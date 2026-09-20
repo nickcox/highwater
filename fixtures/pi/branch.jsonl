@@ -1,0 +1,7 @@
+{"type":"session","version":3,"id":"fixture-branch","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/project"}
+{"type":"message","id":"u1","message":{"role":"user","content":[{"type":"text","text":"start"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"text","text":"plan"}],"provider":"test","model":"m","usage":{"input":1,"output":1}}}
+{"type":"message","id":"u2a","parentId":"a1","message":{"role":"user","content":[{"type":"text","text":"branch A"}]}}
+{"type":"message","id":"a2a","parentId":"u2a","message":{"role":"assistant","content":[{"type":"text","text":"A"}],"provider":"test","model":"m","usage":{"input":1,"output":1}}}
+{"type":"message","id":"u2b","parentId":"a1","message":{"role":"user","content":[{"type":"text","text":"branch B"}]}}
+{"type":"message","id":"a2b","parentId":"u2b","message":{"role":"assistant","content":[{"type":"text","text":"B"}],"provider":"test","model":"m","usage":{"input":1,"output":1}}}

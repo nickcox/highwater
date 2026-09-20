@@ -1,0 +1,6 @@
+{"type":"session","version":3,"id":"fixture-terminal-compaction","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/project"}
+{"type":"message","id":"u1","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"investigate"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"text","text":"working"}],"provider":"test","model":"model-1","usage":{"input":10,"output":2}}}
+{"type":"message","id":"r1","parentId":"a1","message":{"role":"toolResult","toolCallId":"tool-1","toolName":"bash","content":[{"type":"text","text":"large test output"}]}}
+{"type":"message","id":"a2","parentId":"r1","message":{"role":"assistant","content":[{"type":"text","text":"more"}],"provider":"test","model":"model-1","usage":{"input":20,"output":2}}}
+{"type":"compaction","id":"c1","parentId":"a2","summary":"summary of old context","firstKeptEntryId":"r1","tokensBefore":100}

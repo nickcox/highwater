@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"fixture-failed-tool","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/project"}
+{"type":"message","id":"u1","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"read the file"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"toolCall","id":"tool-failed","name":"read","arguments":{"path":"missing.txt"}}],"provider":"test","model":"model-1","usage":{"input":10,"output":2},"stopReason":"toolUse"}}
+{"type":"message","id":"r1","parentId":"a1","message":{"role":"toolResult","toolCallId":"tool-failed","toolName":"read","isError":true,"content":[{"type":"text","text":"file not found"}]}}
+{"type":"message","id":"a2","parentId":"r1","message":{"role":"assistant","content":[{"type":"text","text":"unable to read"}],"provider":"test","model":"model-1","usage":{"input":20,"output":2},"stopReason":"stop"}}

@@ -1,0 +1,11 @@
+{"type":"session","version":3,"id":"fixture-multiple-compactions","cwd":"/tmp/project"}
+{"type":"message","id":"u1","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"one"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"text","text":"one"}],"provider":"test","model":"m","usage":{"input":1,"output":1}}}
+{"type":"message","id":"keep1","parentId":"a1","message":{"role":"user","content":[{"type":"text","text":"keep one"}]}}
+{"type":"message","id":"a2","parentId":"keep1","message":{"role":"assistant","content":[{"type":"text","text":"two"}],"provider":"test","model":"m","usage":{"input":2,"output":1}}}
+{"type":"compaction","id":"c1","parentId":"a2","summary":"first summary","firstKeptEntryId":"keep1","tokensBefore":20}
+{"type":"message","id":"u2","parentId":"c1","message":{"role":"user","content":[{"type":"text","text":"new work"}]}}
+{"type":"message","id":"a3","parentId":"u2","message":{"role":"assistant","content":[{"type":"text","text":"three"}],"provider":"test","model":"m","usage":{"input":3,"output":1}}}
+{"type":"compaction","id":"c2","parentId":"a3","summary":"second summary","firstKeptEntryId":"u2","tokensBefore":30}
+{"type":"message","id":"u3","parentId":"c2","message":{"role":"user","content":[{"type":"text","text":"finish"}]}}
+{"type":"message","id":"a4","parentId":"u3","message":{"role":"assistant","content":[{"type":"text","text":"four"}],"provider":"test","model":"m","usage":{"input":4,"output":1}}}

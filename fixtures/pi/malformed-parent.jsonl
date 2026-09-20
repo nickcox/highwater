@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"fixture-malformed","cwd":"/tmp/project"}
+{"type":"message","id":"u1","parentId":"missing","message":{"role":"user","content":"hello"}}

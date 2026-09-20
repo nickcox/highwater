@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"fixture-tools","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/project"}
+{"type":"message","id":"u1","message":{"role":"user","content":[{"type":"text","text":"run tests"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"toolCall","id":"tool-1","name":"bash","arguments":{"command":"npm test"}}],"provider":"test","model":"model-1","usage":{"input":10,"output":2},"stopReason":"toolUse"}}
+{"type":"message","id":"r1","parentId":"a1","message":{"role":"toolResult","toolCallId":"tool-1","toolName":"bash","content":[{"type":"text","text":"all tests passed"}]}}
+{"type":"message","id":"a2","parentId":"r1","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"provider":"test","model":"model-1","usage":{"input":20,"output":2},"stopReason":"stop"}}

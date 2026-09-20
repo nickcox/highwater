@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"fixture-entry-kinds","cwd":"/tmp/project"}
+{"type":"custom_message","id":"cm1","parentId":null,"customType":"notice","display":true,"content":"custom context"}
+{"type":"branch_summary","id":"bs1","parentId":"cm1","summary":"branch checkpoint"}
+{"type":"message","id":"u1","parentId":"bs1","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"provider":"test","model":"m","usage":{"input":1,"output":1}}}

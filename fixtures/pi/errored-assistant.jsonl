@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"fixture-errored-assistant","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/project"}
+{"type":"message","id":"u1","message":{"role":"user","content":[{"type":"text","text":"first request"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"text","text":"failed response"}],"provider":"test","model":"model-1","usage":{"input":10,"output":1},"stopReason":"error"}}
+{"type":"message","id":"u2","parentId":"a1","message":{"role":"user","content":[{"type":"text","text":"retry request"}]}}
+{"type":"message","id":"a2","parentId":"u2","message":{"role":"assistant","content":[{"type":"text","text":"recovered"}],"provider":"test","model":"model-1","usage":{"input":12,"output":2},"stopReason":"stop"}}

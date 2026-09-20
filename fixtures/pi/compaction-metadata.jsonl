@@ -1,0 +1,9 @@
+{"type":"session","version":3,"id":"fixture-compaction-metadata","cwd":"/tmp/project"}
+{"type":"message","id":"u1","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"old"}]}}
+{"type":"message","id":"a1","parentId":"u1","message":{"role":"assistant","content":[{"type":"text","text":"working"}],"provider":"test","model":"m","usage":{"input":1,"output":1}}}
+{"type":"custom","id":"meta1","parentId":"a1","customType":"marker","data":{}}
+{"type":"message","id":"r1","parentId":"meta1","message":{"role":"toolResult","toolCallId":"t1","toolName":"bash","content":[{"type":"text","text":"retained"}]}}
+{"type":"message","id":"a2","parentId":"r1","message":{"role":"assistant","content":[{"type":"text","text":"more"}],"provider":"test","model":"m","usage":{"input":2,"output":1}}}
+{"type":"compaction","id":"c1","parentId":"a2","summary":"summary","firstKeptEntryId":"meta1","tokensBefore":22}
+{"type":"message","id":"u2","parentId":"c1","message":{"role":"user","content":[{"type":"text","text":"continue"}]}}
+{"type":"message","id":"a3","parentId":"u2","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"provider":"test","model":"m","usage":{"input":3,"output":1}}}
