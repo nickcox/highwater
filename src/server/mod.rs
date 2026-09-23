@@ -1,4 +1,7 @@
 mod assets;
+mod events;
+#[path = "watch.rs"]
+mod watcher;
 
 use crate::{
     analysis::{analyze, AnalysisConfig, AnalysisError, TokenizationPolicy},
@@ -14,19 +17,26 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
+use events::{LiveAvailability, LiveState};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{BufRead, BufReader},
     net::SocketAddr,
     path::{Path as FsPath, PathBuf},
-    sync::{Arc, Mutex},
-    time::{Instant, UNIX_EPOCH},
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, Mutex, RwLock,
+    },
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 use thiserror::Error;
-use tokio::sync::watch;
+use tokio::{
+    sync::{mpsc, oneshot, watch},
+    task::JoinHandle,
+};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum TokenizationArg {
@@ -67,11 +77,104 @@ type AnalysisExecutor = dyn Fn(PathBuf, AnalysisConfig, AnalysisCacheKey) -> Res
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    sessions: Arc<Vec<SessionFile>>,
+    catalog: Arc<SessionCatalog>,
+    live_state: watch::Sender<LiveState>,
+    shutdown: watch::Sender<bool>,
+    coordinator: Option<Arc<ScanCoordinator>>,
     config: AnalysisConfig,
     analysis_cache: Arc<Mutex<AnalysisCache>>,
     analysis_flights: Arc<Mutex<HashMap<AnalysisCacheKey, Arc<AnalysisFlight>>>>,
     analysis_executor: Arc<AnalysisExecutor>,
+}
+
+#[derive(Debug, Clone)]
+struct CatalogSnapshot {
+    generation: String,
+    revision: u64,
+    sessions: Arc<[SessionFile]>,
+}
+
+#[derive(Debug)]
+struct SessionCatalog {
+    snapshot: RwLock<CatalogSnapshot>,
+}
+
+impl SessionCatalog {
+    fn new(generation: String, sessions: Vec<SessionFile>) -> Self {
+        Self {
+            snapshot: RwLock::new(CatalogSnapshot {
+                generation,
+                revision: 0,
+                sessions: Arc::from(sessions.into_boxed_slice()),
+            }),
+        }
+    }
+
+    fn snapshot(&self) -> Result<CatalogSnapshot, AppError> {
+        self.snapshot
+            .read()
+            .map(|snapshot| snapshot.clone())
+            .map_err(|_| AppError::Message("session catalogue is unavailable".into()))
+    }
+
+    fn install(&self, sessions: Vec<SessionFile>) -> Result<bool, AppError> {
+        let sessions: Arc<[SessionFile]> = Arc::from(sessions.into_boxed_slice());
+        let mut snapshot = self
+            .snapshot
+            .write()
+            .map_err(|_| AppError::Message("session catalogue is unavailable".into()))?;
+        if snapshot.sessions.as_ref() == sessions.as_ref() {
+            return Ok(false);
+        }
+        snapshot.revision = snapshot
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| AppError::Message("session catalogue revision exhausted".into()))?;
+        snapshot.sessions = sessions;
+        Ok(true)
+    }
+}
+
+#[derive(Debug, Default)]
+struct Diagnostics {
+    watch_events_received: AtomicU64,
+    watch_hints_dropped: AtomicU64,
+    watch_refreshes_started: AtomicU64,
+    watch_refreshes_changed: AtomicU64,
+    watch_refreshes_unchanged: AtomicU64,
+    watch_errors: AtomicU64,
+    catalogue_refresh_failures: AtomicU64,
+    catalogue_refresh_retries: AtomicU64,
+    catalogue_degraded_refreshes: AtomicU64,
+    catalogue_sessions: AtomicU64,
+    catalogue_refresh_ms: AtomicU64,
+}
+
+#[derive(Debug)]
+struct ScanCoordinator {
+    controls: mpsc::Sender<ScanControl>,
+}
+
+enum ScanControl {
+    EnsureFresh(oneshot::Sender<Result<(), String>>),
+    Shutdown,
+}
+
+impl ScanCoordinator {
+    async fn ensure_fresh(&self) -> Result<(), String> {
+        let (sender, receiver) = oneshot::channel();
+        self.controls
+            .send(ScanControl::EnsureFresh(sender))
+            .await
+            .map_err(|_| "catalogue refresh is unavailable".to_owned())?;
+        receiver
+            .await
+            .map_err(|_| "catalogue refresh is unavailable".to_owned())?
+    }
+
+    async fn shutdown(&self) {
+        let _ = self.controls.send(ScanControl::Shutdown).await;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -116,6 +219,8 @@ struct AnalysisFlight {
 #[derive(Debug, Clone)]
 enum FlightError {
     Source(String),
+    SourceChanged,
+    Fingerprint(String),
     Analysis(String),
     Message(String),
 }
@@ -124,6 +229,8 @@ impl FlightError {
     fn into_app_error(self) -> AppError {
         match self {
             Self::Source(message) => AppError::SourceMessage(message),
+            Self::SourceChanged => AppError::SourceChanged,
+            Self::Fingerprint(message) => AppError::Fingerprint(message),
             Self::Analysis(message) => AppError::AnalysisMessage(message),
             Self::Message(message) => AppError::Message(message),
         }
@@ -199,7 +306,7 @@ impl AnalysisCache {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionFile {
     id: String,
@@ -210,6 +317,8 @@ pub(crate) struct SessionFile {
     started_at: Option<DateTime<Utc>>,
     byte_size: u64,
     modified_at: Option<DateTime<Utc>>,
+    #[serde(skip)]
+    modified_nanos: Option<u128>,
 }
 
 #[derive(Debug, Error)]
@@ -226,6 +335,10 @@ pub(crate) enum AppError {
     AnalysisMessage(String),
     #[error("cannot fingerprint session: {0}")]
     Fingerprint(String),
+    #[error("session changed while it was being analysed")]
+    SourceChanged,
+    #[error("catalogue refresh is unavailable")]
+    CatalogRefreshUnavailable,
     #[error("{0}")]
     Message(String),
     #[error("unknown session")]
@@ -236,9 +349,14 @@ impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, code) = match &self {
             Self::NotFound => (StatusCode::NOT_FOUND, "SESSION_NOT_FOUND"),
+            Self::SourceChanged => (StatusCode::CONFLICT, "SESSION_SOURCE_CHANGED"),
             Self::Source(_) | Self::SourceMessage(_) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "SESSION_PARSE_FAILED")
             }
+            Self::CatalogRefreshUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "CATALOG_REFRESH_UNAVAILABLE",
+            ),
             _ => (StatusCode::BAD_REQUEST, "SESSION_ANALYSIS_FAILED"),
         };
         (
@@ -249,17 +367,72 @@ impl IntoResponse for AppError {
     }
 }
 
+const HINT_CHANNEL_CAPACITY: usize = 256;
+const DEBOUNCE_QUIET: Duration = Duration::from_millis(200);
+const DEBOUNCE_MAX: Duration = Duration::from_secs(1);
+const RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_millis(100),
+    Duration::from_millis(250),
+    Duration::from_millis(500),
+];
+const DEGRADED_SCAN_INTERVAL: Duration = Duration::from_secs(1);
+const DEGRADED_SCAN_DEADLINE: Duration = Duration::from_secs(5);
+const SCAN_SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
+
 pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let root = args.session_root.unwrap_or_else(|| {
+    let configured_root = args.session_root.unwrap_or_else(|| {
         PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".pi/agent/sessions")
     });
-    let sessions = discover(&root)?;
+    let root = tokio::task::spawn_blocking(move || canonical_root(&configured_root)).await??;
+    let generation = new_generation()?;
+    let diagnostics = Arc::new(Diagnostics::default());
+    let signals = Arc::new(watcher::WatchSignals::default());
+    let (hint_sender, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
+    let watcher = watcher::start(&root, hint_sender, Arc::clone(&signals))
+        .map_err(|error| format!("cannot watch session root: {error}"))?;
+
+    let initial_root = root.clone();
+    let sessions = tokio::task::spawn_blocking(move || discover(&initial_root, None)).await??;
+    diagnostics
+        .catalogue_sessions
+        .store(sessions.len() as u64, Ordering::Relaxed);
     println!("Discovered {} sessions", sessions.len());
+
+    let catalog = Arc::new(SessionCatalog::new(generation.clone(), sessions));
+    let (live_state, _live_receiver) = watch::channel(LiveState {
+        generation: generation.clone(),
+        revision: 0,
+        availability: LiveAvailability::Active,
+    });
+    let (shutdown, _shutdown_receiver) = watch::channel(false);
+    let (control_sender, control_receiver) = mpsc::channel(32);
+    let coordinator = Arc::new(ScanCoordinator {
+        controls: control_sender,
+    });
+    let worker_catalog = Arc::clone(&catalog);
+    let worker_live_state = live_state.clone();
+    let worker_root = root.clone();
+    let worker_diagnostics = Arc::clone(&diagnostics);
+    let worker_signals = Arc::clone(&signals);
+    let worker = tokio::spawn(scan_worker(
+        worker_root,
+        worker_catalog,
+        worker_live_state,
+        hint_receiver,
+        control_receiver,
+        worker_signals,
+        worker_diagnostics,
+    ));
+
+    let perf_diagnostics = args.perf_diagnostics;
     let state = AppState {
-        sessions: Arc::new(sessions),
+        catalog,
+        live_state,
+        shutdown: shutdown.clone(),
+        coordinator: Some(Arc::clone(&coordinator)),
         config: AnalysisConfig {
             tokenization: args.tokenization.into(),
-            perf_diagnostics: args.perf_diagnostics,
+            perf_diagnostics,
         },
         analysis_cache: Arc::new(Mutex::new(AnalysisCache::default())),
         analysis_flights: Arc::new(Mutex::new(HashMap::new())),
@@ -269,19 +442,72 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let address = SocketAddr::from(([127, 0, 0, 1], args.port));
     println!("Listening on http://{address}");
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(shutdown.clone()))
+        .await?;
+
+    coordinator.shutdown().await;
+    let _ = tokio::time::timeout(SCAN_SHUTDOWN_DRAIN, worker).await;
+    drop(watcher);
+    if perf_diagnostics {
+        print_diagnostics(&diagnostics);
+    }
     Ok(())
+}
+
+async fn shutdown_signal(shutdown: watch::Sender<bool>) {
+    let _ = tokio::signal::ctrl_c().await;
+    shutdown.send_replace(true);
+}
+
+fn print_diagnostics(diagnostics: &Diagnostics) {
+    eprintln!(
+        "live_updates_perf watch_events_received={} watch_hints_dropped={} watch_refreshes_started={} watch_refreshes_changed={} watch_refreshes_unchanged={} watch_errors={} catalogue_refresh_failures={} catalogue_refresh_retries={} catalogue_degraded_refreshes={} catalogue_sessions={} catalogue_refresh_ms={}",
+        diagnostics.watch_events_received.load(Ordering::Relaxed),
+        diagnostics.watch_hints_dropped.load(Ordering::Relaxed),
+        diagnostics.watch_refreshes_started.load(Ordering::Relaxed),
+        diagnostics.watch_refreshes_changed.load(Ordering::Relaxed),
+        diagnostics.watch_refreshes_unchanged.load(Ordering::Relaxed),
+        diagnostics.watch_errors.load(Ordering::Relaxed),
+        diagnostics.catalogue_refresh_failures.load(Ordering::Relaxed),
+        diagnostics.catalogue_refresh_retries.load(Ordering::Relaxed),
+        diagnostics.catalogue_degraded_refreshes.load(Ordering::Relaxed),
+        diagnostics.catalogue_sessions.load(Ordering::Relaxed),
+        diagnostics.catalogue_refresh_ms.load(Ordering::Relaxed),
+    );
+}
+
+fn new_generation() -> Result<String, AppError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|error| AppError::Message(error.to_string()))?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn canonical_root(root: &FsPath) -> Result<PathBuf, AppError> {
+    let canonical = fs::canonicalize(root).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            AppError::Message("session root does not exist".into())
+        } else {
+            AppError::Io(error)
+        }
+    })?;
+    if !fs::metadata(&canonical)?.is_dir() {
+        return Err(AppError::Message("session root is not a directory".into()));
+    }
+    Ok(canonical)
 }
 
 fn session_listing_metadata(
     path: &FsPath,
     file_name: &str,
-) -> (String, Option<String>, Option<DateTime<Utc>>) {
-    let header = File::open(path)
-        .ok()
-        .and_then(|file| BufReader::new(file).lines().next())
-        .and_then(Result::ok)
-        .and_then(|line| serde_json::from_str::<Value>(&line).ok());
+) -> std::io::Result<(String, Option<String>, Option<DateTime<Utc>>)> {
+    let first_line = BufReader::new(File::open(path)?)
+        .lines()
+        .next()
+        .transpose()?;
+    let header = first_line
+        .as_deref()
+        .and_then(|line| serde_json::from_str::<Value>(line).ok());
     let working_directory = header
         .as_ref()
         .and_then(|value| value.get("cwd"))
@@ -312,45 +538,427 @@ fn session_listing_metadata(
         (Some(project), None, Some(suffix)) => format!("{project} · {suffix}"),
         _ => stem.chars().take(48).collect(),
     };
-    (display_name, working_directory, started_at)
+    Ok((display_name, working_directory, started_at))
 }
 
-fn discover(root: &FsPath) -> Result<Vec<SessionFile>, AppError> {
-    if !root.exists() {
-        return Err(AppError::Message(format!(
-            "session root does not exist: {}",
-            root.display()
-        )));
-    }
+#[derive(Debug, thiserror::Error)]
+enum ScanError {
+    #[error("transient catalogue discovery failure: {0}")]
+    Transient(String),
+    #[error("catalogue discovery cancelled")]
+    Cancelled,
+}
+
+fn discover(root: &FsPath, cancelled: Option<&AtomicBool>) -> Result<Vec<SessionFile>, ScanError> {
     let mut output = Vec::new();
-    fn walk(path: &FsPath, output: &mut Vec<SessionFile>) -> std::io::Result<()> {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, output)?;
-            } else if path.extension().and_then(|extension| extension.to_str()) == Some("jsonl") {
-                let metadata = entry.metadata()?;
-                let (display_name, working_directory, started_at) =
-                    session_listing_metadata(&path, &entry.file_name().to_string_lossy());
-                let path_string = path.to_string_lossy().into_owned();
-                output.push(SessionFile {
-                    id: path_string.clone(),
-                    path: path_string,
-                    file_name: entry.file_name().to_string_lossy().into_owned(),
-                    display_name,
-                    working_directory,
-                    started_at,
-                    byte_size: metadata.len(),
-                    modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
-                });
+    let mut identities = HashSet::new();
+
+    fn walk(
+        root: &FsPath,
+        path: &FsPath,
+        output: &mut Vec<SessionFile>,
+        identities: &mut HashSet<PathBuf>,
+        cancelled: Option<&AtomicBool>,
+    ) -> Result<(), ScanError> {
+        if cancelled.is_some_and(|value| value.load(Ordering::Acquire)) {
+            return Err(ScanError::Cancelled);
+        }
+        let entries =
+            fs::read_dir(path).map_err(|error| ScanError::Transient(error.to_string()))?;
+        for entry in entries {
+            if cancelled.is_some_and(|value| value.load(Ordering::Acquire)) {
+                return Err(ScanError::Cancelled);
             }
+            let entry = entry.map_err(|error| ScanError::Transient(error.to_string()))?;
+            let candidate = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|error| ScanError::Transient(error.to_string()))?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            if file_type.is_dir() {
+                walk(root, &candidate, output, identities, cancelled)?;
+                continue;
+            }
+            if !file_type.is_file()
+                || candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    != Some("jsonl")
+            {
+                continue;
+            }
+
+            let metadata = entry
+                .metadata()
+                .map_err(|error| ScanError::Transient(error.to_string()))?;
+            let before = fs::symlink_metadata(&candidate)
+                .map_err(|error| ScanError::Transient(error.to_string()))?;
+            if !before.file_type().is_file() {
+                return Err(ScanError::Transient(
+                    "session entry changed type during discovery".into(),
+                ));
+            }
+            let canonical = fs::canonicalize(&candidate)
+                .map_err(|error| ScanError::Transient(error.to_string()))?;
+            if !canonical.starts_with(root) {
+                return Err(ScanError::Transient(
+                    "session entry escaped the watched root".into(),
+                ));
+            }
+            let after = fs::symlink_metadata(&candidate)
+                .map_err(|error| ScanError::Transient(error.to_string()))?;
+            if !after.file_type().is_file() {
+                return Err(ScanError::Transient(
+                    "session entry changed type during discovery".into(),
+                ));
+            }
+            if !identities.insert(canonical.clone()) {
+                continue;
+            }
+            let file_name = canonical
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            let (display_name, working_directory, started_at) =
+                session_listing_metadata(&canonical, &file_name)
+                    .map_err(|error| ScanError::Transient(error.to_string()))?;
+            let modified_nanos = metadata
+                .modified()
+                .ok()
+                .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+                .map(|duration| duration.as_nanos());
+            output.push(SessionFile {
+                id: canonical.to_string_lossy().into_owned(),
+                path: canonical.to_string_lossy().into_owned(),
+                file_name,
+                display_name,
+                working_directory,
+                started_at,
+                byte_size: metadata.len(),
+                modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
+                modified_nanos,
+            });
         }
         Ok(())
     }
-    walk(root, &mut output)?;
-    output.sort_by_key(|session| std::cmp::Reverse(session.modified_at));
+
+    walk(root, root, &mut output, &mut identities, cancelled)?;
+    output.sort_by(|left, right| {
+        right
+            .modified_nanos
+            .cmp(&left.modified_nanos)
+            .then_with(|| left.id.cmp(&right.id))
+    });
     Ok(output)
+}
+
+async fn wait_for_scan(
+    active: &mut Option<JoinHandle<Result<Vec<SessionFile>, ScanError>>>,
+) -> Result<Vec<SessionFile>, ScanError> {
+    let handle = active
+        .as_mut()
+        .expect("wait_for_scan called without an active scan");
+    match handle.await {
+        Ok(result) => result,
+        Err(error) => Err(ScanError::Transient(format!(
+            "catalogue scan task failed: {error}"
+        ))),
+    }
+}
+
+fn publish_live_state(
+    catalog: &SessionCatalog,
+    live_state: &watch::Sender<LiveState>,
+    availability: LiveAvailability,
+) {
+    if let Ok(snapshot) = catalog.snapshot() {
+        live_state.send_replace(LiveState {
+            generation: snapshot.generation,
+            revision: snapshot.revision,
+            availability,
+        });
+    }
+}
+
+fn schedule_hint(
+    pending: &mut bool,
+    ready: &mut bool,
+    quiet_deadline: &mut Option<Instant>,
+    maximum_deadline: &mut Option<Instant>,
+) {
+    *pending = true;
+    if !*ready {
+        let now = Instant::now();
+        *quiet_deadline = Some(now + DEBOUNCE_QUIET);
+        maximum_deadline.get_or_insert(now + DEBOUNCE_MAX);
+    }
+}
+
+async fn scan_worker(
+    root: PathBuf,
+    catalog: Arc<SessionCatalog>,
+    live_state: watch::Sender<LiveState>,
+    mut hints: mpsc::Receiver<watcher::WatchHint>,
+    mut controls: mpsc::Receiver<ScanControl>,
+    signals: Arc<watcher::WatchSignals>,
+    diagnostics: Arc<Diagnostics>,
+) {
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let mut active: Option<JoinHandle<Result<Vec<SessionFile>, ScanError>>> = None;
+    let mut pending = false;
+    let mut ready = false;
+    let mut quiet_deadline = None;
+    let mut maximum_deadline = None;
+    let mut retry_deadline = None;
+    let mut retry_index = 0_usize;
+    let mut rate_deadline = None;
+    let mut last_scan_start = None;
+    let mut waiters: Vec<oneshot::Sender<Result<(), String>>> = Vec::new();
+    let mut watcher_healthy = true;
+    let mut degraded = false;
+
+    loop {
+        let received = signals.received.swap(0, Ordering::AcqRel);
+        if received > 0 {
+            diagnostics
+                .watch_events_received
+                .fetch_add(received, Ordering::Relaxed);
+        }
+        let dropped = signals.dropped.swap(0, Ordering::AcqRel);
+        if dropped > 0 {
+            diagnostics
+                .watch_hints_dropped
+                .fetch_add(dropped, Ordering::Relaxed);
+            schedule_hint(
+                &mut pending,
+                &mut ready,
+                &mut quiet_deadline,
+                &mut maximum_deadline,
+            );
+        }
+        if signals.overflow.swap(false, Ordering::AcqRel) {
+            schedule_hint(
+                &mut pending,
+                &mut ready,
+                &mut quiet_deadline,
+                &mut maximum_deadline,
+            );
+        }
+        if signals.watcher_failed.swap(false, Ordering::AcqRel) {
+            watcher_healthy = false;
+            diagnostics.watch_errors.fetch_add(1, Ordering::Relaxed);
+            if !degraded {
+                degraded = true;
+                publish_live_state(&catalog, &live_state, LiveAvailability::Degraded);
+            }
+        }
+
+        if active.is_none() && pending && ready && retry_deadline.is_none() {
+            let now = Instant::now();
+            if degraded {
+                if let Some(last_start) = last_scan_start {
+                    let allowed_at = last_start + DEGRADED_SCAN_INTERVAL;
+                    if allowed_at > now {
+                        rate_deadline = Some(allowed_at);
+                    } else {
+                        rate_deadline = None;
+                    }
+                }
+            }
+            if rate_deadline.is_none() {
+                pending = false;
+                ready = false;
+                quiet_deadline = None;
+                maximum_deadline = None;
+                last_scan_start = Some(now);
+                diagnostics
+                    .watch_refreshes_started
+                    .fetch_add(1, Ordering::Relaxed);
+                let scan_root = root.clone();
+                let scan_cancelled = Arc::clone(&cancelled);
+                active = Some(tokio::spawn(async move {
+                    match tokio::task::spawn_blocking(move || {
+                        discover(&scan_root, Some(scan_cancelled.as_ref()))
+                    })
+                    .await
+                    {
+                        Ok(result) => result,
+                        Err(error) => Err(ScanError::Transient(format!(
+                            "catalogue scan task failed: {error}"
+                        ))),
+                    }
+                }));
+            }
+        }
+
+        let next_deadline = [
+            quiet_deadline,
+            maximum_deadline,
+            retry_deadline,
+            rate_deadline,
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        let mut timer = Box::pin(match next_deadline {
+            Some(deadline) => tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)),
+            None => tokio::time::sleep(Duration::from_secs(24 * 60 * 60)),
+        });
+        let active_result = async {
+            if active.is_some() {
+                Some(wait_for_scan(&mut active).await)
+            } else {
+                std::future::pending().await
+            }
+        };
+
+        tokio::select! {
+            biased;
+            result = active_result => {
+                active = None;
+                let elapsed = last_scan_start
+                    .map(|started| started.elapsed().as_millis() as u64)
+                    .unwrap_or_default();
+                diagnostics.catalogue_refresh_ms.fetch_add(elapsed, Ordering::Relaxed);
+                match result.expect("active scan result") {
+                    Ok(sessions) => {
+                        diagnostics.catalogue_sessions.store(sessions.len() as u64, Ordering::Relaxed);
+                        match catalog.install(sessions) {
+                            Ok(changed) => {
+                                if changed {
+                                    diagnostics.watch_refreshes_changed.fetch_add(1, Ordering::Relaxed);
+                                } else {
+                                    diagnostics.watch_refreshes_unchanged.fetch_add(1, Ordering::Relaxed);
+                                }
+                                if changed || degraded == watcher_healthy {
+                                    let next_availability = if watcher_healthy {
+                                        LiveAvailability::Active
+                                    } else {
+                                        LiveAvailability::Degraded
+                                    };
+                                    publish_live_state(&catalog, &live_state, next_availability);
+                                }
+                                if watcher_healthy {
+                                    degraded = false;
+                                }
+                                retry_index = 0;
+                                retry_deadline = None;
+                                for waiter in waiters.drain(..) {
+                                    let _ = waiter.send(Ok(()));
+                                }
+                                if pending {
+                                    ready = true;
+                                }
+                            }
+                            Err(error) => {
+                                diagnostics.catalogue_refresh_failures.fetch_add(1, Ordering::Relaxed);
+                                if retry_index < RETRY_DELAYS.len() {
+                                    retry_deadline = Some(Instant::now() + RETRY_DELAYS[retry_index]);
+                                    retry_index += 1;
+                                    diagnostics.catalogue_refresh_retries.fetch_add(1, Ordering::Relaxed);
+                                    pending = true;
+                                    ready = false;
+                                } else {
+                                    retry_index = 0;
+                                    retry_deadline = None;
+                                    pending = false;
+                                    ready = false;
+                                    quiet_deadline = None;
+                                    maximum_deadline = None;
+                                    degraded = true;
+                                    diagnostics.catalogue_degraded_refreshes.fetch_add(1, Ordering::Relaxed);
+                                    publish_live_state(&catalog, &live_state, LiveAvailability::Degraded);
+                                    let message = error.to_string();
+                                    for waiter in waiters.drain(..) {
+                                        let _ = waiter.send(Err(message.clone()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(ScanError::Cancelled) => break,
+                    Err(error) => {
+                        diagnostics.catalogue_refresh_failures.fetch_add(1, Ordering::Relaxed);
+                        if retry_index < RETRY_DELAYS.len() {
+                            retry_deadline = Some(Instant::now() + RETRY_DELAYS[retry_index]);
+                            retry_index += 1;
+                            diagnostics.catalogue_refresh_retries.fetch_add(1, Ordering::Relaxed);
+                            pending = true;
+                            ready = false;
+                        } else {
+                            retry_index = 0;
+                            retry_deadline = None;
+                            pending = false;
+                            ready = false;
+                            quiet_deadline = None;
+                            maximum_deadline = None;
+                            degraded = true;
+                            diagnostics.catalogue_degraded_refreshes.fetch_add(1, Ordering::Relaxed);
+                            publish_live_state(&catalog, &live_state, LiveAvailability::Degraded);
+                            let message = error.to_string();
+                            for waiter in waiters.drain(..) {
+                                let _ = waiter.send(Err(message.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+            control = controls.recv() => {
+                match control {
+                    Some(ScanControl::EnsureFresh(waiter)) => {
+                        waiters.push(waiter);
+                        pending = true;
+                        ready = true;
+                        quiet_deadline = None;
+                        maximum_deadline = None;
+                        diagnostics.catalogue_degraded_refreshes.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Some(ScanControl::Shutdown) | None => {
+                        cancelled.store(true, Ordering::Release);
+                        for waiter in waiters.drain(..) {
+                            let _ = waiter.send(Err("catalogue refresh is shutting down".into()));
+                        }
+                        if active.is_some() {
+                            let _ = tokio::time::timeout(SCAN_SHUTDOWN_DRAIN, wait_for_scan(&mut active)).await;
+                        }
+                        break;
+                    }
+                }
+            }
+            Some(hint) = hints.recv() => {
+                match hint {
+                    watcher::WatchHint::Filesystem => schedule_hint(
+                        &mut pending,
+                        &mut ready,
+                        &mut quiet_deadline,
+                        &mut maximum_deadline,
+                    ),
+                }
+            }
+            _ = signals.wake.notified() => {}
+            _ = &mut timer => {
+                let now = Instant::now();
+                if quiet_deadline.is_some_and(|deadline| deadline <= now)
+                    || maximum_deadline.is_some_and(|deadline| deadline <= now)
+                {
+                    quiet_deadline = None;
+                    maximum_deadline = None;
+                    ready = true;
+                }
+                if retry_deadline.is_some_and(|deadline| deadline <= now) {
+                    retry_deadline = None;
+                    ready = true;
+                    pending = true;
+                }
+                if rate_deadline.is_some_and(|deadline| deadline <= now) {
+                    rate_deadline = None;
+                }
+            }
+        }
+    }
 }
 
 fn analysis_cache_key(path: &FsPath, config: AnalysisConfig) -> Result<AnalysisCacheKey, AppError> {
@@ -375,13 +983,83 @@ fn analysis_cache_key(path: &FsPath, config: AnalysisConfig) -> Result<AnalysisC
 fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/sessions", get(sessions))
+        .route("/api/events", get(events::handler))
         .route("/api/sessions/{id}/analysis", get(session_analysis))
         .fallback(assets::static_file)
         .with_state(state)
 }
 
-async fn sessions(State(state): State<AppState>) -> Json<Value> {
-    Json(serde_json::json!({ "sessions": &*state.sessions }))
+async fn sessions(State(state): State<AppState>, headers: HeaderMap) -> Result<Response, AppError> {
+    if state.live_state.borrow().availability == LiveAvailability::Degraded {
+        let coordinator = state
+            .coordinator
+            .as_ref()
+            .ok_or(AppError::CatalogRefreshUnavailable)?;
+        tokio::time::timeout(DEGRADED_SCAN_DEADLINE, coordinator.ensure_fresh())
+            .await
+            .map_err(|_| AppError::CatalogRefreshUnavailable)?
+            .map_err(|_| AppError::CatalogRefreshUnavailable)?;
+    }
+    let snapshot = state.catalog.snapshot()?;
+    let availability = state.live_state.borrow().availability;
+    list_response(&snapshot, availability, &headers)
+}
+
+fn list_response(
+    snapshot: &CatalogSnapshot,
+    availability: LiveAvailability,
+    headers: &HeaderMap,
+) -> Result<Response, AppError> {
+    let body = serde_json::to_vec(&serde_json::json!({ "sessions": &*snapshot.sessions }))
+        .map_err(|error| {
+            AppError::Message(format!("cannot serialize session catalogue: {error}"))
+        })?;
+    let etag = list_etag(snapshot);
+    let mut builder = Response::builder()
+        .header(header::ETAG, etag.as_str())
+        .header(
+            "X-TokenPlume-Server-Generation",
+            snapshot.generation.as_str(),
+        )
+        .header(
+            "X-TokenPlume-Catalog-Revision",
+            snapshot.revision.to_string(),
+        )
+        .header(
+            "X-TokenPlume-Live-Updates",
+            availability_header(availability),
+        );
+    let matches = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.split(',').any(|candidate| candidate.trim() == etag));
+    if matches {
+        return builder
+            .status(StatusCode::NOT_MODIFIED)
+            .body(axum::body::Body::empty())
+            .map_err(|error| AppError::Message(format!("cannot build response: {error}")));
+    }
+    builder = builder
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::CONTENT_LENGTH, body.len());
+    builder
+        .status(StatusCode::OK)
+        .body(axum::body::Body::from(body))
+        .map_err(|error| AppError::Message(format!("cannot build response: {error}")))
+}
+
+fn availability_header(availability: LiveAvailability) -> &'static str {
+    match availability {
+        LiveAvailability::Active => "active",
+        LiveAvailability::Degraded => "degraded",
+    }
+}
+
+fn list_etag(snapshot: &CatalogSnapshot) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(snapshot.generation.as_bytes());
+    hasher.update(&snapshot.revision.to_le_bytes());
+    format!("\"{}\"", hasher.finalize().to_hex())
 }
 
 async fn session_analysis(
@@ -389,10 +1067,11 @@ async fn session_analysis(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
-    let session = state
+    let snapshot = state.catalog.snapshot()?;
+    let session = snapshot
         .sessions
         .iter()
-        .find(|session| session.id == id || session.file_name == id)
+        .find(|session| session.id == id)
         .ok_or(AppError::NotFound)?;
     let path = FsPath::new(&session.path).to_path_buf();
     let key = analysis_cache_key(&path, state.config)?;
@@ -491,13 +1170,18 @@ fn execute_analysis(
     config: AnalysisConfig,
     response_key: AnalysisCacheKey,
 ) -> Result<Arc<CachedResponse>, FlightError> {
-    let source_bytes = fs::metadata(&path)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0);
+    let source_bytes = response_key.byte_size;
     let parse_started = Instant::now();
-    let (normalized, parse_stats) = PiSourceAdapter
-        .parse_path_with_stats(&path)
-        .map_err(|error| FlightError::Source(error.to_string()))?;
+    let parsed = PiSourceAdapter.parse_path_with_stats(&path);
+    let (normalized, parse_stats) = match parsed {
+        Ok(value) => value,
+        Err(error) => {
+            if matches!(fingerprint_matches(&path, &response_key), Ok(false)) {
+                return Err(FlightError::SourceChanged);
+            }
+            return Err(FlightError::Source(error.to_string()));
+        }
+    };
     let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
     let analysis_started = Instant::now();
     let analysis =
@@ -506,6 +1190,10 @@ fn execute_analysis(
     let serialization_started = Instant::now();
     let body =
         serde_json::to_vec(&analysis).map_err(|error| FlightError::Message(error.to_string()))?;
+    match fingerprint_matches(&path, &response_key)? {
+        true => {}
+        false => return Err(FlightError::SourceChanged),
+    }
     if config.perf_diagnostics {
         eprintln!(
             "analysis_perf parse_ms={parse_ms:.3} analyze_ms={analysis_ms:.3} serialize_ms={:.3} source_bytes={source_bytes} response_bytes={} entries={} selected_entries={} calls={} items={} presences={}",
@@ -527,6 +1215,18 @@ fn execute_analysis(
         body: bytes::Bytes::from(body),
         etag: etag_for_key(&response_key),
     }))
+}
+
+fn fingerprint_matches(path: &FsPath, key: &AnalysisCacheKey) -> Result<bool, FlightError> {
+    let metadata =
+        fs::metadata(path).map_err(|error| FlightError::Fingerprint(error.to_string()))?;
+    let modified_nanos = metadata
+        .modified()
+        .map_err(|error| FlightError::Fingerprint(error.to_string()))?
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| FlightError::Fingerprint(error.to_string()))?
+        .as_nanos();
+    Ok(metadata.len() == key.byte_size && modified_nanos == key.modified_nanos)
 }
 
 fn etag_for_key(key: &AnalysisCacheKey) -> String {
@@ -581,15 +1281,18 @@ mod tests {
     use tower::ServiceExt;
 
     fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> SessionFile {
+        let path = path.into();
+        let file_name = file_name.into();
         SessionFile {
-            id: "fixture".into(),
-            path: path.into(),
-            file_name: file_name.into(),
+            id: file_name.clone(),
+            path,
+            file_name,
             display_name: "fixture".into(),
             working_directory: None,
             started_at: None,
             byte_size: 1,
             modified_at: None,
+            modified_nanos: None,
         }
     }
 
@@ -598,6 +1301,11 @@ mod tests {
             .uri(format!("/api/sessions/{file_name}/analysis"))
             .body(axum::body::Body::empty())
             .expect("request")
+    }
+
+    fn canonical_request(path: &FsPath) -> axum::http::Request<axum::body::Body> {
+        let encoded = path.to_string_lossy().replace('/', "%2F");
+        request(&encoded)
     }
 
     fn test_state(
@@ -619,8 +1327,19 @@ mod tests {
         analysis_cache: Arc<Mutex<AnalysisCache>>,
         analysis_executor: Arc<AnalysisExecutor>,
     ) -> AppState {
+        let generation = "0123456789abcdef0123456789abcdef".to_owned();
+        let catalog = Arc::new(SessionCatalog::new(generation.clone(), sessions));
+        let (live_state, _receiver) = watch::channel(LiveState {
+            generation,
+            revision: 0,
+            availability: LiveAvailability::Active,
+        });
+        let (shutdown, _shutdown_receiver) = watch::channel(false);
         AppState {
-            sessions: Arc::new(sessions),
+            catalog,
+            live_state,
+            shutdown,
+            coordinator: None,
             config,
             analysis_cache,
             analysis_flights: Arc::new(Mutex::new(HashMap::new())),
@@ -745,6 +1464,68 @@ mod tests {
         let cache = cache.lock().expect("cache");
         assert_eq!(cache.entries.len(), 1);
         assert_eq!(cache.hits, 1);
+    }
+
+    #[tokio::test]
+    async fn list_response_has_generation_scoped_headers_and_etag() {
+        let app = router(test_state(
+            fixture_session("fixtures/pi/simple.jsonl", "simple.jsonl"),
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+            Arc::new(Mutex::new(AnalysisCache::default())),
+        ));
+        let response = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/sessions")
+                    .body(axum::body::Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("list response");
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["X-TokenPlume-Catalog-Revision"], "0");
+        assert_eq!(response.headers()["X-TokenPlume-Live-Updates"], "active");
+        let etag = response.headers()[header::ETAG].clone();
+        let mut conditional = axum::http::Request::builder()
+            .uri("/api/sessions")
+            .body(axum::body::Body::empty())
+            .expect("request");
+        conditional
+            .headers_mut()
+            .insert(header::IF_NONE_MATCH, etag);
+        let not_modified = app
+            .oneshot(conditional)
+            .await
+            .expect("conditional list response");
+        assert_eq!(not_modified.status(), StatusCode::NOT_MODIFIED);
+        assert!(not_modified.headers().contains_key(header::ETAG));
+        assert!(not_modified
+            .headers()
+            .contains_key("X-TokenPlume-Server-Generation"));
+    }
+
+    #[tokio::test]
+    async fn canonical_path_ids_are_resolved_without_filename_fallback() {
+        let path = std_fs::canonicalize("fixtures/pi/simple.jsonl").expect("canonical fixture");
+        let mut session = fixture_session(path.to_string_lossy(), "simple.jsonl");
+        session.id = path.to_string_lossy().into_owned();
+        let app = router(test_state(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+            Arc::new(Mutex::new(AnalysisCache::default())),
+        ));
+        let response = app
+            .oneshot(canonical_request(&path))
+            .await
+            .expect("canonical analysis response");
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -961,7 +1742,7 @@ mod tests {
         );
         let app = router(state);
         let first = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
-        let second = tokio::spawn(app.oneshot(request("compaction.jsonl")));
+        let second = tokio::spawn(app.oneshot(request("second")));
         while invocations.load(Ordering::SeqCst) < 2 {
             tokio::task::yield_now().await;
         }
@@ -1071,6 +1852,52 @@ mod tests {
         assert_eq!(third, diagnostics);
         assert_eq!(etag_for_key(&third), etag_for_key(&diagnostics));
         std_fs::remove_dir_all(directory).expect("temporary directory cleanup");
+    }
+
+    #[test]
+    fn analysis_rejects_a_source_changed_after_the_initial_fingerprint() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let directory = std_fs::canonicalize(std::env::temp_dir())
+            .expect("temporary directory")
+            .join(format!("tokenplume-source-change-{unique}"));
+        std_fs::create_dir_all(&directory).expect("temporary directory");
+        let path = directory.join("session.jsonl");
+        std_fs::copy("fixtures/pi/simple.jsonl", &path).expect("copy fixture");
+        let config = AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        };
+        let key = analysis_cache_key(&path, config).expect("initial fingerprint");
+        let original = std_fs::read_to_string(&path).expect("read fixture copy");
+        let changed = original.replace("hello", "world");
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(10));
+            std_fs::write(&path, &changed).expect("rewrite fixture copy");
+            if analysis_cache_key(&path, config)
+                .map(|candidate| candidate.modified_nanos != key.modified_nanos)
+                .unwrap_or(false)
+            {
+                break;
+            }
+        }
+        let result = execute_analysis(path.clone(), config, key);
+        assert!(matches!(result, Err(FlightError::SourceChanged)));
+        std_fs::remove_dir_all(directory).expect("temporary directory cleanup");
+    }
+
+    #[test]
+    fn analysis_publishes_a_stable_response() {
+        let path = std_fs::canonicalize("fixtures/pi/simple.jsonl").expect("fixture");
+        let config = AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        };
+        let key = analysis_cache_key(&path, config).expect("fingerprint");
+        let response = execute_analysis(path, config, key).expect("stable analysis");
+        assert!(!response.body.is_empty());
     }
 
     #[test]

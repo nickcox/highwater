@@ -22,7 +22,13 @@ beforeEach(() => {
       return new Response(JSON.stringify({ sessions: [
         { id: 'one', fileName: 'one.jsonl', displayName: 'one', workingDirectory: null, startedAt: null, byteSize: 1, modifiedAt: null },
         { id: 'two', fileName: 'two.jsonl', displayName: 'two', workingDirectory: null, startedAt: null, byteSize: 1, modifiedAt: null },
-      ] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      ] }), { status: 200, headers: {
+        'content-type': 'application/json',
+        etag: '"catalog-v0"',
+        'X-TokenPlume-Server-Generation': '0123456789abcdef0123456789abcdef',
+        'X-TokenPlume-Catalog-Revision': '0',
+        'X-TokenPlume-Live-Updates': 'active',
+      } });
     }
     const analysis = testAnalysis();
     modifyAnalysis?.(analysis);
@@ -58,7 +64,13 @@ function sessionListResponse(ids = ['one', 'two']): Response {
       byteSize: 1,
       modifiedAt: null,
     })),
-  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }), { status: 200, headers: {
+    'content-type': 'application/json',
+    etag: '"catalog-v0"',
+    'X-TokenPlume-Server-Generation': '0123456789abcdef0123456789abcdef',
+    'X-TokenPlume-Catalog-Revision': '0',
+    'X-TokenPlume-Live-Updates': 'active',
+  } });
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {

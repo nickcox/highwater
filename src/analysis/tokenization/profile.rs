@@ -117,7 +117,18 @@ pub(crate) fn resolve_profile(
 
     let lower_provider = provider.to_ascii_lowercase();
     let lower_model = model.to_ascii_lowercase();
-    let matched = if is_openai_provider(&lower_provider) {
+    let is_gpt6 = lower_model.starts_with("gpt-6");
+    let matched = if is_gpt6
+        && (is_openai_provider(&lower_provider)
+            || (lower_provider == "github-copilot" && api.as_deref() == Some("openai-responses")))
+    {
+        // Assumption, not a published OpenAI model mapping: in local text-only
+        // GPT-6 Sol/Astra responses, reported output tokens match o200k_base
+        // text tokens plus the same four-token overhead observed for GPT-5.6.
+        // Revisit when OpenAI publishes the GPT-6 encoding. Keep the provider/API
+        // gate: a model name alone is not proof of the underlying tokenizer.
+        Some((TokenizerFamily::O200k, "assumed-gpt6-o200k-base"))
+    } else if is_openai_provider(&lower_provider) {
         tiktoken::model_to_encoding(&lower_model).and_then(|encoding| match encoding {
             "o200k_base" => Some((TokenizerFamily::O200k, "tiktoken-o200k-base")),
             "cl100k_base" => Some((TokenizerFamily::Cl100k, "tiktoken-cl100k-base")),
@@ -208,6 +219,59 @@ fn is_openai_provider(provider: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gpt6_assumption_is_scoped_to_openai_and_verified_copilot_route() {
+        for (provider, api) in [
+            ("openai", "openai-responses"),
+            ("openai-codex", "openai-codex-responses"),
+            ("github-copilot", "openai-responses"),
+        ] {
+            for model in ["gpt-6-sol", "gpt-6-astra", "gpt-6-future"] {
+                let target = ModelTarget {
+                    provider: Some(provider.into()),
+                    model: Some(model.into()),
+                    api: Some(api.into()),
+                };
+                let auto = resolve_profile(&target, TokenizationPolicy::Auto);
+                assert_eq!(auto.family, TokenizerFamily::O200k, "{provider}/{model}");
+                assert_eq!(auto.method, TokenizationMethod::ModelTokenizer);
+                assert_eq!(auto.rule, "assumed-gpt6-o200k-base");
+                assert!(auto.id.contains("o200k:tiktoken-4.1.2"));
+                assert_eq!(
+                    resolve_profile(&target, TokenizationPolicy::Strict).family,
+                    TokenizerFamily::O200k
+                );
+                assert_eq!(
+                    resolve_profile(&target, TokenizationPolicy::Heuristic).method,
+                    TokenizationMethod::CharacterHeuristic
+                );
+                assert_eq!(
+                    resolve_profile(&target, TokenizationPolicy::Off).method,
+                    TokenizationMethod::Unavailable
+                );
+            }
+        }
+        for (provider, api) in [
+            ("github-copilot", "openai-completions"),
+            ("openrouter", "openai-responses"),
+            ("unknown", "openai-responses"),
+        ] {
+            let target = ModelTarget {
+                provider: Some(provider.into()),
+                model: Some("gpt-6-astra".into()),
+                api: Some(api.into()),
+            };
+            assert_eq!(
+                resolve_profile(&target, TokenizationPolicy::Auto).method,
+                TokenizationMethod::CharacterHeuristic
+            );
+            assert_eq!(
+                resolve_profile(&target, TokenizationPolicy::Strict).method,
+                TokenizationMethod::Unavailable
+            );
+        }
+    }
 
     #[test]
     fn resolves_library_openai_families_and_codex_aliases() {

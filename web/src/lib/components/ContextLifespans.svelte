@@ -8,7 +8,7 @@
   export let indexed: IndexedAnalysis;
   export let interaction: InteractionState;
   export let onSelectItem: (id: string) => void;
-  export let onHoverItem: (id: string | null) => void;
+  export let onHoverItem: (id: string | null, event?: PointerEvent) => void;
 
   $: items = sortLifespans(indexed.analysis.contextItems);
   $: related = interaction.selectedItemId
@@ -77,7 +77,8 @@
               aria-pressed={interaction.selectedItemId === item.id}
               title={`${itemLabel(item)}: calls ${range.startCall}–${range.endCall}`}
               style={segmentStyle(range, itemColor(item.id))}
-              onpointerenter={() => onHoverItem(item.id)}
+              onpointerenter={(event) => onHoverItem(item.id, event)}
+              onpointermove={(event) => onHoverItem(item.id, event)}
               onpointerleave={() => onHoverItem(null)}
               onclick={() => onSelectItem(item.id)}
             ></button>

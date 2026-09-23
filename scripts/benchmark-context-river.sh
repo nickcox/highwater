@@ -40,6 +40,11 @@ for _ in $(seq 1 100); do
   sleep 0.05
 done
 
+session_url_id() {
+  local file_name=$1
+  curl -fsS "http://127.0.0.1:$PORT/api/sessions" | python3 -c 'import json, sys, urllib.parse; name=sys.argv[1]; sessions=json.load(sys.stdin)["sessions"]; match=next(item["id"] for item in sessions if item["fileName"] == name); print(urllib.parse.quote(match, safe=""))' "$file_name"
+}
+
 measure() {
   local session=$1
   local output=$2
@@ -48,11 +53,12 @@ measure() {
 
 cold_times=()
 for index in 1 2 3 4 5; do
-  cold_times+=("$(measure "benchmark-$index.jsonl" "$ROOT/cold-$index.json")")
+  cold_times+=("$(measure "$(session_url_id "benchmark-$index.jsonl")" "$ROOT/cold-$index.json")")
 done
+warm_session=$(session_url_id "benchmark-1.jsonl")
 warm_times=()
 for index in 1 2 3 4 5; do
-  warm_times+=("$(measure "benchmark-1.jsonl" "$ROOT/warm-$index.json")")
+  warm_times+=("$(measure "$warm_session" "$ROOT/warm-$index.json")")
 done
 cp "$ROOT/cold-5.json" "$RESPONSE"
 bytes=$(wc -c <"$RESPONSE" | tr -d ' ')

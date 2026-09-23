@@ -287,6 +287,25 @@ mod tests {
     }
 
     #[test]
+    fn gpt6_profiles_count_text_with_o200k_instead_of_the_character_fallback() {
+        for (provider, api) in [
+            ("openai-codex", "openai-codex-responses"),
+            ("github-copilot", "openai-responses"),
+        ] {
+            let target = ModelTarget {
+                provider: Some(provider.into()),
+                model: Some("gpt-6-future".into()),
+                api: Some(api.into()),
+            };
+            let mut registry = ProfileRegistry::default();
+            let profile = registry.profile(&target, super::super::TokenizationPolicy::Auto);
+            let estimate = registry.estimate(&item("hello world"), &profile, &target);
+            assert_eq!(estimate.tokens, Some(2));
+            assert_eq!(estimate.method, TokenizationMethod::ModelTokenizer);
+        }
+    }
+
+    #[test]
     fn repeated_fingerprinted_estimates_do_not_reinvoke_the_tokenizer() {
         let target = ModelTarget {
             provider: Some("openai".into()),

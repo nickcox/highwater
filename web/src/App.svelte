@@ -1,6 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchAnalysis, fetchSessions, type SessionListItem } from './lib/api/client';
+  import {
+    ApiError,
+    fetchAnalysis,
+    fetchSessions,
+    type LiveAvailability,
+    type SessionListItem,
+  } from './lib/api/client';
+  import {
+    connectEvents,
+    type AvailabilityUpdate,
+    type CatalogueInvalidation,
+  } from './lib/api/events';
   import { AnalysisValidationError, indexAnalysis } from './lib/analysis';
   import CallDetails from './lib/components/CallDetails.svelte';
   import ContextLifespans from './lib/components/ContextLifespans.svelte';
@@ -9,7 +20,11 @@
   import SessionPicker from './lib/components/SessionPicker.svelte';
   import SessionSummary from './lib/components/SessionSummary.svelte';
   import ContextRiver from './lib/context-river/ContextRiver.svelte';
-  import { escapeInteraction, resetInteraction } from './lib/state/interaction';
+  import {
+    escapeInteraction,
+    reconcileInteraction,
+    resetInteraction,
+  } from './lib/state/interaction';
   import type { IndexedAnalysis, InteractionState } from './lib/types';
   import { chartUnitLabel } from './lib/context-river/format';
 
@@ -21,7 +36,30 @@
   let sessionListError = '';
   let analysisError = '';
   let refreshWarning = '';
+  let selectedRemoved = false;
+
+  let catalogueGeneration: string | null = null;
+  let appliedRevision: bigint | null = null;
+  let latestObservedRevision: bigint | null = null;
+  let listEtag: string | null = null;
+  let listInitialized = false;
+  let reconciliationEpoch = 0;
+  let listRequest: { controller: AbortController; epoch: number } | null = null;
+  let listDirty = false;
+  let listForce = false;
+  let listReconnect = false;
+
   let activeRequest: AbortController | null = null;
+  let refreshRequest: AbortController | null = null;
+  let refreshDirty = false;
+  let hoveredItemPoint: { x: number; y: number } | null = null;
+  let hoveredItemPlacement: { horizontal: 'left' | 'right'; vertical: 'above' | 'below' } = {
+    horizontal: 'right',
+    vertical: 'below',
+  };
+  let transportState: 'connecting' | 'open' | 'reconnecting' | 'closed' = 'connecting';
+  let reportedAvailability: LiveAvailability | null = null;
+
   const indexedCache = new Map<string, { etag: string | null; indexed: IndexedAnalysis }>();
   const INDEXED_CACHE_CAPACITY = 3;
 
@@ -34,16 +72,40 @@
   $: hoveredItem = interaction.hoveredItemId
     ? indexed?.itemById.get(interaction.hoveredItemId) ?? null
     : null;
+  $: liveStatus = transportState === 'open' && reportedAvailability === 'active'
+    ? 'live'
+    : transportState === 'connecting' || transportState === 'reconnecting'
+      ? 'reconnecting'
+      : 'live updates unavailable';
 
-  onMount(async () => {
+  onMount(() => {
+    let stopEvents = () => {};
     try {
-      sessions = await fetchSessions();
-      if (sessions.length > 0) await loadSession(sessions[0].id);
-      else loading = false;
-    } catch (error) {
-      sessionListError = error instanceof Error ? error.message : String(error);
-      loading = false;
+      stopEvents = connectEvents({
+        onOpen: () => {
+          transportState = 'open';
+          reportedAvailability = null;
+          void reconcileSessions(false, true);
+        },
+        onReconnecting: () => {
+          transportState = 'reconnecting';
+          reportedAvailability = null;
+        },
+        onClosed: () => {
+          transportState = 'closed';
+          reportedAvailability = null;
+        },
+        onCatalogue: handleCatalogueInvalidation,
+        onAvailability: handleAvailabilityUpdate,
+        onWarning: () => {
+          // Malformed advisory events never replace authoritative HTTP state.
+        },
+      });
+    } catch {
+      transportState = 'closed';
     }
+    void reconcileSessions(true);
+    return stopEvents;
   });
 
   function cacheAnalysis(id: string, value: { etag: string | null; indexed: IndexedAnalysis }): void {
@@ -56,11 +118,174 @@
     }
   }
 
+  function maxRevision(left: bigint | null, right: bigint | null): bigint | null {
+    if (left === null) return right;
+    if (right === null) return left;
+    return left > right ? left : right;
+  }
+
+  function adoptGeneration(
+    generation: string,
+    revision: bigint | null = null,
+    abortCurrentList = true,
+  ): boolean {
+    if (catalogueGeneration === generation) {
+      latestObservedRevision = maxRevision(latestObservedRevision, revision);
+      return false;
+    }
+    catalogueGeneration = generation;
+    appliedRevision = null;
+    latestObservedRevision = revision;
+    listEtag = null;
+    reconciliationEpoch += 1;
+    activeRequest?.abort();
+    refreshRequest?.abort();
+    refreshDirty = false;
+    if (abortCurrentList && listRequest) {
+      listRequest.controller.abort();
+      listDirty = true;
+      listForce = true;
+    }
+    return true;
+  }
+
+  function requestAuthoritativeReconciliation(): void {
+    if (listRequest) {
+      listRequest.controller.abort();
+      listDirty = true;
+      listForce = true;
+    }
+    void reconcileSessions(true);
+  }
+
+  function handleCatalogueInvalidation(event: CatalogueInvalidation): void {
+    if (catalogueGeneration !== null && event.generation !== catalogueGeneration) {
+      requestAuthoritativeReconciliation();
+      return;
+    }
+    const generationChanged = adoptGeneration(event.generation, event.revision);
+    if (!generationChanged && latestObservedRevision !== null && appliedRevision !== null
+      && event.revision <= appliedRevision) return;
+    void reconcileSessions(generationChanged);
+  }
+
+  function handleAvailabilityUpdate(event: AvailabilityUpdate): void {
+    if (catalogueGeneration !== null && event.generation !== catalogueGeneration) {
+      requestAuthoritativeReconciliation();
+      return;
+    }
+    const generationChanged = adoptGeneration(event.generation);
+    reportedAvailability = event.availability;
+    if (generationChanged) void reconcileSessions(true);
+  }
+
+  async function reconcileSessions(force = false, reconnect = false): Promise<void> {
+    if (listRequest) {
+      listDirty = true;
+      listForce ||= force;
+      listReconnect ||= reconnect;
+      return;
+    }
+    const controller = new AbortController();
+    const request = { controller, epoch: reconciliationEpoch };
+    listRequest = request;
+    const requestEtag = force ? null : listEtag;
+    const requestGeneration = catalogueGeneration;
+    try {
+      const result = await fetchSessions(controller.signal, requestEtag);
+      if (controller.signal.aborted || listRequest !== request) return;
+      if (request.epoch !== reconciliationEpoch && result.generation === requestGeneration) return;
+
+      const previousAppliedRevision = appliedRevision;
+      const generationChanged = adoptGeneration(result.generation, result.revision, false);
+      const revisionChanged = generationChanged
+        || previousAppliedRevision === null
+        || result.revision > previousAppliedRevision;
+      const sameGeneration = catalogueGeneration === result.generation;
+      if (!sameGeneration) return;
+      const observedRevision = latestObservedRevision;
+      if (!generationChanged && observedRevision !== null && result.revision < observedRevision) {
+        listDirty = true;
+        return;
+      }
+      if (!generationChanged && appliedRevision !== null && result.revision < appliedRevision) {
+        listDirty = true;
+        return;
+      }
+
+      if (result.status === 'notModified') {
+        if (!listInitialized || !listEtag || result.etag !== listEtag) {
+          throw new ApiError('Server returned not modified without the matching catalogue', 304, 'INVALID_CATALOG_HEADERS');
+        }
+      } else {
+        if (!result.sessions) throw new ApiError('Server returned an empty catalogue body', 200, 'INVALID_CATALOG_BODY');
+        sessions = result.sessions;
+        listInitialized = true;
+      }
+      listEtag = result.etag;
+      appliedRevision = result.revision;
+      latestObservedRevision = maxRevision(latestObservedRevision, result.revision);
+      sessionListError = '';
+      if (sessions.length === 0) {
+        if (selectedSessionId !== null) removeSelectedSession();
+        loading = false;
+      } else if (selectedSessionId === null) {
+        loading = true;
+        void loadSession(sessions[0].id);
+      } else if (!sessions.some((session) => session.id === selectedSessionId)) {
+        removeSelectedSession();
+      } else {
+        selectedRemoved = false;
+        if (revisionChanged || reconnect) {
+          void refreshSelectedAnalysis();
+        }
+      }
+    } catch (error) {
+      if (controller.signal.aborted || listRequest !== request) return;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!listInitialized) {
+        sessionListError = message;
+        loading = false;
+      } else {
+        refreshWarning = `Session list refresh failed; showing previous state. ${message}`;
+      }
+    } finally {
+      if (listRequest === request) listRequest = null;
+      if (listDirty) {
+        const nextForce = listForce;
+        const nextReconnect = listReconnect;
+        listDirty = false;
+        listForce = false;
+        listReconnect = false;
+        void reconcileSessions(nextForce, nextReconnect);
+      }
+    }
+  }
+
+  function removeSelectedSession(): void {
+    activeRequest?.abort();
+    refreshRequest?.abort();
+    refreshDirty = false;
+    activeRequest = null;
+    refreshRequest = null;
+    selectedSessionId = null;
+    indexed = null;
+    interaction = resetInteraction();
+    selectedRemoved = true;
+    analysisError = '';
+    loading = false;
+  }
+
   async function loadSession(id: string): Promise<void> {
     activeRequest?.abort();
+    refreshRequest?.abort();
+    refreshDirty = false;
+    activeRequest = null;
+    refreshRequest = null;
     const request = new AbortController();
     activeRequest = request;
     selectedSessionId = id;
+    selectedRemoved = false;
     analysisError = '';
     refreshWarning = '';
     interaction = resetInteraction();
@@ -102,6 +327,49 @@
     }
   }
 
+  async function refreshSelectedAnalysis(): Promise<void> {
+    const id = selectedSessionId;
+    const previous = indexed;
+    if (!id || !previous) return;
+    if (refreshRequest) {
+      refreshDirty = true;
+      return;
+    }
+    const request = new AbortController();
+    refreshRequest = request;
+    const cached = indexedCache.get(id);
+    try {
+      const result = await fetchAnalysis(id, request.signal, cached?.etag ?? null);
+      if (request.signal.aborted || refreshRequest !== request || selectedSessionId !== id || indexed !== previous) return;
+      if (result.status === 'notModified') {
+        if (!cached) throw new Error('Server returned not modified without a cached analysis');
+        cacheAnalysis(id, { ...cached, etag: result.etag ?? cached.etag });
+        refreshWarning = '';
+      } else {
+        const next = indexAnalysis(result.analysis);
+        if (request.signal.aborted || refreshRequest !== request || selectedSessionId !== id) return;
+        interaction = reconcileInteraction(interaction, previous, next);
+        indexed = next;
+        cacheAnalysis(id, { etag: result.etag, indexed: next });
+        refreshWarning = '';
+      }
+    } catch (error) {
+      if (request.signal.aborted || refreshRequest !== request || selectedSessionId !== id) return;
+      const message = error instanceof AnalysisValidationError
+        ? `Analysis is inconsistent: ${error.message}`
+        : error instanceof ApiError && error.code === 'SESSION_SOURCE_CHANGED'
+          ? 'Update not yet readable; showing previous analysis.'
+          : error instanceof Error ? error.message : String(error);
+      refreshWarning = `Refresh failed; showing cached analysis. ${message}`;
+    } finally {
+      if (refreshRequest === request) refreshRequest = null;
+      if (refreshDirty && selectedSessionId === id && indexed !== null) {
+        refreshDirty = false;
+        void refreshSelectedAnalysis();
+      }
+    }
+  }
+
   function hoverCall(index: number | null): void {
     if (interaction.hoveredCallIndex !== index) interaction = { ...interaction, hoveredCallIndex: index };
   }
@@ -110,7 +378,16 @@
     interaction = { ...interaction, pinnedCallIndex: index };
   }
 
-  function hoverItem(id: string | null): void {
+  function hoverItem(id: string | null, event?: PointerEvent): void {
+    if (id === null) {
+      hoveredItemPoint = null;
+    } else if (event) {
+      hoveredItemPoint = { x: event.clientX, y: event.clientY };
+      hoveredItemPlacement = {
+        horizontal: event.clientX > window.innerWidth - 390 ? 'left' : 'right',
+        vertical: event.clientY > window.innerHeight - 300 ? 'above' : 'below',
+      };
+    }
     if (interaction.hoveredItemId !== id) interaction = { ...interaction, hoveredItemId: id };
   }
 
@@ -138,19 +415,31 @@
 
 <main>
   <header class="titlebar">
-    <div><h1>TokenPlume</h1><p>Follow persistent context through model calls and explicit compaction boundaries.</p></div>
+    <div>
+      <h1>TokenPlume</h1>
+      <p>Follow persistent context through model calls and explicit compaction boundaries.</p>
+      <p class="live-status" data-testid="live-status">Live updates: {liveStatus}</p>
+    </div>
     {#if sessions.length > 0}<SessionPicker {sessions} selectedId={selectedSessionId} onSelect={loadSession} />{/if}
   </header>
 
+  {#if refreshWarning && !indexed}<section class="refresh-warning" role="status">{refreshWarning}</section>{/if}
   {#if sessionListError}
     <section class="state error"><h2>Could not discover sessions</h2><p>{sessionListError}</p></section>
   {:else if sessions.length === 0 && !loading}
-    <section class="state"><h2>No sessions discovered</h2><p>Point TokenPlume at a session directory with <code>--session-root</code>.</p></section>
+    {#if selectedRemoved}
+      <section class="state"><h2>Selected session is no longer available</h2><p>Choose another session after one appears in the session directory.</p></section>
+    {:else}
+      <section class="state"><h2>No sessions discovered</h2><p>Point TokenPlume at a session directory with <code>--session-root</code>.</p></section>
+    {/if}
+  {:else if selectedRemoved}
+    <section class="state"><h2>Selected session is no longer available</h2><p>Choose another session from the refreshed list.</p></section>
   {:else if loading}
     <section class="state"><p>Analysing session…</p></section>
   {:else if analysisError}
     <section class="state error"><h2>Could not render this session</h2><p>{analysisError}</p><p>Select another session above.</p></section>
   {:else if indexed && indexed.analysis.modelCalls.length === 0}
+    {#if refreshWarning}<section class="refresh-warning" role="status">{refreshWarning}</section>{/if}
     <section class="state"><h2>No model calls</h2><p>This session has no completed assistant model responses on its current branch.</p></section>
   {:else if indexed}
     {#if refreshWarning}<section class="refresh-warning" role="status">{refreshWarning}</section>{/if}
@@ -173,7 +462,12 @@
           onEscape={handleEscape}
         />
         {#if hoveredItem && interaction.selectedItemId !== interaction.hoveredItemId}
-          <div class="item-hover-position"><ItemHoverCard item={hoveredItem} {indexed} /></div>
+          <div
+            class="item-hover-position"
+            class:item-hover-left={hoveredItemPlacement.horizontal === 'left'}
+            class:item-hover-above={hoveredItemPlacement.vertical === 'above'}
+            style={`--pointer-x: ${hoveredItemPoint?.x ?? 0}px; --pointer-y: ${hoveredItemPoint?.y ?? 0}px`}
+          ><ItemHoverCard item={hoveredItem} {indexed} /></div>
         {/if}
       </div>
     </section>
@@ -212,12 +506,23 @@
   .titlebar { display: flex; justify-content: space-between; align-items: start; gap: 24px; }
   h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; }
   .titlebar p, .panel-head p { color: #96a2b8; margin: 4px 0 0; }
+  .live-status { font-size: 12px; }
   .panel { background: linear-gradient(180deg,#121a30,#0f1629); border: 1px solid #26324f; border-radius: 13px; padding: 15px; margin-top: 14px; min-width: 0; }
   .panel-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 10px; }
   h2 { font-size: 15px; margin: 0; }
   .panel-head p { font-size: 12px; }
   .chart-area { position: relative; }
-  .item-hover-position { position: absolute; z-index: 5; top: 8px; right: 12px; pointer-events: none; }
+  .item-hover-position {
+    position: fixed;
+    z-index: 5;
+    left: var(--pointer-x);
+    top: var(--pointer-y);
+    transform: translate(14px, 14px);
+    pointer-events: none;
+  }
+  .item-hover-position.item-hover-left { transform: translate(calc(-100% - 14px), 14px); }
+  .item-hover-position.item-hover-above { transform: translate(14px, calc(-100% - 14px)); }
+  .item-hover-position.item-hover-left.item-hover-above { transform: translate(calc(-100% - 14px), calc(-100% - 14px)); }
   .details-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; }
   .state { margin-top: 24px; padding: 24px; border-radius: 12px; background: #11182c; border: 1px solid #26324f; }
   .state h2 { font-size: 18px; }

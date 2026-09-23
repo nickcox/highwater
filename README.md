@@ -12,7 +12,7 @@ cargo run --release -- --no-open          # large-session validation and normal 
 # optionally: cargo run --release -- --session-root ~/.pi/agent/sessions --port 43123 --no-open --tokenization auto
 ```
 
-Tokenization is local and offline. `auto` uses the pinned `o200k_base`/`cl100k_base` tokenizers for recognized OpenAI model families, provider serialization estimates where documented, and a versioned Unicode-character heuristic for unknown models. Use `--tokenization strict` to report unsupported profiles without fallback, `heuristic` to force the fallback, or `off` to disable token analysis. Add `--perf-diagnostics` to emit aggregate stage timings and operation counts without session content.
+Tokenization is local and offline. `auto` uses the pinned `o200k_base`/`cl100k_base` tokenizers for recognized OpenAI model families, provider serialization estimates where documented, and a versioned Unicode-character heuristic for unknown models. GPT-6-family models on OpenAI/OpenAI Codex (and GitHub Copilot's OpenAI Responses route) provisionally use `o200k_base`: local text-only output counts support this choice, but OpenAI has not published a GPT-6 encoding mapping. Calculated item counts remain estimates, not exact billed prompt tokens. Use `--tokenization strict` to report unsupported profiles without fallback, `heuristic` to force the fallback, or `off` to disable token analysis. Add `--perf-diagnostics` to emit aggregate stage timings and operation counts without session content.
 
 Open the printed localhost URL. The server binds only to `127.0.0.1` and never modifies session files. Returning to a recently viewed session displays its bounded browser-cached analysis immediately, then conditionally revalidates it in the background with the server ETag. A failed refresh leaves the valid cached view in place and shows a warning.
 
@@ -51,4 +51,6 @@ For generated performance validation, run `scripts/benchmark-context-river.sh la
 - D3 computes scales and SVG ribbon paths.
 - Svelte owns rendering and interaction state.
 
-The primary endpoint is `GET /api/sessions/{id}/analysis`. It contains labels, structural metadata, and bounded reader-facing content previews, but it does not duplicate full raw JSONL records or provider payloads. Top-level `schemaVersion` is the sole public envelope-version marker; the current response schema is version 5. Responses include an ETag and support `If-None-Match` with an empty-body `304 Not Modified` response.
+The primary endpoint is `GET /api/sessions/{id}/analysis`, where `id` is the URL-encoded canonical session path returned by `GET /api/sessions`. It contains labels, structural metadata, and bounded reader-facing content previews, but it does not duplicate full raw JSONL records or provider payloads. Top-level `schemaVersion` is the sole public envelope-version marker; the current response schema is version 5. Responses include an ETag and support `If-None-Match` with an empty-body `304 Not Modified` response.
+
+`GET /api/sessions` returns the current catalogue with generation, revision, availability, and ETag headers. `GET /api/events` provides content-free SSE invalidation hints; browsers refetch the catalogue rather than treating SSE as an event log. Live discovery is local and remains usable through ordinary HTTP when SSE or filesystem watching is unavailable.

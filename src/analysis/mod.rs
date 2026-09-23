@@ -19,7 +19,7 @@ pub(crate) use tokenization::TokenizationPolicy;
 
 pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 5;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 4;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {

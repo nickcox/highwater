@@ -10,7 +10,7 @@
   export let interaction: InteractionState;
   export let onHoverCall: (index: number | null) => void;
   export let onPinCall: (index: number) => void;
-  export let onHoverItem: (id: string | null) => void;
+  export let onHoverItem: (id: string | null, event?: PointerEvent) => void;
   export let onSelectItem: (id: string) => void;
   export let onEmptyClick: (index: number) => void;
   export let onEscape: () => void;
@@ -181,7 +181,8 @@
           tabindex="0"
           aria-label={`${indexed.itemById.get(ribbon.itemId)?.kind ?? 'other'}: ${itemAccessibleLabel(ribbon.itemId)}`}
           aria-pressed={interaction.selectedItemId === ribbon.itemId}
-          onpointerenter={() => onHoverItem(ribbon.itemId)}
+          onpointerenter={(event) => onHoverItem(ribbon.itemId, event)}
+          onpointermove={(event) => onHoverItem(ribbon.itemId, event)}
           onpointerleave={() => onHoverItem(null)}
           onclick={(event) => { event.stopPropagation(); onSelectItem(ribbon.itemId); }}
           onkeydown={(event) => selectFromKeyboard(event, ribbon.itemId)}
