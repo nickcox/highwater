@@ -12,8 +12,7 @@ opt-level = 3
 [dependencies]
 axum = "0.8"
 bytes = "1"
-tokio = { version = "1", features = ["full"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 futures-util = "0.3"
 notify = "8"
 getrandom = "0.3"
@@ -22,10 +21,10 @@ serde_json = "1"
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
-tower-http = { version = "0.6", features = ["cors"] }
 rust-embed = "8"
 mime_guess = "2"
 blake3 = "1"
 tiktoken = { version = "=4.1.2", default-features = false, features = ["vocab-openai"] }
 
+[dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

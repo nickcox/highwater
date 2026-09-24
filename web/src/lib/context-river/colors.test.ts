@@ -13,6 +13,7 @@ describe('itemColor', () => {
   });
 
   it('uses palette colors with reviewed dark-background contrast', () => {
-    for (const color of ITEM_PALETTE) expect(contrastRatio(color, CHART_BACKGROUND)).toBeGreaterThan(3);
+    for (const color of ITEM_PALETTE)
+      expect(contrastRatio(color, CHART_BACKGROUND)).toBeGreaterThan(3);
   });
 });

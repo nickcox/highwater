@@ -17,7 +17,7 @@ trap cleanup EXIT
 python3 scripts/generate-benchmark-session.py --case "$CASE" --output "$ROOT/benchmark.jsonl"
 for index in 1 2 3 4 5; do cp "$ROOT/benchmark.jsonl" "$ROOT/benchmark-$index.jsonl"; done
 cargo build --release >/dev/null
-./target/release/tokenplume --session-root "$ROOT" --no-open --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
+./target/release/tokenplume --session-root "$ROOT" --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 RSS_FILE="$ROOT/peak-rss-kb"
 printf '0\n' >"$RSS_FILE"

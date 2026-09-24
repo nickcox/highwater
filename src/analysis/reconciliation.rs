@@ -29,6 +29,11 @@ pub(crate) fn reported_prompt_tokens(usage: &ReportedUsage) -> (Option<u64>, Usa
     let total = fields
         .into_iter()
         .try_fold(0_u64, |sum, value| sum.checked_add(value?));
+    let completeness = if known == 3 && total.is_none() {
+        UsageCompleteness::Partial
+    } else {
+        completeness
+    };
     (total, completeness)
 }
 
@@ -57,5 +62,46 @@ pub(crate) fn reconciliation_status(
         "notable".into()
     } else {
         "large".into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompt_usage_distinguishes_complete_partial_missing_and_overflow() {
+        let complete = ReportedUsage {
+            input: Some(1),
+            cache_read: Some(2),
+            cache_write: Some(3),
+            ..ReportedUsage::default()
+        };
+        assert_eq!(
+            reported_prompt_tokens(&complete),
+            (Some(6), UsageCompleteness::Complete)
+        );
+        let partial = ReportedUsage {
+            input: Some(1),
+            ..ReportedUsage::default()
+        };
+        assert_eq!(
+            reported_prompt_tokens(&partial),
+            (None, UsageCompleteness::Partial)
+        );
+        assert_eq!(
+            reported_prompt_tokens(&ReportedUsage::default()),
+            (None, UsageCompleteness::Missing)
+        );
+        let overflow = ReportedUsage {
+            input: Some(u64::MAX),
+            cache_read: Some(1),
+            cache_write: Some(0),
+            ..ReportedUsage::default()
+        };
+        assert_eq!(
+            reported_prompt_tokens(&overflow),
+            (None, UsageCompleteness::Partial)
+        );
     }
 }

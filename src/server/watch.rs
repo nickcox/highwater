@@ -1,5 +1,5 @@
 use notify::{
-    event::{MetadataKind, ModifyKind},
+    event::{CreateKind, MetadataKind, ModifyKind, RemoveKind},
     EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use std::path::{Path, PathBuf};
@@ -92,12 +92,19 @@ fn relevant_event(event: &notify::Event, root: &PathBuf) -> bool {
     if event.paths.is_empty() {
         return true;
     }
+    let directory_or_rename = matches!(
+        event.kind,
+        EventKind::Create(CreateKind::Folder)
+            | EventKind::Remove(RemoveKind::Folder)
+            | EventKind::Modify(ModifyKind::Name(_))
+    );
     event.paths.iter().any(|path| {
         path.starts_with(root)
-            && path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_none_or(|extension| extension == "jsonl")
+            && (directory_or_rename
+                || path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_none_or(|extension| extension == "jsonl"))
     })
 }
 
@@ -130,10 +137,29 @@ mod tests {
     #[test]
     fn accepts_directory_and_jsonl_events() {
         let root = PathBuf::from("/tmp/sessions");
-        for path in [root.join("nested"), root.join("nested/session.jsonl")] {
+        for (path, kind) in [
+            (
+                root.join("nested"),
+                EventKind::Create(notify::event::CreateKind::Any),
+            ),
+            (
+                root.join("nested.dir"),
+                EventKind::Create(notify::event::CreateKind::Folder),
+            ),
+            (
+                root.join("nested/session.jsonl"),
+                EventKind::Create(notify::event::CreateKind::Any),
+            ),
+            (
+                root.join("renamed.tmp"),
+                EventKind::Modify(notify::event::ModifyKind::Name(
+                    notify::event::RenameMode::To,
+                )),
+            ),
+        ] {
             assert!(relevant_event(
                 &notify::Event {
-                    kind: EventKind::Create(notify::event::CreateKind::Any),
+                    kind,
                     paths: vec![path],
                     attrs: Default::default(),
                 },

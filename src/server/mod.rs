@@ -34,7 +34,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot, watch},
+    sync::{mpsc, oneshot, watch, Semaphore},
     task::JoinHandle,
 };
 
@@ -63,8 +63,6 @@ pub(crate) struct Args {
     pub session_root: Option<PathBuf>,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
-    #[arg(long)]
-    pub no_open: bool,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
     pub tokenization: TokenizationArg,
     #[arg(long)]
@@ -76,15 +74,21 @@ type AnalysisExecutor = dyn Fn(PathBuf, AnalysisConfig, AnalysisCacheKey) -> Res
     + Sync;
 
 #[derive(Clone)]
+struct AnalysisRuntime {
+    cache: Arc<Mutex<AnalysisCache>>,
+    flights: Arc<Mutex<HashMap<AnalysisCacheKey, Arc<AnalysisFlight>>>>,
+    permits: Arc<Semaphore>,
+    executor: Arc<AnalysisExecutor>,
+}
+
+#[derive(Clone)]
 pub(crate) struct AppState {
     catalog: Arc<SessionCatalog>,
     live_state: watch::Sender<LiveState>,
     shutdown: watch::Sender<bool>,
     coordinator: Option<Arc<ScanCoordinator>>,
     config: AnalysisConfig,
-    analysis_cache: Arc<Mutex<AnalysisCache>>,
-    analysis_flights: Arc<Mutex<HashMap<AnalysisCacheKey, Arc<AnalysisFlight>>>>,
-    analysis_executor: Arc<AnalysisExecutor>,
+    analysis: Arc<AnalysisRuntime>,
 }
 
 #[derive(Debug, Clone)]
@@ -347,21 +351,51 @@ pub(crate) enum AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        let (status, code) = match &self {
-            Self::NotFound => (StatusCode::NOT_FOUND, "SESSION_NOT_FOUND"),
-            Self::SourceChanged => (StatusCode::CONFLICT, "SESSION_SOURCE_CHANGED"),
-            Self::Source(_) | Self::SourceMessage(_) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, "SESSION_PARSE_FAILED")
-            }
+        let (status, code, message) = match &self {
+            Self::NotFound => (
+                StatusCode::NOT_FOUND,
+                "SESSION_NOT_FOUND",
+                "session not found",
+            ),
+            Self::Io(error) if error.kind() == std::io::ErrorKind::NotFound => (
+                StatusCode::NOT_FOUND,
+                "SESSION_NOT_FOUND",
+                "session not found",
+            ),
+            Self::SourceChanged => (
+                StatusCode::CONFLICT,
+                "SESSION_SOURCE_CHANGED",
+                "session changed while it was being analysed",
+            ),
+            Self::Source(_) | Self::SourceMessage(_) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "SESSION_PARSE_FAILED",
+                "source session is invalid",
+            ),
             Self::CatalogRefreshUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "CATALOG_REFRESH_UNAVAILABLE",
+                "catalogue refresh is unavailable",
             ),
-            _ => (StatusCode::BAD_REQUEST, "SESSION_ANALYSIS_FAILED"),
+            Self::Io(_) | Self::Fingerprint(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "SESSION_ANALYSIS_FAILED",
+                "cannot read session",
+            ),
+            Self::Analysis(_) | Self::AnalysisMessage(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "SESSION_ANALYSIS_FAILED",
+                "analysis failed",
+            ),
+            Self::Message(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "SESSION_ANALYSIS_FAILED",
+                "internal server error",
+            ),
         };
         (
             status,
-            Json(serde_json::json!({ "error": { "code": code, "message": self.to_string() } })),
+            Json(serde_json::json!({ "error": { "code": code, "message": message } })),
         )
             .into_response()
     }
@@ -378,6 +412,7 @@ const RETRY_DELAYS: [Duration; 3] = [
 const DEGRADED_SCAN_INTERVAL: Duration = Duration::from_secs(1);
 const DEGRADED_SCAN_DEADLINE: Duration = Duration::from_secs(5);
 const SCAN_SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
+const ANALYSIS_CONCURRENCY_LIMIT: usize = 2;
 
 pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let configured_root = args.session_root.unwrap_or_else(|| {
@@ -388,8 +423,16 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = Arc::new(Diagnostics::default());
     let signals = Arc::new(watcher::WatchSignals::default());
     let (hint_sender, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
-    let watcher = watcher::start(&root, hint_sender, Arc::clone(&signals))
-        .map_err(|error| format!("cannot watch session root: {error}"))?;
+    let watcher = match watcher::start(&root, hint_sender, Arc::clone(&signals)) {
+        Ok(watcher) => Some(watcher),
+        Err(_) => {
+            // A readable root still has useful request-driven discovery even
+            // when the platform watcher cannot be installed.
+            eprintln!("filesystem watcher unavailable; live discovery is degraded");
+            signals.watcher_failed.store(true, Ordering::Release);
+            None
+        }
+    };
 
     let initial_root = root.clone();
     let sessions = tokio::task::spawn_blocking(move || discover(&initial_root, None)).await??;
@@ -402,7 +445,11 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let (live_state, _live_receiver) = watch::channel(LiveState {
         generation: generation.clone(),
         revision: 0,
-        availability: LiveAvailability::Active,
+        availability: if watcher.is_some() {
+            LiveAvailability::Active
+        } else {
+            LiveAvailability::Degraded
+        },
     });
     let (shutdown, _shutdown_receiver) = watch::channel(false);
     let (control_sender, control_receiver) = mpsc::channel(32);
@@ -434,9 +481,12 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             tokenization: args.tokenization.into(),
             perf_diagnostics,
         },
-        analysis_cache: Arc::new(Mutex::new(AnalysisCache::default())),
-        analysis_flights: Arc::new(Mutex::new(HashMap::new())),
-        analysis_executor: Arc::new(execute_analysis),
+        analysis: Arc::new(AnalysisRuntime {
+            cache: Arc::new(Mutex::new(AnalysisCache::default())),
+            flights: Arc::new(Mutex::new(HashMap::new())),
+            permits: Arc::new(Semaphore::new(ANALYSIS_CONCURRENCY_LIMIT)),
+            executor: Arc::new(execute_analysis),
+        }),
     };
     let app = router(state);
     let address = SocketAddr::from(([127, 0, 0, 1], args.port));
@@ -803,9 +853,13 @@ async fn scan_worker(
         .into_iter()
         .flatten()
         .min();
-        let mut timer = Box::pin(match next_deadline {
-            Some(deadline) => tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)),
-            None => tokio::time::sleep(Duration::from_secs(24 * 60 * 60)),
+        let mut timer = Box::pin(async move {
+            match next_deadline {
+                Some(deadline) => {
+                    tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await;
+                }
+                None => std::future::pending::<()>().await,
+            }
         });
         let active_result = async {
             if active.is_some() {
@@ -1005,15 +1059,16 @@ async fn sessions(State(state): State<AppState>, headers: HeaderMap) -> Result<R
     list_response(&snapshot, availability, &headers)
 }
 
+#[derive(Serialize)]
+struct SessionList<'a> {
+    sessions: &'a [SessionFile],
+}
+
 fn list_response(
     snapshot: &CatalogSnapshot,
     availability: LiveAvailability,
     headers: &HeaderMap,
 ) -> Result<Response, AppError> {
-    let body = serde_json::to_vec(&serde_json::json!({ "sessions": &*snapshot.sessions }))
-        .map_err(|error| {
-            AppError::Message(format!("cannot serialize session catalogue: {error}"))
-        })?;
     let etag = list_etag(snapshot);
     let mut builder = Response::builder()
         .header(header::ETAG, etag.as_str())
@@ -1039,6 +1094,10 @@ fn list_response(
             .body(axum::body::Body::empty())
             .map_err(|error| AppError::Message(format!("cannot build response: {error}")));
     }
+    let body = serde_json::to_vec(&SessionList {
+        sessions: &snapshot.sessions,
+    })
+    .map_err(|error| AppError::Message(format!("cannot serialize session catalogue: {error}")))?;
     builder = builder
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::CONTENT_LENGTH, body.len());
@@ -1074,21 +1133,29 @@ async fn session_analysis(
         .find(|session| session.id == id)
         .ok_or(AppError::NotFound)?;
     let path = FsPath::new(&session.path).to_path_buf();
-    let key = analysis_cache_key(&path, state.config)?;
+    let key_path = path.clone();
+    let config = state.config;
+    let key = tokio::task::spawn_blocking(move || analysis_cache_key(&key_path, config))
+        .await
+        .map_err(|error| {
+            AppError::Message(format!("analysis fingerprint task failed: {error}"))
+        })??;
 
     // Keep the cache lookup and flight registration in one lock ordering.
     // The publisher takes these locks in the same order, so a request cannot
     // observe both a missing cache entry and a removed flight.
     let (flight, should_start) = {
         let mut cache = state
-            .analysis_cache
+            .analysis
+            .cache
             .lock()
             .map_err(|_| AppError::Message("analysis cache is unavailable".into()))?;
         if let Some(response) = cache.get(&key) {
             return response_for(&response, &headers);
         }
         let mut flights = state
-            .analysis_flights
+            .analysis
+            .flights
             .lock()
             .map_err(|_| AppError::Message("analysis flight state is unavailable".into()))?;
         if let Some(flight) = flights.get(&key) {
@@ -1103,13 +1170,11 @@ async fn session_analysis(
 
     if should_start {
         start_analysis(
-            Arc::clone(&state.analysis_cache),
-            Arc::clone(&state.analysis_flights),
+            (*state.analysis).clone(),
             key.clone(),
             path.clone(),
             state.config,
             Arc::clone(&flight),
-            Arc::clone(&state.analysis_executor),
         );
     }
 
@@ -1135,23 +1200,44 @@ async fn session_analysis(
 }
 
 fn start_analysis(
-    cache: Arc<Mutex<AnalysisCache>>,
-    flights: Arc<Mutex<HashMap<AnalysisCacheKey, Arc<AnalysisFlight>>>>,
+    runtime: AnalysisRuntime,
     key: AnalysisCacheKey,
     path: PathBuf,
     config: AnalysisConfig,
     flight: Arc<AnalysisFlight>,
-    executor: Arc<AnalysisExecutor>,
 ) {
     tokio::spawn(async move {
+        let AnalysisRuntime {
+            cache,
+            flights,
+            permits,
+            executor,
+        } = runtime;
+        let permit = match permits.acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => {
+                let result = Err(FlightError::Message(
+                    "analysis concurrency is unavailable".into(),
+                ));
+                flight.result.send_replace(Some(result));
+                if let Ok(mut active) = flights.lock() {
+                    active.remove(&key);
+                }
+                return;
+            }
+        };
         let response_key = key.clone();
-        let result =
-            match tokio::task::spawn_blocking(move || executor(path, config, response_key)).await {
-                Ok(result) => result,
-                Err(error) => Err(FlightError::Message(format!(
-                    "analysis task failed: {error}"
-                ))),
-            };
+        let result = match tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            executor(path, config, response_key)
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(error) => Err(FlightError::Message(format!(
+                "analysis task failed: {error}"
+            ))),
+        };
 
         if let Ok(response) = &result {
             if let Ok(mut cache_state) = cache.lock() {
@@ -1161,7 +1247,7 @@ fn start_analysis(
         flight.result.send_replace(Some(result));
         if let Ok(mut active) = flights.lock() {
             active.remove(&key);
-        }
+        };
     });
 }
 
@@ -1341,9 +1427,12 @@ mod tests {
             shutdown,
             coordinator: None,
             config,
-            analysis_cache,
-            analysis_flights: Arc::new(Mutex::new(HashMap::new())),
-            analysis_executor,
+            analysis: Arc::new(AnalysisRuntime {
+                cache: analysis_cache,
+                flights: Arc::new(Mutex::new(HashMap::new())),
+                permits: Arc::new(Semaphore::new(ANALYSIS_CONCURRENCY_LIMIT)),
+                executor: analysis_executor,
+            }),
         }
     }
 
@@ -1384,7 +1473,8 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let receivers = state
-                    .analysis_flights
+                    .analysis
+                    .flights
                     .lock()
                     .expect("flights")
                     .values()
@@ -1423,6 +1513,66 @@ mod tests {
             body: bytes::Bytes::from(vec![b'x'; size]),
             etag: "\"test\"".into(),
         })
+    }
+
+    #[test]
+    fn filesystem_hints_set_a_bounded_debounce_window() {
+        let mut pending = false;
+        let mut ready = false;
+        let mut quiet_deadline = None;
+        let mut maximum_deadline = None;
+        schedule_hint(
+            &mut pending,
+            &mut ready,
+            &mut quiet_deadline,
+            &mut maximum_deadline,
+        );
+        assert!(pending);
+        assert!(!ready);
+        assert!(quiet_deadline.is_some());
+        let first_maximum = maximum_deadline;
+        schedule_hint(
+            &mut pending,
+            &mut ready,
+            &mut quiet_deadline,
+            &mut maximum_deadline,
+        );
+        assert_eq!(maximum_deadline, first_maximum);
+
+        ready = true;
+        quiet_deadline = None;
+        maximum_deadline = None;
+        schedule_hint(
+            &mut pending,
+            &mut ready,
+            &mut quiet_deadline,
+            &mut maximum_deadline,
+        );
+        assert!(pending);
+        assert!(ready);
+        assert_eq!(quiet_deadline, None);
+        assert_eq!(maximum_deadline, None);
+    }
+
+    #[tokio::test]
+    async fn internal_errors_use_server_status_and_redacted_messages() {
+        let response =
+            AppError::Message("private /tmp/session.jsonl detail".into()).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = response_body(response).await;
+        let body = String::from_utf8(body).expect("UTF-8 error response");
+        assert!(body.contains("SESSION_ANALYSIS_FAILED"));
+        assert!(!body.contains("/tmp/session.jsonl"));
+
+        let response = AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "/tmp/missing.jsonl",
+        ))
+        .into_response();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(String::from_utf8(response_body(response).await)
+            .expect("UTF-8 error response")
+            .contains("SESSION_NOT_FOUND"));
     }
 
     #[tokio::test]
@@ -1663,7 +1813,7 @@ mod tests {
                 .contains("SESSION_PARSE_FAILED"));
         }
         assert!(cache.lock().expect("cache").entries.is_empty());
-        assert!(state.analysis_flights.lock().expect("flights").is_empty());
+        assert!(state.analysis.flights.lock().expect("flights").is_empty());
 
         let retry = app
             .oneshot(request("simple.jsonl"))
@@ -1710,6 +1860,61 @@ mod tests {
         let response = waiter.await.expect("waiter task").expect("waiter response");
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(invocations.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn analysis_execution_is_bounded_across_distinct_keys() {
+        let invocations = Arc::new(AtomicUsize::new(0));
+        let (gate, release) = blocking_gate();
+        let executor: Arc<AnalysisExecutor> = {
+            let invocations = Arc::clone(&invocations);
+            let gate = Arc::clone(&gate);
+            Arc::new(move |_, _, _| {
+                invocations.fetch_add(1, Ordering::SeqCst);
+                gate.wait();
+                Ok(sized_response(10))
+            })
+        };
+        let mut second = fixture_session("fixtures/pi/compaction.jsonl", "second.jsonl");
+        second.id = "second".into();
+        let mut third = fixture_session("fixtures/pi/branch.jsonl", "third.jsonl");
+        third.id = "third".into();
+        let state = test_state_with_executor(
+            vec![
+                fixture_session("fixtures/pi/simple.jsonl", "simple.jsonl"),
+                second,
+                third,
+            ],
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+            Arc::new(Mutex::new(AnalysisCache::default())),
+            executor,
+        );
+        let app = router(state);
+        let first = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
+        let second = tokio::spawn(app.clone().oneshot(request("second")));
+        let third = tokio::spawn(app.oneshot(request("third")));
+        while invocations.load(Ordering::SeqCst) < ANALYSIS_CONCURRENCY_LIMIT {
+            tokio::task::yield_now().await;
+        }
+        tokio::task::yield_now().await;
+        assert_eq!(
+            invocations.load(Ordering::SeqCst),
+            ANALYSIS_CONCURRENCY_LIMIT
+        );
+        release.0.release();
+        for task in [first, second, third] {
+            assert_eq!(
+                task.await
+                    .expect("request task")
+                    .expect("response")
+                    .status(),
+                StatusCode::OK
+            );
+        }
+        assert_eq!(invocations.load(Ordering::SeqCst), 3);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

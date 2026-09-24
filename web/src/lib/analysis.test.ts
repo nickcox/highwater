@@ -62,7 +62,9 @@ describe('indexAnalysis', () => {
     analysis.contextItems[0].presenceCallCount = 1;
     analysis.contextItems[0].firstModelCall = 2;
     analysis.contextItems[0].lastModelCall = 2;
-    expect(() => indexAnalysis(analysis)).toThrow(/Model call 1 references item a outside its presence ranges/);
+    expect(() => indexAnalysis(analysis)).toThrow(
+      /Model call 1 references item a outside its presence ranges/,
+    );
   });
 
   it('accepts a terminal compaction boundary and its presence-less summary', () => {
@@ -76,17 +78,26 @@ describe('indexAnalysis', () => {
     analysis.modelCalls[1].transitionItemCounts = { added: 0, retained: 1, dropped: 1 };
     analysis.contextItems = analysis.contextItems
       .filter((item) => item.id !== 'summary' && item.id !== 'retained')
-      .map((item) => item.id === 'gap'
-        ? { ...item, presence: [{ startCall: 1, endCall: 1 }], presenceCallCount: 1, lastModelCall: 1 }
-        : item);
-    analysis.compactions = [{
-      id: 'compact-1',
-      beforeModelCall: 3,
-      sourceItemIds: ['a'],
-      retainedItemIds: [],
-      summaryItemId: 'terminal-summary',
-      tokensBefore: 100,
-    }];
+      .map((item) =>
+        item.id === 'gap'
+          ? {
+              ...item,
+              presence: [{ startCall: 1, endCall: 1 }],
+              presenceCallCount: 1,
+              lastModelCall: 1,
+            }
+          : item,
+      );
+    analysis.compactions = [
+      {
+        id: 'compact-1',
+        beforeModelCall: 3,
+        sourceItemIds: ['a'],
+        retainedItemIds: [],
+        summaryItemId: 'terminal-summary',
+        tokensBefore: 100,
+      },
+    ];
     analysis.contextItems.push({
       id: 'terminal-summary',
       kind: 'compactionSummary',
@@ -103,7 +114,14 @@ describe('indexAnalysis', () => {
       metadata: {},
       tokenEstimates: [],
       tokenTurns: null,
-      tokenTurnsCoverage: { completeItems: 0, partialItems: 0, unavailableItems: 1, totalItems: 1, coveredCalls: 0, totalCalls: 0 },
+      tokenTurnsCoverage: {
+        completeItems: 0,
+        partialItems: 0,
+        unavailableItems: 1,
+        totalItems: 1,
+        coveredCalls: 0,
+        totalCalls: 0,
+      },
     });
     analysis.lineage = [{ from: 'a', to: 'terminal-summary', kind: 'frameworkCompaction' }];
 

@@ -13,7 +13,10 @@ class FakeEventSource implements EventSourceLike {
   }
 
   removeEventListener(type: string, listener: (event: Event) => void): void {
-    this.listeners.set(type, (this.listeners.get(type) ?? []).filter((candidate) => candidate !== listener));
+    this.listeners.set(
+      type,
+      (this.listeners.get(type) ?? []).filter((candidate) => candidate !== listener),
+    );
   }
 
   close(): void {
@@ -41,14 +44,17 @@ describe('SSE event client', () => {
     const source = new FakeEventSource();
     const onCatalogue = vi.fn();
     const onAvailability = vi.fn();
-    const stop = connectEvents({
-      onOpen: vi.fn(),
-      onReconnecting: vi.fn(),
-      onClosed: vi.fn(),
-      onCatalogue,
-      onAvailability,
-      onWarning: vi.fn(),
-    }, () => source);
+    const stop = connectEvents(
+      {
+        onOpen: vi.fn(),
+        onReconnecting: vi.fn(),
+        onClosed: vi.fn(),
+        onCatalogue,
+        onAvailability,
+        onWarning: vi.fn(),
+      },
+      () => source,
+    );
 
     source.open();
     source.emit('sessionsChanged', {
@@ -76,14 +82,17 @@ describe('SSE event client', () => {
     const source = new FakeEventSource();
     const warning = vi.fn();
     const onCatalogue = vi.fn();
-    connectEvents({
-      onOpen: vi.fn(),
-      onReconnecting: vi.fn(),
-      onClosed: vi.fn(),
-      onCatalogue,
-      onAvailability: vi.fn(),
-      onWarning: warning,
-    }, () => source);
+    connectEvents(
+      {
+        onOpen: vi.fn(),
+        onReconnecting: vi.fn(),
+        onClosed: vi.fn(),
+        onCatalogue,
+        onAvailability: vi.fn(),
+        onWarning: warning,
+      },
+      () => source,
+    );
     source.emit('sessionsChanged', {
       generation: 'bad',
       revision: '1',

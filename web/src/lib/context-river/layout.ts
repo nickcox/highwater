@@ -23,9 +23,46 @@ function midpoint(point: RibbonPoint): number {
   return (point.y0 + point.y1) / 2;
 }
 
+function displayWeightFor(
+  indexed: IndexedAnalysis,
+  call: IndexedAnalysis['analysis']['modelCalls'][number],
+  itemId: string,
+): number {
+  if (!indexed.itemById.has(itemId)) return 0;
+  if (
+    indexed.analysis.displayWeightUnit === 'calculatedTokens' ||
+    indexed.analysis.displayWeightUnit === 'estimatedTokens'
+  ) {
+    return (
+      indexed.itemEstimateByProfile.get(itemId)?.get(call.tokenizationProfileId ?? '')?.tokens ?? 0
+    );
+  }
+  return 1;
+}
+
+export function layoutCallColumns(
+  indexed: IndexedAnalysis,
+  width: number,
+  margin: RiverLayoutOptions['margin'],
+): CallColumn[] {
+  const calls = indexed.analysis.modelCalls;
+  const innerWidth = Math.max(0, width - margin.left - margin.right);
+  if (calls.length === 0 || innerWidth === 0) return [];
+  const step = calls.length > 1 ? innerWidth / (calls.length - 1) : innerWidth;
+  return calls.map((call, position) => ({
+    callIndex: call.index,
+    x: calls.length > 1 ? margin.left + position * step : margin.left + innerWidth / 2,
+    totalDisplayWeight: call.contextItemIds.reduce(
+      (total, itemId) => total + displayWeightFor(indexed, call, itemId),
+      0,
+    ),
+  }));
+}
+
 export function layoutContextRiver(
   indexed: IndexedAnalysis,
   options: RiverLayoutOptions,
+  precomputedColumns?: readonly CallColumn[],
 ): ContextRiverLayout {
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
     performance.mark('tokenplume-layout-start');
@@ -63,32 +100,19 @@ export function layoutContextRiver(
   }
 
   const callCount = analysis.modelCalls.length;
+  const columns = precomputedColumns
+    ? [...precomputedColumns]
+    : layoutCallColumns(indexed, options.width, options.margin);
   const step = callCount > 1 ? innerWidth / (callCount - 1) : innerWidth;
-  const xByCall = new Map<number, number>();
-  for (const [position, call] of analysis.modelCalls.entries()) {
-    xByCall.set(
-      call.index,
-      callCount > 1 ? options.margin.left + position * step : options.margin.left + innerWidth / 2,
-    );
-  }
-
-  const weightFor = (call: (typeof analysis.modelCalls)[number], itemId: string): number => {
-    const item = itemById.get(itemId);
-    if (!item) return 0;
-    if (analysis.displayWeightUnit === 'calculatedTokens' || analysis.displayWeightUnit === 'estimatedTokens') {
-      return indexed.itemEstimateByProfile.get(itemId)?.get(call.tokenizationProfileId ?? '')?.tokens ?? 0;
-    }
-    return 1;
-  };
-
-  const columns: CallColumn[] = analysis.modelCalls.map((call) => ({
-    callIndex: call.index,
-    x: xByCall.get(call.index) ?? options.margin.left,
-    totalDisplayWeight: call.contextItemIds.reduce((total, id) => total + weightFor(call, id), 0),
-  }));
+  const xByCall = new Map(columns.map((column) => [column.callIndex, column.x]));
   const maxTotalDisplayWeight = Math.max(0, ...columns.map((column) => column.totalDisplayWeight));
+  const requestedDomainMax = options.verticalDomainMax ?? maxTotalDisplayWeight;
+  const verticalDomainMax =
+    Number.isFinite(requestedDomainMax) && requestedDomainMax >= 0
+      ? requestedDomainMax
+      : maxTotalDisplayWeight;
   const y = scaleLinear()
-    .domain([0, Math.max(1, maxTotalDisplayWeight)])
+    .domain([0, Math.max(1, verticalDomainMax)])
     .range([options.margin.top + innerHeight, options.margin.top]);
   const geometry = new Map<string, Map<number, RibbonPoint>>();
 
@@ -98,7 +122,7 @@ export function layoutContextRiver(
       const item = itemById.get(itemId);
       if (!item) continue;
       const before = y(cumulative);
-      cumulative += weightFor(call, item.id);
+      cumulative += displayWeightFor(indexed, call, item.id);
       const after = y(cumulative);
       const point: RibbonPoint = {
         callIndex: call.index,
@@ -136,10 +160,8 @@ export function layoutContextRiver(
       }
       if (points.length === 0) continue;
       let touchesCompaction = false;
-      const sourceCompaction = analysis.compactions.find(
-        (compaction) =>
-          compaction.beforeModelCall === range.endCall + 1 &&
-          compaction.sourceItemIds.includes(item.id),
+      const sourceCompaction = (indexed.compactionBySourceId.get(item.id) ?? []).find(
+        (compaction) => compaction.beforeModelCall === range.endCall + 1,
       );
       if (sourceCompaction) {
         const last = points[points.length - 1];
@@ -155,10 +177,8 @@ export function layoutContextRiver(
         ];
         touchesCompaction = true;
       }
-      const summaryCompaction = analysis.compactions.find(
-        (compaction) =>
-          compaction.beforeModelCall === range.startCall &&
-          compaction.summaryItemId === item.id,
+      const summaryCompaction = (indexed.compactionsBySummaryId.get(item.id) ?? []).find(
+        (compaction) => compaction.beforeModelCall === range.startCall,
       );
       if (summaryCompaction) {
         const first = points[0];
@@ -202,12 +222,10 @@ export function layoutContextRiver(
     if (!summaryPoint) return [];
     const summaryY = midpoint(summaryPoint);
     const boundary = boundaryX(compaction.beforeModelCall);
-    return analysis.lineage
+    return (indexed.incomingLineage.get(compaction.summaryItemId) ?? [])
       .filter(
         (edge) =>
-          edge.kind === 'frameworkCompaction' &&
-          edge.to === compaction.summaryItemId &&
-          compaction.sourceItemIds.includes(edge.from),
+          edge.kind === 'frameworkCompaction' && compaction.sourceItemIds.includes(edge.from),
       )
       .flatMap((edge) => {
         const sourcePoint = geometry.get(edge.from)?.get(compaction.beforeModelCall - 1);
@@ -228,7 +246,11 @@ export function layoutContextRiver(
 
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
     performance.mark('tokenplume-layout-end');
-    performance.measure('tokenplume-layout-river', 'tokenplume-layout-start', 'tokenplume-layout-end');
+    performance.measure(
+      'tokenplume-layout-river',
+      'tokenplume-layout-start',
+      'tokenplume-layout-end',
+    );
   }
   return {
     chartUnit: analysis.displayWeightUnit,

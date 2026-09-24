@@ -38,7 +38,7 @@ interface ApiErrorBody {
 }
 
 const GENERATION_PATTERN = /^[0-9a-f]{32}$/;
-const MAX_CATALOG_REVISION = (2n ** 64n) - 1n;
+const MAX_CATALOG_REVISION = 2n ** 64n - 1n;
 
 function parseListHeaders(response: Response): {
   etag: string | null;
@@ -48,7 +48,11 @@ function parseListHeaders(response: Response): {
 } {
   const generation = response.headers.get('X-TokenPlume-Server-Generation');
   if (!generation || !GENERATION_PATTERN.test(generation)) {
-    throw new ApiError('Server returned an invalid catalogue generation', response.status, 'INVALID_CATALOG_HEADERS');
+    throw new ApiError(
+      'Server returned an invalid catalogue generation',
+      response.status,
+      'INVALID_CATALOG_HEADERS',
+    );
   }
   const revisionText = response.headers.get('X-TokenPlume-Catalog-Revision');
   let revision: bigint;
@@ -56,18 +60,34 @@ function parseListHeaders(response: Response): {
     if (!revisionText || !/^\d+$/.test(revisionText)) throw new Error('invalid');
     revision = BigInt(revisionText);
   } catch {
-    throw new ApiError('Server returned an invalid catalogue revision', response.status, 'INVALID_CATALOG_HEADERS');
+    throw new ApiError(
+      'Server returned an invalid catalogue revision',
+      response.status,
+      'INVALID_CATALOG_HEADERS',
+    );
   }
   if (revision < 0n || revision > MAX_CATALOG_REVISION) {
-    throw new ApiError('Server returned an out-of-range catalogue revision', response.status, 'INVALID_CATALOG_HEADERS');
+    throw new ApiError(
+      'Server returned an out-of-range catalogue revision',
+      response.status,
+      'INVALID_CATALOG_HEADERS',
+    );
   }
   const etag = response.headers.get('etag');
   if (!etag) {
-    throw new ApiError('Server returned a catalogue response without an ETag', response.status, 'INVALID_CATALOG_HEADERS');
+    throw new ApiError(
+      'Server returned a catalogue response without an ETag',
+      response.status,
+      'INVALID_CATALOG_HEADERS',
+    );
   }
   const availability = response.headers.get('X-TokenPlume-Live-Updates');
   if (availability !== 'active' && availability !== 'degraded') {
-    throw new ApiError('Server returned an invalid live-update status', response.status, 'INVALID_CATALOG_HEADERS');
+    throw new ApiError(
+      'Server returned an invalid live-update status',
+      response.status,
+      'INVALID_CATALOG_HEADERS',
+    );
   }
   return {
     etag,
@@ -79,11 +99,16 @@ function parseListHeaders(response: Response): {
 
 async function responseJson<T>(response: Response): Promise<T> {
   if (response.ok) {
-    if (import.meta.env.DEV && typeof performance !== 'undefined') performance.mark('tokenplume-response-json-start');
-    const value = await response.json() as T;
+    if (import.meta.env.DEV && typeof performance !== 'undefined')
+      performance.mark('tokenplume-response-json-start');
+    const value = (await response.json()) as T;
     if (import.meta.env.DEV && typeof performance !== 'undefined') {
       performance.mark('tokenplume-response-json-end');
-      performance.measure('tokenplume-response-json-parse', 'tokenplume-response-json-start', 'tokenplume-response-json-end');
+      performance.measure(
+        'tokenplume-response-json-parse',
+        'tokenplume-response-json-start',
+        'tokenplume-response-json-end',
+      );
     }
     return value;
   }
@@ -132,7 +157,8 @@ export async function fetchAnalysis(
     signal,
     headers,
   });
-  if (import.meta.env.DEV && typeof performance !== 'undefined') performance.mark('tokenplume-fetch-response');
+  if (import.meta.env.DEV && typeof performance !== 'undefined')
+    performance.mark('tokenplume-fetch-response');
   const responseEtag = response.headers.get('etag');
   if (response.status === 304) return { status: 'notModified', etag: responseEtag };
   return {

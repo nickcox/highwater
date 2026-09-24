@@ -1,7 +1,8 @@
-import type { IndexedAnalysis } from '../types';
+import type { SessionAnalysis } from './types';
 
-export function stableItemOrder(indexed: IndexedAnalysis): string[] {
-  const { analysis, itemById } = indexed;
+export function stableItemOrder(
+  analysis: Pick<SessionAnalysis, 'modelCalls' | 'contextItems' | 'compactions'>,
+): string[] {
   const firstAppearance = new Map<string, number>();
   let sequence = 0;
   for (const call of analysis.modelCalls) {
@@ -34,7 +35,7 @@ export function stableItemOrder(indexed: IndexedAnalysis): string[] {
     ranks.set(compaction.summaryItemId, median + 0.0001);
   }
 
-  return [...itemById.keys()].sort(
-    (a, b) => (ranks.get(a) ?? 0) - (ranks.get(b) ?? 0) || a.localeCompare(b),
-  );
+  return analysis.contextItems
+    .map((item) => item.id)
+    .sort((a, b) => (ranks.get(a) ?? 0) - (ranks.get(b) ?? 0) || a.localeCompare(b));
 }

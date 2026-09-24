@@ -4,7 +4,7 @@ use crate::domain::{
 use blake3::Hasher;
 
 /// Version of the streaming canonical payload encoding used for fingerprints.
-pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 2;
+pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 3;
 const PREVIEW_LIMIT: usize = 160;
 const EXPANDED_PREVIEW_LIMIT: usize = 640;
 
@@ -87,7 +87,14 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
                         has_non_tool_content = true;
                         builder.feed_text(&image_preview(image));
                     }
+                    AssistantContentBlock::Unsupported => {
+                        has_non_tool_content = true;
+                        builder.feed_text("[unsupported content]");
+                    }
                 }
+            }
+            if !has_image && !has_tool_call && !has_non_image_content && has_non_tool_content {
+                return bounded_preview("Content unavailable", "unavailable");
             }
             let mut preview = builder.finish(if has_tool_call {
                 "toolCall"
@@ -153,9 +160,16 @@ fn preview_content(content: &MessageContent) -> PayloadPreview {
         .parts
         .iter()
         .any(|part| matches!(part, ContentPart::Text(_)));
+    let has_unsupported = content
+        .parts
+        .iter()
+        .any(|part| matches!(part, ContentPart::Unsupported));
+    if has_unsupported && !has_image && !has_non_image_content {
+        return bounded_preview("Content unavailable", "unavailable");
+    }
     let mut builder = PreviewBuilder::new();
     feed_content(&mut builder, content, false);
-    builder.finish(if has_image && !has_non_image_content {
+    builder.finish(if has_image && !has_non_image_content && !has_unsupported {
         "image"
     } else {
         "text"
@@ -174,6 +188,7 @@ fn feed_content(builder: &mut PreviewBuilder, content: &MessageContent, inline_f
         match part {
             ContentPart::Text(text) => builder.feed_inline(text),
             ContentPart::Image(image) => builder.feed_inline(&image_preview(image)),
+            ContentPart::Unsupported => builder.feed_inline("[unsupported content]"),
         }
         builder.finish_line();
     }
@@ -344,8 +359,11 @@ pub(crate) fn project_payload(
     target: &ModelTarget,
 ) -> ProjectedPayload {
     let mut notes = Vec::new();
-    let (text, partial) = match payload {
-        TokenizationPayload::UserMessage(content) => project_content(content, &mut notes),
+    let (text, partial, unavailable) = match payload {
+        TokenizationPayload::UserMessage(content) => {
+            let (text, partial, unavailable) = project_content(content, &mut notes);
+            (text, partial, unavailable)
+        }
         TokenizationPayload::AssistantMessage {
             blocks,
             source_provider,
@@ -357,10 +375,16 @@ pub(crate) fn project_payload(
                 && source_api.as_deref() == target.api.as_deref();
             let mut out = String::new();
             let mut partial = false;
+            let mut has_supported = false;
+            let mut has_unsupported = false;
             for block in blocks {
                 match block {
-                    AssistantContentBlock::Text(value) => append_part(&mut out, value),
+                    AssistantContentBlock::Text(value) => {
+                        has_supported = true;
+                        append_part(&mut out, value);
+                    }
                     AssistantContentBlock::Thinking { text, .. } => {
+                        has_supported = true;
                         if source_matches || source_model.is_none() {
                             append_part(&mut out, text);
                         } else {
@@ -371,18 +395,25 @@ pub(crate) fn project_payload(
                     AssistantContentBlock::ToolCall {
                         name, arguments, ..
                     } => {
+                        has_supported = true;
                         append_part(&mut out, name);
                         append_part(&mut out, arguments);
                     }
                     AssistantContentBlock::Image(image) => {
+                        has_supported = true;
                         append_part(&mut out, "[image]");
                         notes.push("unsupportedImage".into());
                         let _ = image;
                         partial = true;
                     }
+                    AssistantContentBlock::Unsupported => {
+                        has_unsupported = true;
+                        notes.push("unsupportedPayload".into());
+                        partial = true;
+                    }
                 }
             }
-            (out, partial)
+            (out, partial, has_unsupported && !has_supported)
         }
         TokenizationPayload::ToolResult {
             tool_call_id,
@@ -396,13 +427,16 @@ pub(crate) fn project_payload(
             if *is_error {
                 append_part(&mut out, "[error]");
             }
-            let (content_text, partial) = project_content(content, &mut notes);
+            let (content_text, partial, unavailable) = project_content(content, &mut notes);
             append_part(&mut out, &content_text);
-            (out, partial)
+            (out, partial, unavailable)
         }
-        TokenizationPayload::CustomMessage(content) => project_content(content, &mut notes),
-        TokenizationPayload::CompactionSummary(summary) => (summary.clone(), false),
-        TokenizationPayload::BranchSummary(summary) => (summary.clone(), false),
+        TokenizationPayload::CustomMessage(content) => {
+            let (text, partial, unavailable) = project_content(content, &mut notes);
+            (text, partial, unavailable)
+        }
+        TokenizationPayload::CompactionSummary(summary) => (summary.clone(), false, false),
+        TokenizationPayload::BranchSummary(summary) => (summary.clone(), false, false),
         TokenizationPayload::CommandExecution {
             command,
             output,
@@ -410,14 +444,14 @@ pub(crate) fn project_payload(
         } => {
             if *excluded_from_context {
                 notes.push("excludedFromContext".into());
-                (String::new(), false)
+                (String::new(), false, false)
             } else {
-                (format!("{command}\n{output}"), false)
+                (format!("{command}\n{output}"), false, false)
             }
         }
         TokenizationPayload::Unavailable => {
             notes.push("unavailablePayload".into());
-            (String::new(), false)
+            (String::new(), false, true)
         }
     };
     notes.sort();
@@ -425,26 +459,37 @@ pub(crate) fn project_payload(
     ProjectedPayload {
         text,
         partial,
-        unavailable: matches!(payload, TokenizationPayload::Unavailable),
+        unavailable,
         note_codes: notes,
     }
 }
 
-fn project_content(content: &MessageContent, notes: &mut Vec<String>) -> (String, bool) {
+fn project_content(content: &MessageContent, notes: &mut Vec<String>) -> (String, bool, bool) {
     let mut output = String::new();
     let mut partial = false;
+    let mut has_supported = false;
+    let mut has_unsupported = false;
     for part in &content.parts {
         match part {
-            ContentPart::Text(text) => append_part(&mut output, text),
+            ContentPart::Text(text) => {
+                has_supported = true;
+                append_part(&mut output, text);
+            }
             ContentPart::Image(image) => {
+                has_supported = true;
                 append_part(&mut output, "[image]");
                 let _ = image;
                 notes.push("unsupportedImage".into());
                 partial = true;
             }
+            ContentPart::Unsupported => {
+                has_unsupported = true;
+                notes.push("unsupportedPayload".into());
+                partial = true;
+            }
         }
     }
-    (output, partial)
+    (output, partial, has_unsupported && !has_supported)
 }
 
 fn append_part(output: &mut String, value: &str) {
@@ -526,6 +571,7 @@ fn hash_content(hasher: &mut Hasher, content: &MessageContent) {
                 hash_tag(hasher, b"image");
                 hash_image(hasher, image);
             }
+            ContentPart::Unsupported => hash_tag(hasher, b"unsupported"),
         }
     }
 }
@@ -558,6 +604,7 @@ fn hash_assistant_block(hasher: &mut Hasher, block: &AssistantContentBlock) {
             hash_tag(hasher, b"image");
             hash_image(hasher, image);
         }
+        AssistantContentBlock::Unsupported => hash_tag(hasher, b"unsupported"),
     }
 }
 
@@ -686,6 +733,51 @@ mod tests {
             .iter()
             .any(|code| code == "unsupportedImage"));
         assert_eq!(preview_payload(&payload).kind, "image");
+    }
+
+    #[test]
+    fn unsupported_content_is_explicit_and_partial_when_mixed() {
+        let mixed = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Text("known".into()), ContentPart::Unsupported],
+        });
+        let projected = project_payload(
+            &mixed,
+            &ModelTarget {
+                provider: Some("openai".into()),
+                model: Some("gpt-4o-mini".into()),
+                api: Some("openai-chat-completions".into()),
+            },
+        );
+        assert!(projected.partial);
+        assert!(!projected.unavailable);
+        assert!(projected
+            .note_codes
+            .iter()
+            .any(|code| code == "unsupportedPayload"));
+        assert!(preview_payload(&mixed).expanded_text.contains("known"));
+        assert!(preview_payload(&mixed)
+            .expanded_text
+            .contains("unsupported content"));
+    }
+
+    #[test]
+    fn unsupported_only_content_is_unavailable_not_zero_tokens() {
+        let payload = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Unsupported],
+        });
+        let projected = project_payload(&payload, &ModelTarget::default());
+        assert!(projected.unavailable);
+        assert_eq!(projected.text, "");
+        assert_eq!(preview_payload(&payload).kind, "unavailable");
+    }
+
+    #[test]
+    fn empty_supported_content_remains_a_valid_empty_payload() {
+        let payload = TokenizationPayload::UserMessage(MessageContent::empty());
+        let projected = project_payload(&payload, &ModelTarget::default());
+        assert!(!projected.partial);
+        assert!(!projected.unavailable);
+        assert_eq!(preview_payload(&payload).kind, "text");
     }
 
     #[test]

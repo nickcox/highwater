@@ -5,6 +5,8 @@ export interface RiverLayoutOptions {
   height: number;
   margin: { top: number; right: number; bottom: number; left: number };
   minimumVisibleThickness: number;
+  /** Optional presentation-only Y-axis maximum; omitted to preserve session-wide scaling. */
+  verticalDomainMax?: number;
 }
 
 export interface CallColumn {

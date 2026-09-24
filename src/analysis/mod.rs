@@ -12,14 +12,14 @@ use std::{
 use thiserror::Error;
 use tokenization::{
     preview_payload, EstimateIndex, PayloadPreview, ProfileIndex, ProfileRegistry, TokenCoverage,
-    TokenEstimate, TokenizationProfile,
+    TokenEstimate, TokenizationMethod, TokenizationProfile,
 };
 
 pub(crate) use tokenization::TokenizationPolicy;
 
 pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 5;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 5;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -76,7 +76,15 @@ struct ApiCallDerived {
     added_ids: Vec<String>,
     dropped_ids: Vec<String>,
     transition_item_counts: TransitionItemCounts,
-    cumulative: (Option<u64>, Option<u64>, Option<u64>, UsageCompleteness),
+    cumulative: UsageSnapshot,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct UsageSnapshot {
+    prompt: Option<u64>,
+    completion: Option<u64>,
+    reasoning: Option<u64>,
+    completeness: UsageCompleteness,
 }
 
 fn derive_transition(
@@ -157,8 +165,8 @@ pub(crate) fn analyze(
     let mut methods = BTreeMap::<String, usize>::new();
 
     for call in &session.model_calls {
-        let profile = registry.profile(&call.target, config.tokenization);
-        let profile_index = registry.profile_index_for(&profile);
+        let (profile_index, profile) =
+            registry.profile_with_index(&call.target, config.tokenization);
         let estimate_indexes = call
             .context_item_ids
             .iter()
@@ -241,7 +249,7 @@ pub(crate) fn analyze(
     }
 
     let tokenize_ms = tokenize_started.elapsed().as_secs_f64() * 1000.0;
-    let cumulative_usages = cumulative_usages(&session.model_calls);
+    let (cumulative_usages, usage_totals) = usage_rollup(&session.model_calls);
     let metrics_started = Instant::now();
     let mut model_calls = Vec::with_capacity(works.len());
     let mut residual_percents = Vec::new();
@@ -321,13 +329,13 @@ pub(crate) fn analyze(
         if usage_completeness != UsageCompleteness::Complete {
             explanation_codes.push("providerUsageIncomplete".into());
         }
-        if profile.method.as_str() == "unavailable" {
+        if profile.method == TokenizationMethod::Unavailable {
             explanation_codes.push("unsupportedTokenizer".into());
         }
-        if profile.method == tokenization::TokenizationMethod::CharacterHeuristic {
+        if profile.method == TokenizationMethod::CharacterHeuristic {
             explanation_codes.push("heuristicTokenizer".into());
         }
-        if profile.method == tokenization::TokenizationMethod::ApiSerializationEstimate {
+        if profile.method == TokenizationMethod::ApiSerializationEstimate {
             explanation_codes.push("estimatedProviderSerialization".into());
         }
         if estimates.iter().any(|estimate| {
@@ -342,7 +350,7 @@ pub(crate) fn analyze(
             estimate
                 .note_codes
                 .iter()
-                .any(|code| code == "unavailablePayload")
+                .any(|code| code == "unavailablePayload" || code == "unsupportedPayload")
         }) {
             explanation_codes.push("unsupportedPayload".into());
         }
@@ -520,12 +528,7 @@ pub(crate) fn analyze(
         let total_calls = item
             .presence
             .iter()
-            .map(|range| {
-                range
-                    .end_call
-                    .saturating_sub(range.start_call)
-                    .saturating_add(1)
-            })
+            .map(PresenceRange::call_count)
             .sum::<usize>();
         let complete = total_calls > 0
             && unavailable_calls == 0
@@ -626,7 +629,7 @@ pub(crate) fn analyze(
                     .map(|index| {
                         let estimate = registry.estimate_at(index);
                         estimate.coverage == TokenCoverage::Complete
-                            && estimate.method == tokenization::TokenizationMethod::ModelTokenizer
+                            && estimate.method == TokenizationMethod::ModelTokenizer
                     })
                     .unwrap_or(false)
             })
@@ -642,8 +645,7 @@ pub(crate) fn analyze(
         work.estimate_indexes.iter().any(|estimate_index| {
             estimate_index
                 .map(|index| {
-                    registry.estimate_at(index).method
-                        != tokenization::TokenizationMethod::ModelTokenizer
+                    registry.estimate_at(index).method != TokenizationMethod::ModelTokenizer
                 })
                 .unwrap_or(false)
         })
@@ -689,8 +691,8 @@ pub(crate) fn analyze(
             rule: profile.rule.clone(),
         })
         .collect::<Vec<_>>();
-    let usage_totals = usage_totals(&session.model_calls);
-    let (reported_prompt, reported_completeness) = usage_totals;
+    let reported_prompt = usage_totals.prompt;
+    let reported_completeness = usage_totals.completeness;
     let analysis_summary = TokenAnalysisSummary {
         policy: config.tokenization.as_str().into(),
         chart_unit: chart_unit.into(),
@@ -716,12 +718,7 @@ pub(crate) fn analyze(
             .map(|item| {
                 item.presence
                     .iter()
-                    .map(|range| {
-                        range
-                            .end_call
-                            .saturating_sub(range.start_call)
-                            .saturating_add(1)
-                    })
+                    .map(PresenceRange::call_count)
                     .sum::<usize>()
             })
             .sum::<usize>();
@@ -751,8 +748,8 @@ pub(crate) fn analyze(
             title: session.title,
             working_directory: session.working_directory,
             reported_prompt_tokens: reported_prompt,
-            reported_completion_tokens: usage_output_total(&session.model_calls),
-            reported_reasoning_tokens: usage_reasoning_total(&session.model_calls),
+            reported_completion_tokens: usage_totals.completion,
+            reported_reasoning_tokens: usage_totals.reasoning,
             reported_cost_total: usage_cost_total(&session.model_calls),
             reported_usage_completeness: reported_completeness.as_str().into(),
             calculated_token_turns: (total_token_turns > 0 || total_turns_complete)
@@ -818,10 +815,10 @@ fn to_api_call(
         reported_completion_tokens: derived.token_analysis.reported_completion_tokens,
         reported_total_tokens: derived.token_analysis.reported_total_tokens,
         reported_usage_completeness: derived.token_analysis.reported_usage_completeness.clone(),
-        cumulative_reported_prompt_tokens: derived.cumulative.0,
-        cumulative_reported_completion_tokens: derived.cumulative.1,
-        cumulative_reported_reasoning_tokens: derived.cumulative.2,
-        cumulative_reported_usage_completeness: derived.cumulative.3.as_str().into(),
+        cumulative_reported_prompt_tokens: derived.cumulative.prompt,
+        cumulative_reported_completion_tokens: derived.cumulative.completion,
+        cumulative_reported_reasoning_tokens: derived.cumulative.reasoning,
+        cumulative_reported_usage_completeness: derived.cumulative.completeness.as_str().into(),
         cost: cost_dto(usage),
         stop_reason: work.call.stop_reason.clone(),
         context_item_ids: work.call.context_item_ids.clone(),
@@ -999,7 +996,7 @@ impl CumulativeUsage {
         }
     }
 
-    fn finish(self) -> (Option<u64>, Option<u64>, Option<u64>, UsageCompleteness) {
+    fn finish(self) -> UsageSnapshot {
         let prompt_complete = self.prompt_complete && !self.prompt_overflow && self.prompt_known;
         let completeness = if prompt_complete {
             UsageCompleteness::Complete
@@ -1008,58 +1005,35 @@ impl CumulativeUsage {
         } else {
             UsageCompleteness::Missing
         };
-        (
-            prompt_complete.then_some(self.prompt_sum),
-            self.output_complete.then_some(self.output_sum),
-            self.reasoning_complete.then_some(self.reasoning_sum),
+        UsageSnapshot {
+            prompt: prompt_complete.then_some(self.prompt_sum),
+            completion: self.output_complete.then_some(self.output_sum),
+            reasoning: self.reasoning_complete.then_some(self.reasoning_sum),
             completeness,
-        )
+        }
     }
 }
 
-type CumulativeUsageValues = (Option<u64>, Option<u64>, Option<u64>, UsageCompleteness);
-
-fn cumulative_usages(calls: &[NormalizedModelCall]) -> Vec<CumulativeUsageValues> {
+fn usage_rollup(calls: &[NormalizedModelCall]) -> (Vec<UsageSnapshot>, UsageSnapshot) {
     let mut accumulator = CumulativeUsage::default();
-    calls
+    let snapshots = calls
         .iter()
         .map(|call| {
             accumulator.update(call);
             accumulator.finish()
         })
-        .collect()
-}
-
-fn usage_totals(calls: &[NormalizedModelCall]) -> (Option<u64>, UsageCompleteness) {
-    let values = calls
-        .iter()
-        .map(|call| reported_prompt_tokens(&call.reported_usage).0)
-        .collect::<Vec<_>>();
-    let completeness = if calls.is_empty() {
-        UsageCompleteness::Missing
-    } else if values.iter().all(Option::is_some) {
-        UsageCompleteness::Complete
-    } else if values.iter().any(Option::is_some) {
-        UsageCompleteness::Partial
+        .collect();
+    let final_snapshot = if calls.is_empty() {
+        UsageSnapshot {
+            prompt: None,
+            completion: None,
+            reasoning: None,
+            completeness: UsageCompleteness::Missing,
+        }
     } else {
-        UsageCompleteness::Missing
+        accumulator.finish()
     };
-    (
-        values
-            .into_iter()
-            .try_fold(0_u64, |total, value| total.checked_add(value?)),
-        completeness,
-    )
-}
-fn usage_output_total(calls: &[NormalizedModelCall]) -> Option<u64> {
-    calls.iter().try_fold(0_u64, |total, call| {
-        total.checked_add(call.reported_usage.output?)
-    })
-}
-fn usage_reasoning_total(calls: &[NormalizedModelCall]) -> Option<u64> {
-    calls.iter().try_fold(0_u64, |total, call| {
-        total.checked_add(call.reported_usage.reasoning?)
-    })
+    (snapshots, final_snapshot)
 }
 fn usage_cost_total(calls: &[NormalizedModelCall]) -> Option<f64> {
     if calls.is_empty() {
@@ -1288,7 +1262,7 @@ mod tests {
         session.model_calls[0].target = ModelTarget {
             provider: Some("openai".into()),
             model: Some("gpt-4o-mini".into()),
-            api: None,
+            api: Some("openai-chat-completions".into()),
         };
         session.model_calls[0].reported_usage = ReportedUsage {
             input: Some(2),
@@ -1317,6 +1291,77 @@ mod tests {
         assert!(call.token_analysis.residual_tokens.is_some());
         assert_eq!(call.token_analysis.status, "large");
         assert_eq!(analysis.session.reconciliation_complete_calls, 1);
+    }
+
+    #[test]
+    fn empty_sessions_have_missing_usage_totals() {
+        let mut session = fake_session();
+        session.model_calls.clear();
+        let analysis = analyze(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+        )
+        .expect("analysis");
+        assert_eq!(analysis.session.reported_prompt_tokens, None);
+        assert_eq!(analysis.session.reported_completion_tokens, None);
+        assert_eq!(analysis.session.reported_reasoning_tokens, None);
+        assert_eq!(analysis.session.reported_usage_completeness, "missing");
+    }
+
+    #[test]
+    fn analysis_preserves_unsupported_content_coverage() {
+        let mut session = fake_session();
+        session.context_items[0].payload = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Text("known".into()), ContentPart::Unsupported],
+        });
+        let analysis = analyze(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+        )
+        .expect("analysis");
+        let call = &analysis.model_calls[0];
+        assert_eq!(call.token_analysis.estimate_coverage.partial_items, 1);
+        assert!(call
+            .token_analysis
+            .explanation_codes
+            .iter()
+            .any(|code| code == "unsupportedPayload"));
+    }
+
+    #[test]
+    fn tokenizer_support_does_not_imply_known_request_framing() {
+        let mut session = fake_session();
+        session.model_calls[0].target = ModelTarget {
+            provider: Some("openai".into()),
+            model: Some("gpt-4o-mini".into()),
+            api: None,
+        };
+        session.model_calls[0].reported_usage = ReportedUsage {
+            input: Some(2),
+            cache_read: Some(0),
+            cache_write: Some(0),
+            ..ReportedUsage::default()
+        };
+        let analysis = analyze(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Auto,
+                perf_diagnostics: false,
+            },
+        )
+        .expect("analysis");
+        let call = &analysis.model_calls[0];
+        assert!(call.token_analysis.calculated_visible_tokens.is_some());
+        assert_eq!(call.token_analysis.known_framing_overhead_tokens, None);
+        assert_eq!(call.token_analysis.calculated_request_tokens, None);
+        assert_eq!(call.token_analysis.status, "unavailable");
+        assert_eq!(analysis.session.reconciliation_complete_calls, 0);
     }
 
     #[test]

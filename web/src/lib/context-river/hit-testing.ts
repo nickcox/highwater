@@ -1,9 +1,6 @@
 import type { CallColumn } from './types';
 
-export function nearestCallIndex(
-  pointerX: number,
-  columns: readonly CallColumn[],
-): number | null {
+export function nearestCallIndex(pointerX: number, columns: readonly CallColumn[]): number | null {
   if (columns.length === 0) return null;
   let low = 0;
   let high = columns.length;

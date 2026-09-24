@@ -3,7 +3,7 @@ use super::{
     TokenizationProfile, TokenizerFamily,
 };
 use crate::domain::{ModelTarget, NormalizedContextItem};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct TokenizationStats {
@@ -50,7 +50,6 @@ impl TokenCoverage {
 
 #[derive(Debug, Default)]
 pub(crate) struct ProfileRegistry {
-    profiles: BTreeMap<String, TokenizationProfile>,
     profile_values: Vec<TokenizationProfile>,
     profile_indexes: HashMap<String, ProfileIndex>,
     estimates: HashMap<(ProfileIndex, PayloadFingerprint), EstimateIndex>,
@@ -60,28 +59,33 @@ pub(crate) struct ProfileRegistry {
 }
 
 impl ProfileRegistry {
+    #[cfg(test)]
     pub(crate) fn profile(
         &mut self,
         target: &ModelTarget,
         policy: super::TokenizationPolicy,
     ) -> TokenizationProfile {
-        let profile = super::profile::resolve_profile(target, policy);
-        self.intern_profile(profile)
+        self.profile_with_index(target, policy).1
     }
 
-    fn intern_profile(&mut self, profile: TokenizationProfile) -> TokenizationProfile {
-        if self.profile_indexes.contains_key(&profile.id) {
-            return self
-                .profiles
-                .get(&profile.id)
-                .expect("interned profile must be present")
-                .clone();
+    pub(crate) fn profile_with_index(
+        &mut self,
+        target: &ModelTarget,
+        policy: super::TokenizationPolicy,
+    ) -> (ProfileIndex, TokenizationProfile) {
+        let profile = super::profile::resolve_profile(target, policy);
+        let index = self.intern_profile(profile);
+        (index, self.profile_values[index.0].clone())
+    }
+
+    fn intern_profile(&mut self, profile: TokenizationProfile) -> ProfileIndex {
+        if let Some(index) = self.profile_indexes.get(&profile.id).copied() {
+            return index;
         }
-        let index = ProfileIndex(self.profile_indexes.len());
+        let index = ProfileIndex(self.profile_values.len());
         self.profile_indexes.insert(profile.id.clone(), index);
-        self.profiles.insert(profile.id.clone(), profile.clone());
-        self.profile_values.push(profile.clone());
-        profile
+        self.profile_values.push(profile);
+        index
     }
 
     pub(crate) fn profile_index_for(&self, profile: &TokenizationProfile) -> ProfileIndex {
@@ -174,7 +178,9 @@ impl ProfileRegistry {
     }
 
     pub(crate) fn profiles(&self) -> impl Iterator<Item = &TokenizationProfile> {
-        self.profiles.values()
+        let mut profiles = self.profile_values.iter().collect::<Vec<_>>();
+        profiles.sort_by(|left, right| left.id.cmp(&right.id));
+        profiles.into_iter()
     }
 }
 

@@ -5,7 +5,8 @@
   export let onSelect: (id: string) => void;
 </script>
 
-<label>Session
+<label
+  >Session
   <select value={selectedId ?? ''} onchange={(event) => onSelect(event.currentTarget.value)}>
     {#each sessions as session (session.id)}
       <option value={session.id} title={session.fileName}>{session.displayName}</option>
@@ -14,6 +15,15 @@
 </label>
 
 <style>
-  label { display: flex; flex-direction: column; gap: 4px; color: #9eabc0; font-size: 12px; min-width: min(440px, 100%); }
-  select { max-width: 100%; }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #9eabc0;
+    font-size: 12px;
+    min-width: min(440px, 100%);
+  }
+  select {
+    max-width: 100%;
+  }
 </style>

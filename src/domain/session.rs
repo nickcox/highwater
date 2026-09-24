@@ -116,6 +116,15 @@ pub(crate) struct PresenceRange {
     pub end_call: usize,
 }
 
+impl PresenceRange {
+    /// Return the inclusive number of calls covered by this range.
+    pub(crate) fn call_count(&self) -> usize {
+        self.end_call
+            .saturating_sub(self.start_call)
+            .saturating_add(1)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct NormalizedCompaction {
     pub id: String,
@@ -189,12 +198,16 @@ pub(crate) enum AssistantContentBlock {
         arguments: String,
     },
     Image(ImageDescriptor),
+    /// A source block whose shape is not understood by the adapter.
+    Unsupported,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum ContentPart {
     Text(String),
     Image(ImageDescriptor),
+    /// A source content part whose shape is not understood by the adapter.
+    Unsupported,
 }
 
 #[derive(Debug, Clone)]

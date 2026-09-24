@@ -44,11 +44,13 @@ export function reconcileInteraction(
     ...state,
     pinnedCallIndex: reconcileCallIndex(state.pinnedCallIndex, previous, replacement),
     hoveredCallIndex: reconcileCallIndex(state.hoveredCallIndex, previous, replacement),
-    hoveredItemId: state.hoveredItemId !== null && replacement.itemById.has(state.hoveredItemId)
-      ? state.hoveredItemId
-      : null,
-    selectedItemId: state.selectedItemId !== null && replacement.itemById.has(state.selectedItemId)
-      ? state.selectedItemId
-      : null,
+    hoveredItemId:
+      state.hoveredItemId !== null && replacement.itemById.has(state.hoveredItemId)
+        ? state.hoveredItemId
+        : null,
+    selectedItemId:
+      state.selectedItemId !== null && replacement.itemById.has(state.selectedItemId)
+        ? state.selectedItemId
+        : null,
   };
 }

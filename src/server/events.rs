@@ -35,23 +35,36 @@ struct StatusData<'a> {
 
 pub(crate) async fn handler(
     State(state): State<AppState>,
-) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-    let initial = state.live_state.borrow().clone();
+) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    // Subscribe before taking the initial snapshot. Otherwise a publication
+    // between these two operations can be marked as already observed and
+    // never reach this client.
+    let mut receiver = state.live_state.subscribe();
+    let initial = receiver.borrow_and_update().clone();
+    let mut shutdown = state.shutdown.subscribe();
+    let shutdown_closed = *shutdown.borrow_and_update();
     let updates = stream::unfold(
         (
-            state.live_state.subscribe(),
-            state.shutdown.subscribe(),
+            receiver,
+            shutdown,
             initial.clone(),
             VecDeque::new(),
+            shutdown_closed,
         ),
-        |(mut receiver, mut shutdown, mut previous, mut pending)| async move {
+        |(mut receiver, mut shutdown, mut previous, mut pending, shutdown_closed)| async move {
             loop {
+                if shutdown_closed {
+                    return None;
+                }
                 if let Some(event) = pending.pop_front() {
-                    return Some((event, (receiver, shutdown, previous, pending)));
+                    return Some((
+                        event,
+                        (receiver, shutdown, previous, pending, shutdown_closed),
+                    ));
                 }
                 tokio::select! {
                     shutdown_result = shutdown.changed() => {
-                        if shutdown_result.is_err() || *shutdown.borrow() {
+                        if shutdown_result.is_err() || *shutdown.borrow_and_update() {
                             return None;
                         }
                     }
@@ -59,7 +72,7 @@ pub(crate) async fn handler(
                         if state_result.is_err() {
                             return None;
                         }
-                        let current = receiver.borrow().clone();
+                        let current = receiver.borrow_and_update().clone();
                         if previous.generation != current.generation
                             || previous.revision != current.revision
                         {
@@ -90,7 +103,7 @@ fn catalogue_event(state: &LiveState) -> Event {
         generation: &state.generation,
         revision: state.revision.to_string(),
     })
-    .unwrap_or_else(|_| "{}".to_owned());
+    .expect("catalogue SSE data contains only serializable primitives");
     Event::default()
         .id(format!("{}:{}", state.generation, state.revision))
         .event("sessionsChanged")
@@ -102,7 +115,7 @@ fn status_event(state: &LiveState) -> Event {
         generation: &state.generation,
         availability: state.availability,
     })
-    .unwrap_or_else(|_| "{}".to_owned());
+    .expect("status SSE data contains only serializable primitives");
     Event::default().event("liveStatus").data(data)
 }
 

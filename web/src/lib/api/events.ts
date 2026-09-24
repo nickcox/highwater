@@ -1,8 +1,4 @@
-import {
-  GENERATION_PATTERN,
-  MAX_CATALOG_REVISION,
-  type LiveAvailability,
-} from './client';
+import { GENERATION_PATTERN, MAX_CATALOG_REVISION, type LiveAvailability } from './client';
 
 export interface CatalogueInvalidation {
   generation: string;
@@ -59,8 +55,10 @@ function parseRevision(value: unknown): bigint | null {
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean {
-  return Object.keys(value).every((key) => keys.includes(key))
-    && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+  return (
+    Object.keys(value).every((key) => keys.includes(key)) &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+  );
 }
 
 export function connectEvents(

@@ -10,7 +10,8 @@ export type ContextItemKind =
   | 'other';
 
 export type ChartUnit = 'calculatedTokens' | 'estimatedTokens' | 'unavailable';
-export type TokenizationMethod = 'modelTokenizer' | 'apiSerializationEstimate' | 'characterHeuristic' | 'unavailable';
+export type TokenizationMethod =
+  'modelTokenizer' | 'apiSerializationEstimate' | 'characterHeuristic' | 'unavailable';
 export type TokenCoverage = 'complete' | 'partial' | 'unavailable';
 export type UsageCompleteness = 'complete' | 'partial' | 'missing';
 
@@ -233,7 +234,9 @@ export interface IndexedAnalysis {
   incomingLineage: Map<string, LineageEdge[]>;
   compactionById: Map<string, CompactionEvent>;
   compactionBySummaryId: Map<string, CompactionEvent>;
+  compactionsBySummaryId: Map<string, CompactionEvent[]>;
   compactionBySourceId: Map<string, CompactionEvent[]>;
+  compactionsByRetainedId: Map<string, CompactionEvent[]>;
 }
 
 export interface InteractionState {

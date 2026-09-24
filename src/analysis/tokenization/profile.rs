@@ -41,6 +41,21 @@ impl TokenizerFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FramingPolicy {
+    OpenAiChatApproximation,
+    Unknown,
+}
+
+impl FramingPolicy {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenAiChatApproximation => "openai-chat-approximation",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TokenizationMethod {
     ModelTokenizer,
     ApiSerializationEstimate,
@@ -67,22 +82,24 @@ pub(crate) struct TokenizationProfile {
     pub api: Option<String>,
     pub family: TokenizerFamily,
     pub method: TokenizationMethod,
+    pub framing: FramingPolicy,
     pub version: u32,
     pub rule: String,
 }
 
 impl TokenizationProfile {
     pub(crate) fn framing_overhead(&self, message_count: usize) -> Option<u64> {
-        match self.family {
+        match self.framing {
             // This is the documented approximation used by the local OpenAI chat
             // serialization model: three tokens per message and three priming tokens.
-            TokenizerFamily::O200k | TokenizerFamily::Cl100k => u64::try_from(message_count)
+            FramingPolicy::OpenAiChatApproximation => u64::try_from(message_count)
                 .ok()?
                 .checked_mul(3)?
                 .checked_add(3),
-            // Provider-specific heuristic profiles do not have documented local
-            // framing rules, so their framing contribution remains unknown.
-            TokenizerFamily::CharacterHeuristic | TokenizerFamily::Unavailable => None,
+            // Encoding support does not imply that the request's wire framing is
+            // known. Responses, Codex, tools, and multimodal payloads remain
+            // unavailable until their serialization rule is explicitly supported.
+            FramingPolicy::Unknown => None,
         }
     }
 }
@@ -192,13 +209,22 @@ fn build_profile(
         TokenizerFamily::CharacterHeuristic => "tokenplume-character-heuristic-v1",
         TokenizerFamily::Unavailable => "tokenplume-unavailable-v1",
     };
+    let framing = if matches!(family, TokenizerFamily::O200k | TokenizerFamily::Cl100k)
+        && is_openai_provider(&provider.to_ascii_lowercase())
+        && api.as_deref() == Some("openai-chat-completions")
+    {
+        FramingPolicy::OpenAiChatApproximation
+    } else {
+        FramingPolicy::Unknown
+    };
     let id = format!(
-        "{}:{}:{}:{}:{}:v2",
+        "{}:{}:{}:{}:{}:{}:v3",
         provider,
         model,
         api_label,
         family.as_str(),
-        implementation
+        implementation,
+        framing.as_str()
     );
     TokenizationProfile {
         id,
@@ -207,7 +233,8 @@ fn build_profile(
         api,
         family,
         method,
-        version: 2,
+        framing,
+        version: 3,
         rule: rule.into(),
     }
 }
@@ -270,6 +297,27 @@ mod tests {
                 resolve_profile(&target, TokenizationPolicy::Strict).method,
                 TokenizationMethod::Unavailable
             );
+        }
+    }
+
+    #[test]
+    fn framing_requires_an_explicit_supported_chat_api() {
+        let target = |api: Option<&str>| ModelTarget {
+            provider: Some("openai".into()),
+            model: Some("gpt-4o-mini".into()),
+            api: api.map(str::to_owned),
+        };
+        let chat = resolve_profile(
+            &target(Some("openai-chat-completions")),
+            TokenizationPolicy::Auto,
+        );
+        assert_eq!(chat.framing, FramingPolicy::OpenAiChatApproximation);
+        assert_eq!(chat.framing_overhead(2), Some(9));
+        for api in [None, Some("responses"), Some("openai-responses")] {
+            let profile = resolve_profile(&target(api), TokenizationPolicy::Auto);
+            assert_eq!(profile.family, TokenizerFamily::O200k);
+            assert_eq!(profile.framing, FramingPolicy::Unknown);
+            assert_eq!(profile.framing_overhead(2), None);
         }
     }
 
