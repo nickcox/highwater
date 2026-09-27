@@ -7,8 +7,17 @@ import ContextRiver from './ContextRiver.svelte';
 import type { IndexedAnalysis } from '../types';
 import type { RiverNavigationCommand, RiverViewportStatus } from './viewport';
 
+function economicsTrackButton(container: HTMLElement, name: string): HTMLButtonElement {
+  const button = [
+    ...container.querySelectorAll<HTMLButtonElement>('.economics-track-controls button'),
+  ].find((candidate) => candidate.textContent?.trim() === name);
+  if (!button) throw new Error(`Economics track button not found: ${name}`);
+  return button;
+}
+
 const callbacks = () => ({
   onViewportChange: vi.fn<(status: RiverViewportStatus) => void>(),
+  onSelectionVisibility: vi.fn<(status: { itemId: string; visible: boolean } | null) => void>(),
   onHoverCall: vi.fn<(index: number | null) => void>(),
   onPinCall: vi.fn<(index: number) => void>(),
   onHoverItem: vi.fn<(id: string | null, event?: PointerEvent) => void>(),
@@ -85,6 +94,73 @@ function longAnalysis(callCount: number): IndexedAnalysis {
     }));
   analysis.compactions = [];
   analysis.lineage = [];
+  return indexAnalysis(analysis);
+}
+
+function economicsAnalysis(): IndexedAnalysis {
+  const analysis = testAnalysis();
+  for (const call of analysis.modelCalls) {
+    const input = call.index === 1 ? 750 : 1000;
+    const cacheRead = call.index === 1 ? 250 : 0;
+    const cacheWrite = 0;
+    const promptTokens = input + cacheRead + cacheWrite;
+    call.provider = 'anthropic';
+    call.api = 'anthropic-messages';
+    call.usage = { ...call.usage, input, cacheRead, cacheWrite };
+    call.cost = {
+      input: 0.0000000123 * call.index,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0.0000000123 * call.index,
+    };
+    call.economics = {
+      ...call.economics,
+      policyId: 'anthropic-messages-cache-v1',
+      usageCompleteness: 'complete',
+      costCompleteness: 'complete',
+      cacheWriteStatus: 'reported',
+      promptTokens,
+      cacheReadRatio: cacheRead / promptTokens,
+      cacheWriteRatio: cacheWrite / promptTokens,
+      freshRatio: input / promptTokens,
+      piPromptCost: 0.0000000123 * call.index,
+      cacheRatioDiscontinuity: null,
+      explanationCodes: [],
+    };
+  }
+  analysis.modelCalls[3].model = 'different-model';
+  analysis.modelCalls[1].economics.cacheRatioDiscontinuity = {
+    previousCallIndex: 1,
+    direction: 'drop',
+    previousRatio: 0.25,
+    currentRatio: 0,
+    delta: 0.25,
+    magnitude: 'notable',
+    method: 'adjacent-cache-read-share-v1',
+    previousPromptTokens: 1000,
+    currentPromptTokens: 1000,
+    compactionBefore: analysis.modelCalls[1].compactionBefore,
+  };
+  const promptTokens = analysis.modelCalls.reduce(
+    (sum, call) => sum + (call.economics.promptTokens ?? 0),
+    0,
+  );
+  const cacheReadTokens = analysis.modelCalls.reduce(
+    (sum, call) => sum + (call.usage.cacheRead ?? 0),
+    0,
+  );
+  analysis.economics = {
+    ...analysis.economics,
+    supportedPolicyIds: ['anthropic-messages-cache-v1'],
+    usageCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
+    costCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
+    cacheReadEligibleCalls: 4,
+    cacheReadPromptTokens: promptTokens,
+    cacheReadTokens,
+    cacheReadRatio: cacheReadTokens / promptTokens,
+    explanationCodes: [],
+  };
   return indexAnalysis(analysis);
 }
 
@@ -169,6 +245,269 @@ afterEach(() => {
 });
 
 describe('ContextRiver continuous viewport integration', () => {
+  it('shares the call axis with a bounded keyboard cache track and pins without selecting an item', async () => {
+    const indexed = economicsAnalysis();
+    const handlers = callbacks();
+    const interaction = { ...resetInteraction(), selectedItemId: 'a' };
+    const view = render(ContextRiver, {
+      props: { indexed, interaction, ...handlers },
+    });
+
+    await waitFor(() =>
+      expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
+    );
+    const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
+    const chartSvgs = host.querySelectorAll(':scope > svg, .economics-track-svg');
+    expect(chartSvgs).toHaveLength(2);
+    expect(chartSvgs[0].getAttribute('width')).toBe(chartSvgs[1].getAttribute('width'));
+    expect(view.getByRole('button', { name: 'Cache' })).toHaveAttribute('aria-pressed', 'true');
+
+    const marks = view.container.querySelectorAll(
+      '.economics-track-svg .economics-mark[role="button"]',
+    );
+    expect(marks).toHaveLength(indexed.analysis.modelCalls.length);
+    expect([...marks].filter((mark) => mark.getAttribute('tabindex') === '0')).toHaveLength(1);
+    expect(marks[0].getAttribute('aria-label')).toContain('Cache read');
+    expect(marks[1].getAttribute('aria-label')).toContain('dropped from 25.0% on call 1');
+    expect(marks[3].getAttribute('aria-label')).toContain('Target changes from anthropic / m');
+    const eventTriggers = view.container.querySelectorAll('.track-event-trigger');
+    expect(eventTriggers).toHaveLength(2);
+    expect(eventTriggers[0]).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('2 economics events'),
+    );
+    expect(eventTriggers[0]?.querySelector('title')).toHaveTextContent('Cache-read share');
+    expect(eventTriggers[0]?.querySelector('title')).toHaveTextContent('Compaction before call 3');
+    expect(eventTriggers[1]?.querySelector('title')).toHaveTextContent(
+      'Target changes from anthropic / m',
+    );
+    expect(view.container.querySelectorAll('.event-anchor-connector').length).toBeGreaterThan(0);
+
+    const nextMark = view.container.querySelector('#economics-call-2') as SVGGElement;
+    await fireEvent.keyDown(view.container.querySelector('#economics-call-1') as SVGGElement, {
+      key: 'ArrowRight',
+    });
+    expect(handlers.onHoverCall).toHaveBeenLastCalledWith(2);
+    expect(document.activeElement).toBe(nextMark);
+    await fireEvent.keyDown(nextMark, { key: ' ' });
+    expect(handlers.onPinCall).toHaveBeenLastCalledWith(2);
+
+    await fireEvent.click(nextMark);
+    expect(handlers.onPinCall).toHaveBeenLastCalledWith(2);
+    expect(handlers.onSelectItem).not.toHaveBeenCalled();
+    expect(interaction.selectedItemId).toBe('a');
+  });
+
+  it('uses individual visible ribbon spans and reveals the nearest present call at current zoom', async () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const handlers = callbacks();
+    const interaction = { ...resetInteraction(), selectedItemId: 'gap', pinnedCallIndex: 2 };
+    const view = render(ContextRiver, {
+      props: { indexed, interaction, selectedItemId: 'gap', ...handlers },
+    });
+    const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
+    await waitFor(() =>
+      expect(handlers.onSelectionVisibility).toHaveBeenLastCalledWith({
+        itemId: 'gap',
+        visible: true,
+      }),
+    );
+
+    await view.rerender({
+      indexed,
+      interaction,
+      selectedItemId: 'gap',
+      navigationCommand: { id: 1, kind: 'range', startCallIndex: 2, endCallIndex: 3 },
+      ...handlers,
+    });
+    await waitFor(() =>
+      expect(handlers.onSelectionVisibility).toHaveBeenLastCalledWith({
+        itemId: 'gap',
+        visible: false,
+      }),
+    );
+    const zoomedWidth = host.querySelector('svg')?.getAttribute('width');
+    const rangeScroll = host.scrollLeft;
+
+    await view.rerender({
+      indexed,
+      interaction,
+      selectedItemId: 'gap',
+      navigationCommand: {
+        id: 2,
+        kind: 'reveal-item',
+        itemId: 'gap',
+        referenceCallIndex: 2,
+      },
+      ...handlers,
+    });
+    await waitFor(() => expect(host.scrollLeft).not.toBe(rangeScroll));
+    expect(host.scrollLeft).toBe(0);
+    expect(host.querySelector('svg')?.getAttribute('width')).toBe(zoomedWidth);
+    expect(interaction.pinnedCallIndex).toBe(2);
+    expect(interaction.selectedItemId).toBe('gap');
+    expect(handlers.onPinCall).not.toHaveBeenCalled();
+  });
+
+  it('holds an explicit reveal until River is visible and cancels it when its command is removed', async () => {
+    const indexed = longAnalysis(160);
+    const handlers = callbacks();
+    const interaction = {
+      ...resetInteraction(),
+      selectedItemId: indexed.analysis.modelCalls[0].contextItemIds[0],
+      pinnedCallIndex: 80,
+    };
+    const view = render(ContextRiver, {
+      props: { indexed, interaction, ...handlers },
+    });
+    const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
+    await view.rerender({
+      indexed,
+      interaction,
+      navigationCommand: { id: 1, kind: 'range', startCallIndex: 10, endCallIndex: 11 },
+      ...handlers,
+    });
+    await waitFor(() => expect(host.scrollLeft).toBeGreaterThan(0));
+    const beforeReveal = host.scrollLeft;
+
+    const command = {
+      id: 2,
+      kind: 'reveal-item' as const,
+      itemId: interaction.selectedItemId!,
+      referenceCallIndex: 80,
+    };
+    await view.rerender({
+      indexed,
+      interaction,
+      navigationCommand: command,
+      isVisible: false,
+      ...handlers,
+    });
+    expect(host.scrollLeft).toBe(beforeReveal);
+    await view.rerender({
+      indexed,
+      interaction,
+      navigationCommand: null,
+      isVisible: true,
+      ...handlers,
+    });
+    expect(host.scrollLeft).toBe(beforeReveal);
+
+    await view.rerender({
+      indexed,
+      interaction,
+      navigationCommand: command,
+      isVisible: false,
+      ...handlers,
+    });
+    expect(host.scrollLeft).toBe(beforeReveal);
+    await view.rerender({
+      indexed,
+      interaction,
+      navigationCommand: command,
+      isVisible: true,
+      ...handlers,
+    });
+    await waitFor(() => expect(host.scrollLeft).not.toBe(beforeReveal));
+    expect(Number(host.querySelector('svg')?.getAttribute('width'))).toBeGreaterThan(30_000);
+    expect(interaction.pinnedCallIndex).toBe(80);
+    expect(interaction.selectedItemId).toBe(command.itemId);
+  });
+
+  it('keeps explicit track choices across same-session data replacement and shows tiny costs precisely', async () => {
+    const indexed = economicsAnalysis();
+    const handlers = callbacks();
+    const view = render(ContextRiver, {
+      props: { indexed, interaction: resetInteraction(), ...handlers },
+    });
+    await waitFor(() =>
+      expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
+    );
+
+    await fireEvent.click(view.getByRole('button', { name: 'Cost' }));
+    const track = view.container.querySelector('.economics-track-svg') as SVGSVGElement;
+    expect(track.getAttribute('aria-label')).toContain('Pi-calculated cost');
+    expect(view.container.querySelector('#economics-call-1')?.getAttribute('aria-label')).toContain(
+      '0.0000000123',
+    );
+
+    await view.rerender({
+      indexed: economicsAnalysis(),
+      interaction: resetInteraction(),
+      ...handlers,
+    });
+    expect(view.getByRole('button', { name: 'Cost' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.container.querySelector('.economics-track-svg')).not.toBeNull();
+
+    await fireEvent.click(view.getByRole('button', { name: 'Off' }));
+    expect(view.container.querySelector('.economics-track-svg')).toBeNull();
+  });
+
+  it('preserves the panned River viewport, pin, and selection across track switches', async () => {
+    const indexed = longAnalysis(160);
+    const handlers = callbacks();
+    const interaction = {
+      ...resetInteraction(),
+      selectedItemId: indexed.analysis.modelCalls[0].contextItemIds[0],
+      pinnedCallIndex: 80,
+    };
+    const view = render(ContextRiver, {
+      props: { indexed, interaction, ...handlers },
+    });
+    const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
+    await view.rerender({
+      indexed,
+      interaction,
+      navigationCommand: { id: 1, kind: 'range', startCallIndex: 80, endCallIndex: 81 },
+      ...handlers,
+    });
+    await waitFor(() => expect(host.scrollLeft).toBeGreaterThan(0));
+    const scrollLeft = host.scrollLeft;
+    const riverWidth = host.querySelector('svg')?.getAttribute('width');
+
+    await fireEvent.click(economicsTrackButton(view.container, 'Cache'));
+    await waitFor(() =>
+      expect(
+        view.container.querySelectorAll('.river-scroll > svg, .river-scroll .economics-track-svg'),
+      ).toHaveLength(2),
+    );
+    expect(host.scrollLeft).toBe(scrollLeft);
+    expect(host.querySelector('.economics-track-svg')?.getAttribute('width')).toBe(riverWidth);
+    await fireEvent.click(economicsTrackButton(view.container, 'Cost'));
+    expect(host.scrollLeft).toBe(scrollLeft);
+    expect(
+      view.container.querySelectorAll('.river-scroll > svg, .river-scroll .economics-track-svg'),
+    ).toHaveLength(2);
+    await fireEvent.click(economicsTrackButton(view.container, 'Off'));
+    expect(host.scrollLeft).toBe(scrollLeft);
+    expect(
+      view.container.querySelectorAll('.river-scroll > svg, .river-scroll .economics-track-svg'),
+    ).toHaveLength(1);
+    expect(interaction.pinnedCallIndex).toBe(80);
+    expect(interaction.selectedItemId).toBe(indexed.analysis.modelCalls[0].contextItemIds[0]);
+    expect(handlers.onPinCall).not.toHaveBeenCalled();
+    expect(handlers.onSelectItem).not.toHaveBeenCalled();
+  });
+
+  it('does not auto-open Cache when support appears after the initial analysis', async () => {
+    const handlers = callbacks();
+    const view = render(ContextRiver, {
+      props: {
+        indexed: indexAnalysis(testAnalysis()),
+        interaction: resetInteraction(),
+        ...handlers,
+      },
+    });
+    expect(view.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+
+    await view.rerender({
+      indexed: economicsAnalysis(),
+      interaction: resetInteraction(),
+      ...handlers,
+    });
+    expect(view.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.container.querySelector('.economics-track-svg')).toBeNull();
+  });
   it('starts fitted, zooms continuously, and returns to Fit all without changing selection', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
@@ -660,7 +999,7 @@ describe('ContextRiver continuous viewport integration', () => {
         'true',
       ),
     );
-    expect(view.getByText(/visible call markers/)).toBeInTheDocument();
+    expect(view.getByRole('img', { name: /visible call markers/ })).toBeInTheDocument();
     expect(
       view.container.querySelector('.ribbon-hit[aria-label="retained tail"]')?.getAttribute('d'),
     ).not.toBe(sessionPath);
@@ -694,9 +1033,9 @@ describe('ContextRiver continuous viewport integration', () => {
         name: /structural placeholder stack weight.*token geometry unavailable/,
       }),
     ).toBeInTheDocument();
-    expect(
-      view.getByText(/Ribbon heights are structural placeholders, not token measurements/),
-    ).toBeInTheDocument();
+    expect(view.container.querySelector('#context-river-description')).toHaveTextContent(
+      'Token geometry is unavailable; ribbon regions are structural placeholders',
+    );
     expect(
       view.queryByRole('img', { name: /Vertical axis.*calculated tokens|estimated tokens/ }),
     ).not.toBeInTheDocument();

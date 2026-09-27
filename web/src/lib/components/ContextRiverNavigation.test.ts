@@ -36,9 +36,7 @@ describe('ContextRiverNavigation', () => {
       },
     });
     expect(screen.getByTestId('visible-call-range')).toHaveTextContent('Calls 1–15 of 73');
-    expect(
-      screen.getByText('Drag a range to zoom · scroll or Shift-drag to pan.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Drag a range to zoom · scroll or Shift-drag to pan.')).toBeNull();
     expect(screen.getByRole('button', { name: 'Fit all calls' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Zoom in' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Zoom out' })).toBeEnabled();
@@ -46,33 +44,6 @@ describe('ContextRiverNavigation', () => {
     expect(screen.getByText('Zoom 3.2×')).toBeInTheDocument();
     expect(screen.getByText('Go to…')).toBeInTheDocument();
     expect((container.querySelector('.go-to-disclosure') as HTMLDetailsElement).open).toBe(false);
-  });
-
-  it('keeps gesture guidance stable across viewport range changes', async () => {
-    const callbacks = navigationCallbacks();
-    const view = render(ContextRiverNavigation, {
-      props: {
-        viewport: zoomedViewport,
-        callIndices: Array.from({ length: 73 }, (_, index) => index + 1),
-        ...callbacks,
-      },
-    });
-    const hint = 'Drag a range to zoom · scroll or Shift-drag to pan.';
-    expect(screen.getByText(hint)).toBeInTheDocument();
-
-    await view.rerender({
-      viewport: {
-        ...zoomedViewport,
-        isFitAll: true,
-        zoomFactor: 1,
-        hasOverflow: false,
-        firstVisibleCallIndex: 1,
-        lastVisibleCallIndex: 73,
-      },
-      callIndices: Array.from({ length: 73 }, (_, index) => index + 1),
-      ...callbacks,
-    });
-    expect(screen.getByText(hint)).toBeInTheDocument();
   });
 
   it('validates and clamps jump requests to available call indices', async () => {

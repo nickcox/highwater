@@ -1,0 +1,961 @@
+<script lang="ts">
+  import { afterUpdate, tick } from 'svelte';
+  import type { IndexedAnalysis } from '../types';
+  import { formatCost, formatInteger, formatPercent } from './format';
+  import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
+  import { formatVerticalTick } from './vertical-scale';
+  import type { CallColumn } from './types';
+  import EventGlyph from './EventGlyph.svelte';
+  import { clusterEconomicsEvents, type EconomicsEventCluster } from './event-clustering';
+  import {
+    projectCacheTrack,
+    projectCostTrack,
+    type CacheShareSegment,
+    type CacheTrackPoint,
+    type CacheViewMode,
+    type CostTrackPoint,
+    type EconomicsTrackMode,
+    type EconomicsTrackProjection,
+    type EconomicsEventBreakdown,
+  } from './economics-track';
+
+  export let indexed: IndexedAnalysis;
+  export let columns: readonly CallColumn[];
+  export let width: number;
+  export let mode: Exclude<EconomicsTrackMode, 'off'>;
+  export let cacheView: CacheViewMode = 'tokens';
+  export let compact = false;
+  export let pinnedCallIndex: number | null;
+  export let hoveredCallIndex: number | null;
+  export let onPinCall: (index: number) => void;
+  export let onHoverCall: (index: number | null) => void;
+  export let onMarkClick: (event: MouseEvent, index: number) => void;
+  export let onReadoutChange: (readout: string) => void = () => {};
+  export let onEventBreakdownChange: (breakdown: EconomicsEventBreakdown | null) => void = () => {};
+
+  interface CacheSegmentGeometry {
+    kind: CacheTrackPoint['segments'][number]['kind'];
+    label: string;
+    value: number;
+    displayValue: number;
+    y: number;
+    height: number;
+  }
+
+  interface CacheBar {
+    point: CacheTrackPoint;
+    x: number;
+    segments: CacheSegmentGeometry[];
+    ariaLabel: string;
+  }
+
+  interface CostMark {
+    point: CostTrackPoint;
+    x: number;
+    y: number;
+    ariaLabel: string;
+  }
+
+  interface TrackBoundaryMarker {
+    callIndex: number;
+    x: number;
+    label: string;
+  }
+
+  type TrackEventKind = 'compaction' | 'targetChange' | 'ratioChange';
+  interface TrackEvent {
+    id: string;
+    kind: TrackEventKind;
+    callIndex: number;
+    x: number;
+    label: string;
+    direction?: 'rise' | 'drop';
+    magnitude?: 'notable' | 'large';
+  }
+  type TrackEventCluster = EconomicsEventCluster<TrackEvent>;
+
+  $: trackHeight = mode === 'cost' || compact ? 222 : 300;
+  $: eventHeaderTop = compact || mode === 'cost' ? 116 : 188;
+  const eventHeaderHeight = 16;
+  $: eventLaneTop = eventHeaderTop + eventHeaderHeight + 2;
+  $: eventLaneHeight = Math.max(44, trackHeight - eventLaneTop - 10);
+  $: eventMarkerY = eventLaneTop + eventLaneHeight / 2;
+  const eventMarkerHeight = 22;
+  const eventCollisionGap = 6;
+  const margin = { top: 14, right: 24, bottom: 62, left: 42 };
+  $: baseline = mode === 'cache' && !compact ? 180 : 108;
+  $: innerHeight = baseline - margin.top;
+  let activeCallIndex: number | null = null;
+  let openEventClusterId: string | null = null;
+  let lastPublishedReadout = '';
+  let lastPublishedEventBreakdownSignature = '';
+
+  $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
+  $: usageMappingLabel = usageNormalizationLabel(indexed.analysis.session.source);
+  $: cacheProjection = mode === 'cache' ? projectCacheTrack(indexed.analysis) : null;
+  $: costProjection = mode === 'cost' ? projectCostTrack(indexed.analysis) : null;
+  $: cachePointsByCall = new Map(
+    cacheProjection?.points.map((point) => [point.callIndex, point]) ?? [],
+  );
+  $: costPointsByCall = new Map(
+    costProjection?.points.map((point) => [point.callIndex, point]) ?? [],
+  );
+  $: maximum = cacheProjection?.maximum ?? costProjection?.maximum ?? 0;
+  $: domainMaximum =
+    mode === 'cost'
+      ? maximum > 0
+        ? maximum
+        : 1
+      : cacheView === 'share'
+        ? 100
+        : Math.max(1, maximum);
+  $: columnsByCall = new Map(columns.map((column) => [column.callIndex, column]));
+  $: compactionMarkers = layoutCompactionMarkers(indexed.analysis.compactions, columns, width);
+  $: targetChanges = layoutTargetChanges(indexed.analysis.modelCalls, columns);
+  $: targetChangesByCall = new Map(targetChanges.map((marker) => [marker.callIndex, marker]));
+  $: minimumSpacing =
+    columns.length < 2
+      ? 14
+      : columns.reduce(
+          (minimum, column, position) =>
+            position === 0 ? minimum : Math.min(minimum, column.x - columns[position - 1].x),
+          Number.POSITIVE_INFINITY,
+        );
+  $: barWidth = Math.max(1.5, Math.min(12, minimumSpacing * 0.68));
+  $: ticks = verticalTicks(mode === 'cache' && cacheView === 'share' ? 100 : maximum);
+  $: tickData = ticks.map((value) => ({
+    value,
+    y: margin.top + innerHeight * (1 - value / domainMaximum),
+  }));
+  $: cacheBars =
+    cacheProjection && cacheView
+      ? cacheProjection.points.flatMap((point) => {
+          const x = columnsByCall.get(point.callIndex)?.x;
+          return x === undefined ? [] : [layoutCacheBar(point, x)];
+        })
+      : [];
+  $: costMarks = costProjection
+    ? costProjection.points.flatMap((point) => {
+        const x = columnsByCall.get(point.callIndex)?.x;
+        return x === undefined ? [] : [layoutCostMark(point, x)];
+      })
+    : [];
+  $: trackEvents = layoutTrackEvents(
+    compactionMarkers,
+    targetChanges,
+    cacheProjection,
+    columnsByCall,
+  );
+  $: eventClusters = clusterEconomicsEvents(trackEvents, {
+    chartWidth: width,
+    left: margin.left,
+    right: margin.right,
+    markerSize: eventMarkerHeight,
+    collisionGap: eventCollisionGap,
+  });
+  $: openEventCluster = eventClusters.find((cluster) => cluster.id === openEventClusterId) ?? null;
+  $: if (openEventCluster) {
+    const signature = JSON.stringify({
+      id: openEventCluster.id,
+      x: openEventCluster.x,
+      events: openEventCluster.events.map((event) => ({
+        id: event.id,
+        kind: event.kind,
+        callIndex: event.callIndex,
+        x: event.x,
+        label: event.label,
+        direction: event.direction,
+        magnitude: event.magnitude,
+      })),
+    });
+    if (signature !== lastPublishedEventBreakdownSignature) {
+      lastPublishedEventBreakdownSignature = signature;
+      onEventBreakdownChange({
+        id: openEventCluster.id,
+        events: openEventCluster.events,
+        callIndices: [...new Set(openEventCluster.events.map((event) => event.callIndex))].sort(
+          (a, b) => a - b,
+        ),
+        anchorX: openEventCluster.x,
+        anchorY: eventMarkerY,
+        laneTop: eventLaneTop,
+        laneHeight: eventLaneHeight,
+      });
+    }
+  } else if (lastPublishedEventBreakdownSignature !== '') {
+    lastPublishedEventBreakdownSignature = '';
+    onEventBreakdownChange(null);
+  }
+  $: readoutCallIndex = hoveredCallIndex ?? pinnedCallIndex;
+  $: readout =
+    readoutCallIndex === null
+      ? ''
+      : callReadout(readoutCallIndex, mode, cacheView, cacheProjection, costProjection);
+  $: if (readout !== lastPublishedReadout) {
+    lastPublishedReadout = readout;
+    onReadoutChange(readout);
+  }
+
+  function verticalTicks(max: number): number[] {
+    if (!Number.isFinite(max) || max <= 0) return [0];
+    const count = 3;
+    return [0, max / count, (2 * max) / count, max];
+  }
+
+  function layoutCompactionMarkers(
+    compactions: IndexedAnalysis['analysis']['compactions'],
+    callColumns: readonly CallColumn[],
+    chartWidth: number,
+  ): TrackBoundaryMarker[] {
+    const byCall = new Map(callColumns.map((column) => [column.callIndex, column.x]));
+    const spacings = callColumns
+      .slice(1)
+      .map((column, position) => column.x - callColumns[position].x);
+    const step =
+      spacings.length > 0
+        ? spacings.reduce(
+            (minimum, spacing) => Math.min(minimum, spacing),
+            Number.POSITIVE_INFINITY,
+          )
+        : Math.max(0, chartWidth - margin.left - margin.right);
+    const innerWidth = Math.max(0, chartWidth - margin.left - margin.right);
+    return compactions.map((compaction) => {
+      const current = byCall.get(compaction.beforeModelCall);
+      const previous = byCall.get(compaction.beforeModelCall - 1);
+      const x =
+        current !== undefined && previous !== undefined
+          ? (previous + current) / 2
+          : current !== undefined
+            ? current - Math.min(step / 2, 16)
+            : margin.left + innerWidth;
+      return {
+        callIndex: compaction.beforeModelCall,
+        x,
+        label: `Compaction before call ${compaction.beforeModelCall}`,
+      };
+    });
+  }
+
+  function layoutTargetChanges(
+    calls: IndexedAnalysis['analysis']['modelCalls'],
+    callColumns: readonly CallColumn[],
+  ): TrackBoundaryMarker[] {
+    const byCall = new Map(callColumns.map((column) => [column.callIndex, column.x]));
+    return calls.flatMap((call, position) => {
+      const previous = calls[position - 1];
+      const x = byCall.get(call.index);
+      if (
+        !previous ||
+        x === undefined ||
+        (previous.provider === call.provider &&
+          previous.model === call.model &&
+          previous.api === call.api)
+      ) {
+        return [];
+      }
+      const previousTarget = `${previous.provider ?? 'Unknown'} / ${previous.model ?? 'Unknown'} / ${previous.api ?? 'Unknown API'}`;
+      const currentTarget = `${call.provider ?? 'Unknown'} / ${call.model ?? 'Unknown'} / ${call.api ?? 'Unknown API'}`;
+      return [
+        {
+          callIndex: call.index,
+          x,
+          label: `Model / provider change (Target changes from ${previousTarget} to ${currentTarget})`,
+        },
+      ];
+    });
+  }
+
+  function layoutTrackEvents(
+    compactionMarkers: readonly TrackBoundaryMarker[],
+    targetChanges: readonly TrackBoundaryMarker[],
+    cacheProjection: EconomicsTrackProjection<CacheTrackPoint> | null,
+    columnsByCall: ReadonlyMap<number, CallColumn>,
+  ): TrackEvent[] {
+    const events: TrackEvent[] = [];
+    for (const marker of compactionMarkers) {
+      events.push({
+        id: `compaction-${marker.callIndex}`,
+        kind: 'compaction',
+        callIndex: marker.callIndex,
+        x: marker.x,
+        label: marker.label,
+      });
+    }
+    for (const marker of targetChanges) {
+      events.push({
+        id: `target-${marker.callIndex}`,
+        kind: 'targetChange',
+        callIndex: marker.callIndex,
+        x: marker.x,
+        label: `${marker.label} at call ${marker.callIndex}`,
+      });
+    }
+    if (cacheProjection) {
+      for (const point of cacheProjection.points) {
+        const change = point.discontinuity;
+        const x = columnsByCall.get(point.callIndex)?.x;
+        if (!change || x === undefined) continue;
+        events.push({
+          id: `ratio-${point.callIndex}`,
+          kind: 'ratioChange',
+          callIndex: point.callIndex,
+          x,
+          direction: change.direction,
+          magnitude: change.magnitude,
+          label: `Cache-read share ${change.direction === 'drop' ? 'dropped' : 'rose'} from ${ratioPercent(change.previousRatio)} on call ${change.previousCallIndex} to ${ratioPercent(change.currentRatio)} on call ${point.callIndex}`,
+        });
+      }
+    }
+    return events.sort((left, right) => left.x - right.x || left.id.localeCompare(right.id));
+  }
+
+  function eventCallLabel(event: TrackEvent): string {
+    return `${event.label} · call ${event.callIndex}`;
+  }
+
+  afterUpdate(() => {
+    if (
+      openEventClusterId !== null &&
+      !eventClusters.some((cluster) => cluster.id === openEventClusterId)
+    ) {
+      const staleTriggerId = openEventClusterId;
+      openEventClusterId = null;
+      void tick().then(() => focusEventTrigger(staleTriggerId));
+    }
+  });
+
+  function openEventBreakdown(cluster: TrackEventCluster): void {
+    openEventClusterId = cluster.id;
+    void tick().then(() => {
+      document.getElementById(`${cluster.id}-close`)?.focus();
+    });
+  }
+
+  export function closeEventBreakdown(returnFocus = true): void {
+    const clusterId = openEventClusterId;
+    openEventClusterId = null;
+    if (returnFocus && clusterId) {
+      void tick().then(() => focusEventTrigger(clusterId));
+    }
+  }
+
+  function focusEventTrigger(triggerId: string): void {
+    const trigger = document.getElementById(triggerId);
+    if (trigger) {
+      trigger.focus();
+      return;
+    }
+    document.querySelector<HTMLElement>('.economics-track-header button')?.focus();
+  }
+
+  function handleEventKeydown(event: KeyboardEvent, cluster: TrackEventCluster): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openEventBreakdown(cluster);
+    }
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && openEventClusterId !== null) {
+      event.preventDefault();
+      closeEventBreakdown();
+    }
+  }
+
+  function callReadout(
+    callIndex: number,
+    mode: Exclude<EconomicsTrackMode, 'off'>,
+    cacheViewMode: CacheViewMode,
+    cacheProjection: EconomicsTrackProjection<CacheTrackPoint> | null,
+    costProjection: EconomicsTrackProjection<CostTrackPoint> | null,
+  ): string {
+    const call = indexed.callByIndex.get(callIndex);
+    if (!call) return '';
+    if (mode === 'cache') {
+      const point = cachePointsByCall.get(callIndex);
+      if (!point || (point.status !== 'complete' && point.status !== 'zero')) {
+        return `Call ${callIndex} · ${point?.note ?? 'Cache data unavailable'}`;
+      }
+      const buckets = point.segments
+        .map((segment) => `${segment.label} ${formatInteger(segment.value)}`)
+        .join(' · ');
+      const share =
+        point.shareStatus === 'complete'
+          ? `${point.shareSegments
+              .map((segment) => `${segment.label} ${ratioPercent(segment.percentage / 100)}`)
+              .join(
+                ' · ',
+              )} · ${usageMappingLabel} denominator of ${formatInteger(point.shareDenominator ?? 0)} prompt tokens`
+          : point.shareStatus === 'zeroPrompt'
+            ? 'share undefined: zero prompt tokens'
+            : 'share unavailable: incomplete or unsupported usage';
+      const promptTokens = call.economics.promptTokens;
+      const ratio = call.economics.cacheReadRatio;
+      const ratioLabel =
+        promptTokens === null || promptTokens <= 0
+          ? 'cache-read share unavailable; prompt-token denominator is zero or unavailable'
+          : ratio === null
+            ? `cache-read share unavailable of ${formatInteger(promptTokens)} prompt tokens`
+            : `cache-read share ${ratioPercent(ratio)} of ${formatInteger(promptTokens)} prompt tokens`;
+      const costLabel =
+        call.cost?.total === null || call.cost?.total === undefined
+          ? ''
+          : ` · ${costCopy.label} ${formatCost(call.cost.total)} USD`;
+      const pinnedLabel =
+        pinnedCallIndex === callIndex && hoveredCallIndex !== callIndex ? ' · pinned' : '';
+      return `Call ${callIndex}${pinnedLabel} · ${buckets} · ${mode === 'cache' && cacheViewMode === 'share' ? `${share} · ` : ''}${ratioLabel}${costLabel}`;
+    }
+    const point = costPointsByCall.get(callIndex);
+    return point?.total === null || point?.total === undefined
+      ? `Call ${callIndex} · ${costCopy.label} unavailable`
+      : `Call ${callIndex} · ${costCopy.label} ${formatCost(point.total)} USD`;
+  }
+
+  function layoutCacheBar(point: CacheTrackPoint, x: number): CacheBar {
+    let nextY = baseline;
+    const sourceSegments: Array<CacheTrackPoint['segments'][number] | CacheShareSegment> =
+      cacheView === 'share' ? point.shareSegments : point.segments;
+    const segments = sourceSegments.map((segment) => {
+      const displayValue =
+        cacheView === 'share' && 'percentage' in segment
+          ? (segment as CacheShareSegment).percentage
+          : segment.value;
+      const height = (displayValue / domainMaximum) * innerHeight;
+      const y = nextY - height;
+      nextY = y;
+      return { ...segment, displayValue, y, height };
+    });
+    const call = indexed.callByIndex.get(point.callIndex);
+    const buckets = point.segments
+      .map((segment) => `${segment.label} ${formatInteger(segment.value)}`)
+      .join(' · ');
+    const share =
+      point.shareStatus === 'complete'
+        ? point.shareSegments
+            .map((segment) => `${segment.label} ${ratioPercent(segment.percentage / 100)}`)
+            .join(' · ')
+        : point.shareStatus === 'zeroPrompt'
+          ? 'share undefined: zero prompt tokens'
+          : 'share unavailable: incomplete or unsupported usage';
+    const ratio = call ? formatPercent(call.economics.cacheReadRatio) : 'Unknown';
+    const denominator =
+      call?.economics.promptTokens === null || call?.economics.promptTokens === undefined
+        ? `${usageMappingLabel} prompt-token denominator unavailable`
+        : `${usageMappingLabel} denominator of ${formatInteger(call.economics.promptTokens)} prompt tokens`;
+    const change = point.discontinuity;
+    const targetChange = targetChangesByCall.get(point.callIndex)?.label;
+    const targetLabel = targetChange ? ` · ${targetChange}.` : '';
+    const changeLabel = change
+      ? ` · Cache-read share ${change.direction === 'drop' ? 'dropped' : 'rose'} from ${ratioPercent(change.previousRatio)} on call ${change.previousCallIndex} to ${ratioPercent(change.currentRatio)} (${(change.delta * 100).toFixed(1)} percentage points, ${change.magnitude})`
+      : '';
+    const pinnedLabel =
+      pinnedCallIndex === point.callIndex && hoveredCallIndex !== point.callIndex
+        ? ' · pinned'
+        : '';
+    const viewLabel = cacheView === 'share' ? ` · ${share} · ${denominator}` : '';
+    const ariaLabel =
+      point.status === 'complete' || point.status === 'zero'
+        ? `Call ${point.callIndex}${pinnedLabel} · prompt ${formatInteger(point.promptTokens ?? 0)} tokens · ${buckets}${viewLabel} · cache-read share ${ratio} ${denominator}${point.note ? ` · ${point.note}` : ''}${targetLabel}${changeLabel}`
+        : `Call ${point.callIndex} · ${point.note}`;
+    return { point, x, segments, ariaLabel };
+  }
+
+  function layoutCostMark(point: CostTrackPoint, x: number): CostMark {
+    const y =
+      point.total === null ? baseline : baseline - (point.total / domainMaximum) * innerHeight;
+    const targetChange = targetChangesByCall.get(point.callIndex)?.label;
+    const targetLabel = targetChange ? ` · ${targetChange}.` : '';
+    const ariaLabel =
+      point.status === 'known' || point.status === 'zero'
+        ? `Call ${point.callIndex} · ${costCopy.totalLabel} ${formatCost(point.total)} · cost components ${point.componentStatus}${targetLabel}`
+        : point.status === 'partial'
+          ? `Call ${point.callIndex} · ${costCopy.totalLabel} unavailable · some cost components are present`
+          : `Call ${point.callIndex} · ${costCopy.label} total unavailable`;
+    return { point, x, y, ariaLabel };
+  }
+
+  function cacheTick(value: number): string {
+    return cacheView === 'share' ? `${value.toFixed(0)}%` : formatVerticalTick(value);
+  }
+
+  function costTick(value: number): string {
+    return formatCost(value);
+  }
+
+  function ratioPercent(value: number): string {
+    return `${(value * 100).toFixed(1)}%`;
+  }
+
+  function focusCall(index: number): void {
+    document.getElementById(`economics-call-${index}`)?.focus();
+  }
+
+  function handleMarkKeydown(event: KeyboardEvent, callIndex: number): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onPinCall(callIndex);
+      return;
+    }
+    const calls = indexed.analysis.modelCalls;
+    const position = calls.findIndex((call) => call.index === callIndex);
+    let targetPosition = position;
+    if (event.key === 'ArrowLeft') targetPosition = Math.max(0, position - 1);
+    else if (event.key === 'ArrowRight') targetPosition = Math.min(calls.length - 1, position + 1);
+    else if (event.key === 'Home') targetPosition = 0;
+    else if (event.key === 'End') targetPosition = calls.length - 1;
+    else return;
+    event.preventDefault();
+    const target = calls[targetPosition];
+    if (!target) return;
+    activeCallIndex = target.index;
+    onHoverCall(target.index);
+    focusCall(target.index);
+  }
+
+  $: activeCallIndex = pinnedCallIndex ?? indexed.analysis.modelCalls[0]?.index ?? null;
+</script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
+
+<div
+  class="track-shell"
+  style={`width:${width}px`}
+  role="presentation"
+  onpointerleave={() => onHoverCall(null)}
+>
+  <svg
+    class="economics-track-svg"
+    viewBox={`0 0 ${width} ${trackHeight}`}
+    {width}
+    height={trackHeight}
+    role="group"
+    aria-label={mode === 'cache'
+      ? 'Cache usage track. One keyboard stop; use left and right arrows to inspect calls.'
+      : `${costCopy.label} track. One keyboard stop; use left and right arrows to inspect calls.`}
+  >
+    <defs>
+      <pattern
+        id="economics-write-pattern"
+        width="6"
+        height="6"
+        patternUnits="userSpaceOnUse"
+        patternTransform="rotate(45)"
+      >
+        <rect width="6" height="6" fill="#9167c7" />
+        <path d="M0 0V6" stroke="#e0c9ff" stroke-width="1.5" opacity=".7" />
+      </pattern>
+      <pattern id="economics-fresh-pattern" width="6" height="6" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#277d68" />
+        <circle cx="2" cy="2" r="1" fill="#b5f6df" />
+      </pattern>
+      <pattern
+        id="economics-nonread-pattern"
+        width="7"
+        height="7"
+        patternUnits="userSpaceOnUse"
+        patternTransform="rotate(45)"
+      >
+        <rect width="7" height="7" fill="#49536a" />
+        <path d="M0 0V7" stroke="#aab5c9" stroke-width="1.5" opacity=".8" />
+      </pattern>
+    </defs>
+    <rect class="track-background" x="0" y="0" {width} height={trackHeight} />
+    <rect
+      class="track-plot"
+      x={margin.left}
+      y={margin.top}
+      width={Math.max(0, width - margin.left - margin.right)}
+      height={innerHeight}
+    />
+    {#each tickData as tick, position (position)}
+      <line
+        class="track-gridline"
+        x1={margin.left}
+        x2={width - margin.right}
+        y1={tick.y}
+        y2={tick.y}
+      />
+      <text class="track-y-label" x={margin.left - 5} y={tick.y + 3} text-anchor="end">
+        {mode === 'cache' ? cacheTick(tick.value) : costTick(tick.value)}
+      </text>
+    {/each}
+    <g class="track-event-header" aria-label="Economics event annotations">
+      <text x={margin.left + 4} y={eventHeaderTop + 10}>Events</text>
+      <text x={margin.left + 48} y={eventHeaderTop + 10}>
+        Numbers count events; activate for details
+      </text>
+    </g>
+    <g class="track-event-lane" aria-label="Economics event lane">
+      <rect
+        x={margin.left}
+        y={eventLaneTop}
+        width={Math.max(0, width - margin.left - margin.right)}
+        height={eventLaneHeight}
+      />
+      {#each eventClusters as cluster (cluster.id)}
+        {@const event = cluster.events[0]!}
+        {#each cluster.events as member (member.id)}
+          {#if Math.abs(member.x - cluster.x) > 1}<line
+              class="event-anchor-connector"
+              x1={member.x}
+              x2={cluster.x}
+              y1={eventMarkerY}
+              y2={eventMarkerY}
+            />{/if}
+        {/each}
+        <g
+          id={cluster.id}
+          class={`track-event-trigger ${cluster.events.length === 1 ? 'track-event-singleton' : 'track-event-cluster'} track-${event?.kind ?? 'cluster'} ${event?.kind === 'compaction' ? 'track-compaction-marker' : event?.kind === 'targetChange' ? 'track-target-change' : event?.kind === 'ratioChange' ? 'track-ratioChange ratio-change-marker' : ''}`}
+          class:rise={event?.direction === 'rise'}
+          class:large={event?.magnitude === 'large'}
+          role="button"
+          tabindex="0"
+          aria-label={cluster.events.length === 1
+            ? `${eventCallLabel(event)}; activate for details`
+            : `${cluster.compositionLabel} at calls ${cluster.callRanges}; activate for breakdown`}
+          onclick={(clickEvent) => {
+            clickEvent.stopPropagation();
+            openEventBreakdown(cluster);
+          }}
+          onkeydown={(keyEvent) => handleEventKeydown(keyEvent, cluster)}
+        >
+          <title
+            >{cluster.compositionLabel} at calls {cluster.callRanges} ·
+            {cluster.events.map((member) => eventCallLabel(member)).join('; ')}</title
+          >
+          <rect
+            class="event-hit"
+            x={cluster.x - cluster.hitWidth / 2}
+            y={eventLaneTop + 6}
+            width={cluster.hitWidth}
+            height={eventLaneHeight - 12}
+            rx="5"
+          />
+          {#if cluster.events.length === 1}
+            <EventGlyph
+              svg
+              kind={event.kind}
+              direction={event.direction}
+              size={eventMarkerHeight}
+              x={cluster.x - eventMarkerHeight / 2}
+              y={eventMarkerY - eventMarkerHeight / 2}
+              label={event.kind === 'compaction'
+                ? 'Compaction'
+                : event.kind === 'targetChange'
+                  ? 'Model / provider change'
+                  : `Cache-share ${event.direction === 'drop' ? 'drop' : 'rise'}`}
+            />
+          {:else}<rect
+              class="event-count-badge"
+              x={cluster.x - cluster.badgeWidth / 2}
+              y={eventMarkerY - eventMarkerHeight / 2}
+              width={cluster.badgeWidth}
+              height={eventMarkerHeight}
+              rx="5"
+            /><text class="event-count" x={cluster.x} y={eventMarkerY + 3} text-anchor="middle">
+              {cluster.badgeLabel}
+            </text>{/if}
+        </g>
+      {/each}
+    </g>
+
+    {#if mode === 'cache'}
+      {#each cacheBars as bar (bar.point.callIndex)}
+        <g
+          id={`economics-call-${bar.point.callIndex}`}
+          class="economics-mark cache-mark"
+          class:partial={bar.point.status === 'partial'}
+          class:missing={bar.point.status === 'missing'}
+          class:unsupported={bar.point.status === 'unsupported'}
+          class:zero={bar.point.status === 'zero'}
+          class:pinned={pinnedCallIndex === bar.point.callIndex}
+          class:hovered={hoveredCallIndex === bar.point.callIndex}
+          role="button"
+          tabindex={activeCallIndex === bar.point.callIndex ? 0 : -1}
+          aria-label={bar.ariaLabel}
+          aria-current={pinnedCallIndex === bar.point.callIndex ? 'true' : undefined}
+          onpointerenter={() => onHoverCall(bar.point.callIndex)}
+          onpointerleave={() => onHoverCall(null)}
+          onfocus={() => onHoverCall(bar.point.callIndex)}
+          onkeydown={(event) => handleMarkKeydown(event, bar.point.callIndex)}
+          onclick={(event) => onMarkClick(event, bar.point.callIndex)}
+        >
+          <title>{bar.ariaLabel}</title>
+          {#if bar.point.status === 'complete'}
+            {#each bar.segments as segment, position (`${segment.kind}-${position}`)}
+              {#if segment.height > 0}<rect
+                  class={`cache-segment ${segment.kind}`}
+                  x={bar.x - barWidth / 2}
+                  y={segment.y}
+                  width={barWidth}
+                  height={segment.height}
+                />{/if}
+            {/each}
+          {:else if bar.point.status === 'zero'}
+            <circle class="zero-mark" cx={bar.x} cy={baseline - 2} r="3" />
+          {:else if bar.point.status === 'missing'}
+            <rect class="missing-mark" x={bar.x - 4} y={baseline - 7} width="8" height="8" />
+          {:else}
+            <path class="uncertain-mark" d={`M ${bar.x} ${baseline - 8} l 5 5 l -5 5 l -5 -5 Z`} />
+          {/if}
+          {#if pinnedCallIndex === bar.point.callIndex}<line
+              class="track-pin"
+              x1={bar.x}
+              x2={bar.x}
+              y1={margin.top}
+              y2={baseline}
+            />{/if}
+          {#if hoveredCallIndex === bar.point.callIndex}<line
+              class="track-hover"
+              x1={bar.x}
+              x2={bar.x}
+              y1={margin.top}
+              y2={baseline}
+            />{/if}
+        </g>
+      {/each}
+    {:else}
+      {#each costMarks as mark (mark.point.callIndex)}
+        <g
+          id={`economics-call-${mark.point.callIndex}`}
+          class="economics-mark cost-mark"
+          class:partial={mark.point.status === 'partial' ||
+            mark.point.componentStatus === 'partial'}
+          class:missing={mark.point.status === 'missing'}
+          class:zero={mark.point.status === 'zero'}
+          class:pinned={pinnedCallIndex === mark.point.callIndex}
+          class:hovered={hoveredCallIndex === mark.point.callIndex}
+          role="button"
+          tabindex={activeCallIndex === mark.point.callIndex ? 0 : -1}
+          aria-label={mark.ariaLabel}
+          aria-current={pinnedCallIndex === mark.point.callIndex ? 'true' : undefined}
+          onpointerenter={() => onHoverCall(mark.point.callIndex)}
+          onfocus={() => onHoverCall(mark.point.callIndex)}
+          onkeydown={(event) => handleMarkKeydown(event, mark.point.callIndex)}
+          onclick={(event) => onMarkClick(event, mark.point.callIndex)}
+        >
+          <title>{mark.ariaLabel}</title>
+          {#if mark.point.status === 'known'}<line
+              class="cost-stem"
+              class:partial={mark.point.componentStatus === 'partial'}
+              x1={mark.x}
+              x2={mark.x}
+              y1={baseline}
+              y2={mark.y}
+            /><circle
+              class="cost-dot"
+              class:partial={mark.point.componentStatus === 'partial'}
+              cx={mark.x}
+              cy={mark.y}
+              r="3.5"
+            />
+          {:else if mark.point.status === 'zero'}<circle
+              class="cost-zero"
+              class:partial={mark.point.componentStatus === 'partial'}
+              cx={mark.x}
+              cy={baseline - 2}
+              r="3.5"
+            />
+          {:else if mark.point.status === 'partial'}<path
+              class="uncertain-mark"
+              d={`M ${mark.x} ${baseline - 8} l 5 5 l -5 5 l -5 -5 Z`}
+            />{:else}<rect
+              class="missing-mark"
+              x={mark.x - 4}
+              y={baseline - 7}
+              width="8"
+              height="8"
+            />{/if}
+          {#if pinnedCallIndex === mark.point.callIndex}<line
+              class="track-pin"
+              x1={mark.x}
+              x2={mark.x}
+              y1={margin.top}
+              y2={baseline}
+            />{/if}
+          {#if hoveredCallIndex === mark.point.callIndex}<line
+              class="track-hover"
+              x1={mark.x}
+              x2={mark.x}
+              y1={margin.top}
+              y2={baseline}
+            />{/if}
+        </g>
+      {/each}
+    {/if}
+  </svg>
+</div>
+
+<style>
+  .track-shell {
+    position: relative;
+    min-width: 0;
+  }
+  .economics-track-svg {
+    display: block;
+    max-width: none;
+    background: #0c1324;
+    touch-action: pan-y;
+  }
+  .track-background {
+    fill: #0c1324;
+    pointer-events: none;
+  }
+  .track-plot {
+    fill: #0d1729;
+    pointer-events: none;
+  }
+  .track-gridline {
+    stroke: #35425b;
+    stroke-width: 0.75;
+    opacity: 0.7;
+    pointer-events: none;
+  }
+  .track-event-header {
+    fill: #899abd;
+    font-size: 8px;
+    pointer-events: none;
+  }
+  .track-event-header text:first-child {
+    fill: #dce6f7;
+    font-weight: 750;
+  }
+  .track-event-lane {
+    pointer-events: all;
+  }
+  .track-event-lane > rect {
+    fill: #101b2e;
+    stroke: #2b3b5c;
+    pointer-events: none;
+  }
+  .track-event-trigger {
+    cursor: pointer;
+    pointer-events: all;
+    outline: none;
+  }
+  .event-hit {
+    fill: transparent;
+    stroke: transparent;
+    stroke-width: 2;
+    pointer-events: all;
+  }
+  .event-anchor-connector {
+    stroke: #7287ad;
+    stroke-dasharray: 2 2;
+    stroke-width: 1;
+    pointer-events: none;
+  }
+  .event-count-badge {
+    stroke-width: 1.25;
+    fill: #263c67;
+    stroke: #d2e0ff;
+  }
+  .event-count {
+    fill: #fff;
+    font-size: 7px;
+    font-weight: 750;
+    pointer-events: none;
+  }
+  .track-event-trigger:focus-visible .event-hit {
+    fill: #335081;
+    fill-opacity: 0.35;
+    stroke: #fff;
+    stroke-width: 2.5;
+  }
+  .track-y-label {
+    fill: #b8c4d9;
+    font-size: 9px;
+    pointer-events: none;
+  }
+  .economics-mark {
+    cursor: pointer;
+    outline: none;
+  }
+  .cache-segment {
+    stroke: #0c1324;
+    stroke-width: 0.6;
+  }
+  .cache-segment.cacheRead {
+    fill: #428fdc;
+  }
+  .cache-segment.cacheWrite {
+    fill: url(#economics-write-pattern);
+  }
+  .cache-segment.fresh,
+  .cache-segment.uncached {
+    fill: url(#economics-fresh-pattern);
+  }
+  .cache-segment.nonRead {
+    fill: url(#economics-nonread-pattern);
+  }
+  .economics-mark.zero .zero-mark {
+    fill: #0c1324;
+    stroke: #d7e1f3;
+    stroke-width: 1.5;
+  }
+  .uncertain-mark {
+    fill: #1b2437;
+    stroke: #ffcb74;
+    stroke-width: 1.5;
+  }
+  .economics-mark.partial .uncertain-mark {
+    fill: #1b2437;
+    stroke: #ffcb74;
+  }
+  .economics-mark.unsupported .uncertain-mark {
+    fill: #2a1c22;
+    stroke: #e1978b;
+    stroke-dasharray: 2 1;
+  }
+  .missing-mark {
+    fill: none;
+    stroke: #aab5c9;
+    stroke-dasharray: 2 1;
+    stroke-width: 1.5;
+  }
+  .cost-stem {
+    stroke: #7ddbb7;
+    stroke-width: 1.5;
+  }
+  .cost-stem.partial {
+    stroke: #ffcb74;
+    stroke-dasharray: 3 2;
+  }
+  .cost-dot {
+    fill: #7ddbb7;
+    stroke: #0c1324;
+    stroke-width: 1;
+  }
+  .cost-dot.partial {
+    stroke: #ffcb74;
+    stroke-width: 2;
+  }
+  .cost-zero {
+    fill: #0c1324;
+    stroke: #7ddbb7;
+    stroke-width: 1.5;
+  }
+  .cost-zero.partial {
+    stroke: #ffcb74;
+    stroke-dasharray: 2 1;
+  }
+  .track-pin {
+    stroke: #fff;
+    stroke-width: 1.5;
+    pointer-events: none;
+  }
+  .track-hover {
+    stroke: #a8bde8;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    pointer-events: none;
+  }
+  .economics-mark:focus-visible .cache-segment,
+  .economics-mark:focus-visible .cost-dot,
+  .economics-mark:focus-visible .cost-zero,
+  .economics-mark:focus-visible .zero-mark,
+  .economics-mark:focus-visible .uncertain-mark {
+    stroke: #fff;
+    stroke-width: 2.5;
+  }
+</style>

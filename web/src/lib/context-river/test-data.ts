@@ -31,6 +31,20 @@ const age = {
   itemsAtLeast10CallsOld: 0,
   itemsAtLeast20CallsOld: 0,
 };
+const unsupportedEconomics = (): ModelCall['economics'] => ({
+  policyId: null,
+  usageCompleteness: 'unsupported',
+  costCompleteness: 'unsupported',
+  cacheWriteStatus: 'unsupported',
+  promptTokens: null,
+  cacheReadRatio: null,
+  cacheWriteRatio: null,
+  freshRatio: null,
+  piPromptCost: null,
+  cacheRatioDiscontinuity: null,
+  explanationCodes: ['unsupportedEconomicsPolicy'],
+});
+
 function callAnalysis(
   visible: number,
   added: number,
@@ -108,6 +122,7 @@ export function testAnalysis(): SessionAnalysis {
       compactionBefore: null,
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(85, 85, 0, 0, null),
+      economics: unsupportedEconomics(),
     },
     {
       index: 2,
@@ -131,6 +146,7 @@ export function testAnalysis(): SessionAnalysis {
       compactionBefore: null,
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(95, 15, 80, 5, 5 / 100),
+      economics: unsupportedEconomics(),
     },
     {
       index: 3,
@@ -154,6 +170,7 @@ export function testAnalysis(): SessionAnalysis {
       compactionBefore: 'compact-1',
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(40, 25, 15, 80, 80 / 120),
+      economics: unsupportedEconomics(),
     },
     {
       index: 4,
@@ -177,6 +194,7 @@ export function testAnalysis(): SessionAnalysis {
       compactionBefore: null,
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(45, 5, 40, 0, 5 / 45),
+      economics: unsupportedEconomics(),
     },
   ];
   const items: ContextItem[] = [
@@ -258,7 +276,7 @@ export function testAnalysis(): SessionAnalysis {
   ];
   const itemEstimateCoverage = coverage(4, 4, 9, 9);
   return {
-    schemaVersion: 5,
+    schemaVersion: 7,
     tokenAnalysis: {
       policy: 'heuristic',
       chartUnit: 'estimatedTokens',
@@ -285,6 +303,17 @@ export function testAnalysis(): SessionAnalysis {
       callsMissingProviderUsage: 4,
       totalCalculatedTokenTurns: 265,
       totalTokenTurnsCoverage: itemEstimateCoverage,
+    },
+    economics: {
+      costBasis: 'piModelRates',
+      supportedPolicyIds: [],
+      usageCompleteness: { complete: 0, partial: 0, missing: 0, unsupported: 4 },
+      costCompleteness: { complete: 0, partial: 0, missing: 0, unsupported: 4 },
+      cacheReadEligibleCalls: 0,
+      cacheReadPromptTokens: 0,
+      cacheReadTokens: 0,
+      cacheReadRatio: null,
+      explanationCodes: ['unsupportedEconomicsPolicy', 'piModelRateCostBasis'],
     },
     session: {
       id: 'test',

@@ -55,6 +55,7 @@ impl SessionSourceAdapter for PiSourceAdapter {
         SourceDescriptor {
             kind: "pi".into(),
             version: "jsonl-v1".into(),
+            cost_basis: CostBasis::PiModelRates,
         }
     }
 

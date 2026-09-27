@@ -92,9 +92,6 @@
 <div class="viewport-navigation" role="group" aria-label="Context River navigation">
   <div class="viewport-status">
     <span class="range" aria-live="polite" data-testid="visible-call-range">{rangeText}</span>
-    {#if !noCalls}
-      <span class="scroll-hint">Drag a range to zoom · scroll or Shift-drag to pan.</span>
-    {/if}
   </div>
 
   <div class="controls" role="group" aria-label="Chart zoom and navigation">
@@ -195,7 +192,6 @@
     font-variant-numeric: tabular-nums;
     font-weight: 600;
   }
-  .scroll-hint,
   .jump-message {
     color: #96a2b8;
     font-size: 12px;

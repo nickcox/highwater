@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub(crate) struct Analysis {
     pub schema_version: u32,
     pub token_analysis: TokenAnalysisSummary,
+    pub economics: EconomicsSummary,
     pub session: SessionSummary,
     pub display_weight_unit: String,
     pub model_calls: Vec<ModelCall>,
@@ -107,6 +108,121 @@ pub(crate) struct ModelCall {
     pub compaction_before: Option<String>,
     pub tokenization_profile_id: Option<String>,
     pub token_analysis: CallTokenAnalysis,
+    pub economics: CallEconomics,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CallEconomics {
+    pub policy_id: Option<String>,
+    pub usage_completeness: EconomicsCompleteness,
+    pub cost_completeness: EconomicsCompleteness,
+    pub cache_write_status: CacheWriteStatus,
+    pub prompt_tokens: Option<u64>,
+    pub cache_read_ratio: Option<f64>,
+    pub cache_write_ratio: Option<f64>,
+    pub fresh_ratio: Option<f64>,
+    pub pi_prompt_cost: Option<f64>,
+    pub cache_ratio_discontinuity: Option<CacheRatioDiscontinuity>,
+    pub explanation_codes: Vec<String>,
+}
+
+impl CallEconomics {
+    pub(crate) fn unsupported() -> Self {
+        Self {
+            policy_id: None,
+            usage_completeness: EconomicsCompleteness::Unsupported,
+            cost_completeness: EconomicsCompleteness::Unsupported,
+            cache_write_status: CacheWriteStatus::Unsupported,
+            prompt_tokens: None,
+            cache_read_ratio: None,
+            cache_write_ratio: None,
+            fresh_ratio: None,
+            pi_prompt_cost: None,
+            cache_ratio_discontinuity: None,
+            explanation_codes: vec!["unsupportedEconomicsPolicy".into()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum EconomicsCompleteness {
+    Complete,
+    Partial,
+    Missing,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum CacheWriteStatus {
+    Reported,
+    NotReported,
+    NotRetainedByPi,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum CacheRatioDirection {
+    Drop,
+    Rise,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum CacheRatioChangeMagnitude {
+    Notable,
+    Large,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CacheRatioDiscontinuity {
+    pub previous_call_index: usize,
+    pub direction: CacheRatioDirection,
+    pub previous_ratio: f64,
+    pub current_ratio: f64,
+    pub delta: f64,
+    pub magnitude: CacheRatioChangeMagnitude,
+    pub method: &'static str,
+    pub previous_prompt_tokens: u64,
+    pub current_prompt_tokens: u64,
+    pub compaction_before: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum EconomicsCostBasis {
+    #[default]
+    PiModelRates,
+    SourceModelRates,
+    ProviderReported,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EconomicsStatusCounts {
+    pub complete: usize,
+    pub partial: usize,
+    pub missing: usize,
+    pub unsupported: usize,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EconomicsSummary {
+    pub cost_basis: EconomicsCostBasis,
+    pub supported_policy_ids: Vec<String>,
+    pub usage_completeness: EconomicsStatusCounts,
+    pub cost_completeness: EconomicsStatusCounts,
+    pub cache_read_eligible_calls: usize,
+    pub cache_read_prompt_tokens: Option<u64>,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_read_ratio: Option<f64>,
+    pub explanation_codes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

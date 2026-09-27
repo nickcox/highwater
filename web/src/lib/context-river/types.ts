@@ -7,6 +7,8 @@ export interface RiverLayoutOptions {
   minimumVisibleThickness: number;
   /** Optional presentation-only Y-axis maximum; omitted to preserve session-wide scaling. */
   verticalDomainMax?: number;
+  /** Presentation-only grouping; item identity and selection remain unchanged. */
+  groupByKind?: boolean;
 }
 
 export interface CallColumn {
@@ -32,6 +34,10 @@ export interface RibbonSegment {
   path: string;
   hitPath: string;
   isSubpixel: boolean;
+  /** Present only for the optional Item types presentation. */
+  groupKind?: import('../types').ContextItemKind;
+  memberItemIds?: string[];
+  valueByCall?: Map<number, number>;
 }
 
 export interface CompactionBoundaryLayout {

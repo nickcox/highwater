@@ -39,7 +39,7 @@ def message(
             {
                 "provider": provider,
                 "model": model,
-                "api": "responses" if provider == "openai" else "messages",
+                "api": "openai-responses" if provider == "openai" else "anthropic-messages",
                 "usage": {
                     "input": (call_index or 1) * 11,
                     "output": 17,

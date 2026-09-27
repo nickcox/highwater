@@ -1,9 +1,11 @@
+use super::source::CostBasis;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SourceDescriptor {
     pub kind: String,
     pub version: String,
+    pub cost_basis: CostBasis,
 }
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,6 @@
 import { scaleLinear } from 'd3-scale';
 import { area, curveLinear, curveMonotoneX } from 'd3-shape';
-import type { IndexedAnalysis } from '../types';
+import type { ContextItemKind, IndexedAnalysis } from '../types';
 import type {
   CallColumn,
   ContextRiverLayout,
@@ -21,6 +21,31 @@ function pathFor(points: readonly RibbonPoint[], linear: boolean): string {
 
 function midpoint(point: RibbonPoint): number {
   return (point.y0 + point.y1) / 2;
+}
+
+function contiguousRanges(indices: readonly number[]): number[][] {
+  const sorted = [...new Set(indices)].sort((left, right) => left - right);
+  const ranges: number[][] = [];
+  for (const index of sorted) {
+    const current = ranges[ranges.length - 1];
+    if (current && index === current[current.length - 1]! + 1) current.push(index);
+    else ranges.push([index]);
+  }
+  return ranges;
+}
+
+function padSingleton(
+  points: RibbonPoint[],
+  step: number,
+  options: RiverLayoutOptions,
+): RibbonPoint[] {
+  if (points.length !== 1) return points;
+  const only = points[0]!;
+  const halfWidth = Math.max(5, Math.min(step * 0.28, 18));
+  return [
+    { ...only, x: Math.max(options.margin.left, only.x - halfWidth) },
+    { ...only, x: Math.min(options.width - options.margin.right, only.x + halfWidth) },
+  ];
 }
 
 function displayWeightFor(
@@ -100,6 +125,15 @@ export function layoutContextRiver(
   }
 
   const callCount = analysis.modelCalls.length;
+  const groupByKind = options.groupByKind === true;
+  const groupMembers = new Map<ContextItemKind, string[]>();
+  if (groupByKind) {
+    for (const item of analysis.contextItems) {
+      const members = groupMembers.get(item.kind) ?? [];
+      members.push(item.id);
+      groupMembers.set(item.kind, members);
+    }
+  }
   const columns = precomputedColumns
     ? [...precomputedColumns]
     : layoutCallColumns(indexed, options.width, options.margin);
@@ -115,14 +149,35 @@ export function layoutContextRiver(
     .domain([0, Math.max(1, verticalDomainMax)])
     .range([options.margin.top + innerHeight, options.margin.top]);
   const geometry = new Map<string, Map<number, RibbonPoint>>();
+  const valueByCall = new Map<string, Map<number, number>>();
 
   for (const call of analysis.modelCalls) {
     let cumulative = 0;
-    for (const itemId of indexed.orderedItemIdsByCall.get(call.index) ?? []) {
-      const item = itemById.get(itemId);
-      if (!item) continue;
+    const entries = groupByKind
+      ? [...groupMembers.entries()].map(([kind, memberItemIds]) => ({
+          key: `kind:${kind}`,
+          memberItemIds,
+        }))
+      : (indexed.orderedItemIdsByCall.get(call.index) ?? []).map((itemId) => ({
+          key: itemId,
+          memberItemIds: [itemId],
+        }));
+    for (const entry of entries) {
+      const weight = entry.memberItemIds.reduce(
+        (total, itemId) =>
+          total +
+          (indexed.contextSetByCall.get(call.index)?.has(itemId)
+            ? displayWeightFor(indexed, call, itemId)
+            : 0),
+        0,
+      );
+      if (
+        weight <= 0 &&
+        !entry.memberItemIds.some((itemId) => indexed.contextSetByCall.get(call.index)?.has(itemId))
+      )
+        continue;
       const before = y(cumulative);
-      cumulative += displayWeightFor(indexed, call, item.id);
+      cumulative += weight;
       const after = y(cumulative);
       const point: RibbonPoint = {
         callIndex: call.index,
@@ -130,9 +185,12 @@ export function layoutContextRiver(
         y0: Math.min(before, after),
         y1: Math.max(before, after),
       };
-      const itemGeometry = geometry.get(itemId) ?? new Map<number, RibbonPoint>();
+      const itemGeometry = geometry.get(entry.key) ?? new Map<number, RibbonPoint>();
       itemGeometry.set(call.index, point);
-      geometry.set(itemId, itemGeometry);
+      geometry.set(entry.key, itemGeometry);
+      const values = valueByCall.get(entry.key) ?? new Map<number, number>();
+      values.set(call.index, weight);
+      valueByCall.set(entry.key, values);
     }
   }
 
@@ -151,98 +209,132 @@ export function layoutContextRiver(
   }));
 
   const ribbons: RibbonSegment[] = [];
-  for (const item of analysis.contextItems) {
-    for (const [rangeIndex, range] of item.presence.entries()) {
-      let points: RibbonPoint[] = [];
-      for (let callIndex = range.startCall; callIndex <= range.endCall; callIndex += 1) {
-        const point = geometry.get(item.id)?.get(callIndex);
-        if (point) points.push(point);
+  if (groupByKind) {
+    for (const [kind, memberItemIds] of groupMembers) {
+      const presentCalls = analysis.modelCalls
+        .filter((call) =>
+          memberItemIds.some((itemId) => indexed.contextSetByCall.get(call.index)?.has(itemId)),
+        )
+        .map((call) => call.index);
+      const ranges = contiguousRanges(presentCalls);
+      for (const [rangeIndex, range] of ranges.entries()) {
+        const points = range.flatMap((callIndex) => {
+          const point = geometry.get(`kind:${kind}`)?.get(callIndex);
+          return point ? [point] : [];
+        });
+        if (points.length === 0) continue;
+        const paddedPoints = padSingleton(points, step, options);
+        const isSubpixel = paddedPoints.some(
+          (point) => point.y1 > point.y0 && point.y1 - point.y0 < options.minimumVisibleThickness,
+        );
+        const path = pathFor(paddedPoints, false);
+        ribbons.push({
+          key: `kind:${kind}:${rangeIndex}`,
+          itemId: `kind:${kind}`,
+          groupKind: kind,
+          memberItemIds: [...memberItemIds],
+          valueByCall: valueByCall.get(`kind:${kind}`),
+          rangeIndex,
+          startCall: range[0]!,
+          endCall: range[range.length - 1]!,
+          points: paddedPoints,
+          path,
+          hitPath: path,
+          isSubpixel,
+        });
       }
-      if (points.length === 0) continue;
-      let touchesCompaction = false;
-      const sourceCompaction = (indexed.compactionBySourceId.get(item.id) ?? []).find(
-        (compaction) => compaction.beforeModelCall === range.endCall + 1,
-      );
-      if (sourceCompaction) {
-        const last = points[points.length - 1];
-        const middle = midpoint(last);
-        points = [
-          ...points,
-          {
-            callIndex: sourceCompaction.beforeModelCall,
-            x: boundaryX(sourceCompaction.beforeModelCall),
-            y0: middle,
-            y1: middle,
-          },
-        ];
-        touchesCompaction = true;
+    }
+  } else {
+    for (const item of analysis.contextItems) {
+      for (const [rangeIndex, range] of item.presence.entries()) {
+        let points: RibbonPoint[] = [];
+        for (let callIndex = range.startCall; callIndex <= range.endCall; callIndex += 1) {
+          const point = geometry.get(item.id)?.get(callIndex);
+          if (point) points.push(point);
+        }
+        if (points.length === 0) continue;
+        let touchesCompaction = false;
+        const sourceCompaction = (indexed.compactionBySourceId.get(item.id) ?? []).find(
+          (compaction) => compaction.beforeModelCall === range.endCall + 1,
+        );
+        if (sourceCompaction) {
+          const last = points[points.length - 1];
+          const middle = midpoint(last);
+          points = [
+            ...points,
+            {
+              callIndex: sourceCompaction.beforeModelCall,
+              x: boundaryX(sourceCompaction.beforeModelCall),
+              y0: middle,
+              y1: middle,
+            },
+          ];
+          touchesCompaction = true;
+        }
+        const summaryCompaction = (indexed.compactionsBySummaryId.get(item.id) ?? []).find(
+          (compaction) => compaction.beforeModelCall === range.startCall,
+        );
+        if (summaryCompaction) {
+          const first = points[0];
+          points = [
+            {
+              ...first,
+              x: boundaryX(summaryCompaction.beforeModelCall),
+            },
+            ...points,
+          ];
+          touchesCompaction = true;
+        }
+        points = padSingleton(points, step, options);
+        const isSubpixel = points.some(
+          (point) => point.y1 > point.y0 && point.y1 - point.y0 < options.minimumVisibleThickness,
+        );
+        const path = pathFor(points, touchesCompaction);
+        ribbons.push({
+          key: `${item.id}:${rangeIndex}`,
+          itemId: item.id,
+          rangeIndex,
+          startCall: range.startCall,
+          endCall: range.endCall,
+          points,
+          path,
+          hitPath: path,
+          isSubpixel,
+        });
       }
-      const summaryCompaction = (indexed.compactionsBySummaryId.get(item.id) ?? []).find(
-        (compaction) => compaction.beforeModelCall === range.startCall,
-      );
-      if (summaryCompaction) {
-        const first = points[0];
-        points = [
-          {
-            ...first,
-            x: boundaryX(summaryCompaction.beforeModelCall),
-          },
-          ...points,
-        ];
-        touchesCompaction = true;
-      }
-      if (points.length === 1) {
-        const only = points[0];
-        const halfWidth = Math.max(5, Math.min(step * 0.28, 18));
-        points = [
-          { ...only, x: Math.max(options.margin.left, only.x - halfWidth) },
-          { ...only, x: Math.min(options.width - options.margin.right, only.x + halfWidth) },
-        ];
-      }
-      const isSubpixel = points.some(
-        (point) => point.y1 > point.y0 && point.y1 - point.y0 < options.minimumVisibleThickness,
-      );
-      const path = pathFor(points, touchesCompaction);
-      ribbons.push({
-        key: `${item.id}:${rangeIndex}`,
-        itemId: item.id,
-        rangeIndex,
-        startCall: range.startCall,
-        endCall: range.endCall,
-        points,
-        path,
-        hitPath: path,
-        isSubpixel,
-      });
     }
   }
 
-  const lineageConnectors = analysis.compactions.flatMap((compaction) => {
-    const summaryPoint = geometry.get(compaction.summaryItemId)?.get(compaction.beforeModelCall);
-    if (!summaryPoint) return [];
-    const summaryY = midpoint(summaryPoint);
-    const boundary = boundaryX(compaction.beforeModelCall);
-    return (indexed.incomingLineage.get(compaction.summaryItemId) ?? [])
-      .filter(
-        (edge) =>
-          edge.kind === 'frameworkCompaction' && compaction.sourceItemIds.includes(edge.from),
-      )
-      .flatMap((edge) => {
-        const sourcePoint = geometry.get(edge.from)?.get(compaction.beforeModelCall - 1);
-        if (!sourcePoint) return [];
-        const sourceY = midpoint(sourcePoint);
-        const control = Math.max(8, Math.min(step * 0.25, 24));
-        return [
-          {
-            key: `${compaction.id}:${edge.from}:${edge.to}`,
-            fromItemId: edge.from,
-            toItemId: edge.to,
-            compactionId: compaction.id,
-            path: `M ${sourcePoint.x} ${sourceY} C ${boundary - control} ${sourceY}, ${boundary + control} ${summaryY}, ${boundary} ${summaryY}`,
-          },
-        ];
+  const lineageConnectors = groupByKind
+    ? []
+    : analysis.compactions.flatMap((compaction) => {
+        const summaryPoint = geometry
+          .get(compaction.summaryItemId)
+          ?.get(compaction.beforeModelCall);
+        if (!summaryPoint) return [];
+        const summaryY = midpoint(summaryPoint);
+        const boundary = boundaryX(compaction.beforeModelCall);
+        return (indexed.incomingLineage.get(compaction.summaryItemId) ?? [])
+          .filter(
+            (edge) =>
+              edge.kind === 'frameworkCompaction' && compaction.sourceItemIds.includes(edge.from),
+          )
+          .flatMap((edge) => {
+            const sourcePoint = geometry.get(edge.from)?.get(compaction.beforeModelCall - 1);
+            if (!sourcePoint) return [];
+            const sourceY = midpoint(sourcePoint);
+            const control = Math.max(8, Math.min(step * 0.25, 24));
+            return [
+              {
+                key: `${compaction.id}:${edge.from}:${edge.to}`,
+                fromItemId: edge.from,
+                toItemId: edge.to,
+                compactionId: compaction.id,
+                path: `M ${sourcePoint.x} ${sourceY} C ${boundary - control} ${sourceY}, ${boundary + control} ${summaryY}, ${boundary} ${summaryY}`,
+              },
+            ];
+          });
       });
-  });
 
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
     performance.mark('tokenplume-layout-end');

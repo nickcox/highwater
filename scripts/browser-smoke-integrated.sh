@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/tokenplume-browser-smoke.XXXXXX")"
 PORT="${TOKENPLUME_BROWSER_PORT:-$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')}"
+BUILD_PROFILE="${TOKENPLUME_BROWSER_BUILD_PROFILE:-debug}"
 SERVER_PID=""
 
 cleanup() {
@@ -20,8 +21,21 @@ python3 "$ROOT/scripts/generate-benchmark-session.py" \
   --output "$TMP_ROOT/browser-smoke.jsonl"
 
 npm --prefix "$ROOT/web" run build
-cargo build --manifest-path "$ROOT/Cargo.toml" --quiet
-"$ROOT/target/debug/tokenplume" \
+case "$BUILD_PROFILE" in
+  debug)
+    cargo build --manifest-path "$ROOT/Cargo.toml" --quiet
+    BINARY="$ROOT/target/debug/tokenplume"
+    ;;
+  release)
+    cargo build --release --manifest-path "$ROOT/Cargo.toml" --quiet
+    BINARY="$ROOT/target/release/tokenplume"
+    ;;
+  *)
+    printf 'Unsupported TOKENPLUME_BROWSER_BUILD_PROFILE: %s (expected debug or release)\n' "$BUILD_PROFILE" >&2
+    exit 2
+    ;;
+esac
+"$BINARY" \
   --session-root "$TMP_ROOT" \
   --port "$PORT" \
   --tokenization heuristic >"$TMP_ROOT/server.log" 2>&1 &

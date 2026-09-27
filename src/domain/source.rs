@@ -2,6 +2,16 @@ use super::{NormalizedSession, SourceDescriptor};
 use std::io::BufRead;
 use thiserror::Error;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)]
+pub(crate) enum CostBasis {
+    #[default]
+    Unknown,
+    PiModelRates,
+    SourceModelRates,
+    ProviderReported,
+}
+
 /// Boundary implemented by each supported session-file source.
 pub(crate) trait SessionSourceAdapter {
     fn source_descriptor(&self) -> SourceDescriptor;

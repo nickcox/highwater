@@ -3,7 +3,14 @@ const integer = new Intl.NumberFormat();
 const currency = new Intl.NumberFormat(undefined, {
   style: 'currency',
   currency: 'USD',
-  maximumFractionDigits: 4,
+  minimumSignificantDigits: 2,
+  maximumSignificantDigits: 7,
+});
+const sessionCurrency = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 export function formatMetric(value: number | null | undefined): string {
@@ -16,6 +23,12 @@ export function formatInteger(value: number): string {
 
 export function formatCost(value: number | null | undefined): string {
   return value === null || value === undefined ? 'Unknown' : currency.format(value);
+}
+
+/** Round reader-facing session totals while retaining precision for very small positive values. */
+export function formatSessionCost(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'Unknown';
+  return value >= 0.01 ? sessionCurrency.format(value) : formatCost(value);
 }
 
 export function formatPercent(value: number | null | undefined): string {

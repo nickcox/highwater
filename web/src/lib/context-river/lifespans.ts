@@ -1,6 +1,6 @@
 import type { ContextItem } from '../types';
 
-export type LifespanSortMode = 'tokenTurns' | 'size' | 'firstAppearance';
+export type LifespanSortMode = 'tokenTurns' | 'size' | 'firstAppearance' | 'presenceCount';
 
 export function presenceCount(item: ContextItem): number {
   return item.presenceCallCount;
@@ -49,6 +49,8 @@ export function sortLifespans(
     let comparison = 0;
     if (mode === 'firstAppearance') {
       comparison = compareNullableAscending(firstAppearance(a), firstAppearance(b));
+    } else if (mode === 'presenceCount') {
+      comparison = presenceCount(b) - presenceCount(a);
     } else if (mode === 'size') {
       comparison = compareNullableDescending(
         sizeEstimateTokens(a, sizeProfileId),

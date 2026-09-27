@@ -14,6 +14,56 @@ export type TokenizationMethod =
   'modelTokenizer' | 'apiSerializationEstimate' | 'characterHeuristic' | 'unavailable';
 export type TokenCoverage = 'complete' | 'partial' | 'unavailable';
 export type UsageCompleteness = 'complete' | 'partial' | 'missing';
+export type EconomicsCompleteness = 'complete' | 'partial' | 'missing' | 'unsupported';
+export type EconomicsCostBasis =
+  'piModelRates' | 'sourceModelRates' | 'providerReported' | 'unknown';
+export type CacheWriteStatus = 'reported' | 'notReported' | 'notRetainedByPi' | 'unsupported';
+
+export interface CacheRatioDiscontinuity {
+  previousCallIndex: number;
+  direction: 'drop' | 'rise';
+  previousRatio: number;
+  currentRatio: number;
+  delta: number;
+  magnitude: 'notable' | 'large';
+  method: 'adjacent-cache-read-share-v1';
+  previousPromptTokens: number;
+  currentPromptTokens: number;
+  compactionBefore: string | null;
+}
+
+export interface CallEconomics {
+  policyId: string | null;
+  usageCompleteness: EconomicsCompleteness;
+  costCompleteness: EconomicsCompleteness;
+  cacheWriteStatus: CacheWriteStatus;
+  promptTokens: number | null;
+  cacheReadRatio: number | null;
+  cacheWriteRatio: number | null;
+  freshRatio: number | null;
+  piPromptCost: number | null;
+  cacheRatioDiscontinuity: CacheRatioDiscontinuity | null;
+  explanationCodes: string[];
+}
+
+export interface EconomicsStatusCounts {
+  complete: number;
+  partial: number;
+  missing: number;
+  unsupported: number;
+}
+
+export interface EconomicsSummary {
+  costBasis: EconomicsCostBasis;
+  supportedPolicyIds: string[];
+  usageCompleteness: EconomicsStatusCounts;
+  costCompleteness: EconomicsStatusCounts;
+  cacheReadEligibleCalls: number;
+  cacheReadPromptTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheReadRatio: number | null;
+  explanationCodes: string[];
+}
 
 export interface PresenceRange {
   startCall: number;
@@ -111,6 +161,7 @@ export interface ModelCall {
   compactionBefore: string | null;
   tokenizationProfileId: string | null;
   tokenAnalysis: CallTokenAnalysis;
+  economics: CallEconomics;
 }
 
 export interface ContextItemPreview {
@@ -215,6 +266,7 @@ export interface SessionSummary {
 export interface SessionAnalysis {
   schemaVersion: number;
   tokenAnalysis: TokenAnalysisSummary;
+  economics: EconomicsSummary;
   session: SessionSummary;
   displayWeightUnit: ChartUnit;
   modelCalls: ModelCall[];

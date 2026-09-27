@@ -1,3 +1,4 @@
+pub(crate) mod economics;
 pub(crate) mod metrics;
 pub(crate) mod reconciliation;
 pub(crate) mod tokenization;
@@ -17,9 +18,9 @@ use tokenization::{
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 5;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 7;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 7;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 9;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -250,6 +251,8 @@ pub(crate) fn analyze(
 
     let tokenize_ms = tokenize_started.elapsed().as_secs_f64() * 1000.0;
     let (cumulative_usages, usage_totals) = usage_rollup(&session.model_calls);
+    let (call_economics, economics_summary) =
+        economics::derive_with_cost_basis(&session.model_calls, session.source.cost_basis);
     let metrics_started = Instant::now();
     let mut model_calls = Vec::with_capacity(works.len());
     let mut residual_percents = Vec::new();
@@ -471,6 +474,7 @@ pub(crate) fn analyze(
         model_calls.push(to_api_call(
             work,
             profile,
+            call_economics[position].clone(),
             ApiCallDerived {
                 token_analysis,
                 added_ids: derived_transition.added_ids,
@@ -742,6 +746,7 @@ pub(crate) fn analyze(
     Ok(Analysis {
         schema_version: ANALYSIS_SCHEMA_VERSION,
         token_analysis: analysis_summary,
+        economics: economics_summary,
         session: SessionSummary {
             id: session.id,
             source: session.source.kind,
@@ -793,6 +798,7 @@ pub(crate) fn analyze(
 fn to_api_call(
     work: &CallWork<'_>,
     profile: &TokenizationProfile,
+    economics: CallEconomics,
     derived: ApiCallDerived,
 ) -> ModelCall {
     let usage = &work.call.reported_usage;
@@ -838,6 +844,7 @@ fn to_api_call(
         compaction_before: work.call.compaction_before.clone(),
         tokenization_profile_id: Some(profile.id.clone()),
         token_analysis: derived.token_analysis,
+        economics,
     }
 }
 
@@ -1040,7 +1047,11 @@ fn usage_cost_total(calls: &[NormalizedModelCall]) -> Option<f64> {
         return None;
     }
     calls.iter().try_fold(0.0_f64, |total, call| {
-        let value = call.reported_usage.cost.total?;
+        let value = call
+            .reported_usage
+            .cost
+            .total
+            .filter(|value| value.is_finite() && *value >= 0.0)?;
         let next = total + value;
         next.is_finite().then_some(next)
     })
@@ -1073,6 +1084,7 @@ mod tests {
             source: SourceDescriptor {
                 kind: "fake".into(),
                 version: "1".into(),
+                cost_basis: CostBasis::Unknown,
             },
             title: None,
             working_directory: None,
@@ -1103,6 +1115,7 @@ mod tests {
             SourceDescriptor {
                 kind: "fake".into(),
                 version: "test-v1".into(),
+                cost_basis: CostBasis::Unknown,
             }
         }
 
@@ -1365,6 +1378,16 @@ mod tests {
     }
 
     #[test]
+    fn session_pi_cost_total_rejects_negative_or_non_finite_values() {
+        let mut session = fake_session();
+        session.model_calls[0].reported_usage.cost.total = Some(-0.01);
+        assert_eq!(usage_cost_total(&session.model_calls), None);
+
+        session.model_calls[0].reported_usage.cost.total = Some(f64::INFINITY);
+        assert_eq!(usage_cost_total(&session.model_calls), None);
+    }
+
+    #[test]
     fn api_omits_full_normalized_payload_records() {
         let analysis = analyze(
             fake_session(),
@@ -1375,7 +1398,16 @@ mod tests {
         )
         .expect("analysis");
         let json = serde_json::to_value(&analysis).expect("json");
-        assert_eq!(json["schemaVersion"], 5);
+        assert_eq!(json["schemaVersion"], 7);
+        assert_eq!(json["economics"]["costBasis"], "unknown");
+        assert_eq!(
+            json["modelCalls"][0]["economics"]["usageCompleteness"],
+            "unsupported"
+        );
+        assert_eq!(
+            json["modelCalls"][0]["economics"]["cacheRatioDiscontinuity"],
+            serde_json::Value::Null
+        );
         assert!(json["tokenAnalysis"].get("version").is_none());
         assert!(json["modelCalls"][0].get("contextItemTokens").is_none());
         assert!(json["modelCalls"][0].get("retainedItemIds").is_none());

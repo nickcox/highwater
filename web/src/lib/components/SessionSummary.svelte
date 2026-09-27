@@ -1,9 +1,12 @@
 <script lang="ts">
   import type { IndexedAnalysis } from '../types';
+  import { estimateQuality } from '../estimate-quality';
+  import { describeCostBasis, isPiSource } from '../cost-basis';
   import {
     chartUnitLabel,
     coverageLabel,
     formatCost,
+    formatSessionCost,
     formatInteger,
     formatMetric,
     formatPercent,
@@ -14,6 +17,7 @@
   $: analysis = indexed.analysis;
   $: session = analysis.session;
   $: tokenAnalysis = analysis.tokenAnalysis;
+  $: economics = analysis.economics;
   $: providers =
     [...new Set(analysis.modelCalls.map((call) => call.provider).filter(Boolean))].join(', ') ||
     'Unknown';
@@ -21,25 +25,11 @@
     [...new Set(analysis.modelCalls.map((call) => call.model).filter(Boolean))].join(', ') ||
     'Unknown';
   $: coverage = tokenAnalysis.itemEstimateCoverage;
-  $: incompleteItemCount = coverage.partialItems + coverage.unavailableItems;
-  $: estimateCaveat =
-    analysis.displayWeightUnit === 'unavailable'
-      ? 'Token geometry is unavailable; the chart uses structural placeholders.'
-      : tokenAnalysis.fallbackReason === 'best-effort-tokenization'
-        ? 'Some chart weights use best-effort token estimates; provider usage is separate.'
-        : tokenAnalysis.fallbackReason === 'tokenizationDisabled'
-          ? 'Token analysis is disabled; the chart does not show token-weighted geometry.'
-          : tokenAnalysis.fallbackReason
-            ? 'Some chart weights use a fallback method; see Session details.'
-            : incompleteItemCount > 0
-              ? 'Token estimates have partial coverage; provider usage is separate.'
-              : 'Local calculated context can differ from provider-reported prompt usage.';
-  $: fallbackReasonText =
-    tokenAnalysis.fallbackReason === 'best-effort-tokenization'
-      ? 'Some weights are best-effort token estimates.'
-      : tokenAnalysis.fallbackReason === 'tokenizationDisabled'
-        ? 'Token analysis is disabled.'
-        : (tokenAnalysis.fallbackReason ?? 'None');
+  $: quality = estimateQuality(analysis);
+  $: costCopy = describeCostBasis(economics.costBasis);
+  $: usageMappingLabel = isPiSource(session.source)
+    ? 'audited Pi provider/API mappings'
+    : 'audited provider/API mappings';
 </script>
 
 <section class="summary" aria-label="Session summary">
@@ -54,149 +44,216 @@
           : formatWeight(session.peakCalculatedVisibleTokens, 'calculatedTokens')}</b
       >
     </div>
-    <div><span>Reported cost</span><b>{formatCost(session.reportedCostTotal)}</b></div>
+    <div>
+      <span>{costCopy.label}</span>
+      <b title={`${costCopy.note} Full precision is in Session details.`}
+        >{session.reportedCostTotal !== null && session.reportedCostTotal >= 0.01
+          ? '≈ '
+          : ''}{formatSessionCost(session.reportedCostTotal)}</b
+      >
+    </div>
   </div>
 
-  <p class="estimate-caveat" data-testid="estimate-caveat">
-    <b>Token estimate caveat</b>
-    {estimateCaveat}
-  </p>
+  <details class="session-details" id="session-details">
+    <summary id="session-details-summary">Session details</summary>
+    <div class="detail-columns">
+      <div class="detail-column">
+        <section>
+          <h3>Usage breakdown</h3>
+          <dl>
+            <div>
+              <dt>Provider prompt</dt>
+              <dd>{formatMetric(session.reportedPromptTokens)}</dd>
+            </div>
+            <div>
+              <dt>Provider output</dt>
+              <dd>{formatMetric(session.reportedCompletionTokens)}</dd>
+            </div>
+            <div>
+              <dt>Provider reasoning</dt>
+              <dd>{formatMetric(session.reportedReasoningTokens)}</dd>
+            </div>
+            <div>
+              <dt>Reported usage completeness</dt>
+              <dd>{session.reportedUsageCompleteness}</dd>
+            </div>
+            <div>
+              <dt>Compactions</dt>
+              <dd>{formatInteger(analysis.compactions.length)}</dd>
+            </div>
+            <div>
+              <dt>{costCopy.totalLabel} (USD)</dt>
+              <dd>{formatCost(session.reportedCostTotal)}</dd>
+            </div>
+            <div>
+              <dt>Cost basis</dt>
+              <dd>{costCopy.basisLabel}</dd>
+            </div>
+          </dl>
+        </section>
 
-  <details class="session-details">
-    <summary>Session details</summary>
-    <div class="detail-sections">
-      <section>
-        <h3>Usage breakdown</h3>
-        <dl>
-          <div>
-            <dt>Provider prompt</dt>
-            <dd>{formatMetric(session.reportedPromptTokens)}</dd>
-          </div>
-          <div>
-            <dt>Provider output</dt>
-            <dd>{formatMetric(session.reportedCompletionTokens)}</dd>
-          </div>
-          <div>
-            <dt>Provider reasoning</dt>
-            <dd>{formatMetric(session.reportedReasoningTokens)}</dd>
-          </div>
-          <div>
-            <dt>Reported usage completeness</dt>
-            <dd>{session.reportedUsageCompleteness}</dd>
-          </div>
-          <div>
-            <dt>Compactions</dt>
-            <dd>{formatInteger(analysis.compactions.length)}</dd>
-          </div>
-          <div>
-            <dt>Reported cost (USD)</dt>
-            <dd>{formatCost(session.reportedCostTotal)}</dd>
-          </div>
-        </dl>
-      </section>
+        <section>
+          <h3>Reported usage and economics</h3>
+          <p>
+            Token ratios use {usageMappingLabel}. Some adapters normalize absent provider buckets to
+            zero, so completeness describes persisted normalized usage, not proof the provider
+            explicitly sent every zero. {costCopy.note}
+          </p>
+          <dl>
+            <div>
+              <dt>Cache-read share</dt>
+              <dd>
+                {formatPercent(economics.cacheReadRatio)} ·
+                {coverageLabel(economics.cacheReadEligibleCalls, analysis.modelCalls.length)}
+                calls with complete supported usage
+              </dd>
+            </div>
+            <div>
+              <dt>Usage policy coverage (complete / partial / missing / unsupported)</dt>
+              <dd>
+                {formatInteger(economics.usageCompleteness.complete)} complete ·
+                {formatInteger(economics.usageCompleteness.partial)} partial ·
+                {formatInteger(economics.usageCompleteness.missing)} missing ·
+                {formatInteger(economics.usageCompleteness.unsupported)} unsupported
+              </dd>
+            </div>
+            <div>
+              <dt>
+                {costCopy.label} component coverage (complete / partial / missing / unsupported)
+              </dt>
+              <dd>
+                {formatInteger(economics.costCompleteness.complete)} complete ·
+                {formatInteger(economics.costCompleteness.partial)} partial ·
+                {formatInteger(economics.costCompleteness.missing)} missing ·
+                {formatInteger(economics.costCompleteness.unsupported)} unsupported
+              </dd>
+            </div>
+            <div>
+              <dt>Cache-write limits</dt>
+              <dd>
+                {#if isPiSource(session.source)}
+                  Anthropic writes are aggregated across TTLs; OpenAI Responses cache-write detail
+                  is not retained by the pinned Pi adapter.
+                {:else}
+                  Cache-write detail follows the source normalization policy; see call details for
+                  the policy and completeness status.
+                {/if}
+              </dd>
+            </div>
+          </dl>
+        </section>
 
-      <section>
-        <h3>Token estimates and diagnostics</h3>
-        <dl>
-          <div>
-            <dt>Chart unit</dt>
-            <dd>{chartUnitLabel(analysis.displayWeightUnit)}</dd>
-          </div>
-          <div>
-            <dt>Fallback</dt>
-            <dd>{fallbackReasonText}</dd>
-          </div>
-          <div>
-            <dt>Estimate coverage (complete / partial / unavailable)</dt>
-            <dd>
-              {coverageLabel(coverage.completeItems, coverage.totalItems)} complete ·
-              {formatInteger(coverage.partialItems)} partial ·
-              {formatInteger(coverage.unavailableItems)} unavailable
-            </dd>
-          </div>
-          <div>
-            <dt>Calculated token-turns</dt>
-            <dd>{formatMetric(session.calculatedTokenTurns)}</dd>
-          </div>
-          <div>
-            <dt>Token-turn call coverage</dt>
-            <dd>
-              {coverageLabel(
-                session.calculatedTokenTurnsCoverage.coveredCalls,
-                session.calculatedTokenTurnsCoverage.totalCalls,
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt>Reconciliation (complete / comparable calls)</dt>
-            <dd>
-              {formatInteger(session.reconciliationCompleteCalls)} /
-              {formatInteger(session.reconciliationComparableCalls)}
-            </dd>
-          </div>
-          <div>
-            <dt>Residual median / maximum</dt>
-            <dd>
-              {formatPercent(session.medianAbsoluteResidualPercent)} /
-              {formatPercent(session.maximumAbsoluteResidualPercent)}
-            </dd>
-          </div>
-          <div>
-            <dt>Negative residual calls</dt>
-            <dd>{formatInteger(session.negativeResidualCalls)}</dd>
-          </div>
-          <div>
-            <dt>Calls missing provider usage</dt>
-            <dd>{formatInteger(session.missingProviderUsageCalls)}</dd>
-          </div>
-          <div>
-            <dt>Tokenizer methods</dt>
-            <dd>
-              {Object.entries(tokenAnalysis.tokenizerMethods)
-                .map(([method, count]) => `${method}: ${formatInteger(count)}`)
-                .join(' · ') || 'None'}
-            </dd>
-          </div>
-        </dl>
-        {#if tokenAnalysis.profiles.length > 0}
-          <h4>Tokenization profiles</h4>
-          <ul class="profiles">
-            {#each tokenAnalysis.profiles as profile (profile.id)}
-              <li>
-                {profile.provider} / {profile.model} · {profile.method} · {profile.tokenizerFamily}
-                (v{profile.version}){#if profile.api}
-                  · {profile.api}{/if}
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
+        <section>
+          <h3>Session metadata</h3>
+          <dl>
+            <div>
+              <dt>Provider</dt>
+              <dd>{providers}</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd>{models}</dd>
+            </div>
+            <div>
+              <dt>Source</dt>
+              <dd>{session.source}</dd>
+            </div>
+            <div>
+              <dt>Title</dt>
+              <dd>{session.title ?? 'Unknown'}</dd>
+            </div>
+            <div>
+              <dt>Working directory</dt>
+              <dd>{session.workingDirectory ?? 'Unknown'}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
 
-      <section>
-        <h3>Session metadata</h3>
-        <dl>
-          <div>
-            <dt>Provider</dt>
-            <dd>{providers}</dd>
-          </div>
-          <div>
-            <dt>Model</dt>
-            <dd>{models}</dd>
-          </div>
-          <div>
-            <dt>Source</dt>
-            <dd>{session.source}</dd>
-          </div>
-          <div>
-            <dt>Title</dt>
-            <dd>{session.title ?? 'Unknown'}</dd>
-          </div>
-          <div>
-            <dt>Working directory</dt>
-            <dd>{session.workingDirectory ?? 'Unknown'}</dd>
-          </div>
-        </dl>
-      </section>
+      <div class="detail-column">
+        <section>
+          <h3>Token estimates and diagnostics</h3>
+          <dl>
+            <div>
+              <dt>Estimate quality</dt>
+              <dd>{quality.message}</dd>
+            </div>
+            <div>
+              <dt>Chart unit</dt>
+              <dd>{chartUnitLabel(analysis.displayWeightUnit)}</dd>
+            </div>
+            {#if tokenAnalysis.fallbackReason}
+              <div>
+                <dt>Fallback code</dt>
+                <dd><code>{tokenAnalysis.fallbackReason}</code></dd>
+              </div>
+            {/if}
+            <div>
+              <dt>Estimate coverage (complete / partial / unavailable)</dt>
+              <dd>
+                {coverageLabel(coverage.completeItems, coverage.totalItems)} complete ·
+                {formatInteger(coverage.partialItems)} partial ·
+                {formatInteger(coverage.unavailableItems)} unavailable
+              </dd>
+            </div>
+            <div>
+              <dt>Calculated token-turns</dt>
+              <dd>{formatMetric(session.calculatedTokenTurns)}</dd>
+            </div>
+            <div>
+              <dt>Token-turn call coverage</dt>
+              <dd>
+                {coverageLabel(
+                  session.calculatedTokenTurnsCoverage.coveredCalls,
+                  session.calculatedTokenTurnsCoverage.totalCalls,
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Reconciliation (complete / comparable calls)</dt>
+              <dd>
+                {formatInteger(session.reconciliationCompleteCalls)} /
+                {formatInteger(session.reconciliationComparableCalls)}
+              </dd>
+            </div>
+            <div>
+              <dt>Residual median / maximum</dt>
+              <dd>
+                {formatPercent(session.medianAbsoluteResidualPercent)} /
+                {formatPercent(session.maximumAbsoluteResidualPercent)}
+              </dd>
+            </div>
+            <div>
+              <dt>Negative residual calls</dt>
+              <dd>{formatInteger(session.negativeResidualCalls)}</dd>
+            </div>
+            <div>
+              <dt>Calls missing provider usage</dt>
+              <dd>{formatInteger(session.missingProviderUsageCalls)}</dd>
+            </div>
+            <div>
+              <dt>Tokenizer methods</dt>
+              <dd>
+                {Object.entries(tokenAnalysis.tokenizerMethods)
+                  .map(([method, count]) => `${method}: ${formatInteger(count)}`)
+                  .join(' · ') || 'None'}
+              </dd>
+            </div>
+          </dl>
+          {#if tokenAnalysis.profiles.length > 0}
+            <h4>Tokenization profiles</h4>
+            <ul class="profiles">
+              {#each tokenAnalysis.profiles as profile (profile.id)}
+                <li>
+                  {profile.provider} / {profile.model} · {profile.method} · {profile.tokenizerFamily}
+                  (v{profile.version}){#if profile.api}
+                    · {profile.api}{/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+      </div>
     </div>
   </details>
 </section>
@@ -230,18 +287,6 @@
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
   }
-  .estimate-caveat {
-    margin: 9px 0 0;
-    padding: 8px 10px;
-    color: #b9c8df;
-    background: #11182c;
-    border-left: 3px solid #7895bd;
-    font-size: 12px;
-  }
-  .estimate-caveat b {
-    margin-right: 4px;
-    color: #e2e8f3;
-  }
   .session-details {
     margin-top: 8px;
     color: #b9c6da;
@@ -259,15 +304,22 @@
     outline-offset: 3px;
     border-radius: 2px;
   }
-  .detail-sections {
+  .detail-columns {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 14px 24px;
     margin-top: 10px;
     padding: 12px;
     background: #0d1425;
     border: 1px solid #25314a;
     border-radius: 8px;
+  }
+  .detail-column {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-width: 0;
   }
   h3 {
     margin: 0 0 7px;
@@ -299,11 +351,15 @@
     font-size: 12px;
     overflow-wrap: anywhere;
   }
+  code {
+    overflow-wrap: anywhere;
+    color: #9fb2d5;
+  }
   @media (max-width: 800px) {
     .primary-metrics {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .detail-sections {
+    .detail-columns {
       grid-template-columns: 1fr;
     }
   }

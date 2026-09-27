@@ -34,3 +34,68 @@ export function displayItemLabel(
   }
   return fallback;
 }
+
+interface ParsedSourcePath {
+  prefix: string;
+  segments: string[];
+}
+
+interface SuffixNode {
+  pathCount: number;
+  children: Map<string, SuffixNode>;
+}
+
+function splitSourcePath(label: string): ParsedSourcePath | null {
+  const match = label.trim().match(/^(Read|Write|Edit)\s*[·:]\s*(.+)$/i);
+  if (!match) return null;
+
+  const prefix = match[1];
+  const path = match[2].trim();
+  if (!/[\\/]/.test(path) || /^[a-z][a-z\d+.-]*:\/\//i.test(path)) return null;
+
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments.length > 0 ? { prefix, segments } : null;
+}
+
+/** Precompute concise labels for one accepted item set in time proportional to path segments. */
+export function conciseLifespanLabels(
+  items: readonly (LabelFields & Pick<ContextItem, 'id'>)[],
+): Map<string, string> {
+  const parsed = items.map((item) => {
+    const fullLabel = displayItemLabel(item);
+    return { id: item.id, fullLabel, source: splitSourcePath(fullLabel) };
+  });
+  const root: SuffixNode = { pathCount: 0, children: new Map() };
+
+  for (const { source } of parsed) {
+    if (!source) continue;
+    let node = root;
+    for (let index = source.segments.length - 1; index >= 0; index -= 1) {
+      const segment = source.segments[index];
+      let child = node.children.get(segment);
+      if (!child) {
+        child = { pathCount: 0, children: new Map() };
+        node.children.set(segment, child);
+      }
+      child.pathCount += 1;
+      node = child;
+    }
+  }
+
+  return new Map(
+    parsed.map(({ id, fullLabel, source }) => {
+      if (!source) return [id, fullLabel];
+      let node = root;
+      let distinguishingDepth = source.segments.length;
+      for (let index = source.segments.length - 1, depth = 1; index >= 0; index -= 1, depth += 1) {
+        node = node.children.get(source.segments[index])!;
+        if (node.pathCount === 1) {
+          distinguishingDepth = depth;
+          break;
+        }
+      }
+      const pathLabel = source.segments.slice(-distinguishingDepth).join('/');
+      return [id, source.prefix ? `${source.prefix} · ${pathLabel}` : pathLabel];
+    }),
+  );
+}

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/sv
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { testAnalysis } from './lib/context-river/test-data';
+import { liveAppendReplacementScenario } from './lib/testing/session-scenarios';
 
 let modifyAnalysis: ((analysis: ReturnType<typeof testAnalysis>) => void) | null = null;
 let restoreViewportMeasurements = () => {};
@@ -147,6 +148,23 @@ async function renderLoaded() {
   return result;
 }
 
+async function expandLifespans(): Promise<void> {
+  const disclosure = document.querySelector('.lifespan-disclosure') as HTMLDetailsElement | null;
+  if (disclosure && !disclosure.open) {
+    await fireEvent.click(disclosure.querySelector('summary')!);
+    await waitFor(() => expect(disclosure.querySelector('.lifespan-content')).not.toBeNull());
+  }
+}
+
+function economicsTrackButton(name: string): HTMLButtonElement {
+  const group = screen.getByRole('group', { name: 'Economics track' });
+  const button = [...group.querySelectorAll<HTMLButtonElement>('button')].find(
+    (candidate) => candidate.textContent?.trim() === name,
+  );
+  if (!button) throw new Error(`Economics track button not found: ${name}`);
+  return button;
+}
+
 function emptyAnalysisResponse(id: string, etag: string): Response {
   const analysis = testAnalysis();
   analysis.session.id = id;
@@ -158,6 +176,41 @@ function emptyAnalysisResponse(id: string, etag: string): Response {
     status: 200,
     headers: { 'content-type': 'application/json', etag },
   });
+}
+
+function withCacheEconomics(analysis: ReturnType<typeof testAnalysis>): void {
+  const calls = analysis.modelCalls;
+  for (const call of calls) {
+    call.provider = 'anthropic';
+    call.api = 'anthropic-messages';
+    call.usage = { ...call.usage, input: 90, cacheRead: 10, cacheWrite: 0 };
+    call.cost = { input: 0.01, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 };
+    call.economics = {
+      ...call.economics,
+      policyId: 'anthropic-messages-cache-v1',
+      usageCompleteness: 'complete',
+      costCompleteness: 'complete',
+      cacheWriteStatus: 'reported',
+      promptTokens: 100,
+      cacheReadRatio: 0.1,
+      cacheWriteRatio: 0,
+      freshRatio: 0.9,
+      piPromptCost: 0.01,
+      cacheRatioDiscontinuity: null,
+      explanationCodes: [],
+    };
+  }
+  analysis.economics = {
+    ...analysis.economics,
+    supportedPolicyIds: ['anthropic-messages-cache-v1'],
+    usageCompleteness: { complete: calls.length, partial: 0, missing: 0, unsupported: 0 },
+    costCompleteness: { complete: calls.length, partial: 0, missing: 0, unsupported: 0 },
+    cacheReadEligibleCalls: calls.length,
+    cacheReadPromptTokens: calls.length * 100,
+    cacheReadTokens: calls.length * 10,
+    cacheReadRatio: 0.1,
+    explanationCodes: [],
+  };
 }
 
 function analysisResponse(id: string, etag: string, model = 'm'): Response {
@@ -219,12 +272,60 @@ describe('Context River interactions', () => {
     await renderLoaded();
     const chart = screen.getByRole('application', { name: 'Context River' });
     chart.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 300 }));
-    expect(screen.queryByText(/Pinned call/)).not.toBeInTheDocument();
-    expect(screen.getByText('No call pinned.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Pinned call \d+$/)).not.toBeInTheDocument();
+    expect(screen.getByText('Select a call to inspect usage.')).toBeInTheDocument();
     await fireEvent.click(chart, { clientX: 300 });
-    expect(await screen.findByText('Pinned call', { exact: false })).toBeInTheDocument();
+    expect(await screen.findByText(/^Pinned call 2$/)).toBeInTheDocument();
     chart.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 700 }));
-    expect(screen.getByText('Pinned call', { exact: false })).toHaveTextContent('Pinned call 2');
+    expect(screen.getByText(/^Pinned call 2$/)).toBeInTheDocument();
+  });
+
+  it('shows concise empty inspectors and disables Clear selection until state exists', async () => {
+    await renderLoaded();
+    expect(screen.getByText('Select a call to inspect usage.')).toBeInTheDocument();
+    expect(screen.getByText('Select an item to inspect its context.')).toBeInTheDocument();
+    expect(document.querySelectorAll('#inspector > .panel')).toHaveLength(1);
+    const clear = screen.getByRole('button', { name: 'Clear selected item and pinned call' });
+    expect(clear).toBeDisabled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 1' }));
+    expect(clear).toBeEnabled();
+    expect(document.querySelectorAll('#inspector > .panel')).toHaveLength(1);
+    await fireEvent.click(clear);
+    expect(clear).toBeDisabled();
+    expect(document.querySelectorAll('#inspector > .panel')).toHaveLength(1);
+
+    await expandLifespans();
+    const itemRow = screen.getByLabelText(/bash: npm test; Tool result/);
+    await fireEvent.click(itemRow.querySelector('.segment')!);
+    expect(screen.getByRole('heading', { name: 'Context item' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Model call' })).not.toBeInTheDocument();
+    expect(screen.getByText('Select a call to inspect usage.')).toBeInTheDocument();
+    expect(document.querySelectorAll('#inspector > .panel')).toHaveLength(1);
+  });
+
+  it('opens chart help, closes it on Escape, and routes to Session details', async () => {
+    const { container } = await renderLoaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 1' }));
+    const trigger = screen.getByRole('button', { name: 'Chart help' });
+    await fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('group', { name: 'Chart help' })).toBeVisible();
+    expect(screen.getByText(/modifier-wheel zoom/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Token-turns count an item's estimated tokens/),
+    ).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+    expect(container.querySelector('.call-details')).toHaveTextContent('Pinned call 1');
+
+    await fireEvent.click(trigger);
+    await fireEvent.click(screen.getByText('Open Session details'));
+    const sessionDetails = document.getElementById('session-details') as HTMLDetailsElement;
+    expect(sessionDetails.open).toBe(true);
+    expect(document.getElementById('session-details-summary')).toHaveFocus();
   });
 
   it('shows a styled context-item inspector on hover without changing the persistent panel', async () => {
@@ -232,7 +333,7 @@ describe('Context River interactions', () => {
     const ribbon = screen.getByRole('button', { name: 'bash: npm test' });
     await fireEvent.pointerEnter(ribbon);
     expect(screen.getByRole('region', { name: 'Context item bash: npm test' })).toBeInTheDocument();
-    expect(screen.getByText('No context item selected')).toBeInTheDocument();
+    expect(screen.getByText('Select an item to inspect its context.')).toBeInTheDocument();
   });
 
   it('expands a bounded context preview from the item inspector', async () => {
@@ -277,14 +378,16 @@ describe('Context River interactions', () => {
     expect(callDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(6);
     expect(
       callDetails.querySelector('.usage-breakdown')?.querySelector('summary'),
-    ).toHaveTextContent('Usage breakdown');
+    ).toHaveTextContent('Usage and economics');
     expect((callDetails.querySelector('.usage-breakdown') as HTMLDetailsElement).open).toBe(false);
     expect((callDetails.querySelector('.technical-identifiers') as HTMLDetailsElement).open).toBe(
       false,
     );
 
     await fireEvent.click(callDetails.querySelector('.usage-breakdown summary')!);
-    expect(callDetails.querySelector('.usage-breakdown')).toHaveTextContent('Fresh input');
+    expect(callDetails.querySelector('.usage-breakdown')).toHaveTextContent(
+      'Input (raw normalized bucket)',
+    );
     await fireEvent.click(
       screen.getByText('Token estimates and diagnostics', { selector: '.call-details summary' }),
     );
@@ -303,9 +406,12 @@ describe('Context River interactions', () => {
 
   it('highlights only the selected ribbon and its direct compaction successor', async () => {
     const { container } = await renderLoaded();
+    await expandLifespans();
     await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
     expect(screen.getByText('Selected item')).toBeInTheDocument();
-    expect(screen.getByText('4 of 4 items')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Context lifespans · 4 items' }),
+    ).toBeInTheDocument();
     expect(container.querySelectorAll('.ribbon-group.selected')).toHaveLength(1);
     expect(container.querySelector('.ribbon-group.related, .ribbon-group.dimmed')).toBeNull();
     expect(container.querySelector('.lifespan-panel .row.dimmed')).toBeNull();
@@ -314,6 +420,7 @@ describe('Context River interactions', () => {
 
   it('does not highlight a compaction summary’s sibling sources as one selection group', async () => {
     const { container } = await renderLoaded();
+    await expandLifespans();
     await fireEvent.click(screen.getByRole('button', { name: 'Compaction summary' }));
 
     expect(container.querySelectorAll('.ribbon-group.selected')).toHaveLength(1);
@@ -325,8 +432,9 @@ describe('Context River interactions', () => {
     );
   });
 
-  it('resets lifespan filters on an explicit session switch', async () => {
+  it('resets lifespan filters and collapses browsing on an explicit session switch', async () => {
     await renderLoaded();
+    await expandLifespans();
     await fireEvent.input(screen.getByRole('searchbox', { name: 'Search items' }), {
       target: { value: 'bash' },
     });
@@ -334,13 +442,35 @@ describe('Context River interactions', () => {
 
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
     await waitFor(() =>
-      expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue(''),
+      expect((document.querySelector('.lifespan-disclosure') as HTMLDetailsElement).open).toBe(
+        false,
+      ),
     );
-    expect(screen.getByText('4 of 4 items')).toBeInTheDocument();
+    await expandLifespans();
+    expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('');
+    expect(
+      screen.getByRole('heading', { name: 'Context lifespans · 4 items' }),
+    ).toBeInTheDocument();
+  });
+
+  it('resets the economics track to Cache when explicitly switching sessions', async () => {
+    modifyAnalysis = withCacheEconomics;
+    await renderLoaded();
+    await waitFor(() =>
+      expect(economicsTrackButton('Cache')).toHaveAttribute('aria-pressed', 'true'),
+    );
+    await fireEvent.click(economicsTrackButton('Cost'));
+    expect(economicsTrackButton('Cost')).toHaveAttribute('aria-pressed', 'true');
+
+    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await waitFor(() =>
+      expect(economicsTrackButton('Cache')).toHaveAttribute('aria-pressed', 'true'),
+    );
   });
 
   it('selects the same item from a lifespan segment', async () => {
     await renderLoaded();
+    await expandLifespans();
     await fireEvent.click(
       screen.getByRole('button', { name: /bash: npm test, calls 1 through 2/ }),
     );
@@ -350,12 +480,44 @@ describe('Context River interactions', () => {
     ).toBeInTheDocument();
   });
 
+  it('reveals a selected item from its actual presence without changing pin or zoom', async () => {
+    const { container } = await renderLoaded();
+    await expandLifespans();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
+    const gapRow = [...container.querySelectorAll('.lifespan-panel .row')].find((row) =>
+      row.textContent?.includes('<img src=x onerror=alert(1)>'),
+    );
+    expect(gapRow).toBeTruthy();
+    await fireEvent.click(gapRow!.querySelector('.segment')!);
+    expect(container.querySelector('.selection-location-note')).toBeNull();
+    expect(screen.getByText(/not present at pinned call 2/)).toBeInTheDocument();
+
+    const goTo = container.querySelector('.go-to-disclosure') as HTMLDetailsElement;
+    goTo.open = true;
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Range start call' }), {
+      target: { value: '2' },
+    });
+    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Range end call' }), {
+      target: { value: '3' },
+    });
+    await fireEvent.submit(container.querySelector('.range-form')!);
+    await waitFor(() => expect(container.querySelector('.selection-location-note')).not.toBeNull());
+    const widthAtRange = container.querySelector('.river-scroll svg')?.getAttribute('width');
+
+    await fireEvent.click(container.querySelector('.item-details .presence-note button')!);
+    await waitFor(() => expect(container.querySelector('.selection-location-note')).toBeNull());
+    expect(container.querySelector('.river-scroll')?.scrollLeft).toBe(0);
+    expect(container.querySelector('.river-scroll svg')?.getAttribute('width')).toBe(widthAtRange);
+    expect(screen.getByText('Pinned call 2')).toBeInTheDocument();
+    expect(screen.getByText('Selected item')).toBeInTheDocument();
+  });
+
   it('empty-space click clears item selection while pinning a call', async () => {
     const { container } = await renderLoaded();
     await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
     await fireEvent.click(container.querySelector('.plot-background')!, { clientX: 300 });
     expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
-    expect(screen.getByText('Pinned call', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(/^Pinned call 2$/)).toBeInTheDocument();
   });
 
   it('Reset clears selected item and pinned call', async () => {
@@ -366,7 +528,7 @@ describe('Context River interactions', () => {
       screen.getByRole('button', { name: 'Clear selected item and pinned call' }),
     );
     expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
-    expect(screen.queryByText('Pinned call', { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Pinned call 2$/)).not.toBeInTheDocument();
   });
 
   it('session changes clear stale interaction and restore Fit all', async () => {
@@ -401,7 +563,7 @@ describe('Context River interactions', () => {
     const oldHost = document.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() => expect(oldHost.scrollLeft).toBeGreaterThan(0));
     expect(screen.getByText('Selected item')).toBeInTheDocument();
-    expect(screen.getByText('Pinned call', { exact: false })).toHaveTextContent('Pinned call 2');
+    expect(screen.getByText(/^Pinned call 2$/)).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Fit all calls' }));
     expect(screen.getByRole('button', { name: 'Zoom out' })).toBeDisabled();
@@ -524,10 +686,10 @@ describe('Context River interactions', () => {
 
     await fireEvent.keyDown(ribbon, { key: 'Escape' });
     expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
-    expect(screen.getByText('Pinned call', { exact: false })).toHaveTextContent('Pinned call 2');
+    expect(screen.getByText(/^Pinned call 2$/)).toBeInTheDocument();
 
     await fireEvent.keyDown(ribbon, { key: 'Escape' });
-    expect(screen.queryByText('Pinned call', { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Pinned call 2$/)).not.toBeInTheDocument();
   });
 });
 
@@ -1004,6 +1166,186 @@ describe('selected analysis request lifecycle', () => {
 
     expect(analysisRequests).toBe(1);
     expect(screen.queryByText(/late-model/)).not.toBeInTheDocument();
+  });
+
+  it('switches visualization tabs with shared pinned-call and item selection state', async () => {
+    await renderLoaded();
+    const riverTab = screen.getByRole('tab', { name: 'River' });
+    await fireEvent.keyDown(riverTab, { key: 'ArrowRight' });
+    const compositionTab = screen.getByRole('tab', { name: 'Composition' });
+    expect(compositionTab).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(compositionTab);
+    expect(
+      screen.getByRole('heading', { name: 'Cumulative context usage · Whole session' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Inspect latest call' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'At call' }));
+    expect(screen.getByText(/Pin a call to inspect its item estimates/)).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect latest call' }));
+    expect(
+      screen.getByRole('heading', { name: 'Context composition · Call 4' }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    await fireEvent.pointerUp(document.querySelector('[data-composition-item="summary"]')!);
+    expect(screen.getByRole('region', { name: 'Pinned call 4' })).toBeInTheDocument();
+    expect(document.querySelector('.item-details h3')?.textContent).toBe('Compaction summary');
+
+    await fireEvent.keyDown(compositionTab, { key: 'ArrowLeft' });
+    expect(screen.getByRole('tab', { name: 'River' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Pinned call 4' })).toBeInTheDocument();
+    expect(document.querySelector('.item-details h3')?.textContent).toBe('Compaction summary');
+  });
+
+  it('reveals a selected item absent from the pinned composition call in Context River', async () => {
+    await renderLoaded();
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'At call' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect latest call' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    await fireEvent.pointerUp(document.querySelector('[data-composition-item="gap"]')!);
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect previous call' }));
+    expect(screen.getByText(/not present at pinned call 3/)).toBeInTheDocument();
+
+    await fireEvent.click(document.querySelector('.selected-composition-item button:last-child')!);
+    expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Pinned call 3' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'River' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('resets Composition and its pinned call on an explicit session switch', async () => {
+    await renderLoaded();
+    await expandLifespans();
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'At call' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect latest call' }));
+    expect(screen.getByRole('region', { name: 'Pinned call 4' })).toBeInTheDocument();
+
+    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'River' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('region', { name: 'Pinned call 4' })).toBeNull();
+    expect(screen.getByText('Select a call to inspect usage.')).toBeInTheDocument();
+    expect((document.querySelector('.lifespan-disclosure') as HTMLDetailsElement).open).toBe(false);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    expect(screen.getByRole('button', { name: 'Cumulative' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('explains when a lost pin widens cumulative Composition to the whole session', async () => {
+    const initial = testAnalysis();
+    initial.session.id = 'one';
+    const replacement = JSON.parse(JSON.stringify(initial)) as ReturnType<typeof testAnalysis>;
+    replacement.modelCalls[1].sourceRecordId = 'replacement-call-record';
+    let catalogueRevision = 0;
+    let analysisRequests = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        if (String(input) === '/api/sessions') {
+          return Promise.resolve(sessionListResponse(['one'], generationA, catalogueRevision));
+        }
+        analysisRequests += 1;
+        const analysis = analysisRequests === 1 ? initial : replacement;
+        return Promise.resolve(
+          new Response(JSON.stringify(analysis), {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              etag: `"analysis-v${analysisRequests}"`,
+            },
+          }),
+        );
+      }),
+    );
+
+    await renderLoaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
+    expect(screen.getByRole('region', { name: 'Pinned call 2' })).toBeInTheDocument();
+
+    catalogueRevision = 1;
+    TestEventSource.instance.emit(
+      'sessionsChanged',
+      JSON.stringify({ generation: generationA, revision: '1' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Pinned call 2' })).toBeNull());
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    expect(
+      screen.getByRole('heading', { name: 'Cumulative context usage · Whole session' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The pinned call is no longer available; cumulative scope now covers the whole session.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('preserves the older Composition pin and selected item through same-session append', async () => {
+    const { initial, replacement } = liveAppendReplacementScenario();
+    initial.session.id = 'one';
+    replacement.session.id = 'one';
+    initial.modelCalls[3].model = 'model-1';
+    replacement.modelCalls[3].model = 'model-2';
+    let catalogueRevision = 0;
+    let analysisRequests = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        if (String(input) === '/api/sessions') {
+          return Promise.resolve(sessionListResponse(['one'], generationA, catalogueRevision));
+        }
+        analysisRequests += 1;
+        const analysis = analysisRequests === 1 ? initial : replacement;
+        return Promise.resolve(
+          new Response(JSON.stringify(analysis), {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              etag: `"analysis-v${analysisRequests}"`,
+            },
+          }),
+        );
+      }),
+    );
+
+    await renderLoaded();
+    await expandLifespans();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 4' }));
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    await fireEvent.pointerUp(document.querySelector('[data-composition-item="summary"]')!);
+    expect(document.querySelector('.item-details h3')?.textContent).toBe('Compaction summary');
+
+    catalogueRevision = 1;
+    TestEventSource.instance.emit(
+      'sessionsChanged',
+      JSON.stringify({ generation: generationA, revision: '1' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Pinned call 4' })).toHaveTextContent('model-2'),
+    );
+    expect(screen.getByRole('region', { name: 'Session summary' })).toHaveTextContent('5');
+    expect((document.querySelector('.lifespan-disclosure') as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByRole('tab', { name: 'Composition' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Cumulative context usage · Calls 1–4' }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.item-details h3')?.textContent).toBe('Compaction summary');
+    expect(
+      document.querySelector('.composition-list [data-composition-item="summary"]'),
+    ).toHaveAttribute('aria-selected', 'true');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect next call' }));
+    expect(
+      screen.getByRole('heading', { name: 'Cumulative context usage · Calls 1–5' }),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.item-details h3')?.textContent).toBe('Compaction summary');
   });
 
   it('does not restart or publish a catalogue reconciliation after unmount', async () => {

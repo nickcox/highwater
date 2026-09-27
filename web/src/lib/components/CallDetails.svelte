@@ -2,6 +2,8 @@
   import type { IndexedAnalysis, ModelCall } from '../types';
   import { displayItemLabel } from '../item-label';
   import { describeTokenDiagnostic } from '../diagnostics';
+  import { describeEconomicsCode } from '../economics';
+  import { describeCostBasis, isPiSource } from '../cost-basis';
   import CopyButton from './CopyButton.svelte';
   import {
     coverageLabel,
@@ -16,6 +18,7 @@
   export let pinned = false;
   export let onSelectItem: (id: string) => void = () => {};
   export let onClose: (() => void) | null = null;
+  export let onPinCall: (index: number) => void = () => {};
 
   $: compaction = call?.compactionBefore
     ? (indexed.compactionById.get(call.compactionBefore) ?? null)
@@ -32,9 +35,110 @@
     return [...summary.entries()].map(([name, value]) => ({ name, ...value }));
   })();
   $: explanationCodes = call?.tokenAnalysis.explanationCodes ?? [];
+  $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
+  $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
+  $: usageMappingLabel = isPiSource(indexed.analysis.session.source)
+    ? 'audited Pi provider/API policy'
+    : 'audited provider/API policy';
+  $: tokenProfile = call?.tokenizationProfileId
+    ? (indexed.analysis.tokenAnalysis.profiles.find(
+        (profile) => profile.id === call?.tokenizationProfileId,
+      ) ?? null)
+    : null;
 
   function itemLabel(id: string): string {
     return displayItemLabel(indexed.itemById.get(id), id);
+  }
+
+  function methodLabel(method: string): string {
+    switch (method) {
+      case 'modelTokenizer':
+        return 'Model tokenizer';
+      case 'apiSerializationEstimate':
+        return 'Estimated API serialization';
+      case 'characterHeuristic':
+        return 'Character heuristic';
+      default:
+        return 'Unavailable estimate method';
+    }
+  }
+
+  function inputBucketLabel(policyId: string | null): string {
+    if (policyId === 'anthropic-messages-cache-v1') return 'Fresh input';
+    if (policyId === 'openai-completions-cache-v1') return 'Uncached input';
+    if (
+      policyId === 'openai-responses-cache-read-v1' ||
+      policyId === 'openai-codex-responses-cache-read-v1'
+    ) {
+      return 'Non-cache-read input (may include writes)';
+    }
+    return 'Input (raw normalized bucket)';
+  }
+
+  function cacheWriteValue(): string {
+    if (!call) return 'Unknown';
+    switch (call.economics.cacheWriteStatus) {
+      case 'reported':
+        return formatMetric(call.usage.cacheWrite);
+      case 'notReported':
+        return 'Not separately reported';
+      case 'notRetainedByPi':
+        return isPiSource(indexed.analysis.session.source)
+          ? 'Not retained by Pi'
+          : 'Not retained by source';
+      default:
+        return `Raw normalized value: ${formatMetric(call.usage.cacheWrite)}`;
+    }
+  }
+
+  function inputShareLabel(policyId: string | null): string {
+    if (policyId === 'anthropic-messages-cache-v1') return 'Fresh-input share';
+    if (policyId === 'openai-completions-cache-v1') return 'Uncached-input share';
+    return 'Fresh / uncached input share';
+  }
+
+  function cacheWriteLabel(): string {
+    if (!call) return 'Cache write';
+    return call.economics.cacheWriteStatus === 'unsupported'
+      ? 'Cache write (raw field)'
+      : 'Cache write';
+  }
+
+  function ratioValue(value: number | null): string {
+    if (value !== null) return formatPercent(value);
+    if (!call) return 'Unknown';
+    if (call.economics.usageCompleteness === 'unsupported') return 'Unsupported policy';
+    if (call.economics.usageCompleteness === 'missing') return 'Provider usage missing';
+    if (call.economics.usageCompleteness === 'partial') return 'Provider usage incomplete';
+    if (call.economics.promptTokens === 0) return 'No prompt tokens';
+    return 'Unavailable';
+  }
+
+  function cacheWriteShareValue(): string {
+    if (!call) return 'Unknown';
+    if (call.economics.cacheWriteStatus === 'notReported') return 'Not separately reported';
+    if (call.economics.cacheWriteStatus === 'notRetainedByPi') {
+      return isPiSource(indexed.analysis.session.source)
+        ? 'Not retained by Pi'
+        : 'Not retained by source';
+    }
+    if (call.economics.cacheWriteStatus === 'unsupported') return 'Unsupported policy';
+    return ratioValue(call.economics.cacheWriteRatio);
+  }
+
+  function discontinuityPercent(value: number): string {
+    return `${(value * 100).toFixed(1)}%`;
+  }
+
+  function freshRatioValue(): string {
+    if (!call) return 'Unknown';
+    if (
+      call.economics.policyId === 'openai-responses-cache-read-v1' ||
+      call.economics.policyId === 'openai-codex-responses-cache-read-v1'
+    ) {
+      return 'Unavailable; writes may be included in non-read input';
+    }
+    return ratioValue(call.economics.freshRatio);
   }
 </script>
 
@@ -59,7 +163,7 @@
         <dd>{formatMetric(call.reportedCompletionTokens)}</dd>
       </div>
       <div>
-        <dt>Reported cost</dt>
+        <dt>{costCopy.label}</dt>
         <dd>{formatCost(call.cost?.total)}</dd>
       </div>
       <div>
@@ -124,23 +228,56 @@
     {/if}
 
     <details class="usage-breakdown">
-      <summary>Usage breakdown</summary>
+      <summary>Usage and economics</summary>
+      <p class="economics-note">
+        Token buckets follow the {usageMappingLabel} when supported; normalized zeros may reflect adapter
+        defaults. {costCopy.note} Cache write 1h is retained source detail and is not added to aggregate
+        cache-write totals.
+      </p>
       <dl class="detail-rows">
         <div>
-          <dt>Fresh input</dt>
+          <dt>{inputBucketLabel(call.economics.policyId)}</dt>
           <dd>{formatMetric(call.usage.input)}</dd>
         </div>
         <div>
-          <dt>Cache read</dt>
+          <dt>{call.economics.policyId ? 'Cache read' : 'Cache read (raw field)'}</dt>
           <dd>{formatMetric(call.usage.cacheRead)}</dd>
         </div>
         <div>
-          <dt>Cache write</dt>
-          <dd>{formatMetric(call.usage.cacheWrite)}</dd>
+          <dt>{cacheWriteLabel()}</dt>
+          <dd>{cacheWriteValue()}</dd>
         </div>
         <div>
-          <dt>Cache write 1h</dt>
+          <dt>Cache write 1h (source detail)</dt>
           <dd>{formatMetric(call.usage.cacheWrite1h)}</dd>
+        </div>
+        <div>
+          <dt>Audited usage completeness</dt>
+          <dd>{call.economics.usageCompleteness}</dd>
+        </div>
+        <div>
+          <dt>Audited prompt total</dt>
+          <dd>{formatMetric(call.economics.promptTokens)}</dd>
+        </div>
+        <div>
+          <dt>Cache-read share</dt>
+          <dd>{ratioValue(call.economics.cacheReadRatio)}</dd>
+        </div>
+        <div>
+          <dt>Cache-write share</dt>
+          <dd>{cacheWriteShareValue()}</dd>
+        </div>
+        <div>
+          <dt>{inputShareLabel(call.economics.policyId)}</dt>
+          <dd>{freshRatioValue()}</dd>
+        </div>
+        <div>
+          <dt>{costCopy.label} component completeness</dt>
+          <dd>{call.economics.costCompleteness}</dd>
+        </div>
+        <div>
+          <dt>{costCopy.promptLabel}</dt>
+          <dd>{formatCost(call.economics.piPromptCost)}</dd>
         </div>
         <div>
           <dt>Reported total tokens</dt>
@@ -163,26 +300,63 @@
           <dd>{call.cumulativeReportedUsageCompleteness}</dd>
         </div>
         <div>
-          <dt>Cost input</dt>
+          <dt>{costCopy.componentPrefix} input cost</dt>
           <dd>{formatCost(call.cost?.input)}</dd>
         </div>
         <div>
-          <dt>Cost output</dt>
+          <dt>{costCopy.componentPrefix} output cost</dt>
           <dd>{formatCost(call.cost?.output)}</dd>
         </div>
         <div>
-          <dt>Cost cache read</dt>
+          <dt>{costCopy.componentPrefix} cache-read cost</dt>
           <dd>{formatCost(call.cost?.cacheRead)}</dd>
         </div>
         <div>
-          <dt>Cost cache write</dt>
+          <dt>{costCopy.componentPrefix} cache-write cost</dt>
           <dd>{formatCost(call.cost?.cacheWrite)}</dd>
         </div>
         <div>
-          <dt>Cost total</dt>
+          <dt>{costCopy.totalLabel}</dt>
           <dd>{formatCost(call.cost?.total)}</dd>
         </div>
       </dl>
+      {#if call.economics.cacheRatioDiscontinuity}
+        {@const change = call.economics.cacheRatioDiscontinuity}
+        <div class="ratio-discontinuity" role="note">
+          <b
+            >Cache-read share {change.direction === 'drop' ? 'dropped' : 'rose'} from {discontinuityPercent(
+              change.previousRatio,
+            )} on call {change.previousCallIndex} to {discontinuityPercent(change.currentRatio)} on call
+            {call.index}</b
+          >
+          <p>
+            Adjacent-call change: {formatInteger(change.previousPromptTokens)} to
+            {formatInteger(change.currentPromptTokens)} prompt tokens; change of
+            {(change.delta * 100).toFixed(1)} percentage points ({change.magnitude}). Method:
+            {change.method}.
+            {#if change.compactionBefore}Compaction {change.compactionBefore} is nearby context.{/if}
+          </p>
+          <button type="button" onclick={() => onPinCall(change.previousCallIndex)}>
+            Inspect previous call {change.previousCallIndex}
+          </button>
+        </div>
+      {/if}
+      {#if economicsExplanationCodes.length > 0}
+        <h4>Economics notes</h4>
+        <ul class="economics-explanations">
+          {#each economicsExplanationCodes as code (code)}
+            {@const description = describeEconomicsCode(
+              code,
+              indexed.analysis.economics.costBasis,
+              indexed.analysis.session.source,
+            )}
+            <li>
+              {#if description}<b>{description.title}</b> — {description.impact}
+              {:else}<b>Unrecognized economics explanation</b> — see the raw code in Technical identifiers.{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </details>
 
     <details class="token-diagnostics">
@@ -224,8 +398,16 @@
           <dd>{call.tokenAnalysis.status}</dd>
         </div>
         <div>
-          <dt>Method profile</dt>
-          <dd>{call.tokenizationProfileId ?? 'Unavailable'}</dd>
+          <dt>Model / tokenizer</dt>
+          <dd>
+            {#if tokenProfile}
+              {tokenProfile.provider} / {tokenProfile.model} · {methodLabel(tokenProfile.method)}
+            {:else if call.tokenizationProfileId}
+              Tokenizer profile unavailable · {call.tokenizationProfileId}
+            {:else}
+              Unavailable
+            {/if}
+          </dd>
         </div>
         <div>
           <dt>Added tokens</dt>
@@ -314,6 +496,13 @@
               <CopyButton value={call.tokenizationProfileId} label="tokenization profile ID" />
             </dd>
           </div>{/if}
+        {#if call.economics.policyId}<div>
+            <dt>Economics policy ID</dt>
+            <dd>
+              <code>{call.economics.policyId}</code>
+              <CopyButton value={call.economics.policyId} label="economics policy ID" />
+            </dd>
+          </div>{/if}
       </dl>
       <dl class="technical-values">
         <div>
@@ -350,6 +539,12 @@
           {#each explanationCodes as code (code)}<li><code>{code}</code></li>{/each}
         </ul>
       {/if}
+      {#if economicsExplanationCodes.length > 0}
+        <h4>Raw economics codes</h4>
+        <ul>
+          {#each economicsExplanationCodes as code (code)}<li><code>{code}</code></li>{/each}
+        </ul>
+      {/if}
     </details>
   </section>
 {/if}
@@ -361,11 +556,16 @@
     max-width: 100%;
   }
   header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
     gap: 16px;
     align-items: start;
-    margin-bottom: 8px;
+    margin: -2px 0 8px;
+    padding: 4px 0 7px;
+    background: #121a30;
   }
   header div {
     display: flex;
@@ -433,26 +633,43 @@
   .tool-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 6px;
+    gap: 4px 12px;
+    margin-top: 4px;
   }
   .tool-chip {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid #3a496a;
-    border-radius: 999px;
-    padding: 3px 8px;
-    color: #d8e2f4;
-    background: #151e35;
+    display: inline;
+    color: #aebbd0;
     font-size: 12px;
+    cursor: default;
   }
   .tool-chip.failed {
-    border-color: #a45d50;
     color: #ffc0ae;
   }
   .detail-rows,
   .technical-values {
     margin-top: 8px;
+  }
+  .economics-note,
+  .economics-explanations {
+    color: #aebbd0;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .economics-note {
+    margin: 6px 0;
+  }
+  .ratio-discontinuity {
+    margin-top: 9px;
+    padding: 8px 10px;
+    border-left: 3px solid #ffbd64;
+    border-radius: 4px;
+    background: #1b1c2a;
+    color: #e4e8f1;
+    font-size: 12px;
+  }
+  .ratio-discontinuity p {
+    margin: 4px 0 7px;
+    color: #bac5d8;
   }
   h4 {
     margin: 11px 0 4px;

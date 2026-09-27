@@ -45,6 +45,25 @@ describe('lifespans', () => {
     ]);
   });
 
+  it('sorts lifetime by calls actually present, with zero-presence items last and stable ties', () => {
+    const items = structuredClone(testAnalysis().contextItems);
+    items.push({
+      ...items[0],
+      id: 'terminal',
+      firstModelCall: 0,
+      lastModelCall: 0,
+      presence: [],
+      presenceCallCount: 0,
+    });
+    expect(sortLifespans(items, 'presenceCount').map((item) => item.id)).toEqual([
+      'retained',
+      'a',
+      'summary',
+      'gap',
+      'terminal',
+    ]);
+  });
+
   it('sorts first appearance chronologically and leaves presence-less items last', () => {
     const items = structuredClone(testAnalysis().contextItems);
     items.push({

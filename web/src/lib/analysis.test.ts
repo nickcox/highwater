@@ -3,6 +3,146 @@ import { AnalysisValidationError, indexAnalysis } from './analysis';
 import { testAnalysis } from './context-river/test-data';
 
 describe('indexAnalysis', () => {
+  function analysisWithAuditedAnthropicCall() {
+    const analysis = testAnalysis();
+    const call = analysis.modelCalls[0];
+    call.provider = 'anthropic';
+    call.api = 'anthropic-messages';
+    call.usage = { ...call.usage, input: 10, cacheRead: 20, cacheWrite: 30 };
+    call.economics = {
+      policyId: 'anthropic-messages-cache-v1',
+      usageCompleteness: 'complete',
+      costCompleteness: 'missing',
+      cacheWriteStatus: 'reported',
+      promptTokens: 60,
+      cacheReadRatio: 20 / 60,
+      cacheWriteRatio: 30 / 60,
+      freshRatio: 10 / 60,
+      piPromptCost: null,
+      cacheRatioDiscontinuity: null,
+      explanationCodes: [],
+    };
+    analysis.economics.supportedPolicyIds = ['anthropic-messages-cache-v1'];
+    analysis.economics.usageCompleteness = {
+      complete: 1,
+      partial: 0,
+      missing: 0,
+      unsupported: 3,
+    };
+    analysis.economics.costCompleteness = {
+      complete: 0,
+      partial: 0,
+      missing: 1,
+      unsupported: 3,
+    };
+    analysis.economics.cacheReadEligibleCalls = 1;
+    analysis.economics.cacheReadPromptTokens = 60;
+    analysis.economics.cacheReadTokens = 20;
+    analysis.economics.cacheReadRatio = 20 / 60;
+    return analysis;
+  }
+
+  function analysisWithAdjacentCacheRatioChange() {
+    const analysis = testAnalysis();
+    const previous = analysis.modelCalls[0];
+    const current = analysis.modelCalls[1];
+    for (const [call, input, cacheRead] of [
+      [previous, 750, 250],
+      [current, 1000, 0],
+    ] as const) {
+      call.provider = 'anthropic';
+      call.api = 'anthropic-messages';
+      call.usage = { ...call.usage, input, cacheRead, cacheWrite: 0 };
+      const promptTokens = input + cacheRead;
+      call.economics = {
+        ...call.economics,
+        policyId: 'anthropic-messages-cache-v1',
+        usageCompleteness: 'complete',
+        costCompleteness: call.index === 1 ? 'missing' : 'partial',
+        cacheWriteStatus: 'reported',
+        promptTokens,
+        cacheReadRatio: cacheRead / promptTokens,
+        cacheWriteRatio: 0,
+        freshRatio: input / promptTokens,
+        piPromptCost: null,
+        cacheRatioDiscontinuity: null,
+        explanationCodes: [],
+      };
+    }
+    current.economics.cacheRatioDiscontinuity = {
+      previousCallIndex: previous.index,
+      direction: 'drop',
+      previousRatio: 0.25,
+      currentRatio: 0,
+      delta: 0.25,
+      magnitude: 'notable',
+      method: 'adjacent-cache-read-share-v1',
+      previousPromptTokens: 1000,
+      currentPromptTokens: 1000,
+      compactionBefore: current.compactionBefore,
+    };
+    analysis.economics.supportedPolicyIds = ['anthropic-messages-cache-v1'];
+    analysis.economics.usageCompleteness = {
+      complete: 2,
+      partial: 0,
+      missing: 0,
+      unsupported: 2,
+    };
+    analysis.economics.costCompleteness = {
+      complete: 0,
+      partial: 1,
+      missing: 1,
+      unsupported: 2,
+    };
+    analysis.economics.cacheReadEligibleCalls = 2;
+    analysis.economics.cacheReadPromptTokens = 2000;
+    analysis.economics.cacheReadTokens = 250;
+    analysis.economics.cacheReadRatio = 0.125;
+    return analysis;
+  }
+
+  it('accepts only eligible adjacent cache-ratio changes and validates their provenance', () => {
+    const analysis = analysisWithAdjacentCacheRatioChange();
+    expect(() => indexAnalysis(analysis)).not.toThrow();
+
+    analysis.modelCalls[1].economics.cacheRatioDiscontinuity!.previousCallIndex = 0;
+    expect(() => indexAnalysis(analysis)).toThrow(/ineligible cache-ratio change/);
+  });
+
+  it('preserves a complete zero prompt without a ratio and rejects unsafe totals', () => {
+    const zero = analysisWithAuditedAnthropicCall();
+    zero.modelCalls[0].usage = {
+      ...zero.modelCalls[0].usage,
+      input: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    };
+    zero.modelCalls[0].economics.promptTokens = 0;
+    zero.modelCalls[0].economics.cacheReadRatio = null;
+    zero.modelCalls[0].economics.cacheWriteRatio = null;
+    zero.modelCalls[0].economics.freshRatio = null;
+    zero.economics.cacheReadPromptTokens = 0;
+    zero.economics.cacheReadTokens = 0;
+    zero.economics.cacheReadRatio = null;
+    expect(() => indexAnalysis(zero)).not.toThrow();
+
+    const unsafe = analysisWithAuditedAnthropicCall();
+    unsafe.modelCalls[0].economics.promptTokens = Number.MAX_SAFE_INTEGER + 1;
+    expect(() => indexAnalysis(unsafe)).toThrow(/safe non-negative integer/);
+  });
+
+  it('accepts cache ratios only when supported normalized buckets agree', () => {
+    expect(() => indexAnalysis(analysisWithAuditedAnthropicCall())).not.toThrow();
+
+    const inconsistent = analysisWithAuditedAnthropicCall();
+    inconsistent.modelCalls[0].economics.cacheReadRatio = 0.5;
+    expect(() => indexAnalysis(inconsistent)).toThrow(/cacheReadRatio disagrees/);
+
+    const malformedSummary = analysisWithAuditedAnthropicCall();
+    malformedSummary.economics.cacheReadRatio = 0.5;
+    expect(() => indexAnalysis(malformedSummary)).toThrow(/Analysis cache-read ratio disagrees/);
+  });
+
   it('builds all lookup indices and normalizes unknown kinds', () => {
     const analysis = testAnalysis();
     analysis.contextItems[0].preview = {

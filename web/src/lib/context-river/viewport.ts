@@ -27,7 +27,13 @@ export type RiverNavigationCommand =
   | { id: number; kind: 'zoom-in' }
   | { id: number; kind: 'zoom-out' }
   | { id: number; kind: 'call'; callIndex: number }
-  | { id: number; kind: 'range'; startCallIndex: number; endCallIndex: number };
+  | { id: number; kind: 'range'; startCallIndex: number; endCallIndex: number }
+  | {
+      id: number;
+      kind: 'reveal-item';
+      itemId: string;
+      referenceCallIndex: number | null;
+    };
 
 export interface ViewportAnchor {
   callIndex: number;

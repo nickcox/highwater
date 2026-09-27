@@ -177,6 +177,22 @@ describe('layoutContextRiver', () => {
     expect(layout.ribbons.some((ribbon) => ribbon.itemId === 'terminal-summary')).toBe(false);
   });
 
+  it('groups only visual geometry while preserving per-call totals and member identities', () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const individual = layoutContextRiver(indexed, options);
+    const grouped = layoutContextRiver(indexed, { ...options, groupByKind: true });
+    expect(grouped.ribbons.every((ribbon) => ribbon.groupKind !== undefined)).toBe(true);
+    expect(new Set(grouped.ribbons.flatMap((ribbon) => ribbon.memberItemIds ?? [])).size).toBe(
+      indexed.analysis.contextItems.length,
+    );
+    expect(grouped.columns.map((column) => column.totalDisplayWeight)).toEqual(
+      individual.columns.map((column) => column.totalDisplayWeight),
+    );
+    expect(grouped.maxTotalDisplayWeight).toBe(individual.maxTotalDisplayWeight);
+    expect(grouped.compactions).toEqual(individual.compactions);
+    expect(grouped.lineageConnectors).toEqual([]);
+  });
+
   it('returns a safe empty layout', () => {
     const analysis = testAnalysis();
     analysis.modelCalls = [];

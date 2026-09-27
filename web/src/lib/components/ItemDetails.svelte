@@ -14,7 +14,11 @@
   export let item: ContextItem | null;
   export let indexed: IndexedAnalysis;
   export let callIndex: number | null = null;
+  export let pinnedCallIndex: number | null = null;
   export let onSelectItem: (id: string) => void = () => {};
+  export let onRevealInRiver: (id: string) => void = () => {};
+
+  let root: HTMLElement;
 
   $: sourceCompactions = item ? (indexed.compactionBySourceId.get(item.id) ?? []) : [];
   $: summaryCompaction = item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null;
@@ -28,14 +32,30 @@
   $: finalCallIndex = indexed.analysis.modelCalls[indexed.analysis.modelCalls.length - 1]?.index;
   $: callCount = indexed.analysis.modelCalls.length;
   $: requestedCall = callIndex === null ? null : (indexed.callByIndex.get(callIndex) ?? null);
+  $: pinnedCall =
+    pinnedCallIndex === null ? null : (indexed.callByIndex.get(pinnedCallIndex) ?? null);
+  $: absentAtPinnedCall =
+    item !== null && pinnedCall !== null && !pinnedCall.contextItemIds.includes(item.id);
   $: latestPresentCall =
     item && item.presence.length > 0 ? (indexed.callByIndex.get(item.lastModelCall) ?? null) : null;
-  $: selectedCall = requestedCall ?? latestPresentCall;
-  $: selectedEstimate = item
-    ? (item.tokenEstimates.find(
-        (estimate) => estimate.profileId === selectedCall?.tokenizationProfileId,
-      ) ?? item.tokenEstimates[0])
-    : undefined;
+  $: selectedCall = (() => {
+    if (requestedCall && requestedCall.contextItemIds.includes(item?.id ?? '')) {
+      return requestedCall;
+    }
+    return pinnedCallIndex !== null ? null : latestPresentCall;
+  })();
+  $: usingLatestFallback = requestedCall === null && selectedCall !== null;
+  $: selectedEstimate =
+    item && selectedCall
+      ? item.tokenEstimates.find(
+          (estimate) => estimate.profileId === selectedCall?.tokenizationProfileId,
+        )
+      : undefined;
+  $: selectedProfile = selectedEstimate
+    ? (indexed.analysis.tokenAnalysis.profiles.find(
+        (profile) => profile.id === selectedEstimate.profileId,
+      ) ?? null)
+    : null;
   $: hasExpandedPreview =
     item?.preview !== null &&
     item?.preview !== undefined &&
@@ -47,14 +67,69 @@
   function itemLabel(id: string): string {
     return displayItemLabel(indexed.itemById.get(id), id);
   }
+
+  function kindLabel(kind: ContextItem['kind']): string {
+    return kind
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/^\w/, (first) => first.toUpperCase());
+  }
+
+  function methodLabel(method: ContextItem['tokenEstimates'][number]['method']): string {
+    switch (method) {
+      case 'modelTokenizer':
+        return 'Model tokenizer';
+      case 'apiSerializationEstimate':
+        return 'Estimated API serialization';
+      case 'characterHeuristic':
+        return 'Character heuristic';
+      default:
+        return 'Unavailable estimate method';
+    }
+  }
+
+  function presenceLabel(): string {
+    if (!item || item.presence.length === 0) return 'No model-call presence';
+    return item.presence
+      .map((range) =>
+        range.startCall === range.endCall
+          ? `call ${range.startCall}`
+          : `calls ${range.startCall}–${range.endCall}`,
+      )
+      .join(', ');
+  }
+
+  function backToItemSummary(): void {
+    if (!root) return;
+    root.querySelectorAll('details').forEach((details) => (details.open = false));
+    const heading = root.querySelector('h3');
+    heading?.scrollIntoView({ block: 'nearest' });
+    heading?.focus();
+  }
 </script>
 
-<section class="item-details" aria-live="polite">
+<section class="item-details" aria-live="polite" bind:this={root}>
   {#if item}
-    <header>
-      <span>{item.kind}</span>
-      <h3>{displayItemLabel(item)}</h3>
+    <header class="item-identity">
+      <div>
+        <span>{kindLabel(item.kind)}</span>
+        <h3 id="selected-item-summary" class="selected-item-summary" tabindex="-1">
+          {displayItemLabel(item)}
+        </h3>
+      </div>
+      <button type="button" class="summary-return" onclick={backToItemSummary}>
+        Back to item summary
+      </button>
     </header>
+    {#if item.presence.length === 0}
+      <p class="presence-note">
+        This item has no model-call presence, so it has no location to reveal in Context River.
+      </p>
+    {:else if absentAtPinnedCall && pinnedCall}
+      <p class="presence-note">
+        This item is not present at pinned call {pinnedCall.index}. Its inspector remains selected.
+        <button type="button" onclick={() => onRevealInRiver(item.id)}>Reveal in River</button>
+      </p>
+    {/if}
     {#if item.preview?.text}<p class="content-preview">
         <b>Content preview</b>
         {item.preview.text}
@@ -79,26 +154,51 @@
           {#if item.presence.length === 0}
             No model-call presence
           {:else}
-            Calls {item.firstModelCall}–{item.lastModelCall} · present in {formatMetric(
-              presenceCount(item),
-            )} of {formatMetric(callCount)} calls ({formatMetric(item.presence.length)} ranges)
+            {presenceLabel()} · present in {formatMetric(presenceCount(item))} of {formatMetric(
+              callCount,
+            )} calls ({formatMetric(item.presence.length)} ranges)
           {/if}
         </dd>
       </div>
       <div>
-        <dt>Calculated tokens</dt>
-        <dd>{formatMetric(selectedEstimate?.tokens)}</dd>
+        <dt>
+          {#if selectedCall && selectedEstimate}
+            {pinnedCallIndex !== null
+              ? `Tokens at pinned call · ${formatMetric(selectedEstimate.tokens)}`
+              : usingLatestFallback
+                ? `Tokens at last included call · ${formatMetric(selectedEstimate.tokens)}`
+                : `Tokens at call · ${formatMetric(selectedEstimate.tokens)}`}
+          {:else if pinnedCallIndex !== null}
+            Tokens at pinned call · unavailable
+          {:else}
+            Tokens at last included call · unavailable
+          {/if}
+        </dt>
+        <dd>
+          {selectedEstimate
+            ? `${formatMetric(selectedEstimate.tokens)} · call ${selectedCall?.index}`
+            : 'Unavailable'}
+          {#if usingLatestFallback}<small>Latest actual presence; not a newly pinned call.</small
+            >{/if}
+        </dd>
       </div>
       <div>
         <dt>Estimate basis</dt>
         <dd>
-          {selectedCall
-            ? `${selectedEstimate?.profileId ?? 'Unavailable'} · call ${selectedCall.index}`
-            : (selectedEstimate?.profileId ?? 'No model-call profile')}
+          {#if selectedCall && selectedEstimate}
+            {selectedProfile
+              ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
+              : methodLabel(selectedEstimate.method)}
+            · call {selectedCall.index}
+          {:else if pinnedCallIndex !== null}
+            No applicable estimate at pinned call {pinnedCallIndex}
+          {:else}
+            No applicable model-call estimate
+          {/if}
         </dd>
       </div>
       <div>
-        <dt>Calculated token-turns</dt>
+        <dt>Whole-session exposure · estimated token-turns</dt>
         <dd>{exposureLabel(item.tokenTurns, 'calculatedTokens')}</dd>
       </div>
     </dl>
@@ -221,6 +321,13 @@
     <details class="technical-identifiers">
       <summary>Technical identifiers</summary>
       <dl class="identifier-list">
+        {#if selectedEstimate}<div>
+            <dt>Estimate profile ID</dt>
+            <dd>
+              <code>{selectedEstimate.profileId}</code>
+              <CopyButton value={selectedEstimate.profileId} label="estimate profile ID" />
+            </dd>
+          </div>{/if}
         <div>
           <dt>Context ID</dt>
           <dd><code>{item.id}</code><CopyButton value={item.id} label="context ID" /></dd>
@@ -250,8 +357,7 @@
         </ul>{/if}
     </details>
   {:else}
-    <h3>No context item selected</h3>
-    <p>Click a ribbon or lifespan segment to select a context item.</p>
+    <p>Select an item to inspect its context.</p>
   {/if}
 </section>
 
@@ -260,13 +366,28 @@
     color: #bdc7d8;
     min-width: 0;
   }
-  header {
+  .item-identity {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0 7px;
+    background: #121a30;
+  }
+  .item-identity > div {
+    display: grid;
+    min-width: 0;
     gap: 5px;
   }
-  header span {
+  .summary-return {
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  .item-identity span {
     display: inline-block;
     color: #b8c7e3;
     border: 1px solid #3a496a;
@@ -280,6 +401,10 @@
     margin: 0 0 6px;
     overflow-wrap: anywhere;
   }
+  h3:focus {
+    outline: 2px solid #9fc0ff;
+    outline-offset: 2px;
+  }
   h4 {
     margin: 11px 0 4px;
     color: #c8d5ed;
@@ -290,9 +415,13 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .preview-note {
+  .preview-note,
+  .presence-note {
     color: #9caac0;
     font-size: 12px;
+  }
+  .presence-note button {
+    margin-left: 7px;
   }
   details {
     margin-top: 10px;
@@ -331,6 +460,12 @@
     margin: 1px 0 0;
     overflow-wrap: anywhere;
     color: #e2e8f3;
+  }
+  .essential-metrics dd small {
+    display: block;
+    margin-top: 2px;
+    color: #9caac0;
+    font-size: 10px;
   }
   .lineage-actions {
     display: grid;
