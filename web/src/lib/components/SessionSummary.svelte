@@ -201,7 +201,7 @@
               <dd>{formatMetric(session.calculatedTokenTurns)}</dd>
             </div>
             <div>
-              <dt>Token-turn call coverage</dt>
+              <dt>Token-turn exposure coverage</dt>
               <dd>
                 {coverageLabel(
                   session.calculatedTokenTurnsCoverage.coveredCalls,

@@ -2,6 +2,7 @@
 name = "tokenplume"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.88"
 
 [profile.dev.package.tiktoken]
 opt-level = 3
@@ -27,4 +28,5 @@ blake3 = "1"
 tiktoken = { version = "=4.1.2", default-features = false, features = ["vocab-openai"] }
 
 [dev-dependencies]
+tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

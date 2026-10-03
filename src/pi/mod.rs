@@ -1,3 +1,4 @@
+mod branch;
 pub(crate) mod parser;
 pub(crate) mod reconstruct;
 

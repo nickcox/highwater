@@ -1,3 +1,4 @@
+use crate::analysis::diagnostics::DiagnosticCode;
 use crate::domain::{
     AssistantContentBlock, ContentPart, MessageContent, ModelTarget, TokenizationPayload,
 };
@@ -8,10 +9,32 @@ pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 3;
 const PREVIEW_LIMIT: usize = 160;
 const EXPANDED_PREVIEW_LIMIT: usize = 640;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PreviewKind {
+    Text,
+    Image,
+    ToolCall,
+    ToolResult,
+    Summary,
+    Unavailable,
+}
+impl PreviewKind {
+    pub(in crate::analysis) fn as_str(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Image => "image",
+            Self::ToolCall => "toolCall",
+            Self::ToolResult => "toolResult",
+            Self::Summary => "summary",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PayloadPreview {
     pub text: String,
-    pub kind: &'static str,
+    pub kind: PreviewKind,
     pub truncated: bool,
     pub expanded_text: String,
     pub expanded_truncated: bool,
@@ -22,7 +45,7 @@ pub(crate) struct ProjectedPayload {
     pub text: String,
     pub partial: bool,
     pub unavailable: bool,
-    pub note_codes: Vec<String>,
+    pub note_codes: Vec<DiagnosticCode>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -94,17 +117,17 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
                 }
             }
             if !has_image && !has_tool_call && !has_non_image_content && has_non_tool_content {
-                return bounded_preview("Content unavailable", "unavailable");
+                return bounded_preview("Content unavailable", PreviewKind::Unavailable);
             }
             let mut preview = builder.finish(if has_tool_call {
-                "toolCall"
+                PreviewKind::ToolCall
             } else if has_image && !has_non_image_content {
-                "image"
+                PreviewKind::Image
             } else {
-                "text"
+                PreviewKind::Text
             });
             if let Some(first_tool_call) = first_tool_call_preview {
-                let first_tool_call = first_tool_call.finish("toolCall");
+                let first_tool_call = first_tool_call.finish(PreviewKind::ToolCall);
                 preview.text = first_tool_call.text;
                 preview.truncated = preview.truncated
                     || first_tool_call.truncated
@@ -127,11 +150,13 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
             }
             builder.feed_space();
             feed_content(&mut builder, content, true);
-            builder.finish("toolResult")
+            builder.finish(PreviewKind::ToolResult)
         }
         TokenizationPayload::CustomMessage(content) => preview_content(content),
         TokenizationPayload::CompactionSummary(summary)
-        | TokenizationPayload::BranchSummary(summary) => bounded_preview(summary, "summary"),
+        | TokenizationPayload::BranchSummary(summary) => {
+            bounded_preview(summary, PreviewKind::Summary)
+        }
         TokenizationPayload::CommandExecution {
             command, output, ..
         } => {
@@ -139,11 +164,11 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
             builder.feed_inline("$ ");
             builder.feed_inline(command);
             builder.feed_text(output);
-            builder.finish("text")
+            builder.finish(PreviewKind::Text)
         }
         TokenizationPayload::Unavailable => PayloadPreview {
             text: "Content unavailable".into(),
-            kind: "unavailable",
+            kind: PreviewKind::Unavailable,
             truncated: false,
             expanded_text: "Content unavailable".into(),
             expanded_truncated: false,
@@ -165,14 +190,14 @@ fn preview_content(content: &MessageContent) -> PayloadPreview {
         .iter()
         .any(|part| matches!(part, ContentPart::Unsupported));
     if has_unsupported && !has_image && !has_non_image_content {
-        return bounded_preview("Content unavailable", "unavailable");
+        return bounded_preview("Content unavailable", PreviewKind::Unavailable);
     }
     let mut builder = PreviewBuilder::new();
     feed_content(&mut builder, content, false);
     builder.finish(if has_image && !has_non_image_content && !has_unsupported {
-        "image"
+        PreviewKind::Image
     } else {
-        "text"
+        PreviewKind::Text
     })
 }
 
@@ -196,22 +221,25 @@ fn feed_content(builder: &mut PreviewBuilder, content: &MessageContent, inline_f
 
 fn image_preview(image: &crate::domain::ImageDescriptor) -> String {
     let media_type = image.media_type.as_deref().unwrap_or("unknown");
-    let Some(byte_length) = image.byte_length else {
+    let Some(encoded_data_length) = image.encoded_data_length else {
         return format!("[image: {media_type}]");
     };
-    let (size, unit) = if byte_length < 1024 {
-        (byte_length as f64, "B")
-    } else if byte_length < 1024 * 1024 {
-        (byte_length as f64 / 1024.0, "KB")
-    } else if byte_length < 1024 * 1024 * 1024 {
-        (byte_length as f64 / (1024.0 * 1024.0), "MB")
+    let (size, unit) = if encoded_data_length < 1024 {
+        (encoded_data_length as f64, "B")
+    } else if encoded_data_length < 1024 * 1024 {
+        (encoded_data_length as f64 / 1024.0, "KB")
+    } else if encoded_data_length < 1024 * 1024 * 1024 {
+        (encoded_data_length as f64 / (1024.0 * 1024.0), "MB")
     } else {
-        (byte_length as f64 / (1024.0 * 1024.0 * 1024.0), "GB")
+        (
+            encoded_data_length as f64 / (1024.0 * 1024.0 * 1024.0),
+            "GB",
+        )
     };
-    format!("[image: {media_type}, {size:.1} {unit}]")
+    format!("[image: {media_type}, {size:.1} {unit} encoded]")
 }
 
-fn bounded_preview(value: &str, kind: &'static str) -> PayloadPreview {
+fn bounded_preview(value: &str, kind: PreviewKind) -> PayloadPreview {
     let mut builder = PreviewBuilder::new();
     builder.feed_text(value);
     builder.finish(kind)
@@ -329,7 +357,7 @@ impl PreviewBuilder {
         self.line_has_content = false;
     }
 
-    fn finish(mut self, kind: &'static str) -> PayloadPreview {
+    fn finish(mut self, kind: PreviewKind) -> PayloadPreview {
         self.finish_line();
         if self.meaningful_lines == 0 {
             return PayloadPreview {
@@ -388,7 +416,7 @@ pub(crate) fn project_payload(
                         if source_matches || source_model.is_none() {
                             append_part(&mut out, text);
                         } else {
-                            notes.push("modelSwitchTransformation".into());
+                            notes.push(DiagnosticCode::ModelSwitchTransformation);
                             partial = true;
                         }
                     }
@@ -402,13 +430,13 @@ pub(crate) fn project_payload(
                     AssistantContentBlock::Image(image) => {
                         has_supported = true;
                         append_part(&mut out, "[image]");
-                        notes.push("unsupportedImage".into());
+                        notes.push(DiagnosticCode::UnsupportedImage);
                         let _ = image;
                         partial = true;
                     }
                     AssistantContentBlock::Unsupported => {
                         has_unsupported = true;
-                        notes.push("unsupportedPayload".into());
+                        notes.push(DiagnosticCode::UnsupportedPayload);
                         partial = true;
                     }
                 }
@@ -443,14 +471,14 @@ pub(crate) fn project_payload(
             excluded_from_context,
         } => {
             if *excluded_from_context {
-                notes.push("excludedFromContext".into());
+                notes.push(DiagnosticCode::ExcludedFromContext);
                 (String::new(), false, false)
             } else {
                 (format!("{command}\n{output}"), false, false)
             }
         }
         TokenizationPayload::Unavailable => {
-            notes.push("unavailablePayload".into());
+            notes.push(DiagnosticCode::UnavailablePayload);
             (String::new(), false, true)
         }
     };
@@ -464,7 +492,10 @@ pub(crate) fn project_payload(
     }
 }
 
-fn project_content(content: &MessageContent, notes: &mut Vec<String>) -> (String, bool, bool) {
+fn project_content(
+    content: &MessageContent,
+    notes: &mut Vec<DiagnosticCode>,
+) -> (String, bool, bool) {
     let mut output = String::new();
     let mut partial = false;
     let mut has_supported = false;
@@ -479,12 +510,12 @@ fn project_content(content: &MessageContent, notes: &mut Vec<String>) -> (String
                 has_supported = true;
                 append_part(&mut output, "[image]");
                 let _ = image;
-                notes.push("unsupportedImage".into());
+                notes.push(DiagnosticCode::UnsupportedImage);
                 partial = true;
             }
             ContentPart::Unsupported => {
                 has_unsupported = true;
-                notes.push("unsupportedPayload".into());
+                notes.push(DiagnosticCode::UnsupportedPayload);
                 partial = true;
             }
         }
@@ -610,7 +641,8 @@ fn hash_assistant_block(hasher: &mut Hasher, block: &AssistantContentBlock) {
 
 fn hash_image(hasher: &mut Hasher, image: &crate::domain::ImageDescriptor) {
     hash_optional_string(hasher, b"media-type", image.media_type.as_deref());
-    match image.byte_length {
+    // Keep the historical tag: only the Rust field name changed; encoding is v3.
+    match image.encoded_data_length {
         Some(value) => {
             hasher.update(b"byte-length");
             hasher.update(&[1]);
@@ -723,16 +755,15 @@ mod tests {
         let payload = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
-                byte_length: Some(10),
+                encoded_data_length: Some(10),
             })],
         });
         let projected = project_payload(&payload, &ModelTarget::default());
         assert!(projected.partial);
         assert!(projected
             .note_codes
-            .iter()
-            .any(|code| code == "unsupportedImage"));
-        assert_eq!(preview_payload(&payload).kind, "image");
+            .contains(&DiagnosticCode::UnsupportedImage));
+        assert_eq!(preview_payload(&payload).kind, PreviewKind::Image);
     }
 
     #[test]
@@ -752,8 +783,7 @@ mod tests {
         assert!(!projected.unavailable);
         assert!(projected
             .note_codes
-            .iter()
-            .any(|code| code == "unsupportedPayload"));
+            .contains(&DiagnosticCode::UnsupportedPayload));
         assert!(preview_payload(&mixed).expanded_text.contains("known"));
         assert!(preview_payload(&mixed)
             .expanded_text
@@ -768,7 +798,7 @@ mod tests {
         let projected = project_payload(&payload, &ModelTarget::default());
         assert!(projected.unavailable);
         assert_eq!(projected.text, "");
-        assert_eq!(preview_payload(&payload).kind, "unavailable");
+        assert_eq!(preview_payload(&payload).kind, PreviewKind::Unavailable);
     }
 
     #[test]
@@ -777,7 +807,7 @@ mod tests {
         let projected = project_payload(&payload, &ModelTarget::default());
         assert!(!projected.partial);
         assert!(!projected.unavailable);
-        assert_eq!(preview_payload(&payload).kind, "text");
+        assert_eq!(preview_payload(&payload).kind, PreviewKind::Text);
     }
 
     #[test]
@@ -804,7 +834,7 @@ mod tests {
             source_api: None,
         };
         let preview = preview_payload(&payload);
-        assert_eq!(preview.kind, "toolCall");
+        assert_eq!(preview.kind, PreviewKind::ToolCall);
         assert_eq!(preview.text, "bash {\"command\":\"cargo test\"}");
         assert_eq!(
             preview.expanded_text,
@@ -828,7 +858,7 @@ mod tests {
             is_error: true,
         };
         let preview = preview_payload(&payload);
-        assert_eq!(preview.kind, "toolResult");
+        assert_eq!(preview.kind, PreviewKind::ToolResult);
         assert_eq!(preview.text, "bash [error] first result line");
         assert_eq!(
             preview.expanded_text,
@@ -839,16 +869,95 @@ mod tests {
     }
 
     #[test]
+    fn preview_kind_wire_spellings_remain_exact() {
+        use PreviewKind::*;
+        assert_eq!(
+            [Text, Image, ToolCall, ToolResult, Summary, Unavailable].map(PreviewKind::as_str),
+            [
+                "text",
+                "image",
+                "toolCall",
+                "toolResult",
+                "summary",
+                "unavailable"
+            ]
+        );
+    }
+
+    #[test]
+    fn encoded_image_size_handles_missing_zero_and_unicode_metadata_honestly() {
+        for (media_type, length, expected) in [
+            (None, None, "[image: unknown]"),
+            (Some("image/png"), None, "[image: image/png]"),
+            (None, Some(0), "[image: unknown, 0.0 B encoded]"),
+            (
+                Some("image/png"),
+                Some(8),
+                "[image: image/png, 8.0 B encoded]",
+            ),
+        ] {
+            let payload = TokenizationPayload::UserMessage(MessageContent {
+                parts: vec![ContentPart::Image(ImageDescriptor {
+                    media_type: media_type.map(str::to_owned),
+                    encoded_data_length: length,
+                })],
+            });
+            let preview = preview_payload(&payload);
+            assert_eq!(preview.text, expected);
+            assert_eq!(preview.expanded_text, expected);
+        }
+        let payload = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Image(ImageDescriptor {
+                media_type: Some("画".repeat(EXPANDED_PREVIEW_LIMIT + 20)),
+                encoded_data_length: Some(8),
+            })],
+        });
+        let preview = preview_payload(&payload);
+        assert!(preview.text.chars().count() <= PREVIEW_LIMIT);
+        assert!(preview.expanded_text.chars().count() <= EXPANDED_PREVIEW_LIMIT);
+        assert!(preview.truncated && preview.expanded_truncated);
+    }
+
+    #[test]
+    fn encoded_image_field_rename_preserves_the_v3_fingerprint_contract() {
+        let payload = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Image(ImageDescriptor {
+                media_type: Some("image/png".into()),
+                encoded_data_length: Some(8),
+            })],
+        });
+        assert_eq!(PAYLOAD_SCHEMA_VERSION, 3);
+        // Verified against the pre-M8 encoder (legacy `byte_length` field/tag).
+        assert_eq!(
+            payload_hash(&payload),
+            "515b86e4f4884777ae5d1256add149318ab766177368fff5f532337dfa279fb0"
+        );
+        let absent = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Image(ImageDescriptor {
+                media_type: Some("image/png".into()),
+                encoded_data_length: None,
+            })],
+        });
+        let zero = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Image(ImageDescriptor {
+                media_type: Some("image/png".into()),
+                encoded_data_length: Some(0),
+            })],
+        });
+        assert_ne!(payload_fingerprint(&absent), payload_fingerprint(&zero));
+    }
+
+    #[test]
     fn image_previews_retain_available_metadata() {
         let payload = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
-                byte_length: Some(24_900),
+                encoded_data_length: Some(24_900),
             })],
         });
         let preview = preview_payload(&payload);
-        assert_eq!(preview.kind, "image");
-        assert_eq!(preview.text, "[image: image/png, 24.3 KB]");
+        assert_eq!(preview.kind, PreviewKind::Image);
+        assert_eq!(preview.text, "[image: image/png, 24.3 KB encoded]");
         assert_eq!(preview.expanded_text, preview.text);
         assert!(!preview.expanded_truncated);
     }
@@ -856,7 +965,7 @@ mod tests {
     #[test]
     fn unavailable_previews_remain_explicit_and_bounded() {
         let preview = preview_payload(&TokenizationPayload::Unavailable);
-        assert_eq!(preview.kind, "unavailable");
+        assert_eq!(preview.kind, PreviewKind::Unavailable);
         assert_eq!(preview.text, "Content unavailable");
         assert_eq!(preview.expanded_text, "Content unavailable");
         assert!(!preview.truncated);

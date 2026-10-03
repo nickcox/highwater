@@ -1,5 +1,5 @@
 use super::CoverageSummary;
-use crate::domain::ReportedUsage;
+use crate::domain::{ReportedUsage, MAX_SAFE_JSON_INTEGER};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UsageCompleteness {
@@ -26,9 +26,10 @@ pub(crate) fn reported_prompt_tokens(usage: &ReportedUsage) -> (Option<u64>, Usa
         0 => UsageCompleteness::Missing,
         _ => UsageCompleteness::Partial,
     };
-    let total = fields
-        .into_iter()
-        .try_fold(0_u64, |sum, value| sum.checked_add(value?));
+    let total = fields.into_iter().try_fold(0_u64, |sum, value| {
+        sum.checked_add(value?)
+            .filter(|value| *value <= MAX_SAFE_JSON_INTEGER)
+    });
     let completeness = if known == 3 && total.is_none() {
         UsageCompleteness::Partial
     } else {
@@ -37,37 +38,134 @@ pub(crate) fn reported_prompt_tokens(usage: &ReportedUsage) -> (Option<u64>, Usa
     (total, completeness)
 }
 
-pub(crate) fn reconciliation_status(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReconciliationStatus {
+    Unavailable,
+    Partial,
+    Close,
+    Notable,
+    Large,
+}
+
+impl ReconciliationStatus {
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::Unavailable => "unavailable",
+            Self::Partial => "partial",
+            Self::Close => "close",
+            Self::Notable => "notable",
+            Self::Large => "large",
+        }
+    }
+}
+
+pub(super) fn reconciliation_status(
     reported_prompt: Option<u64>,
     calculated_request: Option<u64>,
     residual_percent: Option<f64>,
     coverage: &CoverageSummary,
     usage: UsageCompleteness,
-) -> String {
+) -> ReconciliationStatus {
     if reported_prompt.is_none() || calculated_request.is_none() {
-        return "unavailable".into();
+        return ReconciliationStatus::Unavailable;
     }
     if usage != UsageCompleteness::Complete
         || coverage.partial_items > 0
         || coverage.unavailable_items > 0
     {
-        return "partial".into();
+        return ReconciliationStatus::Partial;
     }
     let Some(percent) = residual_percent else {
-        return "unavailable".into();
+        return ReconciliationStatus::Unavailable;
     };
     if percent <= 0.05 {
-        "close".into()
+        ReconciliationStatus::Close
     } else if percent <= 0.20 {
-        "notable".into()
+        ReconciliationStatus::Notable
     } else {
-        "large".into()
+        ReconciliationStatus::Large
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reconciliation_thresholds_and_wire_spellings_are_stable() {
+        let coverage = CoverageSummary::default();
+        for (residual, status) in [
+            (0.0, "close"),
+            (0.05, "close"),
+            (0.05001, "notable"),
+            (0.20, "notable"),
+            (0.20001, "large"),
+        ] {
+            assert_eq!(
+                reconciliation_status(
+                    Some(10),
+                    Some(10),
+                    Some(residual),
+                    &coverage,
+                    UsageCompleteness::Complete
+                )
+                .as_str(),
+                status
+            );
+        }
+        for (reported, calculated, residual) in [
+            (None, Some(10), Some(0.0)),
+            (Some(10), None, Some(0.0)),
+            (Some(0), Some(0), None),
+        ] {
+            assert_eq!(
+                reconciliation_status(
+                    reported,
+                    calculated,
+                    residual,
+                    &coverage,
+                    UsageCompleteness::Complete
+                )
+                .as_str(),
+                "unavailable"
+            );
+        }
+        assert_eq!(
+            reconciliation_status(
+                Some(10),
+                Some(10),
+                Some(0.0),
+                &coverage,
+                UsageCompleteness::Partial
+            )
+            .as_str(),
+            "partial"
+        );
+        let partial = CoverageSummary {
+            partial_items: 1,
+            ..coverage
+        };
+        assert_eq!(
+            reconciliation_status(
+                Some(10),
+                Some(10),
+                Some(0.0),
+                &partial,
+                UsageCompleteness::Complete
+            )
+            .as_str(),
+            "partial"
+        );
+        assert_eq!(
+            [
+                UsageCompleteness::Complete,
+                UsageCompleteness::Partial,
+                UsageCompleteness::Missing
+            ]
+            .map(UsageCompleteness::as_str),
+            ["complete", "partial", "missing"]
+        );
+    }
 
     #[test]
     fn prompt_usage_distinguishes_complete_partial_missing_and_overflow() {

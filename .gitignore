@@ -1,4 +1,5 @@
 /target
+/node-compile-cache/
 web/node_modules
 web/dist/assets/*
 !web/dist/assets/index-*.js

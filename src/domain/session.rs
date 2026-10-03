@@ -1,5 +1,14 @@
+//! Source-neutral records. Presence is authoritative; lifetime zeros are legacy boundary fields.
+
+#[cfg(test)]
+#[path = "session_tests.rs"]
+mod tests;
+
 use super::source::CostBasis;
 use std::collections::BTreeMap;
+
+/// Largest integer that can be represented exactly by the TypeScript/JSON contract.
+pub(crate) const MAX_SAFE_JSON_INTEGER: u64 = 9_007_199_254_740_991;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SourceDescriptor {
@@ -32,7 +41,7 @@ pub(crate) struct NormalizedModelCall {
     pub compaction_before: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub(crate) struct ModelTarget {
     pub provider: Option<String>,
     pub model: Option<String>,
@@ -75,12 +84,49 @@ pub(crate) struct NormalizedContextItem {
     pub source_record_id: Option<String>,
     pub source_tool_call_id: Option<String>,
     pub metadata: BTreeMap<String, String>,
-    /// Source-provided serialized size retained as a diagnostic, not a token weight.
-    pub serialized_size: u64,
+    /// Source-provided serialized bytes, never a token-geometry fallback.
+    /// Assembly retains the legacy `displayWeight` wire field for this diagnostic.
+    pub serialized_size_bytes: u64,
     pub payload: TokenizationPayload,
     pub presence: Vec<PresenceRange>,
     pub first_model_call: usize,
     pub last_model_call: usize,
+}
+
+impl NormalizedContextItem {
+    /// Derived from authoritative presence, not the legacy zero lifetime sentinel.
+    /// Analysis callers validate all ranges and call membership before deriving metrics.
+    pub(crate) fn lifetime(&self) -> Option<ItemLifetime> {
+        let first_call = self.presence.first()?.start_call;
+        let last_call = self.presence.last()?.end_call;
+        PresenceRange {
+            start_call: first_call,
+            end_call: last_call,
+        }
+        .checked_call_count()?;
+        Some(ItemLifetime {
+            first_call,
+            last_call,
+        })
+    }
+
+    pub(crate) fn checked_presence_call_count(&self) -> Option<usize> {
+        self.presence.iter().try_fold(0_usize, |count, range| {
+            count.checked_add(range.checked_call_count()?)
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ItemLifetime {
+    pub first_call: usize,
+    pub last_call: usize,
+}
+
+impl ItemLifetime {
+    pub(crate) fn age_at(self, call_index: usize) -> Option<usize> {
+        call_index.checked_sub(self.first_call)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -119,11 +165,14 @@ pub(crate) struct PresenceRange {
 }
 
 impl PresenceRange {
-    /// Return the inclusive number of calls covered by this range.
-    pub(crate) fn call_count(&self) -> usize {
+    /// Return the inclusive number of calls covered by this range when it is valid.
+    pub(crate) fn checked_call_count(&self) -> Option<usize> {
+        if self.start_call == 0 {
+            return None;
+        }
         self.end_call
-            .saturating_sub(self.start_call)
-            .saturating_add(1)
+            .checked_sub(self.start_call)
+            .and_then(|count| count.checked_add(1))
     }
 }
 
@@ -162,6 +211,9 @@ pub(crate) enum TokenizationPayload {
     CustomMessage(MessageContent),
     CompactionSummary(String),
     BranchSummary(String),
+    // Source-neutral capability exercised by analysis tests; Pi command-shaped
+    // records are ignored and do not construct this payload.
+    #[cfg_attr(not(test), allow(dead_code))]
     CommandExecution {
         command: String,
         output: String,
@@ -215,5 +267,7 @@ pub(crate) enum ContentPart {
 #[derive(Debug, Clone)]
 pub(crate) struct ImageDescriptor {
     pub media_type: Option<String>,
-    pub byte_length: Option<u64>,
+    /// Source `data` string length in encoded UTF-8 bytes (usually base64).
+    /// No decoding or image retention is performed.
+    pub encoded_data_length: Option<u64>,
 }

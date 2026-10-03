@@ -21,7 +21,7 @@ impl TokenizationPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum TokenizerFamily {
     O200k,
     Cl100k,
@@ -40,7 +40,7 @@ impl TokenizerFamily {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum FramingPolicy {
     OpenAiChatApproximation,
     Unknown,
@@ -55,7 +55,7 @@ impl FramingPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum TokenizationMethod {
     ModelTokenizer,
     ApiSerializationEstimate,
@@ -74,6 +74,55 @@ impl TokenizationMethod {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ProfileKey {
+    pub(crate) provider: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) api: Option<String>,
+    pub(crate) policy: TokenizationPolicy,
+    pub(crate) family: TokenizerFamily,
+    pub(crate) method: TokenizationMethod,
+    pub(crate) framing: FramingPolicy,
+    pub(crate) implementation: String,
+    pub(crate) rule: String,
+    pub(crate) version: u32,
+}
+
+impl ProfileKey {
+    fn digest(&self) -> String {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"tokenplume-profile-key-v4\0");
+        hash_optional(&mut hasher, self.provider.as_deref());
+        hash_optional(&mut hasher, self.model.as_deref());
+        hash_optional(&mut hasher, self.api.as_deref());
+        hash_string(&mut hasher, self.policy.as_str());
+        hash_string(&mut hasher, self.family.as_str());
+        hash_string(&mut hasher, self.method.as_str());
+        hash_string(&mut hasher, self.framing.as_str());
+        hash_string(&mut hasher, &self.implementation);
+        hash_string(&mut hasher, &self.rule);
+        hasher.update(&self.version.to_le_bytes());
+        format!("profile-v4-{}", hasher.finalize().to_hex())
+    }
+}
+
+fn hash_string(hasher: &mut blake3::Hasher, value: &str) {
+    hasher.update(&(value.len() as u64).to_le_bytes());
+    hasher.update(value.as_bytes());
+}
+
+fn hash_optional(hasher: &mut blake3::Hasher, value: Option<&str>) {
+    match value {
+        Some(value) => {
+            hasher.update(&[1]);
+            hash_string(hasher, value);
+        }
+        None => {
+            hasher.update(&[0]);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct TokenizationProfile {
     pub id: String,
@@ -85,6 +134,8 @@ pub(crate) struct TokenizationProfile {
     pub framing: FramingPolicy,
     pub version: u32,
     pub rule: String,
+    key: ProfileKey,
+    projection_target: ModelTarget,
 }
 
 impl TokenizationProfile {
@@ -102,20 +153,27 @@ impl TokenizationProfile {
             FramingPolicy::Unknown => None,
         }
     }
+
+    pub(crate) fn key(&self) -> &ProfileKey {
+        &self.key
+    }
+
+    pub(crate) fn projection_target(&self) -> &ModelTarget {
+        &self.projection_target
+    }
 }
 
 pub(crate) fn resolve_profile(
     target: &ModelTarget,
     policy: TokenizationPolicy,
 ) -> TokenizationProfile {
-    let provider = target.provider.clone().unwrap_or_else(|| "unknown".into());
-    let model = target.model.clone().unwrap_or_else(|| "unknown".into());
-    let api = target.api.clone();
+    let provider = target.provider.as_deref().unwrap_or("unknown");
+    let model = target.model.as_deref().unwrap_or("unknown");
+    let api = target.api.as_deref();
     if policy == TokenizationPolicy::Off {
         return build_profile(
-            provider,
-            model,
-            api,
+            target,
+            policy,
             TokenizerFamily::Unavailable,
             TokenizationMethod::Unavailable,
             "disabled",
@@ -123,9 +181,8 @@ pub(crate) fn resolve_profile(
     }
     if policy == TokenizationPolicy::Heuristic {
         return build_profile(
-            provider,
-            model,
-            api,
+            target,
+            policy,
             TokenizerFamily::CharacterHeuristic,
             TokenizationMethod::CharacterHeuristic,
             "forced-character-heuristic",
@@ -137,7 +194,7 @@ pub(crate) fn resolve_profile(
     let is_gpt6 = lower_model.starts_with("gpt-6");
     let matched = if is_gpt6
         && (is_openai_provider(&lower_provider)
-            || (lower_provider == "github-copilot" && api.as_deref() == Some("openai-responses")))
+            || (lower_provider == "github-copilot" && api == Some("openai-responses")))
     {
         // Assumption, not a published OpenAI model mapping: in local text-only
         // GPT-6 Sol/Astra responses, reported output tokens match o200k_base
@@ -156,9 +213,8 @@ pub(crate) fn resolve_profile(
     };
     if let Some((family, rule)) = matched {
         return build_profile(
-            provider,
-            model,
-            api,
+            target,
+            policy,
             family,
             TokenizationMethod::ModelTokenizer,
             rule,
@@ -166,9 +222,8 @@ pub(crate) fn resolve_profile(
     }
     if lower_provider == "anthropic" || lower_provider == "google" {
         return build_profile(
-            provider,
-            model,
-            api,
+            target,
+            policy,
             TokenizerFamily::CharacterHeuristic,
             TokenizationMethod::ApiSerializationEstimate,
             "provider-api-serialization-estimate",
@@ -176,18 +231,16 @@ pub(crate) fn resolve_profile(
     }
     if policy == TokenizationPolicy::Strict {
         build_profile(
-            provider,
-            model,
-            api,
+            target,
+            policy,
             TokenizerFamily::Unavailable,
             TokenizationMethod::Unavailable,
             "no-matched-tokenizer",
         )
     } else {
         build_profile(
-            provider,
-            model,
-            api,
+            target,
+            policy,
             TokenizerFamily::CharacterHeuristic,
             TokenizationMethod::CharacterHeuristic,
             "source-neutral-character-fallback",
@@ -196,14 +249,15 @@ pub(crate) fn resolve_profile(
 }
 
 fn build_profile(
-    provider: String,
-    model: String,
-    api: Option<String>,
+    target: &ModelTarget,
+    policy: TokenizationPolicy,
     family: TokenizerFamily,
     method: TokenizationMethod,
     rule: &str,
 ) -> TokenizationProfile {
-    let api_label = api.as_deref().unwrap_or("unknown");
+    let provider = target.provider.as_deref().unwrap_or("unknown").to_owned();
+    let model = target.model.as_deref().unwrap_or("unknown").to_owned();
+    let api = target.api.clone();
     let implementation = match family {
         TokenizerFamily::O200k | TokenizerFamily::Cl100k => TIKTOKEN_VERSION,
         TokenizerFamily::CharacterHeuristic => "tokenplume-character-heuristic-v1",
@@ -217,15 +271,19 @@ fn build_profile(
     } else {
         FramingPolicy::Unknown
     };
-    let id = format!(
-        "{}:{}:{}:{}:{}:{}:v3",
-        provider,
-        model,
-        api_label,
-        family.as_str(),
-        implementation,
-        framing.as_str()
-    );
+    let key = ProfileKey {
+        provider: target.provider.clone(),
+        model: target.model.clone(),
+        api: target.api.clone(),
+        policy,
+        family,
+        method,
+        framing,
+        implementation: implementation.into(),
+        rule: rule.into(),
+        version: 4,
+    };
+    let id = key.digest();
     TokenizationProfile {
         id,
         provider,
@@ -234,8 +292,10 @@ fn build_profile(
         family,
         method,
         framing,
-        version: 3,
-        rule: rule.into(),
+        version: key.version,
+        rule: key.rule.clone(),
+        key,
+        projection_target: target.clone(),
     }
 }
 
@@ -264,7 +324,7 @@ mod tests {
                 assert_eq!(auto.family, TokenizerFamily::O200k, "{provider}/{model}");
                 assert_eq!(auto.method, TokenizationMethod::ModelTokenizer);
                 assert_eq!(auto.rule, "assumed-gpt6-o200k-base");
-                assert!(auto.id.contains("o200k:tiktoken-4.1.2"));
+                assert!(auto.id.starts_with("profile-v4-"));
                 assert_eq!(
                     resolve_profile(&target, TokenizationPolicy::Strict).family,
                     TokenizerFamily::O200k
@@ -298,6 +358,59 @@ mod tests {
                 TokenizationMethod::Unavailable
             );
         }
+    }
+
+    #[test]
+    fn optional_target_values_have_distinct_profile_identity() {
+        let absent = ModelTarget {
+            provider: None,
+            model: None,
+            api: None,
+        };
+        let literal_unknown = ModelTarget {
+            provider: Some("unknown".into()),
+            model: Some("unknown".into()),
+            api: Some("unknown:api".into()),
+        };
+        let absent_profile = resolve_profile(&absent, TokenizationPolicy::Auto);
+        let literal_profile = resolve_profile(&literal_unknown, TokenizationPolicy::Auto);
+        assert_ne!(absent_profile.id, literal_profile.id);
+        assert_ne!(absent_profile.key, literal_profile.key);
+
+        let delimiter_a = ModelTarget {
+            provider: Some("a:b".into()),
+            model: Some("c".into()),
+            api: None,
+        };
+        let delimiter_b = ModelTarget {
+            provider: Some("a".into()),
+            model: Some("b:c".into()),
+            api: None,
+        };
+        assert_ne!(
+            resolve_profile(&delimiter_a, TokenizationPolicy::Heuristic).id,
+            resolve_profile(&delimiter_b, TokenizationPolicy::Heuristic).id
+        );
+        assert_ne!(
+            resolve_profile(
+                &ModelTarget {
+                    provider: Some("OpenAI".into()),
+                    model: Some("gpt-4o-mini".into()),
+                    api: None,
+                },
+                TokenizationPolicy::Auto,
+            )
+            .id,
+            resolve_profile(
+                &ModelTarget {
+                    provider: Some("openai".into()),
+                    model: Some("gpt-4o-mini".into()),
+                    api: None,
+                },
+                TokenizationPolicy::Auto,
+            )
+            .id
+        );
     }
 
     #[test]

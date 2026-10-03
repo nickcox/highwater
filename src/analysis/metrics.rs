@@ -1,5 +1,5 @@
 use crate::api::CallAgeMetrics;
-use crate::domain::NormalizedContextItem;
+use crate::domain::{NormalizedContextItem, MAX_SAFE_JSON_INTEGER};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone, Copy)]
@@ -14,12 +14,12 @@ pub(crate) struct TransitionMetrics {
 }
 
 pub(crate) fn calculate_transition(
-    added_ids: &[String],
-    retained_ids: &[String],
-    dropped_ids: &[String],
+    added_ids: &[&str],
+    retained_ids: &[&str],
+    dropped_ids: &[&str],
     previous_ids: &[String],
     current_ids: &[String],
-    tokens: &BTreeMap<String, Option<u64>>,
+    tokens: &BTreeMap<&str, Option<u64>>,
 ) -> TransitionMetrics {
     let added = sum_ids(added_ids, tokens);
     let retained = sum_ids(retained_ids, tokens);
@@ -27,7 +27,9 @@ pub(crate) fn calculate_transition(
     let union = match (added, retained, dropped) {
         (Some(added), Some(retained), Some(dropped)) => added
             .checked_add(retained)
-            .and_then(|value| value.checked_add(dropped)),
+            .filter(|value| *value <= MAX_SAFE_JSON_INTEGER)
+            .and_then(|value| value.checked_add(dropped))
+            .filter(|value| *value <= MAX_SAFE_JSON_INTEGER),
         _ => None,
     };
     let (churn, reuse) = union
@@ -63,7 +65,7 @@ pub(crate) fn calculate_transition(
 pub(crate) fn calculate_age(
     context_ids: &[String],
     items: &HashMap<&str, &NormalizedContextItem>,
-    tokens: &BTreeMap<String, Option<u64>>,
+    tokens: &BTreeMap<&str, Option<u64>>,
     call_index: usize,
 ) -> CallAgeMetrics {
     let ages: Vec<usize> = context_ids
@@ -71,20 +73,23 @@ pub(crate) fn calculate_age(
         .filter_map(|id| {
             items
                 .get(id.as_str())
-                .and_then(|item| call_index.checked_sub(item.first_model_call))
+                .and_then(|item| item.lifetime()?.age_at(call_index))
         })
         .collect();
     let oldest = ages.iter().copied().max();
     let median = median_usize(&ages);
-    let mut weighted_numerator = Some(0_u64);
-    let mut weighted_denominator = Some(0_u64);
+    let mut weighted_numerator = Some(0_u128);
+    let mut weighted_denominator = Some(0_u128);
     let mut threshold_totals = [Some(0_u64), Some(0_u64), Some(0_u64)];
     let mut threshold_counts = [0_usize; 3];
     for id in context_ids {
         let Some(item) = items.get(id.as_str()) else {
             continue;
         };
-        let Some(age) = call_index.checked_sub(item.first_model_call) else {
+        let Some(age) = item
+            .lifetime()
+            .and_then(|lifetime| lifetime.age_at(call_index))
+        else {
             weighted_numerator = None;
             weighted_denominator = None;
             threshold_totals = [None, None, None];
@@ -95,23 +100,26 @@ pub(crate) fn calculate_age(
                 threshold_counts[slot] += 1;
             }
         }
-        let Some(token_count) = tokens.get(id).copied().flatten() else {
+        let Some(token_count) = tokens.get(id.as_str()).copied().flatten() else {
             weighted_numerator = None;
             weighted_denominator = None;
             threshold_totals = [None, None, None];
             continue;
         };
         weighted_numerator = weighted_numerator.and_then(|total| {
-            token_count
-                .checked_mul(age as u64)
+            u128::from(token_count)
+                .checked_mul(age as u128)
                 .and_then(|value| total.checked_add(value))
         });
         weighted_denominator =
-            weighted_denominator.and_then(|total| total.checked_add(token_count));
+            weighted_denominator.and_then(|total| total.checked_add(u128::from(token_count)));
         for (slot, threshold) in [5, 10, 20].into_iter().enumerate() {
             if age >= threshold {
-                threshold_totals[slot] =
-                    threshold_totals[slot].and_then(|total| total.checked_add(token_count));
+                threshold_totals[slot] = threshold_totals[slot].and_then(|total| {
+                    total
+                        .checked_add(token_count)
+                        .filter(|value| *value <= MAX_SAFE_JSON_INTEGER)
+                });
             }
         }
     }
@@ -133,9 +141,11 @@ pub(crate) fn calculate_age(
     }
 }
 
-fn sum_ids(ids: &[String], tokens: &BTreeMap<String, Option<u64>>) -> Option<u64> {
+fn sum_ids(ids: &[impl AsRef<str>], tokens: &BTreeMap<&str, Option<u64>>) -> Option<u64> {
     ids.iter().try_fold(0_u64, |total, id| {
-        total.checked_add(tokens.get(id).copied().flatten()?)
+        total
+            .checked_add(tokens.get(id.as_ref()).copied().flatten()?)
+            .filter(|value| *value <= MAX_SAFE_JSON_INTEGER)
     })
 }
 
@@ -147,7 +157,7 @@ fn median_usize(values: &[usize]) -> Option<f64> {
     sorted.sort_unstable();
     let middle = sorted.len() / 2;
     if sorted.len().is_multiple_of(2) {
-        Some(sorted[middle - 1].checked_add(sorted[middle])? as f64 / 2.0)
+        Some((sorted[middle - 1] as u128 + sorted[middle] as u128) as f64 / 2.0)
     } else {
         Some(sorted[middle] as f64)
     }

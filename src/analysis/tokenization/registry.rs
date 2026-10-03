@@ -1,8 +1,9 @@
 use super::{
-    heuristic, payload_fingerprint, project_payload, PayloadFingerprint, TokenizationMethod,
-    TokenizationProfile, TokenizerFamily,
+    heuristic, payload_fingerprint, project_payload, PayloadFingerprint, ProfileKey,
+    TokenizationMethod, TokenizationProfile, TokenizerFamily,
 };
-use crate::domain::{ModelTarget, NormalizedContextItem};
+use crate::analysis::diagnostics::DiagnosticCode;
+use crate::domain::{ModelTarget, NormalizedContextItem, MAX_SAFE_JSON_INTEGER};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -28,7 +29,7 @@ pub(crate) struct TokenEstimate {
     pub tokens: Option<u64>,
     pub method: TokenizationMethod,
     pub coverage: TokenCoverage,
-    pub note_codes: Vec<String>,
+    pub note_codes: Vec<DiagnosticCode>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +52,7 @@ impl TokenCoverage {
 #[derive(Debug, Default)]
 pub(crate) struct ProfileRegistry {
     profile_values: Vec<TokenizationProfile>,
-    profile_indexes: HashMap<String, ProfileIndex>,
+    profile_indexes: HashMap<ProfileKey, ProfileIndex>,
     estimates: HashMap<(ProfileIndex, PayloadFingerprint), EstimateIndex>,
     estimate_values: Vec<TokenEstimate>,
     stats: TokenizationStats,
@@ -65,32 +66,33 @@ impl ProfileRegistry {
         target: &ModelTarget,
         policy: super::TokenizationPolicy,
     ) -> TokenizationProfile {
-        self.profile_with_index(target, policy).1
+        let index = self.profile_index(target, policy);
+        self.profile_at(index).clone()
     }
 
-    pub(crate) fn profile_with_index(
+    pub(crate) fn profile_index(
         &mut self,
         target: &ModelTarget,
         policy: super::TokenizationPolicy,
-    ) -> (ProfileIndex, TokenizationProfile) {
+    ) -> ProfileIndex {
         let profile = super::profile::resolve_profile(target, policy);
-        let index = self.intern_profile(profile);
-        (index, self.profile_values[index.0].clone())
+        self.intern_profile(profile)
     }
 
     fn intern_profile(&mut self, profile: TokenizationProfile) -> ProfileIndex {
-        if let Some(index) = self.profile_indexes.get(&profile.id).copied() {
+        if let Some(index) = self.profile_indexes.get(profile.key()).copied() {
             return index;
         }
         let index = ProfileIndex(self.profile_values.len());
-        self.profile_indexes.insert(profile.id.clone(), index);
+        self.profile_indexes.insert(profile.key().clone(), index);
         self.profile_values.push(profile);
         index
     }
 
+    #[cfg(test)]
     pub(crate) fn profile_index_for(&self, profile: &TokenizationProfile) -> ProfileIndex {
         self.profile_indexes
-            .get(&profile.id)
+            .get(profile.key())
             .copied()
             .expect("profile must be interned before estimating")
     }
@@ -109,11 +111,13 @@ impl ProfileRegistry {
         &mut self,
         item: &NormalizedContextItem,
         profile: &TokenizationProfile,
-        target: &ModelTarget,
+        _target: &ModelTarget,
     ) -> TokenEstimate {
         let fingerprint = payload_fingerprint(&item.payload);
         self.stats.payloads_fingerprinted = self.stats.payloads_fingerprinted.saturating_add(1);
-        self.estimate_fingerprinted(item, fingerprint, profile, target)
+        let profile_index = self.profile_index_for(profile);
+        let index = self.estimate_index_at_profile(item, fingerprint, profile_index);
+        self.estimate_at(index).clone()
     }
 
     pub(crate) fn profile_at(&self, index: ProfileIndex) -> &TokenizationProfile {
@@ -128,21 +132,11 @@ impl ProfileRegistry {
         item: &NormalizedContextItem,
         fingerprint: PayloadFingerprint,
         profile: &TokenizationProfile,
-        target: &ModelTarget,
+        _target: &ModelTarget,
     ) -> TokenEstimate {
-        let index = self.estimate_index(item, fingerprint, profile, target);
-        self.estimate_at(index).clone()
-    }
-
-    pub(crate) fn estimate_index(
-        &mut self,
-        item: &NormalizedContextItem,
-        fingerprint: PayloadFingerprint,
-        profile: &TokenizationProfile,
-        target: &ModelTarget,
-    ) -> EstimateIndex {
         let profile_index = self.profile_index_for(profile);
-        self.estimate_index_at_profile(item, fingerprint, profile_index, target)
+        let index = self.estimate_index_at_profile(item, fingerprint, profile_index);
+        self.estimate_at(index).clone()
     }
 
     pub(crate) fn estimate_index_at_profile(
@@ -150,7 +144,6 @@ impl ProfileRegistry {
         item: &NormalizedContextItem,
         fingerprint: PayloadFingerprint,
         profile_index: ProfileIndex,
-        target: &ModelTarget,
     ) -> EstimateIndex {
         self.stats.estimate_lookups = self.stats.estimate_lookups.saturating_add(1);
         let key = (profile_index, fingerprint);
@@ -158,13 +151,24 @@ impl ProfileRegistry {
             self.stats.estimate_cache_hits = self.stats.estimate_cache_hits.saturating_add(1);
             return index;
         }
-        let profile = self.profile_at(profile_index).clone();
-        let estimate = calculate(&item.payload, &profile, target, &mut self.stats);
+        let profile = self
+            .profile_values
+            .get(profile_index.0)
+            .expect("profile index must be valid");
+        let estimate = calculate(&item.payload, profile, &mut self.stats);
         let index = EstimateIndex(self.estimate_values.len());
         self.estimate_values.push(estimate);
         self.estimates.insert(key, index);
         self.stats.unique_estimates = self.stats.unique_estimates.saturating_add(1);
         index
+    }
+
+    /// Controlled estimates for analysis boundary regressions, without huge payloads.
+    #[cfg(test)]
+    pub(crate) fn estimate_at_mut(&mut self, index: EstimateIndex) -> &mut TokenEstimate {
+        self.estimate_values
+            .get_mut(index.0)
+            .expect("estimate index must be valid")
     }
 
     pub(crate) fn estimate_at(&self, index: EstimateIndex) -> &TokenEstimate {
@@ -187,7 +191,6 @@ impl ProfileRegistry {
 fn calculate(
     payload: &crate::domain::TokenizationPayload,
     profile: &TokenizationProfile,
-    target: &ModelTarget,
     stats: &mut TokenizationStats,
 ) -> TokenEstimate {
     if profile.family == TokenizerFamily::Unavailable {
@@ -196,10 +199,10 @@ fn calculate(
             tokens: None,
             method: TokenizationMethod::Unavailable,
             coverage: TokenCoverage::Unavailable,
-            note_codes: vec!["unsupportedTokenizer".into()],
+            note_codes: vec![DiagnosticCode::UnsupportedTokenizer],
         };
     }
-    let projected = project_payload(payload, target);
+    let projected = project_payload(payload, profile.projection_target());
     if projected.unavailable {
         return TokenEstimate {
             profile_id: profile.id.clone(),
@@ -225,13 +228,21 @@ fn calculate(
         ),
         TokenizerFamily::CharacterHeuristic => (
             Some(heuristic::count(&projected.text)),
-            Some("heuristicTokenizer"),
+            Some(DiagnosticCode::HeuristicTokenizer),
         ),
-        TokenizerFamily::Unavailable => (None, Some("unsupportedTokenizer")),
+        TokenizerFamily::Unavailable => (None, Some(DiagnosticCode::UnsupportedTokenizer)),
+    };
+    let (tokens, range_note) = match tokens {
+        Some(tokens) if tokens <= MAX_SAFE_JSON_INTEGER => (Some(tokens), None),
+        Some(_) => (None, Some(DiagnosticCode::TokenEstimateOutOfRange)),
+        None => (None, None),
     };
     let mut note_codes = projected.note_codes;
     if let Some(note) = count_note {
-        note_codes.push(note.into());
+        note_codes.push(note);
+    }
+    if let Some(note) = range_note {
+        note_codes.push(note);
     }
     note_codes.sort();
     note_codes.dedup();
@@ -267,7 +278,7 @@ mod tests {
             source_record_id: None,
             source_tool_call_id: None,
             metadata: BTreeMap::new(),
-            serialized_size: 20,
+            serialized_size_bytes: 20,
             payload: TokenizationPayload::UserMessage(MessageContent::text(text)),
             presence: Vec::new(),
             first_model_call: 0,
@@ -334,5 +345,54 @@ mod tests {
         assert_eq!(stats.unique_estimates, 1);
         assert_eq!(stats.tokenizer_invocations, 1);
         assert_eq!(stats.estimate_cache_hits, 31);
+    }
+
+    #[test]
+    fn projection_target_identity_prevents_estimate_aliasing() {
+        let source = NormalizedContextItem {
+            id: "assistant".into(),
+            kind: ContextItemKind::AssistantMessage,
+            label: "assistant".into(),
+            source_record_id: None,
+            source_tool_call_id: None,
+            metadata: BTreeMap::new(),
+            serialized_size_bytes: 1,
+            payload: TokenizationPayload::AssistantMessage {
+                blocks: vec![crate::domain::AssistantContentBlock::Thinking {
+                    text: "private reasoning".into(),
+                    provider_signature: None,
+                }],
+                source_provider: Some("provider".into()),
+                source_model: Some("unknown".into()),
+                source_api: None,
+            },
+            presence: Vec::new(),
+            first_model_call: 0,
+            last_model_call: 0,
+        };
+        let destination_absent = ModelTarget {
+            provider: Some("provider".into()),
+            model: None,
+            api: None,
+        };
+        let destination_literal = ModelTarget {
+            provider: Some("provider".into()),
+            model: Some("unknown".into()),
+            api: None,
+        };
+        let mut registry = ProfileRegistry::default();
+        let fingerprint = registry.fingerprint_item(&source);
+        let absent_profile =
+            registry.profile_index(&destination_absent, super::super::TokenizationPolicy::Auto);
+        let literal_profile =
+            registry.profile_index(&destination_literal, super::super::TokenizationPolicy::Auto);
+        let absent = registry.estimate_index_at_profile(&source, fingerprint, absent_profile);
+        let literal = registry.estimate_index_at_profile(&source, fingerprint, literal_profile);
+        assert_ne!(absent_profile, literal_profile);
+        assert_ne!(absent, literal);
+        assert_ne!(
+            registry.estimate_at(absent).coverage,
+            registry.estimate_at(literal).coverage
+        );
     }
 }

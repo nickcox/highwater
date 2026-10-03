@@ -3,7 +3,10 @@ use crate::{
         CacheRatioChangeMagnitude, CacheRatioDirection, CacheRatioDiscontinuity, CacheWriteStatus,
         CallEconomics, EconomicsCompleteness, EconomicsCostBasis, EconomicsSummary,
     },
-    domain::{CostBasis, ModelTarget, NormalizedModelCall, ReportedCost, ReportedUsage},
+    domain::{
+        CostBasis, ModelTarget, NormalizedModelCall, ReportedCost, ReportedUsage,
+        MAX_SAFE_JSON_INTEGER,
+    },
 };
 use std::collections::BTreeSet;
 
@@ -12,7 +15,6 @@ const CACHE_RATIO_CHANGE_THRESHOLD: f64 = 0.25;
 const CACHE_RATIO_LARGE_THRESHOLD: f64 = 0.50;
 const CACHE_RATIO_CHANGE_METHOD: &str = "adjacent-cache-read-share-v1";
 const MIN_CACHE_RATIO_PROMPT_TOKENS: u64 = 1_000;
-const MAX_SAFE_JSON_INTEGER: u64 = 9_007_199_254_740_991;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Policy {
@@ -63,18 +65,25 @@ impl Policy {
         }
     }
 
-    fn prompt_fields(self, usage: &ReportedUsage) -> Vec<Option<u64>> {
+    fn prompt_fields(self, usage: &ReportedUsage) -> [Option<u64>; 3] {
         match self {
-            Self::AnthropicMessages => vec![usage.input, usage.cache_read, usage.cache_write],
+            Self::AnthropicMessages => [usage.input, usage.cache_read, usage.cache_write],
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => {
-                vec![usage.input, usage.cache_read]
+                [usage.input, usage.cache_read, None]
             }
         }
     }
 
-    fn cost_fields(self, cost: &ReportedCost) -> Vec<Option<f64>> {
+    fn prompt_field_count(self) -> usize {
         match self {
-            Self::AnthropicMessages => vec![
+            Self::AnthropicMessages => 3,
+            Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => 2,
+        }
+    }
+
+    fn cost_fields(self, cost: &ReportedCost) -> [Option<f64>; 5] {
+        match self {
+            Self::AnthropicMessages => [
                 cost.input,
                 cost.output,
                 cost.cache_read,
@@ -82,15 +91,22 @@ impl Policy {
                 cost.total,
             ],
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => {
-                vec![cost.input, cost.output, cost.cache_read, cost.total]
+                [cost.input, cost.output, cost.cache_read, cost.total, None]
             }
         }
     }
 
-    fn prompt_cost_fields(self, cost: &ReportedCost) -> Option<Vec<f64>> {
+    fn cost_field_count(self) -> usize {
         match self {
-            Self::AnthropicMessages => Some(vec![cost.input?, cost.cache_read?, cost.cache_write?]),
-            Self::OpenAiCompletions => Some(vec![cost.input?, cost.cache_read?]),
+            Self::AnthropicMessages => 5,
+            Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => 4,
+        }
+    }
+
+    fn prompt_cost_fields(self, cost: &ReportedCost) -> Option<[f64; 3]> {
+        match self {
+            Self::AnthropicMessages => Some([cost.input?, cost.cache_read?, cost.cache_write?]),
+            Self::OpenAiCompletions => Some([cost.input?, cost.cache_read?, 0.0]),
             Self::OpenAiResponses | Self::OpenAiCodexResponses => None,
         }
     }
@@ -117,7 +133,15 @@ pub(crate) fn derive_with_cost_basis(
     let mut read_sum = Some(0_u64);
 
     for call in calls {
-        let derived = derive_call(call);
+        let derived = if cost_basis == CostBasis::PiModelRates {
+            derive_call(call)
+        } else {
+            let mut unsupported = CallEconomics::unsupported();
+            unsupported
+                .explanation_codes
+                .push("unsupportedDerivedEconomicsCostBasis".into());
+            unsupported
+        };
         count_status(&mut summary.usage_completeness, derived.usage_completeness);
         count_status(&mut summary.cost_completeness, derived.cost_completeness);
 
@@ -130,8 +154,8 @@ pub(crate) fn derive_with_cost_basis(
                 (derived.prompt_tokens, call.reported_usage.cache_read)
             {
                 summary.cache_read_eligible_calls += 1;
-                prompt_sum = prompt_sum.and_then(|sum| sum.checked_add(prompt));
-                read_sum = read_sum.and_then(|sum| sum.checked_add(read));
+                prompt_sum = checked_safe_add(prompt_sum, prompt);
+                read_sum = checked_safe_add(read_sum, read);
             }
         }
 
@@ -140,9 +164,10 @@ pub(crate) fn derive_with_cost_basis(
 
     add_cache_ratio_discontinuities(calls, &mut derived_calls);
     summary.supported_policy_ids = policy_ids.into_iter().collect();
-    let aggregates_are_safe = matches!(prompt_sum, Some(value) if value <= MAX_SAFE_JSON_INTEGER)
-        && matches!(read_sum, Some(value) if value <= MAX_SAFE_JSON_INTEGER);
-    if !aggregates_are_safe {
+    if summary.cache_read_eligible_calls == 0 {
+        prompt_sum = None;
+        read_sum = None;
+    } else if prompt_sum.is_none() || read_sum.is_none() {
         prompt_sum = None;
         read_sum = None;
         summary
@@ -181,6 +206,12 @@ pub(crate) fn derive_with_cost_basis(
             .into(),
         );
     }
+    for call in &mut derived_calls {
+        call.explanation_codes.sort();
+        call.explanation_codes.dedup();
+    }
+    summary.explanation_codes.sort();
+    summary.explanation_codes.dedup();
 
     (derived_calls, summary)
 }
@@ -203,12 +234,20 @@ fn derive_call(call: &NormalizedModelCall) -> CallEconomics {
         return unsupported;
     }
     let prompt_fields = policy.prompt_fields(usage);
-    let prompt_known = prompt_fields.iter().filter(|value| value.is_some()).count();
+    let prompt_known = prompt_fields[..policy.prompt_field_count()]
+        .iter()
+        .filter(|value| value.is_some())
+        .count();
     let mut explanation_codes = Vec::new();
     let (prompt_tokens, usage_completeness) = match prompt_known {
         0 => (None, EconomicsCompleteness::Missing),
-        known if known < prompt_fields.len() => (None, EconomicsCompleteness::Partial),
-        _ => match checked_sum_u64(prompt_fields.into_iter().flatten()) {
+        known if known < policy.prompt_field_count() => (None, EconomicsCompleteness::Partial),
+        _ => match checked_sum_u64(
+            prompt_fields[..policy.prompt_field_count()]
+                .iter()
+                .flatten()
+                .copied(),
+        ) {
             Some(prompt_tokens) if prompt_tokens <= MAX_SAFE_JSON_INTEGER => {
                 (Some(prompt_tokens), EconomicsCompleteness::Complete)
             }
@@ -400,12 +439,16 @@ fn is_eligible_discontinuity_pair(
 
 fn cost_completeness(policy: Policy, cost: &ReportedCost) -> EconomicsCompleteness {
     let fields = policy.cost_fields(cost);
-    let known = fields.iter().filter(|value| value.is_some()).count();
+    let field_count = policy.cost_field_count();
+    let known = fields[..field_count]
+        .iter()
+        .filter(|value| value.is_some())
+        .count();
     if known == 0 {
         return EconomicsCompleteness::Missing;
     }
-    if known < fields.len()
-        || fields
+    if known < field_count
+        || fields[..field_count]
             .iter()
             .flatten()
             .any(|value| !value.is_finite() || *value < 0.0)
@@ -417,12 +460,12 @@ fn cost_completeness(policy: Policy, cost: &ReportedCost) -> EconomicsCompletene
 }
 
 fn has_cost_total_mismatch(cost: &ReportedCost) -> bool {
-    let Some(values) = [cost.input, cost.output, cost.cache_read, cost.cache_write]
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
+    let (Some(input), Some(output), Some(cache_read), Some(cache_write)) =
+        (cost.input, cost.output, cost.cache_read, cost.cache_write)
     else {
         return false;
     };
+    let values = [input, output, cache_read, cache_write];
     let Some(total) = cost
         .total
         .filter(|value| value.is_finite() && *value >= 0.0)
@@ -441,10 +484,17 @@ fn has_cost_total_mismatch(cost: &ReportedCost) -> bool {
     (sum - total).abs() > COST_SUM_TOLERANCE_USD
 }
 
+fn checked_safe_add(total: Option<u64>, value: u64) -> Option<u64> {
+    total?
+        .checked_add(value)
+        .filter(|value| *value <= MAX_SAFE_JSON_INTEGER)
+}
+
 fn checked_sum_u64(values: impl IntoIterator<Item = u64>) -> Option<u64> {
-    values
-        .into_iter()
-        .try_fold(0_u64, |sum, value| sum.checked_add(value))
+    values.into_iter().try_fold(0_u64, |sum, value| {
+        sum.checked_add(value)
+            .filter(|value| *value <= MAX_SAFE_JSON_INTEGER)
+    })
 }
 
 fn checked_sum_f64(values: impl IntoIterator<Item = f64>) -> Option<f64> {
@@ -748,6 +798,46 @@ mod tests {
         assert!(summary
             .explanation_codes
             .contains(&"cacheReadAggregateOutOfRange".into()));
+    }
+
+    #[test]
+    fn cache_aggregates_distinguish_no_eligible_from_measured_zero() {
+        let unsupported = fixture_calls()
+            .into_iter()
+            .nth(5)
+            .expect("unsupported call");
+        let (_, no_eligible) = derive(&[unsupported]);
+        assert_eq!(no_eligible.cache_read_eligible_calls, 0);
+        assert_eq!(no_eligible.cache_read_prompt_tokens, None);
+        assert_eq!(no_eligible.cache_read_tokens, None);
+        assert_eq!(no_eligible.cache_read_ratio, None);
+
+        let mut zero = fixture_calls().into_iter().nth(2).expect("OpenAI call");
+        zero.reported_usage.input = Some(0);
+        zero.reported_usage.cache_read = Some(0);
+        let (_, measured_zero) = derive(&[zero]);
+        assert_eq!(measured_zero.cache_read_eligible_calls, 1);
+        assert_eq!(measured_zero.cache_read_prompt_tokens, Some(0));
+        assert_eq!(measured_zero.cache_read_tokens, Some(0));
+        assert_eq!(measured_zero.cache_read_ratio, None);
+    }
+
+    #[test]
+    fn non_pi_cost_basis_does_not_claim_pi_derived_economics() {
+        let calls = fixture_calls();
+        let (derived, summary) = derive_with_cost_basis(&calls, CostBasis::SourceModelRates);
+        assert_eq!(summary.cost_basis, EconomicsCostBasis::SourceModelRates);
+        assert!(derived.iter().all(|call| {
+            call.policy_id.is_none()
+                && call.pi_prompt_cost.is_none()
+                && call
+                    .explanation_codes
+                    .contains(&"unsupportedDerivedEconomicsCostBasis".into())
+                && !call
+                    .explanation_codes
+                    .contains(&"piModelRateCostBasis".into())
+        }));
+        assert!(summary.supported_policy_ids.is_empty());
     }
 
     #[test]

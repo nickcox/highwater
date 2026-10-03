@@ -192,7 +192,7 @@ pub(crate) struct CacheRatioDiscontinuity {
     pub compaction_before: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum EconomicsCostBasis {
     #[default]

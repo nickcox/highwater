@@ -1,4 +1,13 @@
-use super::parser::{parse_reader, PiEntry};
+#[path = "interpret.rs"]
+mod interpret;
+#[path = "state.rs"]
+mod state;
+use state::ReconstructionState;
+
+use super::{
+    branch::select_branch,
+    parser::{parse_reader, PiEntry, PiParseError},
+};
 use crate::domain::*;
 use serde_json::Value;
 use std::{
@@ -16,18 +25,6 @@ pub(crate) struct PiParseStats {
     pub selected_entries: usize,
 }
 
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
-struct ItemIndex(usize);
-
-#[derive(Debug)]
-struct PendingCompaction {
-    record_id: String,
-    source_item_ids: Vec<String>,
-    retained_item_ids: Vec<String>,
-    before_model_call: usize,
-    tokens_before: Option<u64>,
-}
-
 struct ToolInvocation<'a> {
     name: Option<&'a str>,
     arguments: Option<&'a Value>,
@@ -35,19 +32,11 @@ struct ToolInvocation<'a> {
 
 const MAX_LABEL_CHARS: usize = 160;
 
-fn insert_item(
-    items: &mut Vec<NormalizedContextItem>,
-    item_indices: &mut HashMap<String, ItemIndex>,
-    item_id: String,
-    item: NormalizedContextItem,
-) -> ItemIndex {
-    if let Some(index) = item_indices.get(&item_id).copied() {
-        return index;
+fn source_error_from_parse(error: PiParseError) -> SourceError {
+    match error {
+        PiParseError::Io(source) => SourceError::Io(source),
+        PiParseError::Json { line, source } => SourceError::Json { line, source },
     }
-    let index = ItemIndex(items.len());
-    item_indices.insert(item_id, index);
-    items.push(item);
-    index
 }
 
 impl SessionSourceAdapter for PiSourceAdapter {
@@ -60,22 +49,17 @@ impl SessionSourceAdapter for PiSourceAdapter {
     }
 
     fn parse(&self, input: &mut dyn BufRead) -> Result<NormalizedSession, SourceError> {
-        let entries = parse_reader(input).map_err(|error| SourceError::Parse(error.to_string()))?;
-        let selected = select_branch(&entries)?;
-        reconstruct_selected(&entries, self.source_descriptor(), selected)
+        self.parse_reader_with_stats(input)
+            .map(|(session, _)| session)
     }
 }
 
 impl PiSourceAdapter {
-    pub(crate) fn parse_path_with_stats(
+    fn parse_reader_with_stats(
         &self,
-        path: &std::path::Path,
+        input: &mut dyn BufRead,
     ) -> Result<(NormalizedSession, PiParseStats), SourceError> {
-        let file = std::fs::File::open(path)
-            .map_err(|error| SourceError::Parse(format!("cannot read session: {error}")))?;
-        let mut reader = std::io::BufReader::new(file);
-        let entries =
-            parse_reader(&mut reader).map_err(|error| SourceError::Parse(error.to_string()))?;
+        let entries = parse_reader(input).map_err(source_error_from_parse)?;
         let selected = select_branch(&entries)?;
         let selected_entries = selected.len();
         let session = reconstruct_selected(&entries, self.source_descriptor(), selected)?;
@@ -86,6 +70,15 @@ impl PiSourceAdapter {
                 selected_entries,
             },
         ))
+    }
+
+    pub(crate) fn parse_path_with_stats(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<(NormalizedSession, PiParseStats), SourceError> {
+        let file = std::fs::File::open(path).map_err(SourceError::Io)?;
+        let mut reader = std::io::BufReader::new(file);
+        self.parse_reader_with_stats(&mut reader)
     }
 }
 
@@ -106,11 +99,7 @@ fn reconstruct_selected(
         .and_then(Value::as_str)
         .map(str::to_owned);
 
-    let mut items = Vec::<NormalizedContextItem>::new();
-    let mut item_indices = HashMap::<String, ItemIndex>::new();
-    let mut calls = Vec::new();
-    let mut active = Vec::<ItemIndex>::new();
-    let mut compactions = Vec::<PendingCompaction>::new();
+    // Lookahead is prepared on the selected branch before sequential application.
     let failed_tool_call_ids: HashSet<String> = selected
         .iter()
         .filter_map(|index| {
@@ -129,449 +118,32 @@ fn reconstruct_selected(
         .map(|(index, entry_index)| (entries[*entry_index].id.as_str(), index))
         .collect();
     let tool_invocations = collect_tool_invocations(entries, &selected);
-    let mut last_compaction = None;
+    let mut state = ReconstructionState::new(id, working_directory, source);
 
     for entry_index in &selected {
-        let entry = &entries[*entry_index];
-        if entry.kind == "compaction" {
-            let summary_id = format!("pi:{id}:compaction:{}", entry.id);
-            let summary = entry
-                .value
-                .get("summary")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_owned();
-            let summary_index = insert_item(
-                &mut items,
-                &mut item_indices,
-                summary_id.clone(),
-                NormalizedContextItem {
-                    id: summary_id.clone(),
-                    kind: ContextItemKind::CompactionSummary,
-                    label: "Compaction summary".into(),
-                    source_record_id: Some(entry.id.clone()),
-                    source_tool_call_id: None,
-                    metadata: BTreeMap::new(),
-                    serialized_size: entry.source_bytes,
-                    payload: TokenizationPayload::CompactionSummary(summary),
-                    presence: Vec::new(),
-                    first_model_call: 0,
-                    last_model_call: 0,
-                },
-            );
-            let first_kept = entry.value.get("firstKeptEntryId").and_then(Value::as_str);
-            let first_kept_position = first_kept.and_then(|key| branch_positions.get(key).copied());
-            if first_kept.is_some() && first_kept_position.is_none() {
-                return Err(SourceError::Invalid(format!(
-                    "compaction {} references unknown firstKeptEntryId {}",
-                    entry.id,
-                    first_kept.unwrap_or_default()
-                )));
+        match interpret::interpret(
+            &entries[*entry_index],
+            &state.id,
+            state.working_directory.as_deref(),
+            &branch_positions,
+            &tool_invocations,
+            &failed_tool_call_ids,
+        )? {
+            interpret::SelectedEntry::Assistant { item, call } => {
+                state.apply_message(item, Some(call))
             }
-            let (old_indexes, retained_indexes): (Vec<ItemIndex>, Vec<ItemIndex>) =
-                active.iter().copied().partition(|item_index| {
-                    let item = &items[item_index.0];
-                    let Some(boundary) = first_kept_position else {
-                        return true;
-                    };
-                    item.source_record_id
-                        .as_deref()
-                        .and_then(|record_id| branch_positions.get(record_id).copied())
-                        .is_none_or(|position| position < boundary)
-                });
-            let old = old_indexes
-                .iter()
-                .map(|item_index| items[item_index.0].id.clone())
-                .collect::<Vec<_>>();
-            let retained = retained_indexes
-                .iter()
-                .map(|item_index| items[item_index.0].id.clone())
-                .collect::<Vec<_>>();
-            active.clear();
-            active.push(summary_index);
-            active.extend(retained_indexes);
-            last_compaction = Some(summary_id);
-            compactions.push(PendingCompaction {
-                record_id: entry.id.clone(),
-                source_item_ids: old,
-                retained_item_ids: retained,
-                before_model_call: calls.len() + 1,
-                tokens_before: entry.value.get("tokensBefore").and_then(Value::as_u64),
-            });
-            continue;
-        }
-        if !matches!(
-            entry.kind.as_str(),
-            "message" | "custom_message" | "branch_summary"
-        ) {
-            continue;
-        }
-        let role = message(entry)
-            .and_then(|message| message.get("role"))
-            .and_then(Value::as_str)
-            .unwrap_or(match entry.kind.as_str() {
-                "custom_message" => "customMessage",
-                "branch_summary" => "branchSummary",
-                other => other,
-            });
-        if role == "assistant" {
-            let index = calls.len() + 1;
-            let context_item_ids = active
-                .iter()
-                .map(|item_index| items[item_index.0].id.clone())
-                .collect::<Vec<_>>();
-            for item_index in &active {
-                let item = &mut items[item_index.0];
-                item.last_model_call = index;
-                extend_presence(item, index);
-                if item.first_model_call == 0 {
-                    item.first_model_call = index;
-                }
+            interpret::SelectedEntry::Message(item) => state.apply_message(item, None),
+            interpret::SelectedEntry::Compaction {
+                item,
+                first_kept_position,
+                tokens_before,
+            } => {
+                state.apply_compaction(item, first_kept_position, tokens_before, &branch_positions)
             }
-            let model_message = message(entry)
-                .ok_or_else(|| SourceError::Invalid("assistant message is missing".into()))?;
-            let usage = parse_usage(model_message.get("usage"));
-            let stop_reason = model_message
-                .get("stopReason")
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            let tool_calls_after = assistant_tool_calls(model_message, &failed_tool_call_ids);
-            calls.push(NormalizedModelCall {
-                index,
-                source_record_id: entry.id.clone(),
-                target: ModelTarget {
-                    provider: model_message
-                        .get("provider")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned),
-                    model: model_message
-                        .get("model")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned),
-                    api: model_message
-                        .get("api")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned),
-                },
-                reported_usage: usage,
-                stop_reason: stop_reason.clone(),
-                context_item_ids,
-                tool_calls_after,
-                compaction_before: last_compaction.take(),
-            });
-            let assistant_id = format!("pi:{id}:entry:{}", entry.id);
-            let assistant_index = insert_item(
-                &mut items,
-                &mut item_indices,
-                assistant_id.clone(),
-                NormalizedContextItem {
-                    id: assistant_id,
-                    kind: ContextItemKind::AssistantMessage,
-                    label: item_label(
-                        ContextItemKind::AssistantMessage,
-                        Some(model_message),
-                        &tool_invocations,
-                        working_directory.as_deref(),
-                    ),
-                    source_record_id: Some(entry.id.clone()),
-                    source_tool_call_id: None,
-                    metadata: BTreeMap::new(),
-                    serialized_size: entry.source_bytes,
-                    payload: if has_content(model_message) {
-                        TokenizationPayload::AssistantMessage {
-                            blocks: assistant_blocks(model_message),
-                            source_provider: model_message
-                                .get("provider")
-                                .and_then(Value::as_str)
-                                .map(str::to_owned),
-                            source_model: model_message
-                                .get("model")
-                                .and_then(Value::as_str)
-                                .map(str::to_owned),
-                            source_api: model_message
-                                .get("api")
-                                .and_then(Value::as_str)
-                                .map(str::to_owned),
-                        }
-                    } else {
-                        TokenizationPayload::Unavailable
-                    },
-                    presence: Vec::new(),
-                    first_model_call: 0,
-                    last_model_call: 0,
-                },
-            );
-            if assistant_response_is_contextual(stop_reason.as_deref()) {
-                active.push(assistant_index);
-            }
-            continue;
-        }
-
-        let item_id = format!("pi:{id}:entry:{}", entry.id);
-        let item_kind = match role {
-            "system" => ContextItemKind::System,
-            "tool" | "toolResult" => ContextItemKind::ToolResult,
-            "toolDefinition" => ContextItemKind::ToolDefinition,
-            "user" => ContextItemKind::UserMessage,
-            "custom_message" | "customMessage" => ContextItemKind::CustomMessage,
-            "branch_summary" | "branchSummary" => ContextItemKind::BranchSummary,
-            _ => ContextItemKind::Other,
-        };
-        let message_value = message(entry);
-        let content_value = message_value.unwrap_or(&entry.value);
-        let mut metadata = BTreeMap::new();
-        if let Some(name) = content_value.get("toolName").and_then(Value::as_str) {
-            metadata.insert("toolName".into(), name.into());
-        }
-        if let Some(is_error) = content_value.get("isError").and_then(Value::as_bool) {
-            metadata.insert("isError".into(), is_error.to_string());
-        }
-        let payload = match item_kind {
-            ContextItemKind::ToolResult => {
-                if !has_content(content_value) {
-                    TokenizationPayload::Unavailable
-                } else {
-                    TokenizationPayload::ToolResult {
-                        tool_call_id: content_value
-                            .get("toolCallId")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .into(),
-                        tool_name: content_value
-                            .get("toolName")
-                            .and_then(Value::as_str)
-                            .unwrap_or("unknown")
-                            .into(),
-                        content: message_content(Some(content_value)),
-                        is_error: content_value
-                            .get("isError")
-                            .and_then(Value::as_bool)
-                            .unwrap_or(false),
-                    }
-                }
-            }
-            ContextItemKind::UserMessage => {
-                if !has_content(content_value) {
-                    TokenizationPayload::Unavailable
-                } else {
-                    TokenizationPayload::UserMessage(message_content(Some(content_value)))
-                }
-            }
-            ContextItemKind::CustomMessage
-            | ContextItemKind::System
-            | ContextItemKind::ToolDefinition => {
-                if !has_content(content_value) {
-                    TokenizationPayload::Unavailable
-                } else {
-                    TokenizationPayload::CustomMessage(message_content(Some(content_value)))
-                }
-            }
-            ContextItemKind::BranchSummary => entry
-                .value
-                .get("summary")
-                .and_then(Value::as_str)
-                .map_or(TokenizationPayload::Unavailable, |summary| {
-                    TokenizationPayload::BranchSummary(summary.to_owned())
-                }),
-            ContextItemKind::Other if entry.kind == "command" => {
-                match (
-                    entry.value.get("command").and_then(Value::as_str),
-                    entry.value.get("output").and_then(Value::as_str),
-                ) {
-                    (Some(command), Some(output)) => TokenizationPayload::CommandExecution {
-                        command: command.into(),
-                        output: output.into(),
-                        excluded_from_context: entry
-                            .value
-                            .get("excludedFromContext")
-                            .and_then(Value::as_bool)
-                            .unwrap_or(false),
-                    },
-                    _ => TokenizationPayload::Unavailable,
-                }
-            }
-            _ => TokenizationPayload::Unavailable,
-        };
-        let item_index = insert_item(
-            &mut items,
-            &mut item_indices,
-            item_id.clone(),
-            NormalizedContextItem {
-                id: item_id,
-                kind: item_kind,
-                label: item_label(
-                    item_kind,
-                    message_value,
-                    &tool_invocations,
-                    working_directory.as_deref(),
-                ),
-                source_record_id: Some(entry.id.clone()),
-                source_tool_call_id: content_value
-                    .get("toolCallId")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-                metadata,
-                serialized_size: entry.source_bytes,
-                payload,
-                presence: Vec::new(),
-                first_model_call: 0,
-                last_model_call: 0,
-            },
-        );
-        active.push(item_index);
-    }
-
-    for item in &mut items {
-        if item.first_model_call == 0 {
-            item.presence.clear();
-        } else if let Some(last) = item.presence.last() {
-            item.last_model_call = last.end_call;
+            interpret::SelectedEntry::Ignored => {}
         }
     }
-
-    let mut lineage = Vec::new();
-    let mut compaction_dtos = Vec::new();
-    for compaction in compactions {
-        let summary_id = format!("pi:{id}:compaction:{}", compaction.record_id);
-        for old_id in &compaction.source_item_ids {
-            lineage.push(NormalizedLineageEdge {
-                from: old_id.clone(),
-                to: summary_id.clone(),
-                kind: "frameworkCompaction".into(),
-            });
-        }
-        compaction_dtos.push(NormalizedCompaction {
-            id: summary_id.clone(),
-            before_model_call: compaction.before_model_call,
-            source_item_ids: compaction.source_item_ids,
-            retained_item_ids: compaction.retained_item_ids,
-            summary_item_id: summary_id,
-            tokens_before: compaction.tokens_before,
-        });
-    }
-    let terminal_boundary = calls.len() + 1;
-    let terminal_summary_ids: HashSet<String> = compaction_dtos
-        .iter()
-        .filter(|event| event.before_model_call == terminal_boundary)
-        .map(|event| event.summary_item_id.clone())
-        .collect();
-    let mut context_items: Vec<_> = items
-        .into_iter()
-        .filter(|item| !item.presence.is_empty() || terminal_summary_ids.contains(&item.id))
-        .collect();
-    let visible_ids: HashSet<String> = context_items.iter().map(|item| item.id.clone()).collect();
-    compaction_dtos.retain(|event| visible_ids.contains(&event.summary_item_id));
-    for event in &mut compaction_dtos {
-        event
-            .source_item_ids
-            .retain(|item_id| visible_ids.contains(item_id));
-        event
-            .retained_item_ids
-            .retain(|item_id| visible_ids.contains(item_id));
-    }
-    lineage.retain(|edge| visible_ids.contains(&edge.from) && visible_ids.contains(&edge.to));
-    context_items.sort_by(|left, right| {
-        left.first_model_call
-            .cmp(&right.first_model_call)
-            .then_with(|| left.id.cmp(&right.id))
-    });
-    compaction_dtos.sort_by(|left, right| {
-        left.before_model_call
-            .cmp(&right.before_model_call)
-            .then_with(|| left.id.cmp(&right.id))
-    });
-    lineage.sort_by(|left, right| {
-        left.to
-            .cmp(&right.to)
-            .then_with(|| left.from.cmp(&right.from))
-            .then_with(|| left.kind.cmp(&right.kind))
-    });
-
-    Ok(NormalizedSession {
-        id,
-        source,
-        title: None,
-        working_directory,
-        context_items,
-        model_calls: calls,
-        compactions: compaction_dtos,
-        lineage,
-    })
-}
-
-fn select_branch(entries: &[PiEntry]) -> Result<Vec<usize>, SourceError> {
-    let mut map = HashMap::with_capacity(entries.len());
-    for (index, entry) in entries
-        .iter()
-        .enumerate()
-        .filter(|(_, entry)| entry.kind != "session")
-    {
-        if map.insert(entry.id.as_str(), index).is_some() {
-            return Err(SourceError::Invalid(format!(
-                "duplicate entry id {}",
-                entry.id
-            )));
-        }
-    }
-    let mut complete = HashSet::new();
-    for start in map.keys() {
-        let mut path = HashSet::new();
-        let mut current = Some(*start);
-        while let Some(id) = current {
-            if complete.contains(id) {
-                break;
-            }
-            if !path.insert(id) {
-                return Err(SourceError::Invalid(format!(
-                    "cycle detected in parent graph at {id}"
-                )));
-            }
-            let entry_index = map.get(id).copied().ok_or_else(|| {
-                SourceError::Invalid(format!("broken parent link: missing entry {id}"))
-            })?;
-            current = entries[entry_index].parent.as_deref();
-        }
-        complete.extend(path);
-    }
-    let mut parents_with_children = HashSet::new();
-    for entry in entries.iter().filter(|entry| entry.kind != "session") {
-        if let Some(parent) = entry.parent.as_deref() {
-            parents_with_children.insert(parent);
-        }
-    }
-    let leaf_index = entries
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, entry)| {
-            entry.kind != "session" && !parents_with_children.contains(entry.id.as_str())
-        })
-        .map(|(index, _)| index)
-        .ok_or_else(|| SourceError::Invalid("session has no branch leaf".into()))?;
-    let mut chain = Vec::new();
-    let mut visited = HashSet::new();
-    let mut current = Some(leaf_index);
-    while let Some(index) = current {
-        let entry = &entries[index];
-        if !visited.insert(entry.id.as_str()) {
-            return Err(SourceError::Invalid(format!(
-                "cycle detected while following parent chain at {}",
-                entry.id
-            )));
-        }
-        chain.push(index);
-        current = entry
-            .parent
-            .as_deref()
-            .map(|parent| {
-                map.get(parent).copied().ok_or_else(|| {
-                    SourceError::Invalid(format!("broken parent link: missing entry {parent}"))
-                })
-            })
-            .transpose()?;
-    }
-    chain.reverse();
-    Ok(chain)
+    Ok(state.finish())
 }
 
 fn message(entry: &PiEntry) -> Option<&Value> {
@@ -1078,26 +650,44 @@ fn image_descriptor(value: &Value) -> ImageDescriptor {
             .or_else(|| value.get("media_type"))
             .and_then(Value::as_str)
             .map(str::to_owned),
-        byte_length: value
+        encoded_data_length: value
             .get("data")
             .and_then(Value::as_str)
             .map(|data| data.len() as u64),
     }
 }
 
-fn parse_usage(value: Option<&Value>) -> ReportedUsage {
+fn parse_safe_u64(value: Option<&Value>, field: &'static str) -> Result<Option<u64>, SourceError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if let Some(number) = value.as_u64() {
+        if number > crate::domain::MAX_SAFE_JSON_INTEGER {
+            return Err(SourceError::UnsafeInteger { field });
+        }
+        return Ok(Some(number));
+    }
+    if value.as_f64().is_some_and(|number| {
+        number.is_finite() && number > crate::domain::MAX_SAFE_JSON_INTEGER as f64
+    }) {
+        return Err(SourceError::UnsafeInteger { field });
+    }
+    Ok(None)
+}
+
+fn parse_usage(value: Option<&Value>) -> Result<ReportedUsage, SourceError> {
     let Some(usage) = value else {
-        return ReportedUsage::default();
+        return Ok(ReportedUsage::default());
     };
     let cost = usage.get("cost");
-    ReportedUsage {
-        input: usage.get("input").and_then(Value::as_u64),
-        output: usage.get("output").and_then(Value::as_u64),
-        cache_read: usage.get("cacheRead").and_then(Value::as_u64),
-        cache_write: usage.get("cacheWrite").and_then(Value::as_u64),
-        cache_write_1h: usage.get("cacheWrite1h").and_then(Value::as_u64),
-        reasoning: usage.get("reasoning").and_then(Value::as_u64),
-        total_tokens: usage.get("totalTokens").and_then(Value::as_u64),
+    Ok(ReportedUsage {
+        input: parse_safe_u64(usage.get("input"), "usage.input")?,
+        output: parse_safe_u64(usage.get("output"), "usage.output")?,
+        cache_read: parse_safe_u64(usage.get("cacheRead"), "usage.cacheRead")?,
+        cache_write: parse_safe_u64(usage.get("cacheWrite"), "usage.cacheWrite")?,
+        cache_write_1h: parse_safe_u64(usage.get("cacheWrite1h"), "usage.cacheWrite1h")?,
+        reasoning: parse_safe_u64(usage.get("reasoning"), "usage.reasoning")?,
+        total_tokens: parse_safe_u64(usage.get("totalTokens"), "usage.totalTokens")?,
         cost: ReportedCost {
             input: cost
                 .and_then(|value| value.get("input"))
@@ -1115,7 +705,7 @@ fn parse_usage(value: Option<&Value>) -> ReportedUsage {
                 .and_then(|value| value.get("total"))
                 .and_then(Value::as_f64),
         },
-    }
+    })
 }
 
 fn canonical_json(value: &Value) -> String {
@@ -1128,7 +718,7 @@ fn canonical_json(value: &Value) -> String {
 
 fn extend_presence(item: &mut NormalizedContextItem, call_index: usize) {
     if let Some(last) = item.presence.last_mut() {
-        if last.end_call.saturating_add(1) == call_index {
+        if last.end_call.checked_add(1) == Some(call_index) {
             last.end_call = call_index;
             return;
         }
@@ -1181,6 +771,239 @@ mod tests {
             .find(|item| item.source_record_id.as_deref() == Some(record_id))
             .map(|item| item.label.as_str())
             .expect("context item for source record")
+    }
+
+    #[test]
+    fn source_base64_length_is_encoded_size_not_decoded_image_size() {
+        let session = parse_records(&[
+            serde_json::json!({"type": "session", "id": "encoded", "version": 3}),
+            message_record(
+                "image",
+                None,
+                serde_json::json!({"role": "user", "content": [{"type": "image", "mimeType": "image/png", "data": "aGVsbG8="}]}),
+            ),
+            message_record(
+                "call",
+                Some("image"),
+                serde_json::json!({"role": "assistant", "content": [{"type": "text", "text": "seen"}]}),
+            ),
+        ]);
+        let item = &session.context_items[0];
+        let TokenizationPayload::UserMessage(content) = &item.payload else {
+            panic!("user payload");
+        };
+        let ContentPart::Image(image) = &content.parts[0] else {
+            panic!("image metadata");
+        };
+        assert_eq!(image.encoded_data_length, Some(8)); // Encoded "hello", not its five decoded bytes.
+        let analysis = crate::analysis::analyze(
+            session,
+            crate::analysis::AnalysisConfig {
+                tokenization: crate::analysis::TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+        )
+        .expect("image analysis");
+        let preview = analysis.context_items[0].preview.as_ref().expect("preview");
+        assert_eq!(preview.text, "[image: image/png, 8.0 B encoded]");
+        assert_eq!(preview.expanded_text, preview.text);
+        assert_eq!(
+            analysis.context_items[0].token_estimates[0].coverage,
+            "partial"
+        );
+    }
+
+    #[test]
+    fn normalized_fixture_parity() {
+        let mut digest = blake3::Hasher::new();
+        for name in [
+            "aborted-assistant",
+            "branch",
+            "compaction-metadata",
+            "compaction",
+            "context-entry-kinds",
+            "economics-policies",
+            "errored-assistant",
+            "failed-tool",
+            "multiple-compactions",
+            "simple",
+            "terminal-compaction",
+            "tools",
+        ] {
+            digest.update(format!("{:?}", fixture(name)).as_bytes());
+        }
+        assert_eq!(
+            digest.finalize().to_hex().as_str(),
+            // M8 renamed serialized-size/image-length Debug fields; values/order are unchanged.
+            "3e435e4b909ad520f8b5d669be97f6f464594b9cb170c209350d8ca35ce7c605"
+        );
+    }
+
+    #[test]
+    fn reader_and_path_stats_share_reconstruction() {
+        let reader_session = fixture("simple");
+        let (path_session, stats) = PiSourceAdapter
+            .parse_path_with_stats(Path::new("fixtures/pi/simple.jsonl"))
+            .expect("path fixture");
+        assert!(stats.entries >= stats.selected_entries);
+        assert_eq!(reader_session.id, path_session.id);
+        assert_eq!(
+            reader_session.model_calls.len(),
+            path_session.model_calls.len()
+        );
+        assert_eq!(
+            reader_session
+                .model_calls
+                .iter()
+                .map(|call| &call.context_item_ids)
+                .collect::<Vec<_>>(),
+            path_session
+                .model_calls
+                .iter()
+                .map(|call| &call.context_item_ids)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            reader_session.context_items.len(),
+            path_session.context_items.len()
+        );
+        assert_eq!(
+            reader_session.compactions.len(),
+            path_session.compactions.len()
+        );
+    }
+
+    #[test]
+    fn consecutive_compactions_keep_stable_indexes_and_defer_response_filtering() {
+        let session = parse_records(&[
+            message_record(
+                "u1",
+                None,
+                serde_json::json!({"role":"user","content":"first"}),
+            ),
+            message_record(
+                "a1",
+                Some("u1"),
+                serde_json::json!({"role":"assistant","content":"first answer"}),
+            ),
+            message_record(
+                "u2",
+                Some("a1"),
+                serde_json::json!({"role":"user","content":"retained"}),
+            ),
+            serde_json::json!({"type":"compaction","id":"c1","parentId":"u2","summary":"first summary","firstKeptEntryId":"u2"}),
+            serde_json::json!({"type":"compaction","id":"c2","parentId":"c1","summary":"second summary","firstKeptEntryId":"u2"}),
+            message_record(
+                "a2",
+                Some("c2"),
+                serde_json::json!({"role":"assistant","content":"second answer"}),
+            ),
+            message_record(
+                "a3",
+                Some("a2"),
+                serde_json::json!({"role":"assistant","content":"last answer"}),
+            ),
+        ]);
+        assert_eq!(suffixes(&session, 1), vec!["u1"]);
+        // The first summary is newer than the retained-tail boundary, so it
+        // remains in that tail under the existing source-local semantics.
+        assert_eq!(suffixes(&session, 2), vec!["c2", "c1", "u2"]);
+        assert_eq!(suffixes(&session, 3), vec!["c2", "c1", "u2", "a2"]);
+        assert_eq!(session.compactions.len(), 2);
+        assert!(session.compactions[1].summary_item_id.ends_with(":c2"));
+        assert_eq!(session.compactions[1].before_model_call, 2);
+        assert!(session.compactions[1]
+            .retained_item_ids
+            .iter()
+            .any(|id| id.ends_with(":c1")));
+        let response = session
+            .context_items
+            .iter()
+            .find(|item| item.source_record_id.as_deref() == Some("a2"))
+            .expect("response used by next call");
+        assert_eq!(response.first_model_call, 3);
+        assert_eq!(
+            response.presence,
+            vec![PresenceRange {
+                start_call: 3,
+                end_call: 3
+            }]
+        );
+        let summary = session
+            .context_items
+            .iter()
+            .find(|item| item.kind == ContextItemKind::CompactionSummary)
+            .expect("current summary");
+        assert_eq!(
+            summary.presence,
+            vec![PresenceRange {
+                start_call: 2,
+                end_call: 3
+            }]
+        );
+    }
+
+    #[test]
+    fn command_shaped_and_unknown_records_remain_ignored() {
+        let session = parse_records(&[
+            message_record(
+                "u1",
+                None,
+                serde_json::json!({"role":"user","content":"hello"}),
+            ),
+            serde_json::json!({"type":"command","id":"cmd","parentId":"u1","command":"echo hello","output":"hello","message":{"role":"user","content":"not context"}}),
+            message_record(
+                "a1",
+                Some("cmd"),
+                serde_json::json!({"role":"assistant","content":"answer"}),
+            ),
+            serde_json::json!({"type":"future-event","id":"future","parentId":"a1","content":"ignored"}),
+            message_record(
+                "a2",
+                Some("future"),
+                serde_json::json!({"role":"assistant","content":"final"}),
+            ),
+        ]);
+        assert_eq!(suffixes(&session, 1), vec!["u1"]);
+        assert_eq!(suffixes(&session, 2), vec!["u1", "a1"]);
+        assert!(session
+            .context_items
+            .iter()
+            .all(|item| !matches!(item.payload, TokenizationPayload::CommandExecution { .. })));
+    }
+
+    #[test]
+    fn failed_tool_lookahead_uses_only_the_selected_branch() {
+        let session = parse_records(&[
+            message_record(
+                "u1",
+                None,
+                serde_json::json!({"role":"user","content":"run tools"}),
+            ),
+            message_record(
+                "a1",
+                Some("u1"),
+                serde_json::json!({"role":"assistant","content":[{"type":"toolCall","id":"selected-tool","name":"bash","arguments":{}},{"type":"toolCall","id":"other-tool","name":"bash","arguments":{}}]}),
+            ),
+            message_record(
+                "other-result",
+                Some("a1"),
+                serde_json::json!({"role":"toolResult","toolCallId":"other-tool","isError":true,"content":"unselected failure"}),
+            ),
+            message_record(
+                "selected-result",
+                Some("a1"),
+                serde_json::json!({"role":"toolResult","toolCallId":"selected-tool","isError":true,"content":"selected failure"}),
+            ),
+            message_record(
+                "a2",
+                Some("selected-result"),
+                serde_json::json!({"role":"assistant","content":"done"}),
+            ),
+        ]);
+        assert!(session.model_calls[0].tool_calls_after[0].failed);
+        assert!(!session.model_calls[0].tool_calls_after[1].failed);
+        assert_eq!(suffixes(&session, 2), vec!["u1", "a1", "selected-result"]);
     }
 
     #[test]
@@ -1695,5 +1518,114 @@ mod tests {
             .parse(&mut BufReader::new(file))
             .expect_err("must fail");
         assert!(error.to_string().contains("broken parent link"));
+        assert!(matches!(error, SourceError::InvalidStructure(_)));
+    }
+
+    #[test]
+    fn compaction_summary_is_required_but_explicit_empty_is_supported() {
+        for summary in [
+            None,
+            Some(serde_json::Value::Null),
+            Some(serde_json::json!(12)),
+        ] {
+            let mut compaction = serde_json::json!({
+                "type": "compaction",
+                "id": "c1",
+                "parentId": "a1",
+                "firstKeptEntryId": "a1",
+            });
+            if let Some(summary) = summary {
+                compaction["summary"] = summary;
+            }
+            let records = [
+                serde_json::json!({"type":"session","id":"summary-required"}),
+                message_record(
+                    "u1",
+                    None,
+                    serde_json::json!({"role":"user","content":"start"}),
+                ),
+                message_record(
+                    "a1",
+                    Some("u1"),
+                    serde_json::json!({"role":"assistant","stopReason":"stop","content":"done"}),
+                ),
+                compaction,
+            ];
+            let jsonl = records
+                .iter()
+                .map(|record| serde_json::to_string(record).expect("JSON record"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let error = PiSourceAdapter
+                .parse(&mut Cursor::new(jsonl))
+                .expect_err("missing or invalid summary must fail");
+            assert!(matches!(error, SourceError::RequiredField { .. }));
+        }
+
+        let session = parse_records(&[
+            serde_json::json!({"type":"session","id":"empty-summary"}),
+            message_record(
+                "u1",
+                None,
+                serde_json::json!({"role":"user","content":"start"}),
+            ),
+            message_record(
+                "a1",
+                Some("u1"),
+                serde_json::json!({"role":"assistant","stopReason":"stop","content":"done"}),
+            ),
+            serde_json::json!({
+                "type":"compaction",
+                "id":"c1",
+                "parentId":"a1",
+                "summary":"",
+                "firstKeptEntryId":"a1"
+            }),
+        ]);
+        let summary = session
+            .context_items
+            .iter()
+            .find(|item| item.kind == ContextItemKind::CompactionSummary)
+            .expect("summary item");
+        assert!(matches!(
+            summary.payload,
+            TokenizationPayload::CompactionSummary(ref text) if text.is_empty()
+        ));
+    }
+
+    #[test]
+    fn selected_source_usage_above_safe_integer_is_rejected() {
+        let records = [
+            serde_json::json!({"type":"session","id":"numeric"}),
+            message_record(
+                "u1",
+                None,
+                serde_json::json!({"role":"user","content":"start"}),
+            ),
+            message_record(
+                "a1",
+                Some("u1"),
+                serde_json::json!({
+                    "role":"assistant",
+                    "stopReason":"stop",
+                    "content":"done",
+                    "usage":{"input":9007199254740992u64}
+                }),
+            ),
+        ];
+        let jsonl = records
+            .iter()
+            .map(|record| serde_json::to_string(record).expect("JSON record"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let error = PiSourceAdapter
+            .parse(&mut Cursor::new(jsonl))
+            .expect_err("unsafe usage must fail");
+        assert!(matches!(
+            error,
+            SourceError::UnsafeInteger {
+                field: "usage.input"
+            }
+        ));
     }
 }

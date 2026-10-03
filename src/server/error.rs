@@ -1,0 +1,158 @@
+use crate::{analysis::AnalysisError, domain::SourceError};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use std::sync::Arc;
+use thiserror::Error;
+
+/// Non-cloneable causes are retained once and shared by flight subscribers.
+#[derive(Debug, Error)]
+pub(super) enum FlightError {
+    #[error("source session is invalid")]
+    Source(#[source] SourceError),
+    #[error("cannot read session")]
+    Io(#[source] std::io::Error),
+    #[error("session changed while it was being analysed")]
+    SourceChanged,
+    #[error("cannot fingerprint session")]
+    Fingerprint(#[source] std::time::SystemTimeError),
+    #[error("analysis failed")]
+    Analysis(#[source] AnalysisError),
+    #[error("cannot serialize analysis")]
+    Serialization(#[source] serde_json::Error),
+    #[error("analysis task failed")]
+    Task(#[source] tokio::task::JoinError),
+    #[error("analysis service is unavailable")]
+    Unavailable,
+}
+
+#[cfg(test)]
+#[path = "error_tests.rs"]
+mod tests;
+
+type Details = (StatusCode, &'static str, &'static str);
+const NOT_FOUND: Details = (
+    StatusCode::NOT_FOUND,
+    "SESSION_NOT_FOUND",
+    "session not found",
+);
+const READ_FAILED: Details = (
+    StatusCode::INTERNAL_SERVER_ERROR,
+    "SESSION_ANALYSIS_FAILED",
+    "cannot read session",
+);
+const INVALID_SOURCE: Details = (
+    StatusCode::UNPROCESSABLE_ENTITY,
+    "SESSION_PARSE_FAILED",
+    "source session is invalid",
+);
+const INTERNAL: Details = (
+    StatusCode::INTERNAL_SERVER_ERROR,
+    "SESSION_ANALYSIS_FAILED",
+    "internal server error",
+);
+
+fn io_details(error: &std::io::Error) -> Details {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        NOT_FOUND
+    } else {
+        READ_FAILED
+    }
+}
+fn source_details(error: &SourceError) -> Details {
+    match error {
+        SourceError::Io(error) => io_details(error),
+        _ => INVALID_SOURCE,
+    }
+}
+
+impl FlightError {
+    /// Fixed category only: never includes a cause, path, ID, transcript, or panic.
+    pub(super) fn safe_diagnostic(&self) -> &'static str {
+        match self {
+            Self::Source(SourceError::Io(_)) | Self::Io(_) => "analysis_failure category=io",
+            Self::Source(_) => "analysis_failure category=source",
+            Self::SourceChanged => "analysis_failure category=source_changed",
+            Self::Fingerprint(_) => "analysis_failure category=fingerprint",
+            Self::Analysis(_) => "analysis_failure category=invariant",
+            Self::Serialization(_) => "analysis_failure category=serialization",
+            Self::Task(_) => "analysis_failure category=task",
+            Self::Unavailable => "analysis_failure category=unavailable",
+        }
+    }
+
+    fn details(&self) -> Details {
+        match self {
+            Self::Source(error) => source_details(error),
+            Self::Io(error) => io_details(error),
+            Self::SourceChanged => (
+                StatusCode::CONFLICT,
+                "SESSION_SOURCE_CHANGED",
+                "session changed while it was being analysed",
+            ),
+            Self::Fingerprint(_) => READ_FAILED,
+            Self::Analysis(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "SESSION_ANALYSIS_FAILED",
+                "analysis failed",
+            ),
+            Self::Unavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "SESSION_ANALYSIS_FAILED",
+                "analysis service is unavailable",
+            ),
+            Self::Serialization(_) | Self::Task(_) => INTERNAL,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum AppError {
+    #[error("cannot read session: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("source session is invalid: {0}")]
+    Source(#[from] SourceError),
+    #[error("analysis failed: {0}")]
+    Analysis(#[from] AnalysisError),
+    #[error("{0}")]
+    Shared(#[source] Arc<FlightError>),
+    #[error("catalogue refresh is unavailable")]
+    CatalogRefreshUnavailable,
+    #[error("{0}")]
+    Message(String),
+    #[error("cannot serialize response")]
+    Serialization(#[from] serde_json::Error),
+    #[error("cannot build response")]
+    ResponseBuild(#[from] axum::http::Error),
+    #[error("unknown session")]
+    NotFound,
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = match &self {
+            Self::NotFound => NOT_FOUND,
+            Self::Io(error) => io_details(error),
+            Self::Source(error) => source_details(error),
+            Self::Analysis(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "SESSION_ANALYSIS_FAILED",
+                "analysis failed",
+            ),
+            Self::Shared(error) => error.details(),
+            Self::CatalogRefreshUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "CATALOG_REFRESH_UNAVAILABLE",
+                "catalogue refresh is unavailable",
+            ),
+            Self::Message(_) | Self::Serialization(_) | Self::ResponseBuild(_) => INTERNAL,
+        };
+        (
+            status,
+            Json(serde_json::json!({ "error": { "code": code, "message": message } })),
+        )
+            .into_response()
+    }
+}

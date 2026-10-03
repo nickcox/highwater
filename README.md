@@ -30,25 +30,25 @@ Open the printed localhost URL. The server binds only to `127.0.0.1` and never m
 - **Selected item** identifies and outlines only the exact ribbon. Compaction lineage remains available through direct connectors, item details, and lineage actions; sibling sources are not treated as one visual selection group, and other ribbons stay at normal opacity.
 - Press `Escape` to clear the selected item, then a pinned call. **Clear selected item and pinned call** clears both at once.
 
-The **Cache / Cost / Off** track reports only policy-supported, provider-usage-derived cache buckets and Pi-calculated per-call totals. Cache ratios and cost are not assigned to individual items; unsupported, missing, partial, and measured-zero data remain distinct. The mode controls and compact legend sit beside the economics plot; its exact readout is a normal-flow chart footer that remains aligned while the River pans. The track keeps quantitative marks on the shared call axis and places compaction, target-change, and cache-share observations in a bounded event lane with explicit event counts, keyboard/touch details, and exact call mappings. Ribbon thickness and Composition use local item token estimates, not provider prompt totals. Genuinely unavailable token geometry is shown explicitly rather than replaced with serialized-byte weights. Serialized size remains available as item diagnostics. Compaction connectors show structural replacement only; their width does not imply token contribution. These economics mappings are audited against Pi v0.78.0 adapters and should not be read as universal provider semantics.
+The **Cache / Cost / Off** track reports only policy-supported, provider-usage-derived cache buckets and Pi-calculated per-call totals. Cache ratios and cost are not assigned to individual items; unsupported, missing, partial, and measured-zero data remain distinct. The mode controls and compact legend sit beside the economics plot; its exact readout is a normal-flow chart footer that remains aligned while the River pans. The track keeps quantitative marks on the shared call axis and places compaction, target-change, and cache-share observations in a bounded event lane with explicit event counts, keyboard/touch details, and exact call mappings. Ribbon thickness and Composition use local item token estimates, not provider prompt totals. Genuinely unavailable token geometry is shown explicitly rather than replaced with serialized-byte weights. The legacy `displayWeight` field remains a serialized-byte diagnostic, never a token-geometry fallback. Image previews identify encoded source-data size (usually base64), not decoded image bytes. Compaction connectors show structural replacement only; their width does not imply token contribution. These economics mappings are audited against Pi v0.78.0 adapters and should not be read as universal provider semantics.
 
 ## Development checks
 
+Use Rust **1.88 or newer**, Node **24 LTS or newer**, npm, Bash, Python 3, and curl. The Rust minimum is declared in `Cargo.toml` and tested with 1.88.0: the locked dependency graph includes `ruzstd` requiring 1.87, and pinned `tiktoken` 4.1.2 uses let-chains requiring 1.88. Dependency changes must preserve this floor or explicitly advance and test it; the edition alone does not establish compatibility.
+
 ```bash
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test --all-targets
-npm --prefix web ci
-npm --prefix web run format:check
-npm --prefix web run check
-npm --prefix web run test
-npm --prefix web run build
-npm --prefix web run test:browser:install
-npm --prefix web run test:browser
-scripts/browser-smoke-integrated.sh
-cargo build --release
-TOKENPLUME_BROWSER_BUILD_PROFILE=release scripts/browser-smoke-integrated.sh
+scripts/check.sh          # locked installs, Rust/frontend checks, live contract, embedded release build
+scripts/check.sh --full   # also Chromium, mocked + debug/release integrated browser checks, large benchmark
+
+# Optional focused checks:
+scripts/check-contract.sh
+rustup toolchain install 1.88.0 --profile minimal --component rustfmt --component clippy
+RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
+
+`check-contract.sh` runs a test-only Rust producer using the production parser/analyzer/serializer, then passes 65 fresh checked-in/synthetic outputs to the production TypeScript `indexAnalysis` validator. Cases cover all tokenization policies, opaque profile identities, exposure/economics coverage, terminal summaries, safe-number boundaries, and aggregate exhaustion. Controlled estimates use the same production derivation stages without giant test payloads; invalid source/normalized inputs must fail in Rust before export. The temporary export directory is always removed, and the contract suite fails rather than silently skipping when exports are missing. Its standalone Vitest config keeps normal frontend tests independent of generated files.
+
+`.github/workflows/check.yml` defines Rust 1.88/stable checks and full Node 24 contract/browser validation on GitHub Actions. Local checks are independently reproducible; a newly added workflow is not evidence that a remote CI run has completed.
 
 Frontend formatting is configured in `web/.prettierrc.json` for Svelte and TypeScript source, tests, and root TypeScript configs; generated `web/dist/` assets are excluded. Run `npm --prefix web run format` to apply it and `npm --prefix web run format:check` to verify it.
 
@@ -61,11 +61,19 @@ For generated performance validation, run `scripts/benchmark-context-river.sh la
 ## Architecture
 
 - Rust owns source-adapter parsing, branch/context reconstruction, offline tokenization, reconciliation, derived metrics, and the Axum API.
+- Pi graph validation and typed interpretation precede stable-index reconstruction and finalization. Normalized references, presence, and raw safe integers are validated before a borrowed preparation stage plans unique item/profile estimates; call/item derivation and DTO assembly reuse that plan.
+- Catalogue scheduling owns debounce/retry/rate/shutdown decisions independently of discovery. One analysis service owns the four-entry/16-MiB response cache and active flights under one short lock, with at most two blocking analysis jobs. Flights register before permit acquisition and survive request cancellation; typed shared failures map centrally, and best-effort category reporting cannot strand a completed flight. These are response-cache/concurrency limits, not total process-memory bounds.
 - Source-neutral normalized domain types keep provider usage/costs, calculated estimates, and missing-value semantics distinct.
 - TypeScript validates and indexes the normalized analysis response; it does not tokenize or infer missing payloads.
 - D3 computes scales, SVG ribbon paths, and the Composition treemap layout.
 - Svelte owns rendering and interaction state.
 
 The primary endpoint is `GET /api/sessions/{id}/analysis`, where `id` is the URL-encoded canonical session path returned by `GET /api/sessions`. It contains labels, structural metadata, bounded reader-facing content previews, and normalized economics, but it does not duplicate full raw JSONL records or provider payloads. `ContextItem.label` is a bounded source-aware title/accessibility label; Pi tool results use their matching selected-branch invocation when available, while previews remain separate content and are never reinterpreted as arguments. Top-level `schemaVersion` is the sole public envelope-version marker; the current response schema is version 7. Responses include an ETag and support `If-None-Match` with an empty-body `304 Not Modified` response.
+
+Raw public analysis integers are limited to `Number.MAX_SAFE_INTEGER`; invalid source/normalized values are rejected before successful serialization. Derived range exhaustion remains qualified `null`, never a recovered total or misleading subtotal. Exposure coverage distinguishes an observed numeric zero, partial available observations, and unavailable values; terminal summaries are structural/selectable but have no fabricated exposure. Known request framing is a text-only approximation for supported chat routes, not universal provider serialization or billing.
+
+Internal output/cache identity is **11**, tokenization profile identity is **v4** (opaque, delimiter-safe IDs preserving absent versus literal target values), and payload fingerprint encoding remains **3**. These are not additional public envelope-version fields. Source verification retains size/mtime identity: rewrites preserving both can escape detection, and filesystem races are not completely eliminated. Shutdown drain timeouts acknowledge that blocking work may remain; detached scan results cannot publish after shutdown.
+
+The completed implementation and validation evidence are recorded in [backend maintainability notes](plans/backend-maintainability-notes.md), following the [milestone plan](plans/backend-maintainability-implementation-plan.md). Persistence and incremental analysis remain deferred rather than being implied by these changes.
 
 `GET /api/sessions` returns the current catalogue with generation, revision, availability, and ETag headers. `GET /api/events` provides content-free SSE invalidation hints; browsers refetch the catalogue rather than treating SSE as an event log. Live discovery is local and remains usable through ordinary HTTP when SSE or filesystem watching is unavailable. If filesystem watching cannot be initialized for an existing readable root, the server starts in degraded mode and performs bounded request-driven catalogue refreshes.

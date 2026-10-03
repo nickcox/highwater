@@ -1,0 +1,111 @@
+use super::*;
+
+/// Borrowed, frozen plan. Registry mutation ends before any metrics are derived.
+/// Sparse per-item profile maps avoid an items-by-profiles matrix and repeated
+/// estimate copies for every presence.
+pub(super) struct PreparedAnalysis<'a> {
+    pub registry: ProfileRegistry,
+    pub works: Vec<CallWork<'a>>,
+    pub item_lookup: HashMap<&'a str, &'a NormalizedContextItem>,
+    pub transitions: Vec<DerivedTransition<'a>>,
+    pub destination_estimates: Vec<HashMap<&'a str, EstimateIndex>>,
+    pub item_estimates: Vec<BTreeMap<String, EstimateIndex>>,
+    pub methods: BTreeMap<String, usize>,
+    pub fingerprint_ms: f64,
+    pub tokenize_ms: f64,
+}
+
+pub(super) fn prepare<'a>(
+    session: &'a NormalizedSession,
+    validated: &ValidatedSession<'a>,
+    config: AnalysisConfig,
+) -> PreparedAnalysis<'a> {
+    let mut registry = ProfileRegistry::default();
+    let item_lookup = validated
+        .item_indices
+        .iter()
+        .map(|(id, index)| (*id, &session.context_items[*index]))
+        .collect();
+    let started = Instant::now();
+    let fingerprints = session
+        .context_items
+        .iter()
+        .map(|item| registry.fingerprint_item(item))
+        .collect::<Vec<_>>();
+    let fingerprint_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let started = Instant::now();
+    let mut planned =
+        vec![HashMap::<ProfileIndex, EstimateIndex>::new(); session.context_items.len()];
+    let mut plan_estimate =
+        |item_index: usize, profile_index: ProfileIndex, registry: &mut ProfileRegistry| {
+            *planned[item_index].entry(profile_index).or_insert_with(|| {
+                registry.estimate_index_at_profile(
+                    &session.context_items[item_index],
+                    fingerprints[item_index],
+                    profile_index,
+                )
+            })
+        };
+    let mut methods = BTreeMap::<String, usize>::new();
+    let works = session
+        .model_calls
+        .iter()
+        .map(|call| {
+            let profile_index = registry.profile_index(&call.target, config.tokenization);
+            let estimate_indexes = call
+                .context_item_ids
+                .iter()
+                .map(|id| {
+                    plan_estimate(
+                        validated.item_indices[id.as_str()],
+                        profile_index,
+                        &mut registry,
+                    )
+                })
+                .collect();
+            *methods
+                .entry(registry.profile_at(profile_index).method.as_str().into())
+                .or_default() += 1;
+            CallWork {
+                call,
+                profile_index,
+                context_membership: call.context_item_ids.iter().map(String::as_str).collect(),
+                estimate_indexes,
+            }
+        })
+        .collect::<Vec<_>>();
+    let transitions = works
+        .iter()
+        .enumerate()
+        .map(|(position, work)| derive_transition(&works, position, work))
+        .collect::<Vec<_>>();
+    let mut destination_estimates = vec![HashMap::new(); works.len()];
+    for position in 1..works.len() {
+        for id in &transitions[position].dropped_ids {
+            let item_index = validated.item_indices[*id];
+            let index = plan_estimate(item_index, works[position].profile_index, &mut registry);
+            destination_estimates[position]
+                .insert(session.context_items[item_index].id.as_str(), index);
+        }
+    }
+    let item_estimates = planned
+        .into_iter()
+        .map(|estimates| {
+            estimates
+                .into_iter()
+                .map(|(profile, estimate)| (registry.profile_at(profile).id.clone(), estimate))
+                .collect()
+        })
+        .collect();
+    PreparedAnalysis {
+        registry,
+        works,
+        item_lookup,
+        transitions,
+        destination_estimates,
+        item_estimates,
+        methods,
+        fingerprint_ms,
+        tokenize_ms: started.elapsed().as_secs_f64() * 1000.0,
+    }
+}

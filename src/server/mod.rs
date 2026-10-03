@@ -1,40 +1,46 @@
+mod analysis;
 mod assets;
+mod catalog;
+mod error;
 mod events;
+mod routes;
+mod scan;
+use routes::router;
 #[path = "watch.rs"]
 mod watcher;
 
-use crate::{
-    analysis::{analyze, AnalysisConfig, AnalysisError, TokenizationPolicy},
-    domain::SourceError,
-    pi::PiSourceAdapter,
+use crate::analysis::{AnalysisConfig, TokenizationPolicy};
+#[cfg(test)]
+use analysis::{
+    analysis_cache_key, classify_parse_failure, etag_for_key, AnalysisCache, AnalysisCacheKey,
+    AnalysisExecutor, AnalysisFlight, CachedResponse,
 };
+use analysis::{execute_analysis, AnalysisService};
+#[cfg(test)]
 use axum::{
-    extract::{Path, State},
-    http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
-    routing::get,
-    Json, Router,
+    http::{header, StatusCode},
+    response::IntoResponse,
 };
+use catalog::{canonical_root, discover, ScanError, SessionCatalog};
 use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
+use error::AppError;
+#[cfg(test)]
+use error::FlightError;
 use events::{LiveAvailability, LiveState};
+use scan::{FailureDisposition, ScanScheduler};
 use serde::Serialize;
-use serde_json::Value;
 use std::{
-    collections::{HashMap, HashSet},
-    fs::{self, File},
-    io::{BufRead, BufReader},
     net::SocketAddr,
     path::{Path as FsPath, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex, RwLock,
+        Arc,
     },
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
-use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot, watch, Semaphore},
+    sync::{mpsc, oneshot, watch},
     task::JoinHandle,
 };
 
@@ -69,74 +75,17 @@ pub(crate) struct Args {
     pub perf_diagnostics: bool,
 }
 
-type AnalysisExecutor = dyn Fn(PathBuf, AnalysisConfig, AnalysisCacheKey) -> Result<Arc<CachedResponse>, FlightError>
-    + Send
-    + Sync;
-
-#[derive(Clone)]
-struct AnalysisRuntime {
-    cache: Arc<Mutex<AnalysisCache>>,
-    flights: Arc<Mutex<HashMap<AnalysisCacheKey, Arc<AnalysisFlight>>>>,
-    permits: Arc<Semaphore>,
-    executor: Arc<AnalysisExecutor>,
-}
+type ScanOperation =
+    dyn Fn(PathBuf, Arc<AtomicBool>) -> Result<Vec<SessionFile>, ScanError> + Send + Sync;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
     catalog: Arc<SessionCatalog>,
     live_state: watch::Sender<LiveState>,
     shutdown: watch::Sender<bool>,
-    coordinator: Option<Arc<ScanCoordinator>>,
+    coordinator: Arc<ScanCoordinator>,
     config: AnalysisConfig,
-    analysis: Arc<AnalysisRuntime>,
-}
-
-#[derive(Debug, Clone)]
-struct CatalogSnapshot {
-    generation: String,
-    revision: u64,
-    sessions: Arc<[SessionFile]>,
-}
-
-#[derive(Debug)]
-struct SessionCatalog {
-    snapshot: RwLock<CatalogSnapshot>,
-}
-
-impl SessionCatalog {
-    fn new(generation: String, sessions: Vec<SessionFile>) -> Self {
-        Self {
-            snapshot: RwLock::new(CatalogSnapshot {
-                generation,
-                revision: 0,
-                sessions: Arc::from(sessions.into_boxed_slice()),
-            }),
-        }
-    }
-
-    fn snapshot(&self) -> Result<CatalogSnapshot, AppError> {
-        self.snapshot
-            .read()
-            .map(|snapshot| snapshot.clone())
-            .map_err(|_| AppError::Message("session catalogue is unavailable".into()))
-    }
-
-    fn install(&self, sessions: Vec<SessionFile>) -> Result<bool, AppError> {
-        let sessions: Arc<[SessionFile]> = Arc::from(sessions.into_boxed_slice());
-        let mut snapshot = self
-            .snapshot
-            .write()
-            .map_err(|_| AppError::Message("session catalogue is unavailable".into()))?;
-        if snapshot.sessions.as_ref() == sessions.as_ref() {
-            return Ok(false);
-        }
-        snapshot.revision = snapshot
-            .revision
-            .checked_add(1)
-            .ok_or_else(|| AppError::Message("session catalogue revision exhausted".into()))?;
-        snapshot.sessions = sessions;
-        Ok(true)
-    }
+    analysis: Arc<AnalysisService>,
 }
 
 #[derive(Debug, Default)]
@@ -152,6 +101,7 @@ struct Diagnostics {
     catalogue_degraded_refreshes: AtomicU64,
     catalogue_sessions: AtomicU64,
     catalogue_refresh_ms: AtomicU64,
+    scan_shutdown_drain_timeouts: AtomicU64,
 }
 
 #[derive(Debug)]
@@ -181,135 +131,6 @@ impl ScanCoordinator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct AnalysisCacheKey {
-    path: PathBuf,
-    byte_size: u64,
-    modified_nanos: u128,
-    tokenization: TokenizationPolicy,
-    schema_version: u32,
-    output_version: u32,
-}
-
-#[derive(Debug)]
-struct CachedResponse {
-    body: bytes::Bytes,
-    etag: String,
-    approximate_bytes: usize,
-}
-
-#[derive(Debug)]
-struct CachedEntry {
-    last_used: u64,
-    response: Arc<CachedResponse>,
-}
-
-#[derive(Debug)]
-struct AnalysisCache {
-    entries: HashMap<AnalysisCacheKey, CachedEntry>,
-    clock: u64,
-    capacity: usize,
-    byte_capacity: usize,
-    bytes: usize,
-    hits: u64,
-    evictions: u64,
-}
-
-#[derive(Debug)]
-struct AnalysisFlight {
-    result: watch::Sender<Option<Result<Arc<CachedResponse>, FlightError>>>,
-}
-
-#[derive(Debug, Clone)]
-enum FlightError {
-    Source(String),
-    SourceChanged,
-    Fingerprint(String),
-    Analysis(String),
-    Message(String),
-}
-
-impl FlightError {
-    fn into_app_error(self) -> AppError {
-        match self {
-            Self::Source(message) => AppError::SourceMessage(message),
-            Self::SourceChanged => AppError::SourceChanged,
-            Self::Fingerprint(message) => AppError::Fingerprint(message),
-            Self::Analysis(message) => AppError::AnalysisMessage(message),
-            Self::Message(message) => AppError::Message(message),
-        }
-    }
-}
-
-impl Default for AnalysisCache {
-    fn default() -> Self {
-        Self::with_limits(4, 16 * 1024 * 1024)
-    }
-}
-
-impl AnalysisCache {
-    #[cfg(test)]
-    fn new(capacity: usize) -> Self {
-        Self::with_limits(capacity, 16 * 1024 * 1024)
-    }
-
-    fn with_limits(capacity: usize, byte_capacity: usize) -> Self {
-        Self {
-            entries: HashMap::new(),
-            clock: 0,
-            capacity: capacity.max(1),
-            byte_capacity: byte_capacity.max(1),
-            bytes: 0,
-            hits: 0,
-            evictions: 0,
-        }
-    }
-
-    fn get(&mut self, key: &AnalysisCacheKey) -> Option<Arc<CachedResponse>> {
-        self.clock = self.clock.saturating_add(1);
-        let last_used = self.clock;
-        let cached = self.entries.get_mut(key)?;
-        self.hits = self.hits.saturating_add(1);
-        cached.last_used = last_used;
-        Some(Arc::clone(&cached.response))
-    }
-
-    fn insert(&mut self, key: AnalysisCacheKey, response: Arc<CachedResponse>) {
-        if response.approximate_bytes > self.byte_capacity {
-            return;
-        }
-        if let Some(previous) = self.entries.remove(&key) {
-            self.bytes = self
-                .bytes
-                .saturating_sub(previous.response.approximate_bytes);
-        }
-        self.clock = self.clock.saturating_add(1);
-        let last_used = self.clock;
-        self.bytes = self.bytes.saturating_add(response.approximate_bytes);
-        self.entries.insert(
-            key,
-            CachedEntry {
-                last_used,
-                response,
-            },
-        );
-        while self.entries.len() > self.capacity || self.bytes > self.byte_capacity {
-            let Some(oldest_key) = self
-                .entries
-                .iter()
-                .min_by_key(|(_, cached)| cached.last_used)
-                .map(|(key, _)| key.clone())
-            else {
-                break;
-            };
-            if let Some(entry) = self.entries.remove(&oldest_key) {
-                self.bytes = self.bytes.saturating_sub(entry.response.approximate_bytes);
-                self.evictions = self.evictions.saturating_add(1);
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionFile {
@@ -325,105 +146,28 @@ pub(crate) struct SessionFile {
     modified_nanos: Option<u128>,
 }
 
-#[derive(Debug, Error)]
-pub(crate) enum AppError {
-    #[error("cannot read session: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("source session is invalid: {0}")]
-    Source(#[from] SourceError),
-    #[error("source session is invalid: {0}")]
-    SourceMessage(String),
-    #[error("analysis failed: {0}")]
-    Analysis(#[from] AnalysisError),
-    #[error("analysis failed: {0}")]
-    AnalysisMessage(String),
-    #[error("cannot fingerprint session: {0}")]
-    Fingerprint(String),
-    #[error("session changed while it was being analysed")]
-    SourceChanged,
-    #[error("catalogue refresh is unavailable")]
-    CatalogRefreshUnavailable,
-    #[error("{0}")]
-    Message(String),
-    #[error("unknown session")]
-    NotFound,
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        let (status, code, message) = match &self {
-            Self::NotFound => (
-                StatusCode::NOT_FOUND,
-                "SESSION_NOT_FOUND",
-                "session not found",
-            ),
-            Self::Io(error) if error.kind() == std::io::ErrorKind::NotFound => (
-                StatusCode::NOT_FOUND,
-                "SESSION_NOT_FOUND",
-                "session not found",
-            ),
-            Self::SourceChanged => (
-                StatusCode::CONFLICT,
-                "SESSION_SOURCE_CHANGED",
-                "session changed while it was being analysed",
-            ),
-            Self::Source(_) | Self::SourceMessage(_) => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "SESSION_PARSE_FAILED",
-                "source session is invalid",
-            ),
-            Self::CatalogRefreshUnavailable => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "CATALOG_REFRESH_UNAVAILABLE",
-                "catalogue refresh is unavailable",
-            ),
-            Self::Io(_) | Self::Fingerprint(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "SESSION_ANALYSIS_FAILED",
-                "cannot read session",
-            ),
-            Self::Analysis(_) | Self::AnalysisMessage(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "SESSION_ANALYSIS_FAILED",
-                "analysis failed",
-            ),
-            Self::Message(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "SESSION_ANALYSIS_FAILED",
-                "internal server error",
-            ),
-        };
-        (
-            status,
-            Json(serde_json::json!({ "error": { "code": code, "message": message } })),
-        )
-            .into_response()
-    }
-}
-
 const HINT_CHANNEL_CAPACITY: usize = 256;
-const DEBOUNCE_QUIET: Duration = Duration::from_millis(200);
-const DEBOUNCE_MAX: Duration = Duration::from_secs(1);
-const RETRY_DELAYS: [Duration; 3] = [
-    Duration::from_millis(100),
-    Duration::from_millis(250),
-    Duration::from_millis(500),
-];
-const DEGRADED_SCAN_INTERVAL: Duration = Duration::from_secs(1);
 const DEGRADED_SCAN_DEADLINE: Duration = Duration::from_secs(5);
 const SCAN_SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
 const ANALYSIS_CONCURRENCY_LIMIT: usize = 2;
 
+type WatcherStarter = fn(
+    &FsPath,
+    mpsc::Sender<watcher::WatchHint>,
+    Arc<watcher::WatchSignals>,
+) -> notify::Result<watcher::WatcherHandle>;
+
 pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let configured_root = args.session_root.unwrap_or_else(|| {
-        PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".pi/agent/sessions")
-    });
-    let root = tokio::task::spawn_blocking(move || canonical_root(&configured_root)).await??;
-    let generation = new_generation()?;
-    let diagnostics = Arc::new(Diagnostics::default());
-    let signals = Arc::new(watcher::WatchSignals::default());
-    let (hint_sender, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
-    let watcher = match watcher::start(&root, hint_sender, Arc::clone(&signals)) {
+    run_with_watcher(args, watcher::start).await
+}
+
+fn start_watcher_or_degraded(
+    root: &FsPath,
+    hint_sender: mpsc::Sender<watcher::WatchHint>,
+    signals: &Arc<watcher::WatchSignals>,
+    start_watcher: WatcherStarter,
+) -> Option<watcher::WatcherHandle> {
+    match start_watcher(root, hint_sender, Arc::clone(signals)) {
         Ok(watcher) => Some(watcher),
         Err(_) => {
             // A readable root still has useful request-driven discovery even
@@ -432,7 +176,22 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             signals.watcher_failed.store(true, Ordering::Release);
             None
         }
-    };
+    }
+}
+
+async fn run_with_watcher(
+    args: Args,
+    start_watcher: WatcherStarter,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let configured_root = args.session_root.unwrap_or_else(|| {
+        PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".pi/agent/sessions")
+    });
+    let root = tokio::task::spawn_blocking(move || canonical_root(&configured_root)).await??;
+    let generation = new_generation()?;
+    let diagnostics = Arc::new(Diagnostics::default());
+    let signals = Arc::new(watcher::WatchSignals::default());
+    let (hint_sender, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
+    let watcher = start_watcher_or_degraded(&root, hint_sender, &signals, start_watcher);
 
     let initial_root = root.clone();
     let sessions = tokio::task::spawn_blocking(move || discover(&initial_root, None)).await??;
@@ -461,14 +220,19 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let worker_root = root.clone();
     let worker_diagnostics = Arc::clone(&diagnostics);
     let worker_signals = Arc::clone(&signals);
+    let worker_shutdown = shutdown.subscribe();
     let worker = tokio::spawn(scan_worker(
-        worker_root,
-        worker_catalog,
-        worker_live_state,
+        ScanWorkerContext {
+            root: worker_root,
+            catalog: worker_catalog,
+            live_state: worker_live_state,
+            signals: worker_signals,
+            diagnostics: worker_diagnostics,
+            shutdown: worker_shutdown,
+            scanner: Arc::new(|root, cancelled| discover(&root, Some(cancelled.as_ref()))),
+        },
         hint_receiver,
         control_receiver,
-        worker_signals,
-        worker_diagnostics,
     ));
 
     let perf_diagnostics = args.perf_diagnostics;
@@ -476,17 +240,12 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         catalog,
         live_state,
         shutdown: shutdown.clone(),
-        coordinator: Some(Arc::clone(&coordinator)),
+        coordinator: Arc::clone(&coordinator),
         config: AnalysisConfig {
             tokenization: args.tokenization.into(),
             perf_diagnostics,
         },
-        analysis: Arc::new(AnalysisRuntime {
-            cache: Arc::new(Mutex::new(AnalysisCache::default())),
-            flights: Arc::new(Mutex::new(HashMap::new())),
-            permits: Arc::new(Semaphore::new(ANALYSIS_CONCURRENCY_LIMIT)),
-            executor: Arc::new(execute_analysis),
-        }),
+        analysis: Arc::new(AnalysisService::new(Arc::new(execute_analysis))),
     };
     let app = router(state);
     let address = SocketAddr::from(([127, 0, 0, 1], args.port));
@@ -497,7 +256,13 @@ pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     coordinator.shutdown().await;
-    let _ = tokio::time::timeout(SCAN_SHUTDOWN_DRAIN, worker).await;
+    match tokio::time::timeout(SCAN_SHUTDOWN_DRAIN, worker).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => eprintln!("catalogue worker failed during shutdown: {error}"),
+        Err(_) => eprintln!(
+            "catalogue worker shutdown timed out; blocking catalogue work may still be running"
+        ),
+    }
     drop(watcher);
     if perf_diagnostics {
         print_diagnostics(&diagnostics);
@@ -512,7 +277,7 @@ async fn shutdown_signal(shutdown: watch::Sender<bool>) {
 
 fn print_diagnostics(diagnostics: &Diagnostics) {
     eprintln!(
-        "live_updates_perf watch_events_received={} watch_hints_dropped={} watch_refreshes_started={} watch_refreshes_changed={} watch_refreshes_unchanged={} watch_errors={} catalogue_refresh_failures={} catalogue_refresh_retries={} catalogue_degraded_refreshes={} catalogue_sessions={} catalogue_refresh_ms={}",
+        "live_updates_perf watch_events_received={} watch_hints_dropped={} watch_refreshes_started={} watch_refreshes_changed={} watch_refreshes_unchanged={} watch_errors={} catalogue_refresh_failures={} catalogue_refresh_retries={} catalogue_degraded_refreshes={} catalogue_sessions={} catalogue_refresh_ms={} scan_shutdown_drain_timeouts={}",
         diagnostics.watch_events_received.load(Ordering::Relaxed),
         diagnostics.watch_hints_dropped.load(Ordering::Relaxed),
         diagnostics.watch_refreshes_started.load(Ordering::Relaxed),
@@ -524,6 +289,9 @@ fn print_diagnostics(diagnostics: &Diagnostics) {
         diagnostics.catalogue_degraded_refreshes.load(Ordering::Relaxed),
         diagnostics.catalogue_sessions.load(Ordering::Relaxed),
         diagnostics.catalogue_refresh_ms.load(Ordering::Relaxed),
+        diagnostics
+            .scan_shutdown_drain_timeouts
+            .load(Ordering::Relaxed),
     );
 }
 
@@ -531,178 +299,6 @@ fn new_generation() -> Result<String, AppError> {
     let mut bytes = [0_u8; 16];
     getrandom::fill(&mut bytes).map_err(|error| AppError::Message(error.to_string()))?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
-}
-
-fn canonical_root(root: &FsPath) -> Result<PathBuf, AppError> {
-    let canonical = fs::canonicalize(root).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            AppError::Message("session root does not exist".into())
-        } else {
-            AppError::Io(error)
-        }
-    })?;
-    if !fs::metadata(&canonical)?.is_dir() {
-        return Err(AppError::Message("session root is not a directory".into()));
-    }
-    Ok(canonical)
-}
-
-fn session_listing_metadata(
-    path: &FsPath,
-    file_name: &str,
-) -> std::io::Result<(String, Option<String>, Option<DateTime<Utc>>)> {
-    let first_line = BufReader::new(File::open(path)?)
-        .lines()
-        .next()
-        .transpose()?;
-    let header = first_line
-        .as_deref()
-        .and_then(|line| serde_json::from_str::<Value>(line).ok());
-    let working_directory = header
-        .as_ref()
-        .and_then(|value| value.get("cwd"))
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    let started_at = header
-        .as_ref()
-        .and_then(|value| value.get("timestamp"))
-        .and_then(Value::as_str)
-        .and_then(|timestamp| timestamp.parse::<DateTime<Utc>>().ok());
-    let stem = file_name.strip_suffix(".jsonl").unwrap_or(file_name);
-    let suffix = stem
-        .rsplit_once('_')
-        .map(|(_, suffix)| suffix)
-        .filter(|suffix| !suffix.is_empty())
-        .map(|suffix| suffix.chars().take(8).collect::<String>());
-    let project = working_directory
-        .as_deref()
-        .and_then(|directory| FsPath::new(directory).file_name())
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty());
-    let timestamp_label = started_at.map(|timestamp| timestamp.format("%b %d %H:%M").to_string());
-    let display_name = match (project, timestamp_label, suffix) {
-        (Some(project), Some(timestamp), Some(suffix)) => {
-            format!("{project} · {timestamp} · {suffix}")
-        }
-        (Some(project), Some(timestamp), None) => format!("{project} · {timestamp}"),
-        (Some(project), None, Some(suffix)) => format!("{project} · {suffix}"),
-        _ => stem.chars().take(48).collect(),
-    };
-    Ok((display_name, working_directory, started_at))
-}
-
-#[derive(Debug, thiserror::Error)]
-enum ScanError {
-    #[error("transient catalogue discovery failure: {0}")]
-    Transient(String),
-    #[error("catalogue discovery cancelled")]
-    Cancelled,
-}
-
-fn discover(root: &FsPath, cancelled: Option<&AtomicBool>) -> Result<Vec<SessionFile>, ScanError> {
-    let mut output = Vec::new();
-    let mut identities = HashSet::new();
-
-    fn walk(
-        root: &FsPath,
-        path: &FsPath,
-        output: &mut Vec<SessionFile>,
-        identities: &mut HashSet<PathBuf>,
-        cancelled: Option<&AtomicBool>,
-    ) -> Result<(), ScanError> {
-        if cancelled.is_some_and(|value| value.load(Ordering::Acquire)) {
-            return Err(ScanError::Cancelled);
-        }
-        let entries =
-            fs::read_dir(path).map_err(|error| ScanError::Transient(error.to_string()))?;
-        for entry in entries {
-            if cancelled.is_some_and(|value| value.load(Ordering::Acquire)) {
-                return Err(ScanError::Cancelled);
-            }
-            let entry = entry.map_err(|error| ScanError::Transient(error.to_string()))?;
-            let candidate = entry.path();
-            let file_type = entry
-                .file_type()
-                .map_err(|error| ScanError::Transient(error.to_string()))?;
-            if file_type.is_symlink() {
-                continue;
-            }
-            if file_type.is_dir() {
-                walk(root, &candidate, output, identities, cancelled)?;
-                continue;
-            }
-            if !file_type.is_file()
-                || candidate
-                    .extension()
-                    .and_then(|extension| extension.to_str())
-                    != Some("jsonl")
-            {
-                continue;
-            }
-
-            let metadata = entry
-                .metadata()
-                .map_err(|error| ScanError::Transient(error.to_string()))?;
-            let before = fs::symlink_metadata(&candidate)
-                .map_err(|error| ScanError::Transient(error.to_string()))?;
-            if !before.file_type().is_file() {
-                return Err(ScanError::Transient(
-                    "session entry changed type during discovery".into(),
-                ));
-            }
-            let canonical = fs::canonicalize(&candidate)
-                .map_err(|error| ScanError::Transient(error.to_string()))?;
-            if !canonical.starts_with(root) {
-                return Err(ScanError::Transient(
-                    "session entry escaped the watched root".into(),
-                ));
-            }
-            let after = fs::symlink_metadata(&candidate)
-                .map_err(|error| ScanError::Transient(error.to_string()))?;
-            if !after.file_type().is_file() {
-                return Err(ScanError::Transient(
-                    "session entry changed type during discovery".into(),
-                ));
-            }
-            if !identities.insert(canonical.clone()) {
-                continue;
-            }
-            let file_name = canonical
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default()
-                .to_owned();
-            let (display_name, working_directory, started_at) =
-                session_listing_metadata(&canonical, &file_name)
-                    .map_err(|error| ScanError::Transient(error.to_string()))?;
-            let modified_nanos = metadata
-                .modified()
-                .ok()
-                .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-                .map(|duration| duration.as_nanos());
-            output.push(SessionFile {
-                id: canonical.to_string_lossy().into_owned(),
-                path: canonical.to_string_lossy().into_owned(),
-                file_name,
-                display_name,
-                working_directory,
-                started_at,
-                byte_size: metadata.len(),
-                modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
-                modified_nanos,
-            });
-        }
-        Ok(())
-    }
-
-    walk(root, root, &mut output, &mut identities, cancelled)?;
-    output.sort_by(|left, right| {
-        right
-            .modified_nanos
-            .cmp(&left.modified_nanos)
-            .then_with(|| left.id.cmp(&right.id))
-    });
-    Ok(output)
 }
 
 async fn wait_for_scan(
@@ -733,44 +329,106 @@ fn publish_live_state(
     }
 }
 
-fn schedule_hint(
-    pending: &mut bool,
-    ready: &mut bool,
-    quiet_deadline: &mut Option<Instant>,
-    maximum_deadline: &mut Option<Instant>,
+fn handle_scan_failure(
+    scheduler: &mut ScanScheduler,
+    diagnostics: &Diagnostics,
+    catalog: &SessionCatalog,
+    live_state: &watch::Sender<LiveState>,
+    waiters: &mut Vec<oneshot::Sender<Result<(), String>>>,
+    message: String,
 ) {
-    *pending = true;
-    if !*ready {
-        let now = Instant::now();
-        *quiet_deadline = Some(now + DEBOUNCE_QUIET);
-        maximum_deadline.get_or_insert(now + DEBOUNCE_MAX);
+    diagnostics
+        .catalogue_refresh_failures
+        .fetch_add(1, Ordering::Relaxed);
+    match scheduler.scan_failed(Instant::now()) {
+        FailureDisposition::Retry { .. } => {
+            diagnostics
+                .catalogue_refresh_retries
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        FailureDisposition::Exhausted => {
+            diagnostics
+                .catalogue_degraded_refreshes
+                .fetch_add(1, Ordering::Relaxed);
+            publish_live_state(catalog, live_state, LiveAvailability::Degraded);
+            for waiter in waiters.drain(..) {
+                let _ = waiter.send(Err(message.clone()));
+            }
+        }
     }
 }
 
-async fn scan_worker(
+async fn drain_active_scan(
+    active: &mut Option<JoinHandle<Result<Vec<SessionFile>, ScanError>>>,
+    diagnostics: &Diagnostics,
+) {
+    drain_active_scan_with_timeout(active, diagnostics, SCAN_SHUTDOWN_DRAIN).await;
+}
+
+async fn drain_active_scan_with_timeout(
+    active: &mut Option<JoinHandle<Result<Vec<SessionFile>, ScanError>>>,
+    diagnostics: &Diagnostics,
+    timeout_duration: Duration,
+) {
+    if active.is_none() {
+        return;
+    }
+    match tokio::time::timeout(timeout_duration, wait_for_scan(active)).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => {
+            eprintln!("catalogue scan failed while draining during shutdown: {error}");
+        }
+        Err(_) => {
+            diagnostics
+                .scan_shutdown_drain_timeouts
+                .fetch_add(1, Ordering::Relaxed);
+            eprintln!(
+                "catalogue scan shutdown drain timed out; blocking catalogue work may still be running"
+            );
+        }
+    }
+}
+
+struct ScanWorkerContext {
     root: PathBuf,
     catalog: Arc<SessionCatalog>,
     live_state: watch::Sender<LiveState>,
-    mut hints: mpsc::Receiver<watcher::WatchHint>,
-    mut controls: mpsc::Receiver<ScanControl>,
     signals: Arc<watcher::WatchSignals>,
     diagnostics: Arc<Diagnostics>,
+    shutdown: watch::Receiver<bool>,
+    scanner: Arc<ScanOperation>,
+}
+
+async fn scan_worker(
+    context: ScanWorkerContext,
+    mut hints: mpsc::Receiver<watcher::WatchHint>,
+    mut controls: mpsc::Receiver<ScanControl>,
 ) {
+    let ScanWorkerContext {
+        root,
+        catalog,
+        live_state,
+        signals,
+        diagnostics,
+        mut shutdown,
+        scanner,
+    } = context;
     let cancelled = Arc::new(AtomicBool::new(false));
     let mut active: Option<JoinHandle<Result<Vec<SessionFile>, ScanError>>> = None;
-    let mut pending = false;
-    let mut ready = false;
-    let mut quiet_deadline = None;
-    let mut maximum_deadline = None;
-    let mut retry_deadline = None;
-    let mut retry_index = 0_usize;
-    let mut rate_deadline = None;
-    let mut last_scan_start = None;
+    let mut scheduler = ScanScheduler::new(true);
     let mut waiters: Vec<oneshot::Sender<Result<(), String>>> = Vec::new();
-    let mut watcher_healthy = true;
-    let mut degraded = false;
 
     loop {
+        if *shutdown.borrow() {
+            scheduler.shutdown();
+            cancelled.store(true, Ordering::Release);
+            for waiter in waiters.drain(..) {
+                let _ = waiter.send(Err("catalogue refresh is shutting down".into()));
+            }
+            drain_active_scan(&mut active, &diagnostics).await;
+            break;
+        }
+        waiters.retain(|waiter| !waiter.is_closed());
         let received = signals.received.swap(0, Ordering::AcqRel);
         if received > 0 {
             diagnostics
@@ -782,77 +440,38 @@ async fn scan_worker(
             diagnostics
                 .watch_hints_dropped
                 .fetch_add(dropped, Ordering::Relaxed);
-            schedule_hint(
-                &mut pending,
-                &mut ready,
-                &mut quiet_deadline,
-                &mut maximum_deadline,
-            );
+            scheduler.hint(Instant::now());
         }
         if signals.overflow.swap(false, Ordering::AcqRel) {
-            schedule_hint(
-                &mut pending,
-                &mut ready,
-                &mut quiet_deadline,
-                &mut maximum_deadline,
-            );
+            scheduler.hint(Instant::now());
         }
         if signals.watcher_failed.swap(false, Ordering::AcqRel) {
-            watcher_healthy = false;
             diagnostics.watch_errors.fetch_add(1, Ordering::Relaxed);
-            if !degraded {
-                degraded = true;
+            if scheduler.watcher_failed() {
                 publish_live_state(&catalog, &live_state, LiveAvailability::Degraded);
             }
         }
 
-        if active.is_none() && pending && ready && retry_deadline.is_none() {
-            let now = Instant::now();
-            if degraded {
-                if let Some(last_start) = last_scan_start {
-                    let allowed_at = last_start + DEGRADED_SCAN_INTERVAL;
-                    if allowed_at > now {
-                        rate_deadline = Some(allowed_at);
-                    } else {
-                        rate_deadline = None;
-                    }
-                }
-            }
-            if rate_deadline.is_none() {
-                pending = false;
-                ready = false;
-                quiet_deadline = None;
-                maximum_deadline = None;
-                last_scan_start = Some(now);
-                diagnostics
-                    .watch_refreshes_started
-                    .fetch_add(1, Ordering::Relaxed);
-                let scan_root = root.clone();
-                let scan_cancelled = Arc::clone(&cancelled);
-                active = Some(tokio::spawn(async move {
-                    match tokio::task::spawn_blocking(move || {
-                        discover(&scan_root, Some(scan_cancelled.as_ref()))
-                    })
+        if scheduler.try_start(Instant::now(), active.is_some()) {
+            diagnostics
+                .watch_refreshes_started
+                .fetch_add(1, Ordering::Relaxed);
+            let scan_root = root.clone();
+            let scan_cancelled = Arc::clone(&cancelled);
+            let scan_operation = Arc::clone(&scanner);
+            active = Some(tokio::spawn(async move {
+                match tokio::task::spawn_blocking(move || scan_operation(scan_root, scan_cancelled))
                     .await
-                    {
-                        Ok(result) => result,
-                        Err(error) => Err(ScanError::Transient(format!(
-                            "catalogue scan task failed: {error}"
-                        ))),
-                    }
-                }));
-            }
+                {
+                    Ok(result) => result,
+                    Err(error) => Err(ScanError::Transient(format!(
+                        "catalogue scan task failed: {error}"
+                    ))),
+                }
+            }));
         }
 
-        let next_deadline = [
-            quiet_deadline,
-            maximum_deadline,
-            retry_deadline,
-            rate_deadline,
-        ]
-        .into_iter()
-        .flatten()
-        .min();
+        let next_deadline = scheduler.next_deadline();
         let mut timer = Box::pin(async move {
             match next_deadline {
                 Some(deadline) => {
@@ -873,10 +492,19 @@ async fn scan_worker(
             biased;
             result = active_result => {
                 active = None;
-                let elapsed = last_scan_start
+                let elapsed = scheduler
+                    .scan_started_at()
                     .map(|started| started.elapsed().as_millis() as u64)
                     .unwrap_or_default();
                 diagnostics.catalogue_refresh_ms.fetch_add(elapsed, Ordering::Relaxed);
+                if *shutdown.borrow() {
+                    scheduler.shutdown();
+                    cancelled.store(true, Ordering::Release);
+                    for waiter in waiters.drain(..) {
+                        let _ = waiter.send(Err("catalogue refresh is shutting down".into()));
+                    }
+                    break;
+                }
                 match result.expect("active scan result") {
                     Ok(sessions) => {
                         diagnostics.catalogue_sessions.store(sessions.len() as u64, Ordering::Relaxed);
@@ -887,482 +515,96 @@ async fn scan_worker(
                                 } else {
                                     diagnostics.watch_refreshes_unchanged.fetch_add(1, Ordering::Relaxed);
                                 }
-                                if changed || degraded == watcher_healthy {
-                                    let next_availability = if watcher_healthy {
+                                if scheduler.scan_succeeded(changed) {
+                                    let availability = if scheduler.watcher_healthy() {
                                         LiveAvailability::Active
                                     } else {
                                         LiveAvailability::Degraded
                                     };
-                                    publish_live_state(&catalog, &live_state, next_availability);
+                                    publish_live_state(&catalog, &live_state, availability);
                                 }
-                                if watcher_healthy {
-                                    degraded = false;
-                                }
-                                retry_index = 0;
-                                retry_deadline = None;
                                 for waiter in waiters.drain(..) {
                                     let _ = waiter.send(Ok(()));
                                 }
-                                if pending {
-                                    ready = true;
-                                }
                             }
-                            Err(error) => {
-                                diagnostics.catalogue_refresh_failures.fetch_add(1, Ordering::Relaxed);
-                                if retry_index < RETRY_DELAYS.len() {
-                                    retry_deadline = Some(Instant::now() + RETRY_DELAYS[retry_index]);
-                                    retry_index += 1;
-                                    diagnostics.catalogue_refresh_retries.fetch_add(1, Ordering::Relaxed);
-                                    pending = true;
-                                    ready = false;
-                                } else {
-                                    retry_index = 0;
-                                    retry_deadline = None;
-                                    pending = false;
-                                    ready = false;
-                                    quiet_deadline = None;
-                                    maximum_deadline = None;
-                                    degraded = true;
-                                    diagnostics.catalogue_degraded_refreshes.fetch_add(1, Ordering::Relaxed);
-                                    publish_live_state(&catalog, &live_state, LiveAvailability::Degraded);
-                                    let message = error.to_string();
-                                    for waiter in waiters.drain(..) {
-                                        let _ = waiter.send(Err(message.clone()));
-                                    }
-                                }
-                            }
+                            Err(error) => handle_scan_failure(
+                                &mut scheduler,
+                                &diagnostics,
+                                &catalog,
+                                &live_state,
+                                &mut waiters,
+                                error.to_string(),
+                            ),
                         }
                     }
                     Err(ScanError::Cancelled) => break,
-                    Err(error) => {
-                        diagnostics.catalogue_refresh_failures.fetch_add(1, Ordering::Relaxed);
-                        if retry_index < RETRY_DELAYS.len() {
-                            retry_deadline = Some(Instant::now() + RETRY_DELAYS[retry_index]);
-                            retry_index += 1;
-                            diagnostics.catalogue_refresh_retries.fetch_add(1, Ordering::Relaxed);
-                            pending = true;
-                            ready = false;
-                        } else {
-                            retry_index = 0;
-                            retry_deadline = None;
-                            pending = false;
-                            ready = false;
-                            quiet_deadline = None;
-                            maximum_deadline = None;
-                            degraded = true;
-                            diagnostics.catalogue_degraded_refreshes.fetch_add(1, Ordering::Relaxed);
-                            publish_live_state(&catalog, &live_state, LiveAvailability::Degraded);
-                            let message = error.to_string();
-                            for waiter in waiters.drain(..) {
-                                let _ = waiter.send(Err(message.clone()));
-                            }
-                        }
+                    Err(error) => handle_scan_failure(
+                        &mut scheduler,
+                        &diagnostics,
+                        &catalog,
+                        &live_state,
+                        &mut waiters,
+                        error.to_string(),
+                    ),
+                }
+            }
+            shutdown_result = shutdown.changed() => {
+                if shutdown_result.is_err() || *shutdown.borrow_and_update() {
+                    scheduler.shutdown();
+                    cancelled.store(true, Ordering::Release);
+                    for waiter in waiters.drain(..) {
+                        let _ = waiter.send(Err("catalogue refresh is shutting down".into()));
                     }
+                    drain_active_scan(&mut active, &diagnostics).await;
+                    break;
                 }
             }
             control = controls.recv() => {
                 match control {
                     Some(ScanControl::EnsureFresh(waiter)) => {
                         waiters.push(waiter);
-                        pending = true;
-                        ready = true;
-                        quiet_deadline = None;
-                        maximum_deadline = None;
-                        diagnostics.catalogue_degraded_refreshes.fetch_add(1, Ordering::Relaxed);
+                        let degraded = scheduler.is_degraded();
+                        scheduler.request(Instant::now(), active.is_some());
+                        if degraded {
+                            diagnostics
+                                .catalogue_degraded_refreshes
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
                     }
                     Some(ScanControl::Shutdown) | None => {
+                        scheduler.shutdown();
                         cancelled.store(true, Ordering::Release);
                         for waiter in waiters.drain(..) {
                             let _ = waiter.send(Err("catalogue refresh is shutting down".into()));
                         }
-                        if active.is_some() {
-                            let _ = tokio::time::timeout(SCAN_SHUTDOWN_DRAIN, wait_for_scan(&mut active)).await;
-                        }
+                        drain_active_scan(&mut active, &diagnostics).await;
                         break;
                     }
                 }
             }
             Some(hint) = hints.recv() => {
                 match hint {
-                    watcher::WatchHint::Filesystem => schedule_hint(
-                        &mut pending,
-                        &mut ready,
-                        &mut quiet_deadline,
-                        &mut maximum_deadline,
-                    ),
+                    watcher::WatchHint::Filesystem => scheduler.hint(Instant::now()),
                 }
             }
             _ = signals.wake.notified() => {}
-            _ = &mut timer => {
-                let now = Instant::now();
-                if quiet_deadline.is_some_and(|deadline| deadline <= now)
-                    || maximum_deadline.is_some_and(|deadline| deadline <= now)
-                {
-                    quiet_deadline = None;
-                    maximum_deadline = None;
-                    ready = true;
-                }
-                if retry_deadline.is_some_and(|deadline| deadline <= now) {
-                    retry_deadline = None;
-                    ready = true;
-                    pending = true;
-                }
-                if rate_deadline.is_some_and(|deadline| deadline <= now) {
-                    rate_deadline = None;
-                }
-            }
+            _ = &mut timer => scheduler.timer(Instant::now()),
         }
     }
-}
-
-fn analysis_cache_key(path: &FsPath, config: AnalysisConfig) -> Result<AnalysisCacheKey, AppError> {
-    let metadata = fs::metadata(path)?;
-    let modified_nanos = metadata
-        .modified()
-        .map_err(|error| AppError::Fingerprint(error.to_string()))?
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| AppError::Fingerprint(error.to_string()))?
-        .as_nanos();
-    let canonical_path = fs::canonicalize(path)?;
-    Ok(AnalysisCacheKey {
-        path: canonical_path,
-        byte_size: metadata.len(),
-        modified_nanos,
-        tokenization: config.tokenization,
-        schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
-        output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
-    })
-}
-
-fn router(state: AppState) -> Router {
-    Router::new()
-        .route("/api/sessions", get(sessions))
-        .route("/api/events", get(events::handler))
-        .route("/api/sessions/{id}/analysis", get(session_analysis))
-        .fallback(assets::static_file)
-        .with_state(state)
-}
-
-async fn sessions(State(state): State<AppState>, headers: HeaderMap) -> Result<Response, AppError> {
-    if state.live_state.borrow().availability == LiveAvailability::Degraded {
-        let coordinator = state
-            .coordinator
-            .as_ref()
-            .ok_or(AppError::CatalogRefreshUnavailable)?;
-        tokio::time::timeout(DEGRADED_SCAN_DEADLINE, coordinator.ensure_fresh())
-            .await
-            .map_err(|_| AppError::CatalogRefreshUnavailable)?
-            .map_err(|_| AppError::CatalogRefreshUnavailable)?;
-    }
-    let snapshot = state.catalog.snapshot()?;
-    let availability = state.live_state.borrow().availability;
-    list_response(&snapshot, availability, &headers)
-}
-
-#[derive(Serialize)]
-struct SessionList<'a> {
-    sessions: &'a [SessionFile],
-}
-
-fn list_response(
-    snapshot: &CatalogSnapshot,
-    availability: LiveAvailability,
-    headers: &HeaderMap,
-) -> Result<Response, AppError> {
-    let etag = list_etag(snapshot);
-    let mut builder = Response::builder()
-        .header(header::ETAG, etag.as_str())
-        .header(
-            "X-TokenPlume-Server-Generation",
-            snapshot.generation.as_str(),
-        )
-        .header(
-            "X-TokenPlume-Catalog-Revision",
-            snapshot.revision.to_string(),
-        )
-        .header(
-            "X-TokenPlume-Live-Updates",
-            availability_header(availability),
-        );
-    let matches = headers
-        .get(header::IF_NONE_MATCH)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.split(',').any(|candidate| candidate.trim() == etag));
-    if matches {
-        return builder
-            .status(StatusCode::NOT_MODIFIED)
-            .body(axum::body::Body::empty())
-            .map_err(|error| AppError::Message(format!("cannot build response: {error}")));
-    }
-    let body = serde_json::to_vec(&SessionList {
-        sessions: &snapshot.sessions,
-    })
-    .map_err(|error| AppError::Message(format!("cannot serialize session catalogue: {error}")))?;
-    builder = builder
-        .header(header::CONTENT_TYPE, "application/json")
-        .header(header::CONTENT_LENGTH, body.len());
-    builder
-        .status(StatusCode::OK)
-        .body(axum::body::Body::from(body))
-        .map_err(|error| AppError::Message(format!("cannot build response: {error}")))
-}
-
-fn availability_header(availability: LiveAvailability) -> &'static str {
-    match availability {
-        LiveAvailability::Active => "active",
-        LiveAvailability::Degraded => "degraded",
-    }
-}
-
-fn list_etag(snapshot: &CatalogSnapshot) -> String {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(snapshot.generation.as_bytes());
-    hasher.update(&snapshot.revision.to_le_bytes());
-    format!("\"{}\"", hasher.finalize().to_hex())
-}
-
-async fn session_analysis(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Response, AppError> {
-    let snapshot = state.catalog.snapshot()?;
-    let session = snapshot
-        .sessions
-        .iter()
-        .find(|session| session.id == id)
-        .ok_or(AppError::NotFound)?;
-    let path = FsPath::new(&session.path).to_path_buf();
-    let key_path = path.clone();
-    let config = state.config;
-    let key = tokio::task::spawn_blocking(move || analysis_cache_key(&key_path, config))
-        .await
-        .map_err(|error| {
-            AppError::Message(format!("analysis fingerprint task failed: {error}"))
-        })??;
-
-    // Keep the cache lookup and flight registration in one lock ordering.
-    // The publisher takes these locks in the same order, so a request cannot
-    // observe both a missing cache entry and a removed flight.
-    let (flight, should_start) = {
-        let mut cache = state
-            .analysis
-            .cache
-            .lock()
-            .map_err(|_| AppError::Message("analysis cache is unavailable".into()))?;
-        if let Some(response) = cache.get(&key) {
-            return response_for(&response, &headers);
-        }
-        let mut flights = state
-            .analysis
-            .flights
-            .lock()
-            .map_err(|_| AppError::Message("analysis flight state is unavailable".into()))?;
-        if let Some(flight) = flights.get(&key) {
-            (Arc::clone(flight), false)
-        } else {
-            let (result, _receiver) = watch::channel(None);
-            let flight = Arc::new(AnalysisFlight { result });
-            flights.insert(key.clone(), Arc::clone(&flight));
-            (flight, true)
-        }
-    };
-
-    if should_start {
-        start_analysis(
-            (*state.analysis).clone(),
-            key.clone(),
-            path.clone(),
-            state.config,
-            Arc::clone(&flight),
-        );
-    }
-
-    let mut receiver = flight.result.subscribe();
-    let current = receiver.borrow().clone();
-    let result = match current {
-        Some(result) => result,
-        None => {
-            receiver
-                .changed()
-                .await
-                .map_err(|_| AppError::Message("analysis flight ended unexpectedly".into()))?;
-            receiver
-                .borrow()
-                .clone()
-                .ok_or_else(|| AppError::Message("analysis flight ended without a result".into()))?
-        }
-    };
-    match result {
-        Ok(response) => response_for(&response, &headers),
-        Err(error) => Err(error.into_app_error()),
-    }
-}
-
-fn start_analysis(
-    runtime: AnalysisRuntime,
-    key: AnalysisCacheKey,
-    path: PathBuf,
-    config: AnalysisConfig,
-    flight: Arc<AnalysisFlight>,
-) {
-    tokio::spawn(async move {
-        let AnalysisRuntime {
-            cache,
-            flights,
-            permits,
-            executor,
-        } = runtime;
-        let permit = match permits.acquire_owned().await {
-            Ok(permit) => permit,
-            Err(_) => {
-                let result = Err(FlightError::Message(
-                    "analysis concurrency is unavailable".into(),
-                ));
-                flight.result.send_replace(Some(result));
-                if let Ok(mut active) = flights.lock() {
-                    active.remove(&key);
-                }
-                return;
-            }
-        };
-        let response_key = key.clone();
-        let result = match tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            executor(path, config, response_key)
-        })
-        .await
-        {
-            Ok(result) => result,
-            Err(error) => Err(FlightError::Message(format!(
-                "analysis task failed: {error}"
-            ))),
-        };
-
-        if let Ok(response) = &result {
-            if let Ok(mut cache_state) = cache.lock() {
-                cache_state.insert(key.clone(), Arc::clone(response));
-            }
-        }
-        flight.result.send_replace(Some(result));
-        if let Ok(mut active) = flights.lock() {
-            active.remove(&key);
-        };
-    });
-}
-
-fn execute_analysis(
-    path: PathBuf,
-    config: AnalysisConfig,
-    response_key: AnalysisCacheKey,
-) -> Result<Arc<CachedResponse>, FlightError> {
-    let source_bytes = response_key.byte_size;
-    let parse_started = Instant::now();
-    let parsed = PiSourceAdapter.parse_path_with_stats(&path);
-    let (normalized, parse_stats) = match parsed {
-        Ok(value) => value,
-        Err(error) => {
-            if matches!(fingerprint_matches(&path, &response_key), Ok(false)) {
-                return Err(FlightError::SourceChanged);
-            }
-            return Err(FlightError::Source(error.to_string()));
-        }
-    };
-    let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
-    let analysis_started = Instant::now();
-    let analysis =
-        analyze(normalized, config).map_err(|error| FlightError::Analysis(error.to_string()))?;
-    let analysis_ms = analysis_started.elapsed().as_secs_f64() * 1000.0;
-    let serialization_started = Instant::now();
-    let body =
-        serde_json::to_vec(&analysis).map_err(|error| FlightError::Message(error.to_string()))?;
-    match fingerprint_matches(&path, &response_key)? {
-        true => {}
-        false => return Err(FlightError::SourceChanged),
-    }
-    if config.perf_diagnostics {
-        eprintln!(
-            "analysis_perf parse_ms={parse_ms:.3} analyze_ms={analysis_ms:.3} serialize_ms={:.3} source_bytes={source_bytes} response_bytes={} entries={} selected_entries={} calls={} items={} presences={}",
-            serialization_started.elapsed().as_secs_f64() * 1000.0,
-            body.len(),
-            parse_stats.entries,
-            parse_stats.selected_entries,
-            analysis.model_calls.len(),
-            analysis.context_items.len(),
-            analysis
-                .context_items
-                .iter()
-                .map(|item| item.presence_call_count)
-                .sum::<usize>(),
-        );
-    }
-    Ok(Arc::new(CachedResponse {
-        approximate_bytes: body.len(),
-        body: bytes::Bytes::from(body),
-        etag: etag_for_key(&response_key),
-    }))
-}
-
-fn fingerprint_matches(path: &FsPath, key: &AnalysisCacheKey) -> Result<bool, FlightError> {
-    let metadata =
-        fs::metadata(path).map_err(|error| FlightError::Fingerprint(error.to_string()))?;
-    let modified_nanos = metadata
-        .modified()
-        .map_err(|error| FlightError::Fingerprint(error.to_string()))?
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| FlightError::Fingerprint(error.to_string()))?
-        .as_nanos();
-    Ok(metadata.len() == key.byte_size && modified_nanos == key.modified_nanos)
-}
-
-fn etag_for_key(key: &AnalysisCacheKey) -> String {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(key.path.to_string_lossy().as_bytes());
-    hasher.update(&key.byte_size.to_le_bytes());
-    hasher.update(&key.modified_nanos.to_le_bytes());
-    hasher.update(key.tokenization.as_str().as_bytes());
-    hasher.update(&key.schema_version.to_le_bytes());
-    hasher.update(&key.output_version.to_le_bytes());
-    format!("\"{}\"", hasher.finalize().to_hex())
-}
-
-fn response_for(response: &CachedResponse, headers: &HeaderMap) -> Result<Response, AppError> {
-    let matches = headers
-        .get(header::IF_NONE_MATCH)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| {
-            value
-                .split(',')
-                .any(|candidate| candidate.trim() == response.etag)
-        });
-    let mut builder = Response::builder().header(header::ETAG, response.etag.as_str());
-    if matches {
-        return builder
-            .status(StatusCode::NOT_MODIFIED)
-            .body(axum::body::Body::empty())
-            .map_err(|error| AppError::Message(format!("cannot build response: {error}")));
-    }
-    builder = builder
-        .header(header::CONTENT_TYPE, "application/json")
-        .header(header::CONTENT_LENGTH, response.body.len());
-    builder
-        .status(StatusCode::OK)
-        .body(axum::body::Body::from(response.body.clone()))
-        .map_err(|error| AppError::Message(format!("cannot build response: {error}")))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::Analysis;
+    use crate::{analysis::analyze, api::Analysis, domain::SourceError, pi::PiSourceAdapter};
+    use futures_util::StreamExt;
     use std::{
         fs as std_fs,
         sync::{
-            atomic::{AtomicUsize, Ordering},
-            Condvar,
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+            Condvar, Mutex,
         },
-        thread,
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        time::Duration,
     };
     use tower::ServiceExt;
 
@@ -1421,18 +663,17 @@ mod tests {
             availability: LiveAvailability::Active,
         });
         let (shutdown, _shutdown_receiver) = watch::channel(false);
+        let (controls, _control_receiver) = mpsc::channel(1);
         AppState {
             catalog,
             live_state,
             shutdown,
-            coordinator: None,
+            coordinator: Arc::new(ScanCoordinator { controls }),
             config,
-            analysis: Arc::new(AnalysisRuntime {
-                cache: analysis_cache,
-                flights: Arc::new(Mutex::new(HashMap::new())),
-                permits: Arc::new(Semaphore::new(ANALYSIS_CONCURRENCY_LIMIT)),
-                executor: analysis_executor,
-            }),
+            analysis: Arc::new(AnalysisService::with_state(
+                analysis_cache,
+                analysis_executor,
+            )),
         }
     }
 
@@ -1469,14 +710,99 @@ mod tests {
         (Arc::clone(&gate), GateGuard(gate))
     }
 
+    struct ScanHarness {
+        catalog: Arc<SessionCatalog>,
+        shutdown: watch::Sender<bool>,
+        controls: mpsc::Sender<ScanControl>,
+        hints: mpsc::Sender<watcher::WatchHint>,
+        signals: Arc<watcher::WatchSignals>,
+        diagnostics: Arc<Diagnostics>,
+        worker: JoinHandle<()>,
+    }
+
+    fn scan_harness(scanner: Arc<ScanOperation>) -> ScanHarness {
+        let generation = "0123456789abcdef0123456789abcdef".to_owned();
+        let catalog = Arc::new(SessionCatalog::new(generation.clone(), Vec::new()));
+        let (live_state, _live_receiver) = watch::channel(LiveState {
+            generation,
+            revision: 0,
+            availability: LiveAvailability::Active,
+        });
+        let (shutdown, shutdown_receiver) = watch::channel(false);
+        let signals = Arc::new(watcher::WatchSignals::default());
+        let (hints, hint_receiver) = mpsc::channel(32);
+        let (controls, control_receiver) = mpsc::channel(32);
+        let diagnostics = Arc::new(Diagnostics::default());
+        let worker = tokio::spawn(scan_worker(
+            ScanWorkerContext {
+                root: PathBuf::from("."),
+                catalog: Arc::clone(&catalog),
+                live_state: live_state.clone(),
+                signals: Arc::clone(&signals),
+                diagnostics: Arc::clone(&diagnostics),
+                shutdown: shutdown_receiver,
+                scanner,
+            },
+            hint_receiver,
+            control_receiver,
+        ));
+        ScanHarness {
+            catalog,
+            shutdown,
+            controls,
+            hints,
+            signals,
+            diagnostics,
+            worker,
+        }
+    }
+
+    async fn wait_for_invocations(counter: &AtomicUsize, expected: usize) {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while counter.load(Ordering::SeqCst) < expected {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("executor did not reach {expected} invocations"));
+    }
+
+    async fn wait_for_counter(counter: &AtomicU64, expected: u64) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while counter.load(Ordering::Acquire) < expected {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("counter did not reach {expected}"));
+    }
+
+    async fn stop_scan_harness(mut harness: ScanHarness) {
+        harness.shutdown.send_replace(true);
+        tokio::time::timeout(Duration::from_secs(3), &mut harness.worker)
+            .await
+            .expect("scan worker shutdown")
+            .expect("scan worker task");
+    }
+
+    async fn next_sse_event(stream: &mut axum::body::BodyDataStream) -> String {
+        let data = tokio::time::timeout(Duration::from_secs(5), stream.next())
+            .await
+            .expect("SSE event readiness")
+            .expect("SSE stream event")
+            .expect("SSE body event");
+        String::from_utf8(data.to_vec()).expect("SSE UTF-8")
+    }
+
     async fn wait_for_flight_receivers(state: &AppState, expected: usize) {
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let receivers = state
                     .analysis
-                    .flights
+                    .state
                     .lock()
-                    .expect("flights")
+                    .expect("analysis state")
+                    .flights
                     .values()
                     .next()
                     .map(|flight| flight.result.receiver_count())
@@ -1517,41 +843,309 @@ mod tests {
 
     #[test]
     fn filesystem_hints_set_a_bounded_debounce_window() {
-        let mut pending = false;
-        let mut ready = false;
-        let mut quiet_deadline = None;
-        let mut maximum_deadline = None;
-        schedule_hint(
-            &mut pending,
-            &mut ready,
-            &mut quiet_deadline,
-            &mut maximum_deadline,
+        let start = Instant::now();
+        let mut scheduler = ScanScheduler::new(true);
+        scheduler.hint(start);
+        assert_eq!(
+            scheduler.next_deadline(),
+            Some(start + scan::DEBOUNCE_QUIET)
         );
-        assert!(pending);
-        assert!(!ready);
-        assert!(quiet_deadline.is_some());
-        let first_maximum = maximum_deadline;
-        schedule_hint(
-            &mut pending,
-            &mut ready,
-            &mut quiet_deadline,
-            &mut maximum_deadline,
+        scheduler.hint(start + Duration::from_millis(100));
+        assert_eq!(
+            scheduler.next_deadline(),
+            Some(start + Duration::from_millis(300))
         );
-        assert_eq!(maximum_deadline, first_maximum);
+        scheduler.timer(start + Duration::from_millis(300));
+        assert!(scheduler.try_start(start + Duration::from_millis(300), false));
+    }
 
-        ready = true;
-        quiet_deadline = None;
-        maximum_deadline = None;
-        schedule_hint(
-            &mut pending,
-            &mut ready,
-            &mut quiet_deadline,
-            &mut maximum_deadline,
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn scan_worker_coalesces_active_hints_and_overflow_into_one_follow_up() {
+        let invocations = Arc::new(AtomicU64::new(0));
+        let first_scan = Arc::new(AtomicBool::new(true));
+        let (gate, _guard) = blocking_gate();
+        let scanner: Arc<ScanOperation> = {
+            let invocations = Arc::clone(&invocations);
+            let first_scan = Arc::clone(&first_scan);
+            let gate = Arc::clone(&gate);
+            Arc::new(move |_, _| {
+                invocations.fetch_add(1, Ordering::Release);
+                if first_scan.swap(false, Ordering::AcqRel) {
+                    gate.wait();
+                }
+                Ok(vec![fixture_session("test.jsonl", "test.jsonl")])
+            })
+        };
+        let harness = scan_harness(scanner);
+        let (waiter, response) = oneshot::channel();
+        harness
+            .controls
+            .send(ScanControl::EnsureFresh(waiter))
+            .await
+            .expect("scan worker control");
+        wait_for_counter(&invocations, 1).await;
+
+        for _ in 0..3 {
+            harness
+                .hints
+                .send(watcher::WatchHint::Filesystem)
+                .await
+                .expect("filesystem hint");
+        }
+        harness.signals.overflow.store(true, Ordering::Release);
+        harness.signals.wake.notify_one();
+        gate.release();
+
+        assert!(matches!(response.await.expect("refresh waiter"), Ok(())));
+        wait_for_counter(&invocations, 2).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(invocations.load(Ordering::Acquire), 2);
+        stop_scan_harness(harness).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn scan_worker_retries_catalogue_install_failures_and_wakes_waiters() {
+        let scanner: Arc<ScanOperation> = Arc::new(|_, _| Ok(Vec::new()));
+        let harness = scan_harness(scanner);
+        let poisoned = Arc::clone(&harness.catalog);
+        let panic_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = poisoned.snapshot.write().expect("catalogue lock");
+            panic!("poison catalogue for install failure test");
+        }));
+        assert!(panic_result.is_err());
+
+        let (waiter, response) = oneshot::channel();
+        harness
+            .controls
+            .send(ScanControl::EnsureFresh(waiter))
+            .await
+            .expect("scan worker control");
+        let result = tokio::time::timeout(Duration::from_secs(3), response)
+            .await
+            .expect("install failure waiter timeout")
+            .expect("install failure waiter channel");
+        assert!(result.is_err());
+        assert_eq!(
+            harness
+                .diagnostics
+                .catalogue_refresh_failures
+                .load(Ordering::Acquire),
+            scan::RETRY_DELAYS.len() as u64 + 1
         );
-        assert!(pending);
-        assert!(ready);
-        assert_eq!(quiet_deadline, None);
-        assert_eq!(maximum_deadline, None);
+        assert_eq!(
+            harness
+                .diagnostics
+                .catalogue_refresh_retries
+                .load(Ordering::Acquire),
+            scan::RETRY_DELAYS.len() as u64
+        );
+        stop_scan_harness(harness).await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_drain_timeout_is_reported_without_claiming_completion() {
+        let diagnostics = Diagnostics::default();
+        let mut active = Some(tokio::spawn(async {
+            std::future::pending::<Result<Vec<SessionFile>, ScanError>>().await
+        }));
+        drain_active_scan_with_timeout(&mut active, &diagnostics, Duration::ZERO).await;
+        assert_eq!(
+            diagnostics
+                .scan_shutdown_drain_timeouts
+                .load(Ordering::Acquire),
+            1
+        );
+        drop(active);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn scan_worker_shutdown_race_does_not_install_completed_scan() {
+        let first_scan = Arc::new(AtomicBool::new(true));
+        let (gate, _guard) = blocking_gate();
+        let scanner: Arc<ScanOperation> = {
+            let first_scan = Arc::clone(&first_scan);
+            let gate = Arc::clone(&gate);
+            Arc::new(move |_, _| {
+                if first_scan.swap(false, Ordering::AcqRel) {
+                    gate.wait();
+                }
+                Ok(vec![fixture_session("race.jsonl", "race.jsonl")])
+            })
+        };
+        let mut harness = scan_harness(scanner);
+        let (waiter, response) = oneshot::channel();
+        harness
+            .controls
+            .send(ScanControl::EnsureFresh(waiter))
+            .await
+            .expect("scan worker control");
+        wait_for_counter(&harness.diagnostics.watch_refreshes_started, 1).await;
+
+        harness.shutdown.send_replace(true);
+        gate.release();
+        tokio::time::timeout(Duration::from_secs(3), &mut harness.worker)
+            .await
+            .expect("scan worker shutdown")
+            .expect("scan worker task");
+        assert!(response.await.expect("shutdown waiter").is_err());
+        assert_eq!(
+            harness
+                .catalog
+                .snapshot()
+                .expect("catalogue snapshot")
+                .revision,
+            0
+        );
+    }
+
+    fn failing_watcher(
+        _: &FsPath,
+        _: mpsc::Sender<watcher::WatchHint>,
+        _: Arc<watcher::WatchSignals>,
+    ) -> notify::Result<watcher::WatcherHandle> {
+        Err(notify::Error::generic("controlled watcher startup failure"))
+    }
+
+    #[tokio::test]
+    async fn injected_watcher_failure_keeps_degraded_http_usable() {
+        let signals = Arc::new(watcher::WatchSignals::default());
+        let (hints, _receiver) = mpsc::channel(1);
+        assert!(
+            start_watcher_or_degraded(FsPath::new("."), hints, &signals, failing_watcher,)
+                .is_none()
+        );
+        assert!(signals.watcher_failed.load(Ordering::Acquire));
+
+        let mut state = test_state(
+            fixture_session("fixtures/pi/simple.jsonl", "simple.jsonl"),
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+            Arc::new(Mutex::new(AnalysisCache::default())),
+        );
+        let generation = state.live_state.borrow().generation.clone();
+        state.live_state.send_replace(LiveState {
+            generation,
+            revision: 0,
+            availability: LiveAvailability::Degraded,
+        });
+        let (controls, mut requests) = mpsc::channel(1);
+        state.coordinator = Arc::new(ScanCoordinator { controls });
+        let responder = tokio::spawn(async move {
+            if let Some(ScanControl::EnsureFresh(waiter)) = requests.recv().await {
+                let _ = waiter.send(Ok(()));
+            }
+        });
+
+        let response = router(state)
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/sessions")
+                    .body(axum::body::Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("degraded sessions response");
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["X-TokenPlume-Live-Updates"], "degraded");
+        responder.await.expect("degraded responder");
+    }
+
+    #[tokio::test]
+    async fn sse_stream_emits_payloads_updates_converges_for_lagged_subscribers_and_stops() {
+        let state = test_state(
+            fixture_session("fixtures/pi/simple.jsonl", "simple.jsonl"),
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Heuristic,
+                perf_diagnostics: false,
+            },
+            Arc::new(Mutex::new(AnalysisCache::default())),
+        );
+        let live_state = state.live_state.clone();
+        let shutdown = state.shutdown.clone();
+        let app = router(state);
+        let event_request = || {
+            axum::http::Request::builder()
+                .uri("/api/events")
+                .body(axum::body::Body::empty())
+                .expect("event request")
+        };
+
+        let first_response = app
+            .clone()
+            .oneshot(event_request())
+            .await
+            .expect("first SSE response");
+        assert_eq!(first_response.status(), StatusCode::OK);
+        assert_eq!(
+            first_response.headers()[header::CONTENT_TYPE],
+            "text/event-stream"
+        );
+        let mut first = first_response.into_body().into_data_stream();
+        let first_catalogue = next_sse_event(&mut first).await;
+        let first_status = next_sse_event(&mut first).await;
+        assert!(first_catalogue.contains("event: sessionsChanged"));
+        assert!(first_catalogue.contains("id: 0123456789abcdef0123456789abcdef:0"));
+        assert!(first_catalogue.contains("\"revision\":\"0\""));
+        assert!(first_status.contains("event: liveStatus"));
+        assert!(first_status.contains("\"availability\":\"active\""));
+
+        let second_response = app
+            .oneshot(event_request())
+            .await
+            .expect("second SSE response");
+        let mut second = second_response.into_body().into_data_stream();
+        assert!(next_sse_event(&mut second)
+            .await
+            .contains("\"revision\":\"0\""));
+        assert!(next_sse_event(&mut second)
+            .await
+            .contains("event: liveStatus"));
+
+        live_state.send_replace(LiveState {
+            generation: "0123456789abcdef0123456789abcdef".into(),
+            revision: 1,
+            availability: LiveAvailability::Active,
+        });
+        assert!(next_sse_event(&mut first)
+            .await
+            .contains("\"revision\":\"1\""));
+        assert!(next_sse_event(&mut second)
+            .await
+            .contains("\"revision\":\"1\""));
+
+        for revision in 2..=3 {
+            live_state.send_replace(LiveState {
+                generation: "0123456789abcdef0123456789abcdef".into(),
+                revision,
+                availability: if revision == 3 {
+                    LiveAvailability::Degraded
+                } else {
+                    LiveAvailability::Active
+                },
+            });
+        }
+        let first_lagged = next_sse_event(&mut first).await;
+        let second_lagged = next_sse_event(&mut second).await;
+        assert!(first_lagged.contains("\"revision\":\"3\""));
+        assert!(second_lagged.contains("\"revision\":\"3\""));
+        assert!(next_sse_event(&mut first)
+            .await
+            .contains("\"availability\":\"degraded\""));
+        assert!(next_sse_event(&mut second)
+            .await
+            .contains("\"availability\":\"degraded\""));
+
+        shutdown.send_replace(true);
+        assert!(tokio::time::timeout(Duration::from_secs(1), first.next())
+            .await
+            .expect("first SSE shutdown")
+            .is_none());
+        assert!(tokio::time::timeout(Duration::from_secs(1), second.next())
+            .await
+            .expect("second SSE shutdown")
+            .is_none());
     }
 
     #[tokio::test]
@@ -1752,9 +1346,7 @@ mod tests {
         );
         let app = router(state.clone());
         let first = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
-        while invocations.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
+        wait_for_invocations(&invocations, 1).await;
         let second = tokio::spawn(app.oneshot(request("simple.jsonl")));
         wait_for_flight_receivers(&state, 2).await;
         assert_eq!(invocations.load(Ordering::SeqCst), 1);
@@ -1780,7 +1372,9 @@ mod tests {
                 let invocation = invocations.fetch_add(1, Ordering::SeqCst);
                 if invocation == 0 {
                     gate.wait();
-                    Err(FlightError::Source("controlled parse failure".into()))
+                    Err(FlightError::Source(SourceError::InvalidStructure(
+                        "controlled parse failure".into(),
+                    )))
                 } else {
                     Ok(sized_response(7))
                 }
@@ -1798,9 +1392,7 @@ mod tests {
         );
         let app = router(state.clone());
         let first = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
-        while invocations.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
+        wait_for_invocations(&invocations, 1).await;
         let second = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
         wait_for_flight_receivers(&state, 2).await;
         release.0.release();
@@ -1813,7 +1405,13 @@ mod tests {
                 .contains("SESSION_PARSE_FAILED"));
         }
         assert!(cache.lock().expect("cache").entries.is_empty());
-        assert!(state.analysis.flights.lock().expect("flights").is_empty());
+        assert!(state
+            .analysis
+            .state
+            .lock()
+            .expect("analysis state")
+            .flights
+            .is_empty());
 
         let retry = app
             .oneshot(request("simple.jsonl"))
@@ -1848,9 +1446,7 @@ mod tests {
         );
         let app = router(state.clone());
         let initiator = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
-        while invocations.load(Ordering::SeqCst) == 0 {
-            tokio::task::yield_now().await;
-        }
+        wait_for_invocations(&invocations, 1).await;
         let waiter = tokio::spawn(app.oneshot(request("simple.jsonl")));
         wait_for_flight_receivers(&state, 2).await;
         initiator.abort();
@@ -1865,14 +1461,22 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn analysis_execution_is_bounded_across_distinct_keys() {
         let invocations = Arc::new(AtomicUsize::new(0));
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
         let (gate, release) = blocking_gate();
         let executor: Arc<AnalysisExecutor> = {
             let invocations = Arc::clone(&invocations);
+            let active = Arc::clone(&active);
+            let maximum = Arc::clone(&maximum);
             let gate = Arc::clone(&gate);
             Arc::new(move |_, _, _| {
+                let running = active.fetch_add(1, Ordering::SeqCst) + 1;
+                maximum.fetch_max(running, Ordering::SeqCst);
                 invocations.fetch_add(1, Ordering::SeqCst);
                 gate.wait();
-                Ok(sized_response(10))
+                let response = sized_response(10);
+                active.fetch_sub(1, Ordering::SeqCst);
+                Ok(response)
             })
         };
         let mut second = fixture_session("fixtures/pi/compaction.jsonl", "second.jsonl");
@@ -1896,9 +1500,7 @@ mod tests {
         let first = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
         let second = tokio::spawn(app.clone().oneshot(request("second")));
         let third = tokio::spawn(app.oneshot(request("third")));
-        while invocations.load(Ordering::SeqCst) < ANALYSIS_CONCURRENCY_LIMIT {
-            tokio::task::yield_now().await;
-        }
+        wait_for_invocations(&invocations, ANALYSIS_CONCURRENCY_LIMIT).await;
         tokio::task::yield_now().await;
         assert_eq!(
             invocations.load(Ordering::SeqCst),
@@ -1915,6 +1517,8 @@ mod tests {
             );
         }
         assert_eq!(invocations.load(Ordering::SeqCst), 3);
+        assert_eq!(active.load(Ordering::SeqCst), 0);
+        assert_eq!(maximum.load(Ordering::SeqCst), ANALYSIS_CONCURRENCY_LIMIT);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1948,9 +1552,7 @@ mod tests {
         let app = router(state);
         let first = tokio::spawn(app.clone().oneshot(request("simple.jsonl")));
         let second = tokio::spawn(app.oneshot(request("second")));
-        while invocations.load(Ordering::SeqCst) < 2 {
-            tokio::task::yield_now().await;
-        }
+        wait_for_invocations(&invocations, 2).await;
         assert_eq!(invocations.load(Ordering::SeqCst), 2);
         release.0.release();
         assert_eq!(
@@ -1971,15 +1573,26 @@ mod tests {
         );
     }
 
+    fn rewrite_with_changed_mtime(path: &FsPath, bytes: &[u8]) {
+        let modified = std_fs::metadata(path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime")
+            .checked_add(Duration::from_secs(2))
+            .expect("mtime increment");
+        std_fs::write(path, bytes).expect("rewrite");
+        std_fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("file")
+            .set_times(std_fs::FileTimes::new().set_modified(modified))
+            .expect("deterministic changed mtime");
+    }
+
     #[tokio::test]
     async fn request_cache_invalidates_after_same_size_file_rewrite() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!("tokenplume-cache-{unique}"));
-        std_fs::create_dir_all(&directory).expect("temporary directory");
-        let path = directory.join("session.jsonl");
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("session.jsonl");
         std_fs::copy("fixtures/pi/simple.jsonl", &path).expect("copy fixture");
         let cache = Arc::new(Mutex::new(AnalysisCache::default()));
         let app = router(test_state(
@@ -1997,7 +1610,7 @@ mod tests {
             .expect("first response");
         let first_body = response_body(first).await;
         let contents = std_fs::read_to_string(&path).expect("read fixture copy");
-        std_fs::write(&path, contents.replace("hello", "world")).expect("rewrite fixture copy");
+        rewrite_with_changed_mtime(&path, contents.replace("hello", "world").as_bytes());
         let second = app
             .oneshot(request("session.jsonl"))
             .await
@@ -2005,35 +1618,23 @@ mod tests {
         let second_body = response_body(second).await;
         assert_ne!(first_body, second_body);
         assert_eq!(cache.lock().expect("cache").entries.len(), 2);
-        std_fs::remove_dir_all(directory).expect("temporary directory cleanup");
     }
 
     #[test]
     fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!("tokenplume-fingerprint-{unique}"));
-        std_fs::create_dir_all(&directory).expect("temporary directory");
-        let path = directory.join("session.jsonl");
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("session.jsonl");
         std_fs::write(&path, b"abc").expect("initial file");
         let auto = AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
         };
         let first = analysis_cache_key(&path, auto).expect("first fingerprint");
-        let same_size = (0..20).find_map(|_| {
-            thread::sleep(Duration::from_millis(10));
-            std_fs::write(&path, b"xyz").expect("same-size rewrite");
-            let candidate = analysis_cache_key(&path, auto).expect("rewritten fingerprint");
-            (candidate.modified_nanos != first.modified_nanos).then_some(candidate)
-        });
-        let second = same_size.expect("filesystem modification time changed");
+        rewrite_with_changed_mtime(&path, b"xyz");
+        let second = analysis_cache_key(&path, auto).expect("rewritten fingerprint");
         assert_eq!(first.byte_size, second.byte_size);
         assert_ne!(first.modified_nanos, second.modified_nanos);
 
-        thread::sleep(Duration::from_millis(10));
         std_fs::write(&path, b"longer").expect("size rewrite");
         let third = analysis_cache_key(&path, auto).expect("size fingerprint");
         assert_ne!(second.byte_size, third.byte_size);
@@ -2056,20 +1657,12 @@ mod tests {
         assert_ne!(third, strict);
         assert_eq!(third, diagnostics);
         assert_eq!(etag_for_key(&third), etag_for_key(&diagnostics));
-        std_fs::remove_dir_all(directory).expect("temporary directory cleanup");
     }
 
     #[test]
     fn analysis_rejects_a_source_changed_after_the_initial_fingerprint() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let directory = std_fs::canonicalize(std::env::temp_dir())
-            .expect("temporary directory")
-            .join(format!("tokenplume-source-change-{unique}"));
-        std_fs::create_dir_all(&directory).expect("temporary directory");
-        let path = directory.join("session.jsonl");
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("session.jsonl");
         std_fs::copy("fixtures/pi/simple.jsonl", &path).expect("copy fixture");
         let config = AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
@@ -2078,19 +1671,32 @@ mod tests {
         let key = analysis_cache_key(&path, config).expect("initial fingerprint");
         let original = std_fs::read_to_string(&path).expect("read fixture copy");
         let changed = original.replace("hello", "world");
-        for _ in 0..20 {
-            thread::sleep(Duration::from_millis(10));
-            std_fs::write(&path, &changed).expect("rewrite fixture copy");
-            if analysis_cache_key(&path, config)
-                .map(|candidate| candidate.modified_nanos != key.modified_nanos)
-                .unwrap_or(false)
-            {
-                break;
-            }
-        }
+        rewrite_with_changed_mtime(&path, changed.as_bytes());
         let result = execute_analysis(path.clone(), config, key);
         assert!(matches!(result, Err(FlightError::SourceChanged)));
-        std_fs::remove_dir_all(directory).expect("temporary directory cleanup");
+    }
+
+    #[test]
+    fn vanished_source_during_parse_failure_is_not_reported_as_bad_format() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("never-created.jsonl");
+        let key = AnalysisCacheKey {
+            path: path.clone(),
+            byte_size: 1,
+            modified_nanos: 1,
+            tokenization: TokenizationPolicy::Auto,
+            schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
+            output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+        };
+        let result = classify_parse_failure(
+            &path,
+            &key,
+            FlightError::Source(SourceError::InvalidStructure("invalid transcript".into())),
+        );
+        assert!(matches!(
+            result,
+            FlightError::Io(ref source) if source.kind() == std::io::ErrorKind::NotFound
+        ));
     }
 
     #[test]
