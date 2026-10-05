@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 65) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 83) throw new Error('Incomplete live Rust contract export.');
 
 function output(name: string): SessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -29,7 +29,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
   it.each(manifest.cases)('accepts and indexes $name without repairs', ({ name }) => {
     const analysis = output(name);
     const indexed = indexAnalysis(analysis);
-    expect(analysis.schemaVersion).toBe(7);
+    expect(analysis.schemaVersion).toBe(8);
     expect(indexed.callByIndex.size).toBe(analysis.modelCalls.length);
     expect(indexed.itemById.size).toBe(analysis.contextItems.length);
     for (const profile of analysis.tokenAnalysis.profiles)
@@ -40,6 +40,35 @@ describe('live production Rust -> indexAnalysis contract', () => {
       expect(item.displayWeight).toBeGreaterThanOrEqual(0);
       expect(Number.isFinite(item.displayWeight)).toBe(true);
     }
+  });
+
+  it('retains wall-clock instants and distinguishes derived, missing and unsuccessful rates', () => {
+    const timing = output('timing-openai-responses').modelCalls[0].timing;
+    expect(timing).toEqual({
+      startedAtMs: 1700000000000,
+      recordedAtMs: 1700000002000,
+      durationMs: 2000,
+      effectiveOutputTokensPerSecond: 50,
+      basis: 'pi-message-timestamps',
+    });
+    for (const name of [
+      'timing-missing',
+      'timing-zero-interval',
+      'timing-reversed',
+      'timing-unknown-api',
+      'timing-unsafe',
+    ]) {
+      expect(output(name).modelCalls[0].timing.durationMs).toBeNull();
+      expect(output(name).modelCalls[0].timing.effectiveOutputTokensPerSecond).toBeNull();
+    }
+    for (const name of ['timing-error', 'timing-aborted', 'timing-unknown-output']) {
+      expect(output(name).modelCalls[0].timing.durationMs).toBe(2000);
+      expect(output(name).modelCalls[0].timing.effectiveOutputTokensPerSecond).toBeNull();
+    }
+    expect(output('timing-zero-output').modelCalls[0].timing.effectiveOutputTokensPerSecond).toBe(
+      0,
+    );
+    expect(output('timing-unknown-api').modelCalls[0].timing.startedAtMs).toBe(10);
   });
 
   it('preserves optional and delimiter-safe profile identities', () => {
@@ -153,8 +182,8 @@ describe('live production Rust -> indexAnalysis contract', () => {
   });
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
-    expect(manifest.schemaVersion).toBe(7);
-    expect(manifest.outputVersion).toBe(11);
+    expect(manifest.schemaVersion).toBe(8);
+    expect(manifest.outputVersion).toBe(12);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

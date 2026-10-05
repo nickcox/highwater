@@ -151,6 +151,121 @@ fn export_live_contract() {
         session.model_calls[0].target = target;
         push(&mut cases, name, session, TokenizationPolicy::Heuristic);
     }
+    for api in [
+        "openai-codex-responses",
+        "openai-responses",
+        "openai-completions",
+        "anthropic-messages",
+        "google-generative-ai",
+        "google-vertex",
+        "azure-openai-responses",
+        "bedrock-converse-stream",
+        "pi-messages",
+    ] {
+        let mut session = fake_session();
+        session.source.kind = "pi".into();
+        let call = &mut session.model_calls[0];
+        call.target.api = Some(api.into());
+        call.stop_reason = Some("stop".into());
+        call.timestamps = CallTimestamps {
+            started_at_ms: Some(1700000000000),
+            recorded_at_ms: Some(1700000002000),
+        };
+        call.reported_usage.output = Some(100);
+        call.reported_usage.reasoning = Some(80);
+        push(
+            &mut cases,
+            &format!("timing-{api}"),
+            session,
+            TokenizationPolicy::Heuristic,
+        );
+    }
+    for (name, api, reason, start, end, output) in [
+        (
+            "timing-missing",
+            "openai-responses",
+            "stop",
+            None,
+            None,
+            Some(100),
+        ),
+        (
+            "timing-zero-interval",
+            "openai-responses",
+            "stop",
+            Some(10),
+            Some(10),
+            Some(100),
+        ),
+        (
+            "timing-reversed",
+            "openai-responses",
+            "stop",
+            Some(11),
+            Some(10),
+            Some(100),
+        ),
+        (
+            "timing-unknown-api",
+            "custom-api",
+            "stop",
+            Some(10),
+            Some(2010),
+            Some(100),
+        ),
+        (
+            "timing-error",
+            "openai-responses",
+            "error",
+            Some(10),
+            Some(2010),
+            Some(100),
+        ),
+        (
+            "timing-aborted",
+            "openai-responses",
+            "aborted",
+            Some(10),
+            Some(2010),
+            Some(100),
+        ),
+        (
+            "timing-unknown-output",
+            "openai-responses",
+            "stop",
+            Some(10),
+            Some(2010),
+            None,
+        ),
+        (
+            "timing-zero-output",
+            "openai-responses",
+            "stop",
+            Some(0),
+            Some(2000),
+            Some(0),
+        ),
+        (
+            "timing-unsafe",
+            "openai-responses",
+            "stop",
+            Some(i64::MIN),
+            Some(i64::MAX),
+            Some(100),
+        ),
+    ] {
+        let mut session = fake_session();
+        session.source.kind = "pi".into();
+        let call = &mut session.model_calls[0];
+        call.target.api = Some(api.into());
+        call.stop_reason = Some(reason.into());
+        call.timestamps = CallTimestamps {
+            started_at_ms: start,
+            recorded_at_ms: end,
+        };
+        call.reported_usage.output = output;
+        push(&mut cases, name, session, TokenizationPolicy::Heuristic);
+    }
     let zero_usage = ReportedUsage {
         input: Some(0),
         output: Some(0),
@@ -374,7 +489,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 65);
+    assert_eq!(manifest.len(), 83);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

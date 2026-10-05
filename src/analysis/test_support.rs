@@ -40,6 +40,7 @@ pub(super) fn fake_session() -> NormalizedSession {
             },
             reported_usage: ReportedUsage::default(),
             stop_reason: None,
+            timestamps: CallTimestamps::default(),
             context_item_ids: vec!["opaque-item".into()],
             tool_calls_after: vec![],
             compaction_before: None,

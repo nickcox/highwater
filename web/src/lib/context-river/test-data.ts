@@ -98,11 +98,22 @@ const cumulativeFields = {
   cumulativeReportedUsageCompleteness: 'partial' as const,
 };
 
+function emptyTiming() {
+  return {
+    startedAtMs: null,
+    recordedAtMs: null,
+    durationMs: null,
+    effectiveOutputTokensPerSecond: null,
+    basis: null,
+  };
+}
+
 export function testAnalysis(): SessionAnalysis {
   const calls: ModelCall[] = [
     {
       index: 1,
       sourceRecordId: 'call1',
+      timing: emptyTiming(),
       provider: 'test',
       model: 'm',
       api: null,
@@ -127,6 +138,7 @@ export function testAnalysis(): SessionAnalysis {
     {
       index: 2,
       sourceRecordId: 'call2',
+      timing: emptyTiming(),
       provider: 'test',
       model: 'm',
       api: null,
@@ -151,6 +163,7 @@ export function testAnalysis(): SessionAnalysis {
     {
       index: 3,
       sourceRecordId: 'call3',
+      timing: emptyTiming(),
       provider: 'test',
       model: 'm',
       api: null,
@@ -175,6 +188,7 @@ export function testAnalysis(): SessionAnalysis {
     {
       index: 4,
       sourceRecordId: 'call4',
+      timing: emptyTiming(),
       provider: 'test',
       model: 'm',
       api: null,
@@ -276,7 +290,7 @@ export function testAnalysis(): SessionAnalysis {
   ];
   const itemEstimateCoverage = coverage(4, 4, 9, 9);
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     tokenAnalysis: {
       policy: 'heuristic',
       chartUnit: 'estimatedTokens',

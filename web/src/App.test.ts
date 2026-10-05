@@ -471,7 +471,7 @@ describe('Context River interactions', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 1' }));
 
     const callDetails = container.querySelector('.call-details')!;
-    expect(callDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(4);
+    expect(callDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(6);
     expect(callDetails.textContent).toContain('Context changes · 2 added / 0 dropped');
     expect(
       callDetails.querySelector('.usage-breakdown')?.querySelector('summary'),

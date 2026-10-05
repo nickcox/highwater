@@ -109,6 +109,13 @@ fn fixture_outputs_preserve_corrected_baseline() {
             assert_eq!(stats.estimate_lookups, planned_pairs as u64);
             assert!(stats.tokenizer_invocations <= stats.unique_estimates);
             drop(prepared);
+            let mut with_clocks = session.clone();
+            for call in &mut with_clocks.model_calls {
+                call.timestamps = CallTimestamps {
+                    started_at_ms: Some(1_700_000_000_000),
+                    recorded_at_ms: Some(1_700_000_002_000),
+                };
+            }
             let output = analyze(
                 session,
                 AnalysisConfig {
@@ -117,6 +124,26 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 },
             )
             .expect("analysis");
+            let timed = analyze(
+                with_clocks,
+                AnalysisConfig {
+                    tokenization: policy,
+                    perf_diagnostics: false,
+                },
+            )
+            .expect("timed analysis");
+            let strip = |analysis: &Analysis| {
+                let mut value = serde_json::to_value(analysis).expect("JSON");
+                for call in value["modelCalls"].as_array_mut().expect("calls") {
+                    call.as_object_mut().expect("call").remove("timing");
+                }
+                value
+            };
+            assert_eq!(
+                strip(&output),
+                strip(&timed),
+                "timing changed non-timing fields: {fixture}"
+            );
             let bytes = serde_json::to_vec(&output).expect("JSON");
             digest.update(&(bytes.len() as u64).to_le_bytes());
             digest.update(&bytes);
@@ -124,8 +151,8 @@ fn fixture_outputs_preserve_corrected_baseline() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        // Intentional tool-result label changes only: reverting the label format
-        // reproduces the previous digest across every fixture/tokenization policy.
-        "80bcf1fb36bc090f120f713aadd0ec59f80536a13a815b423e25dfef904137df"
+        // Schema 8 adds per-call wall-clock/timing metadata. Above, all other
+        // fields are identical with and without clocks for every fixture/policy.
+        "205304ac73432888acb9996d4ac89fd91aab0b9b5427da11ec09e718a06ae5c8"
     );
 }

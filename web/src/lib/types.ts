@@ -132,6 +132,14 @@ export interface CallTokenAnalysis {
   age: CallAgeMetrics;
 }
 
+export interface CallTiming {
+  startedAtMs: number | null;
+  recordedAtMs: number | null;
+  durationMs: number | null;
+  effectiveOutputTokensPerSecond: number | null;
+  basis: 'pi-message-timestamps' | null;
+}
+
 export interface ModelCall {
   index: number;
   sourceRecordId: string;
@@ -149,6 +157,7 @@ export interface ModelCall {
   cumulativeReportedUsageCompleteness: UsageCompleteness;
   cost: Cost | null;
   stopReason: string | null;
+  timing: CallTiming;
   contextItemIds: string[];
   addedItemIds: string[];
   droppedItemIds: string[];

@@ -20,6 +20,7 @@ pub(super) struct AssistantCall {
     pub target: ModelTarget,
     pub usage: ReportedUsage,
     pub stop_reason: Option<String>,
+    pub timestamps: CallTimestamps,
     pub tools: Vec<NormalizedToolCall>,
 }
 
@@ -119,6 +120,19 @@ pub(super) fn interpret(
             api: value.get("api").and_then(Value::as_str).map(str::to_owned),
         };
         let call = AssistantCall {
+            timestamps: CallTimestamps {
+                started_at_ms: value.get("timestamp").and_then(Value::as_i64).filter(|ms| {
+                    ms.unsigned_abs() <= MAX_SAFE_JSON_INTEGER
+                        && chrono::DateTime::from_timestamp_millis(*ms).is_some()
+                }),
+                recorded_at_ms: entry
+                    .value
+                    .get("timestamp")
+                    .and_then(Value::as_str)
+                    .and_then(|text| chrono::DateTime::parse_from_rfc3339(text).ok())
+                    .map(|time| time.timestamp_millis())
+                    .filter(|ms| ms.unsigned_abs() <= MAX_SAFE_JSON_INTEGER),
+            },
             usage: parse_usage(value.get("usage"))?,
             stop_reason: value
                 .get("stopReason")

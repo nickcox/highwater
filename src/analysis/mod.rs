@@ -11,6 +11,7 @@ mod preparation;
 mod reconciliation;
 #[cfg(test)]
 mod test_support;
+mod timing;
 mod tokenization;
 
 use crate::{api::*, domain::*};
@@ -29,9 +30,9 @@ use tokenization::{
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 7;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 8;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 11;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 12;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -748,6 +749,7 @@ fn derive_calls(
         };
         model_calls.push(to_api_call(
             work,
+            session.source.kind == "pi",
             profile,
             call_economics[position].clone(),
             ApiCallDerived {
@@ -1139,6 +1141,7 @@ fn assemble_analysis(
 
 fn to_api_call(
     work: &CallWork<'_>,
+    pi_source: bool,
     profile: &TokenizationProfile,
     economics: CallEconomics,
     derived: ApiCallDerived,
@@ -1169,6 +1172,7 @@ fn to_api_call(
         cumulative_reported_usage_completeness: derived.cumulative.completeness.as_str().into(),
         cost: cost_dto(usage),
         stop_reason: work.call.stop_reason.clone(),
+        timing: timing::call_timing(work.call, pi_source),
         context_item_ids: work.call.context_item_ids.clone(),
         added_item_ids: derived.added_ids,
         dropped_item_ids: derived.dropped_ids,
@@ -1694,6 +1698,7 @@ mod tests {
             },
             reported_usage: ReportedUsage::default(),
             stop_reason: None,
+            timestamps: CallTimestamps::default(),
             context_item_ids: ids.iter().map(|id| (*id).to_owned()).collect(),
             tool_calls_after: vec![],
             compaction_before: None,
@@ -2124,6 +2129,7 @@ mod tests {
             },
             reported_usage: ReportedUsage::default(),
             stop_reason: None,
+            timestamps: CallTimestamps::default(),
             context_item_ids: vec!["opaque-item".into()],
             tool_calls_after: Vec::new(),
             compaction_before: None,
@@ -2280,7 +2286,7 @@ mod tests {
         )
         .expect("analysis");
         let json = serde_json::to_value(&analysis).expect("json");
-        assert_eq!(json["schemaVersion"], 7);
+        assert_eq!(json["schemaVersion"], 8);
         assert_eq!(json["economics"]["costBasis"], "unknown");
         assert_eq!(
             json["modelCalls"][0]["economics"]["usageCompleteness"],

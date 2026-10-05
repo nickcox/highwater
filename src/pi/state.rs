@@ -87,6 +87,7 @@ impl ReconstructionState {
                 target: call.target,
                 reported_usage: call.usage,
                 stop_reason: call.stop_reason,
+                timestamps: call.timestamps,
                 context_item_ids,
                 tool_calls_after: call.tools,
                 compaction_before: self.last_compaction.take(),

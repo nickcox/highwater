@@ -100,6 +100,7 @@ pub(crate) struct ModelCall {
     pub cumulative_reported_usage_completeness: String,
     pub cost: Option<Cost>,
     pub stop_reason: Option<String>,
+    pub timing: CallTiming,
     pub context_item_ids: Vec<String>,
     pub added_item_ids: Vec<String>,
     pub dropped_item_ids: Vec<String>,
@@ -109,6 +110,17 @@ pub(crate) struct ModelCall {
     pub tokenization_profile_id: Option<String>,
     pub token_analysis: CallTokenAnalysis,
     pub economics: CallEconomics,
+}
+
+/// Approximate client-observed timing, never provider decode speed or TTFT.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CallTiming {
+    pub started_at_ms: Option<i64>,
+    pub recorded_at_ms: Option<i64>,
+    pub duration_ms: Option<u64>,
+    pub effective_output_tokens_per_second: Option<f64>,
+    pub basis: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]

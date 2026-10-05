@@ -36,9 +36,17 @@ pub(crate) struct NormalizedModelCall {
     pub target: ModelTarget,
     pub reported_usage: ReportedUsage,
     pub stop_reason: Option<String>,
+    pub timestamps: CallTimestamps,
     pub context_item_ids: Vec<String>,
     pub tool_calls_after: Vec<NormalizedToolCall>,
     pub compaction_before: Option<String>,
+}
+
+/// Source wall-clock instants, retained independently of timing derivation.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct CallTimestamps {
+    pub started_at_ms: Option<i64>,
+    pub recorded_at_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]

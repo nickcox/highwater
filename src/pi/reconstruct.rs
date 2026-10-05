@@ -814,6 +814,49 @@ mod tests {
     }
 
     #[test]
+    fn assistant_wall_clock_instants_are_normalized_independently() {
+        let mut response = message_record(
+            "a",
+            None,
+            serde_json::json!({
+                "role":"assistant", "api":"openai-codex-responses", "stopReason":"stop",
+                "timestamp":1700000000000_i64, "content":[], "usage":{"output":100}
+            }),
+        );
+        response["timestamp"] = serde_json::json!("2023-11-15T00:13:22+02:00");
+        let header = serde_json::json!({"type":"session","id":"timed","version":3});
+        let session = parse_records(&[header.clone(), response.clone()]);
+        assert_eq!(
+            session.model_calls[0].timestamps,
+            CallTimestamps {
+                started_at_ms: Some(1700000000000),
+                recorded_at_ms: Some(1700000002000)
+            }
+        );
+        // Malformed optional metadata must not reject otherwise usable sessions,
+        // and a missing/invalid start must not discard a valid recording instant.
+        for value in [
+            serde_json::json!("invalid"),
+            serde_json::json!(1.5),
+            serde_json::json!(i64::MAX),
+            Value::Null,
+        ] {
+            response["message"]["timestamp"] = value;
+            let session = parse_records(&[header.clone(), response.clone()]);
+            assert_eq!(session.model_calls[0].timestamps.started_at_ms, None);
+            assert_eq!(
+                session.model_calls[0].timestamps.recorded_at_ms,
+                Some(1700000002000)
+            );
+        }
+        response["message"]["timestamp"] = serde_json::json!(0);
+        response["timestamp"] = serde_json::json!("invalid");
+        let session = parse_records(&[header, response]);
+        assert_eq!(session.model_calls[0].timestamps.started_at_ms, Some(0));
+        assert_eq!(session.model_calls[0].timestamps.recorded_at_ms, None);
+    }
+
+    #[test]
     fn normalized_fixture_parity() {
         let mut digest = blake3::Hasher::new();
         for name in [
@@ -834,9 +877,9 @@ mod tests {
         }
         assert_eq!(
             digest.finalize().to_hex().as_str(),
-            // Explicit tool-result labels; restoring the old label format reproduces
-            // the previous digest with all other fields and ordering unchanged.
-            "87081db8b3d1e5d5b1ff8190941d56390f56c09b5e5a6bada4589867f9b07cc8"
+            // Source wall-clock instants are now retained on calls; other source
+            // reconstruction and accounting contracts remain unchanged.
+            "7a6f8e5e21caef161601aba4110f024810988069086eaec2458079f6d15e76a1"
         );
     }
 

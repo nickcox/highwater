@@ -712,6 +712,49 @@ test('Composition group headings stay clipped inside narrow adjacent groups', as
   }
 });
 
+test('call timing follows each pinned response with qualified rates and explicit unavailable data', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses controlled per-response clock pairs.');
+  const analysis = testAnalysis();
+  analysis.session.source = 'pi';
+  const first = analysis.modelCalls[0];
+  first.api = 'openai-codex-responses';
+  first.timing = {
+    startedAtMs: 1700000000000,
+    recordedAtMs: 1700000002000,
+    durationMs: 2000,
+    effectiveOutputTokensPerSecond: 1,
+    basis: 'pi-message-timestamps',
+  };
+  const second = analysis.modelCalls[1];
+  second.api = 'openai-codex-responses';
+  second.timing = {
+    startedAtMs: 1700003600000,
+    recordedAtMs: 1700003601000,
+    durationMs: 1000,
+    effectiveOutputTokensPerSecond: 2,
+    basis: 'pi-message-timestamps',
+  };
+  await mockApi(page, analysis);
+  await page.goto('/');
+  await assertLoaded(page);
+  const next = page.getByRole('button', { name: 'Next call', exact: true });
+  await next.click();
+  const metrics = page.locator('.call-details .essential-metrics');
+  await expect(metrics.getByText('Response time (approx.)')).toBeVisible();
+  await expect(metrics.getByText('2 s', { exact: true })).toBeVisible();
+  await expect(metrics.getByText('1 tok/s', { exact: true })).toHaveAttribute(
+    'title',
+    /not generation-only speed/,
+  );
+  await next.click();
+  await expect(metrics.getByText('1 s', { exact: true })).toBeVisible();
+  await expect(metrics.getByText('2 tok/s', { exact: true })).toBeVisible();
+  await next.click();
+  await expect(metrics.getByText('Unavailable', { exact: true })).toHaveCount(2);
+});
+
 test('compact call buttons and arrow/vim shortcuts step safely without stealing editing or tab keys', async ({
   page,
 }) => {
@@ -2362,7 +2405,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
     readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8'),
   );
   const analysis = await (await analysisResponse).json();
-  expect(analysis.schemaVersion).toBe(7);
+  expect(analysis.schemaVersion).toBe(8);
   expect(analysis.economics.cacheReadEligibleCalls).toBe(8);
   expect(analysis.economics.supportedPolicyIds).toEqual(
     expect.arrayContaining(['openai-responses-cache-read-v1', 'anthropic-messages-cache-v1']),

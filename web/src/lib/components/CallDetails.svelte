@@ -11,6 +11,7 @@
   import CopyButton from './CopyButton.svelte';
   import ItemContribution from './ItemContribution.svelte';
   import { itemContributions } from './item-contribution';
+  import { responseDuration, effectiveOutputRate, TIMING_EXPLANATION } from './call-timing';
   import {
     inspectorSections,
     rememberSection,
@@ -208,7 +209,22 @@
             >{/if}
         </dd>
       </div>
+      <div>
+        <dt>Response time (approx.)</dt>
+        <dd title={TIMING_EXPLANATION} aria-describedby={`${contributionId}-timing`}>
+          {responseDuration(call.timing.durationMs)}
+        </dd>
+      </div>
+      <div>
+        <dt>Effective output rate</dt>
+        <dd title={TIMING_EXPLANATION} aria-describedby={`${contributionId}-timing`}>
+          {effectiveOutputRate(call.timing.effectiveOutputTokensPerSecond)}
+        </dd>
+      </div>
     </dl>
+    <span class="timing-explanation" id={`${contributionId}-timing`}
+      >{TIMING_EXPLANATION} Missing or unusable timestamps and unsuccessful-response rates are unavailable.</span
+    >
 
     {#if call.addedItemIds.length > 0 || call.droppedItemIds.length > 0}
       <details use:rememberSection={{ state: sections, key: 'changes' }}>
@@ -670,6 +686,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px 14px;
     margin: 0;
+  }
+  .timing-explanation {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   dt {
     color: var(--secondary);

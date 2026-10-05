@@ -31,6 +31,33 @@ describe('CallDetails change lists', () => {
     expect(screen.getByText('Input').nextElementSibling).toHaveTextContent('12.3K');
     expect(screen.getByText('Output').nextElementSibling).toHaveTextContent('678');
   });
+  it('shows approximate response timing with an accessible qualification, not wall-clock dates or decode speed', () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[0];
+    call.timing = {
+      startedAtMs: 1700000000000,
+      recordedAtMs: 1700000002000,
+      durationMs: 2000,
+      effectiveOutputTokensPerSecond: 50,
+      basis: 'pi-message-timestamps',
+    };
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.getByText('Response time (approx.)')).toBeInTheDocument();
+    expect(screen.getByText('2 s')).toHaveAccessibleDescription(/Includes waiting, retries/);
+    expect(screen.getByText('50 tok\/s')).toHaveAccessibleDescription(/not generation-only speed/);
+    expect(screen.queryByText('1700000000000')).toBeNull();
+  });
+
+  it('shows missing timing as unavailable instead of zero', () => {
+    const { container } = renderCall([], []);
+    const label = screen.getByText('Response time (approx.)');
+    expect(label.nextElementSibling).toHaveTextContent('Unavailable');
+    expect(screen.getByText('Effective output rate').nextElementSibling).toHaveTextContent(
+      'Unavailable',
+    );
+    expect(container.querySelector('.essential-metrics')).not.toHaveTextContent('0 tok/s');
+  });
+
   it('renders tool metadata as noninteractive text with an explicit failure label', () => {
     const indexed = indexAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
