@@ -124,6 +124,8 @@ fn fixture_outputs_preserve_corrected_baseline() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "10f787a1bdea650390a8ce5a1c86615f3179b40861a8828e7b59ea07c972bf69"
+        // Intentional tool-result label changes only: reverting the label format
+        // reproduces the previous digest across every fixture/tokenization policy.
+        "80bcf1fb36bc090f120f713aadd0ec59f80536a13a815b423e25dfef904137df"
     );
 }

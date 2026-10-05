@@ -1,17 +1,23 @@
 export const ITEM_PALETTE = [
-  '#79a8ff',
-  '#58c7b6',
-  '#f27f5b',
-  '#ffb14e',
-  '#c78bdd',
-  '#e0c75a',
-  '#4ca8e0',
-  '#9aa9c4',
-  '#e875b5',
-  '#5ac58b',
+  '#8cacc9',
+  '#83b8ac',
+  '#c59b89',
+  '#c5b080',
+  '#b29fbd',
+  '#bbb17d',
+  '#80afbd',
+  '#a1acbc',
+  '#bf9bad',
+  '#96b799',
 ] as const;
 
-export const CHART_BACKGROUND = '#0c1324';
+// Matches --plot in workspace.css; tested against actual browser backgrounds.
+export const CHART_BACKGROUND = '#131b21';
+
+export function itemTextColor(id: string): string {
+  const fill = itemColor(id);
+  return contrastRatio('#11171c', fill) >= contrastRatio('#ffffff', fill) ? '#11171c' : '#ffffff';
+}
 
 export function itemColor(id: string): string {
   let hash = 2_166_136_261;

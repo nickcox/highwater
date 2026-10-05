@@ -1,11 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
+import * as riverLayout from './lib/context-river/layout';
 import { testAnalysis } from './lib/context-river/test-data';
 import { liveAppendReplacementScenario } from './lib/testing/session-scenarios';
 
 let modifyAnalysis: ((analysis: ReturnType<typeof testAnalysis>) => void) | null = null;
 let restoreViewportMeasurements = () => {};
+let restoreScrollIntoView = () => {};
 
 class TestEventSource {
   static instance: TestEventSource;
@@ -41,17 +43,34 @@ class TestEventSource {
 
 afterEach(() => {
   cleanup();
+  restoreScrollIntoView();
+  restoreScrollIntoView = () => {};
   restoreViewportMeasurements();
   restoreViewportMeasurements = () => {};
   vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  });
   modifyAnalysis = null;
   TestEventSource.instance = undefined as unknown as TestEventSource;
   vi.stubGlobal('EventSource', TestEventSource);
   const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
   const scrollWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth');
+  const scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  });
+  restoreScrollIntoView = () => {
+    if (scrollIntoView)
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', scrollIntoView);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+  };
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
     get() {
@@ -268,6 +287,78 @@ function deferred<T>(): {
 }
 
 describe('Context River interactions', () => {
+  it('guards call shortcuts during editing, composition, modifier shortcuts and foreign focus', async () => {
+    const { container } = await renderLoaded();
+    const main = container.querySelector('main')!;
+    await fireEvent.keyDown(document.body, { key: 'l' });
+    expect(container.querySelector('#pinned-call-summary')).toBeNull();
+    await fireEvent.keyDown(main, { key: 'ArrowRight' });
+    expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 1');
+    for (const options of [
+      { ctrlKey: true },
+      { metaKey: true },
+      { altKey: true },
+      { shiftKey: true },
+      { isComposing: true },
+    ]) {
+      await fireEvent.keyDown(main, { key: 'l', ...options });
+      expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 1');
+    }
+    for (const tag of ['input', 'textarea', 'select']) {
+      const editor = document.createElement(tag);
+      main.append(editor);
+      await fireEvent.keyDown(editor, { key: 'ArrowRight' });
+      await fireEvent.keyDown(editor, { key: 'l' });
+      expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 1');
+      editor.remove();
+    }
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    editor.innerHTML = '<span>Editable text</span>';
+    main.append(editor);
+    await fireEvent.keyDown(editor.firstElementChild!, { key: 'l' });
+    editor.remove();
+    const foreign = document.createElement('button');
+    document.body.append(foreign);
+    try {
+      await fireEvent.keyDown(foreign, { key: 'ArrowRight' });
+    } finally {
+      foreign.remove();
+    }
+    const handled = new KeyboardEvent('keydown', { key: 'l', bubbles: true, cancelable: true });
+    handled.preventDefault();
+    await fireEvent(main, handled);
+    expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 1');
+    await fireEvent.keyDown(main, { key: 'l' });
+    expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 2');
+  });
+  it('does not invalidate River geometry for controller status-only publications', async () => {
+    const geometry = vi.spyOn(riverLayout, 'layoutContextRiver');
+    try {
+      await renderLoaded();
+      TestEventSource.instance.onopen?.(new Event('open'));
+      await waitFor(() =>
+        expect(screen.getByTestId('live-status')).toHaveTextContent(/^Live updates: live$/),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('status', { name: 'Refresh progress' })).toBeNull(),
+      );
+      const previousCalls = geometry.mock.calls.length;
+      TestEventSource.instance.emit(
+        'liveStatus',
+        JSON.stringify({
+          generation: '0123456789abcdef0123456789abcdef',
+          availability: 'degraded',
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId('live-status')).toHaveTextContent('live updates unavailable'),
+      );
+      expect(geometry).toHaveBeenCalledTimes(previousCalls);
+    } finally {
+      geometry.mockRestore();
+    }
+  });
   it('uses chart hover only for the crosshair and pins a call on click', async () => {
     await renderLoaded();
     const chart = screen.getByRole('application', { name: 'Context River' });
@@ -352,13 +443,18 @@ describe('Context River interactions', () => {
       screen.getByText('bash: npm test', { selector: '.item-details h3' }),
     ).toBeInTheDocument();
     expect(screen.getByText('first line', { selector: '.content-preview' })).toBeInTheDocument();
-    const details = container.querySelector('.preview-details') as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    details.open = true;
+    expect(container.querySelector('.preview-details details')).toBeNull();
+    const outer = container.querySelector('.preview-details')!.closest('details')!;
+    outer.open = true;
+    await fireEvent(outer, new Event('toggle'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
     expect(container.querySelector('.preview-details pre')?.textContent).toBe(
       'first line\n<img src=x onerror=alert(1)>',
     );
     expect(container.querySelector('.preview-details img')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(container.querySelector('.preview-details pre')).toBeNull();
+    expect(screen.getByText('first line', { selector: '.content-preview' })).toBeInTheDocument();
   });
 
   it('renders concise tool labels in the pinned call panel', async () => {
@@ -375,7 +471,8 @@ describe('Context River interactions', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 1' }));
 
     const callDetails = container.querySelector('.call-details')!;
-    expect(callDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(6);
+    expect(callDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(4);
+    expect(callDetails.textContent).toContain('Context changes · 2 added / 0 dropped');
     expect(
       callDetails.querySelector('.usage-breakdown')?.querySelector('summary'),
     ).toHaveTextContent('Usage and economics');
@@ -397,7 +494,10 @@ describe('Context River interactions', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
     const itemDetails = container.querySelector('.item-details')!;
-    expect(itemDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(4);
+    expect(itemDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(3);
+    expect(
+      within(itemDetails as HTMLElement).getByText('Estimate basis & coverage', { exact: true }),
+    ).toBeInTheDocument();
     expect((itemDetails.querySelector('.technical-identifiers') as HTMLDetailsElement).open).toBe(
       false,
     );
@@ -453,18 +553,37 @@ describe('Context River interactions', () => {
     ).toBeInTheDocument();
   });
 
-  it('resets the economics track to Cache when explicitly switching sessions', async () => {
+  it('keeps presentation state independent between two mounted Apps and writes only explicit settings', async () => {
+    const first = await renderLoaded();
+    const second = render(App);
+    await within(second.container).findByRole('application', { name: 'Context River' });
+    expect(localStorage.getItem('tokenplume.presentation.v1')).toBeNull();
+    const firstOptions = first.container.querySelector('.view-options') as HTMLDetailsElement;
+    firstOptions.open = true;
+    await fireEvent.click(within(first.container).getByRole('button', { name: 'Compact River' }));
+    expect(within(first.container).getByText('Compact', { exact: true })).toBeInTheDocument();
+    expect(second.container.querySelector('.view-status')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.layout).toBe(
+      'compact',
+    );
+    await fireEvent.click(
+      within(first.container).getByRole('button', { name: 'Reset view preferences' }),
+    );
+    expect(first.container.querySelector('.view-status')).toBeNull();
+  });
+
+  it('starts economics closed and preserves explicit preferences when switching sessions', async () => {
     modifyAnalysis = withCacheEconomics;
     await renderLoaded();
-    await waitFor(() =>
-      expect(economicsTrackButton('Cache')).toHaveAttribute('aria-pressed', 'true'),
-    );
+    expect(document.querySelector('.economics-track-svg')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cache & cost · Expand' }));
+    expect(economicsTrackButton('Cache')).toHaveAttribute('aria-pressed', 'true');
     await fireEvent.click(economicsTrackButton('Cost'));
     expect(economicsTrackButton('Cost')).toHaveAttribute('aria-pressed', 'true');
 
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
     await waitFor(() =>
-      expect(economicsTrackButton('Cache')).toHaveAttribute('aria-pressed', 'true'),
+      expect(economicsTrackButton('Cost')).toHaveAttribute('aria-pressed', 'true'),
     );
   });
 
@@ -492,7 +611,7 @@ describe('Context River interactions', () => {
     expect(container.querySelector('.selection-location-note')).toBeNull();
     expect(screen.getByText(/not present at pinned call 2/)).toBeInTheDocument();
 
-    const goTo = container.querySelector('.go-to-disclosure') as HTMLDetailsElement;
+    const goTo = container.querySelector('.view-options') as HTMLDetailsElement;
     goTo.open = true;
     await fireEvent.input(screen.getByRole('spinbutton', { name: 'Range start call' }), {
       target: { value: '2' },
@@ -504,7 +623,11 @@ describe('Context River interactions', () => {
     await waitFor(() => expect(container.querySelector('.selection-location-note')).not.toBeNull());
     const widthAtRange = container.querySelector('.river-scroll svg')?.getAttribute('width');
 
-    await fireEvent.click(container.querySelector('.item-details .presence-note button')!);
+    await fireEvent.click(
+      within(container.querySelector('.item-details') as HTMLElement).getByRole('button', {
+        name: 'Reveal in River',
+      }),
+    );
     await waitFor(() => expect(container.querySelector('.selection-location-note')).toBeNull());
     expect(container.querySelector('.river-scroll')?.scrollLeft).toBe(0);
     expect(container.querySelector('.river-scroll svg')?.getAttribute('width')).toBe(widthAtRange);
@@ -693,7 +816,147 @@ describe('Context River interactions', () => {
   });
 });
 
+describe('manual recovery', () => {
+  it.each(['catalogue', 'analysis'])(
+    'retries a blocking %s failure without switching sessions',
+    async (failure) => {
+      let failed = false;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL) => {
+          const catalogue = String(input) === '/api/sessions';
+          if (!failed && catalogue === (failure === 'catalogue')) {
+            failed = true;
+            throw new Error('temporary failure');
+          }
+          return catalogue ? sessionListResponse() : analysisResponse('one', '"recovered"');
+        }),
+      );
+      render(App);
+      const retry = await screen.findByRole('button', { name: 'Retry' });
+      retry.focus();
+      await fireEvent.click(retry);
+      expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
+      expect(screen.queryByText('temporary failure')).not.toBeInTheDocument();
+    },
+  );
+
+  it('keeps cached analysis visible during repeated manual refresh and clears only its warning', async () => {
+    const pending = deferred<Response>();
+    let analysisRequests = 0;
+    let active = 0;
+    let maxActive = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === '/api/sessions') return sessionListResponse();
+        analysisRequests += 1;
+        if (analysisRequests === 1) return analysisResponse('one', '"cached"', 'cached-model');
+        if (analysisRequests === 2) throw new Error('refresh temporarily unavailable');
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        try {
+          return await pending.promise;
+        } finally {
+          active -= 1;
+        }
+      }),
+    );
+    await renderLoaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await screen.findByText(/Refresh failed; showing cached analysis/);
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    await fireEvent.click(refresh);
+    await fireEvent.click(refresh);
+    await fireEvent.click(refresh);
+    expect(screen.getByRole('application', { name: 'Context River' })).toBeInTheDocument();
+    expect(screen.getByText(/cached-model/)).toBeInTheDocument();
+    pending.resolve(analysisResponse('one', '"fresh"', 'fresh-model'));
+    await screen.findByText(/fresh-model/);
+    await waitFor(() =>
+      expect(screen.queryByText(/Refresh failed; showing cached analysis/)).toBeNull(),
+    );
+    expect(maxActive).toBe(1);
+  });
+
+  it('refreshes an empty catalogue without an SSE event', async () => {
+    let requests = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) !== '/api/sessions') return analysisResponse('one', '"recovered"');
+        requests += 1;
+        if (requests > 1) return sessionListResponse();
+        const response = sessionListResponse();
+        return new Response(JSON.stringify({ sessions: [] }), {
+          status: 200,
+          headers: response.headers,
+        });
+      }),
+    );
+    render(App);
+    await screen.findByRole('heading', { name: 'No sessions discovered' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
+  });
+});
+
 describe('analysis cache freshness', () => {
+  it('reconciles selection and a lost cumulative pin made while cached revalidation is pending', async () => {
+    const pending = deferred<Response>();
+    let oneRequests = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/sessions') return sessionListResponse();
+        if (!url.includes('/one/')) return analysisResponse('two', '"two"');
+        oneRequests += 1;
+        return oneRequests === 1 ? analysisResponse('one', '"one"') : pending.promise;
+      }),
+    );
+    await renderLoaded();
+    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await waitFor(() =>
+      expect(screen.getByRole('application', { name: 'Context River' })).toBeInTheDocument(),
+    );
+    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
+    expect(screen.getByText('Selected item')).toBeInTheDocument();
+    await expandLifespans();
+    await fireEvent.input(screen.getByRole('searchbox', { name: 'Search items' }), {
+      target: { value: 'no-matching-item' },
+    });
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Find in lifespans' }));
+    expect(
+      await screen.findByText('The selected item is hidden by current lifespan filters.'),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Reveal in River' })[0]);
+    const replacement = JSON.parse(
+      JSON.stringify(testAnalysis()).replace(/"a"/g, '"replacement-a"'),
+    ) as ReturnType<typeof testAnalysis>;
+    replacement.session.id = 'one';
+    replacement.modelCalls[1].sourceRecordId = 'replacement-call-record';
+    pending.resolve(
+      new Response(JSON.stringify(replacement), {
+        status: 200,
+        headers: { 'content-type': 'application/json', etag: '"replaced"' },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText('Selected item')).toBeNull());
+    expect(
+      screen.queryByText('The selected item is hidden by current lifespan filters.'),
+    ).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Pinned call 2' })).toBeNull();
+    await fireEvent.click(screen.getByRole('tab', { name: 'Composition' }));
+    expect(
+      screen.getByText(
+        'The pinned call is no longer available; cumulative scope now covers the whole session.',
+      ),
+    ).toBeInTheDocument();
+  });
   it('shows cached A immediately and keeps it after a conditional 304', async () => {
     const refresh = deferred<Response>();
     let oneRequests = 0;
@@ -773,7 +1036,7 @@ describe('analysis cache freshness', () => {
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
+    expect(await screen.findByRole('status', { name: 'Refresh warnings' })).toHaveTextContent(
       'Refresh failed; showing cached analysis',
     );
     expect(screen.getByText(/cached-model/)).toBeInTheDocument();
@@ -800,7 +1063,9 @@ describe('analysis cache freshness', () => {
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
 
-    expect(await screen.findByRole('status')).toHaveTextContent('network unavailable');
+    expect(await screen.findByRole('status', { name: 'Refresh warnings' })).toHaveTextContent(
+      'network unavailable',
+    );
     expect(screen.getByText(/cached-model/)).toBeInTheDocument();
     expect(screen.queryByText('Could not render this session')).not.toBeInTheDocument();
   });

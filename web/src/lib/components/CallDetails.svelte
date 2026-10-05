@@ -1,3 +1,7 @@
+<script context="module" lang="ts">
+  let nextContributionId = 0;
+</script>
+
 <script lang="ts">
   import type { IndexedAnalysis, ModelCall } from '../types';
   import { displayItemLabel } from '../item-label';
@@ -5,6 +9,15 @@
   import { describeEconomicsCode } from '../economics';
   import { describeCostBasis, isPiSource } from '../cost-basis';
   import CopyButton from './CopyButton.svelte';
+  import ItemContribution from './ItemContribution.svelte';
+  import { itemContributions } from './item-contribution';
+  import {
+    inspectorSections,
+    rememberSection,
+    type InspectorSections,
+  } from '../state/inspector-sections';
+  export let sections: InspectorSections = inspectorSections();
+  const contributionId = `call-contribution-${nextContributionId++}`;
   import {
     coverageLabel,
     formatCost,
@@ -45,6 +58,20 @@
         (profile) => profile.id === call?.tokenizationProfileId,
       ) ?? null)
     : null;
+
+  $: previousCall = call
+    ? (indexed.analysis.modelCalls[
+        indexed.analysis.modelCalls.findIndex((value) => value.index === call?.index) - 1
+      ] ?? null)
+    : null;
+
+  $: addedContributions = itemContributions(indexed, call?.addedItemIds ?? [], call, 'added');
+  $: droppedContributions = itemContributions(
+    indexed,
+    call?.droppedItemIds ?? [],
+    previousCall,
+    'dropped',
+  );
 
   function itemLabel(id: string): string {
     return displayItemLabel(indexed.itemById.get(id), id);
@@ -146,7 +173,10 @@
   <section class="call-details" aria-label={`${pinned ? 'Pinned' : 'Model'} call ${call.index}`}>
     <header>
       <div>
-        <strong>{pinned ? 'Pinned call' : 'Call'} {call.index}</strong>
+        <h3 id="pinned-call-summary" tabindex="-1">
+          {pinned ? 'Pinned call' : 'Call'}
+          {call.index}
+        </h3>
         <span>{call.provider ?? 'Unknown provider'} / {call.model ?? 'Unknown model'}</span>
       </div>
       {#if onClose}<button type="button" aria-label="Close pinned call" onclick={onClose}>×</button
@@ -155,7 +185,7 @@
 
     <dl class="essential-metrics">
       <div>
-        <dt>Prompt</dt>
+        <dt>Input</dt>
         <dd>{formatMetric(call.reportedPromptTokens)}</dd>
       </div>
       <div>
@@ -164,55 +194,92 @@
       </div>
       <div>
         <dt>{costCopy.label}</dt>
-        <dd>{formatCost(call.cost?.total)}</dd>
+        <dd>
+          {formatCost(call.cost?.total)}{#if call.economics.costCompleteness !== 'complete'}<small
+              >Components: {call.economics.costCompleteness}</small
+            >{/if}
+        </dd>
       </div>
       <div>
         <dt>Provider usage</dt>
-        <dd>{call.reportedUsageCompleteness}</dd>
-      </div>
-      <div>
-        <dt>Added items</dt>
-        <dd>{formatInteger(call.transitionItemCounts.added)}</dd>
-      </div>
-      <div>
-        <dt>Dropped items</dt>
-        <dd>{formatInteger(call.transitionItemCounts.dropped)}</dd>
+        <dd>
+          {call.reportedUsageCompleteness}{#if call.economics.usageCompleteness !== call.reportedUsageCompleteness}<small
+              >Audited policy: {call.economics.usageCompleteness}</small
+            >{/if}
+        </dd>
       </div>
     </dl>
 
     {#if call.addedItemIds.length > 0 || call.droppedItemIds.length > 0}
-      <div
-        class="change-lists"
-        class:single={call.addedItemIds.length === 0 || call.droppedItemIds.length === 0}
-      >
-        {#if call.addedItemIds.length > 0}<details>
-            <summary>Added items ({formatInteger(call.addedItemIds.length)})</summary>
-            <ul>
-              {#each call.addedItemIds as id}<li>
-                  <button
-                    type="button"
-                    aria-label={`Select added item ${itemLabel(id)}`}
-                    title={itemLabel(id)}
-                    onclick={() => onSelectItem(id)}>{itemLabel(id)}</button
-                  >
-                </li>{/each}
-            </ul>
-          </details>{/if}
-        {#if call.droppedItemIds.length > 0}<details>
-            <summary>Dropped items ({formatInteger(call.droppedItemIds.length)})</summary>
-            <ul>
-              {#each call.droppedItemIds as id}<li>
-                  <button
-                    type="button"
-                    aria-label={`Select dropped item ${itemLabel(id)}`}
-                    title={itemLabel(id)}
-                    onclick={() => onSelectItem(id)}>{itemLabel(id)}</button
-                  >
-                </li>{/each}
-            </ul>
-          </details>{/if}
-      </div>
+      <details use:rememberSection={{ state: sections, key: 'changes' }}>
+        <summary
+          >Context changes · {formatInteger(call.transitionItemCounts.added)} added / {formatInteger(
+            call.transitionItemCounts.dropped,
+          )} dropped</summary
+        >
+        <div
+          class="change-lists"
+          class:single={call.addedItemIds.length === 0 || call.droppedItemIds.length === 0}
+        >
+          {#if call.addedItemIds.length > 0}<div class="change-list">
+              <h4>Added items ({formatInteger(call.addedItemIds.length)})</h4>
+              <p class="change-baseline">Share of estimated added tokens</p>
+              <ul role="list">
+                {#each call.addedItemIds as id, rowIndex}
+                  {@const contribution = addedContributions.get(id)!}
+                  <li>
+                    <button
+                      type="button"
+                      aria-label={`Select added item ${itemLabel(id)}`}
+                      aria-describedby={`${contributionId}-added-${rowIndex}`}
+                      title={`${itemLabel(id)} — ${contribution.detail}`}
+                      onclick={() => onSelectItem(id)}
+                      >{itemLabel(id)}<ItemContribution
+                        value={contribution}
+                        descriptionId={`${contributionId}-added-${rowIndex}`}
+                      /></button
+                    >
+                  </li>{/each}
+              </ul>
+            </div>{/if}
+          {#if call.droppedItemIds.length > 0}<div class="change-list">
+              <h4>Dropped items ({formatInteger(call.droppedItemIds.length)})</h4>
+              <p class="change-baseline">
+                {#if previousCall}Share of estimated dropped tokens · previous call {previousCall.index}{:else}Previous
+                  call unavailable{/if}
+              </p>
+              <ul role="list">
+                {#each call.droppedItemIds as id, rowIndex}
+                  {@const contribution = droppedContributions.get(id)!}
+                  <li>
+                    <button
+                      type="button"
+                      aria-label={`Select dropped item ${itemLabel(id)}`}
+                      aria-describedby={`${contributionId}-dropped-${rowIndex}`}
+                      title={`${itemLabel(id)} — ${contribution.detail}`}
+                      onclick={() => onSelectItem(id)}
+                      >{itemLabel(id)}<ItemContribution
+                        value={contribution}
+                        descriptionId={`${contributionId}-dropped-${rowIndex}`}
+                      /></button
+                    >
+                  </li>{/each}
+              </ul>
+            </div>{/if}
+        </div>
+      </details>
+    {:else}
+      <p>
+        Context changes · {formatInteger(call.transitionItemCounts.added)} added / {formatInteger(
+          call.transitionItemCounts.dropped,
+        )} dropped
+      </p>
     {/if}
+    {#if compaction}<p>
+        Compaction · {formatInteger(compaction.sourceItemIds.length)} structurally replaced / {formatInteger(
+          compaction.retainedItemIds.length,
+        )} retained
+      </p>{/if}
 
     {#if toolSummaries.length > 0}
       <div class="tool-summary">
@@ -227,7 +294,7 @@
       </div>
     {/if}
 
-    <details class="usage-breakdown">
+    <details class="usage-breakdown" use:rememberSection={{ state: sections, key: 'usage' }}>
       <summary>Usage and economics</summary>
       <p class="economics-note">
         Token buckets follow the {usageMappingLabel} when supported; normalized zeros may reflect adapter
@@ -359,7 +426,10 @@
       {/if}
     </details>
 
-    <details class="token-diagnostics">
+    <details
+      class="token-diagnostics"
+      use:rememberSection={{ state: sections, key: 'diagnostics' }}
+    >
       <summary>Token estimates and diagnostics</summary>
       <dl class="detail-rows">
         <div>
@@ -479,7 +549,10 @@
       {/if}
     </details>
 
-    <details class="technical-identifiers">
+    <details
+      class="technical-identifiers"
+      use:rememberSection={{ state: sections, key: 'identifiers' }}
+    >
       <summary>Technical identifiers</summary>
       <dl class="identifier-list">
         <div>
@@ -565,16 +638,21 @@
     align-items: start;
     margin: -2px 0 8px;
     padding: 4px 0 7px;
-    background: #121a30;
+    background: var(--surface);
   }
   header div {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
-  header strong {
-    color: #fff;
+  header h3 {
+    margin: 0;
+    color: var(--text);
     font-size: 15px;
+  }
+  header h3:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   header span {
     color: #aebbd0;
@@ -594,13 +672,18 @@
     margin: 0;
   }
   dt {
-    color: #8996ad;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   dd {
     margin: 1px 0 0;
     color: #eef2f8;
     overflow-wrap: anywhere;
+  }
+  dd small {
+    display: block;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .change-lists {
     display: grid;
@@ -615,8 +698,24 @@
     margin-top: 10px;
     min-width: 0;
   }
-  .change-lists details {
+  .change-list {
+    min-width: 0;
+  }
+  .change-lists h4 {
     margin-top: 0;
+  }
+  .change-lists ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  .change-lists button {
+    width: 100%;
+    text-align: left;
+  }
+  .change-baseline {
+    margin: 0 0 6px;
+    color: var(--secondary);
+    font-size: 11px;
   }
   summary {
     color: #c8d5ed;

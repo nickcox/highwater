@@ -4,6 +4,7 @@ import type { AnalysisFetchResult, SessionListResult } from '../api/client';
 import type { EventsClientCallbacks } from '../api/events';
 import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
+import { reconcileInteraction, resetInteraction } from './interaction';
 import type { SessionAnalysis } from '../types';
 import {
   createSessionController,
@@ -227,6 +228,175 @@ describe('session controller', () => {
     expect(get(controller).analysisError).toBe('');
     expect(get(controller).indexed?.analysis.modelCalls[0]?.model).toBe('recovered-model');
     controller.dispose();
+  });
+
+  it.each(['removed', 'moved', 'surviving'] as const)(
+    'reconciles interaction created during cached revalidation: %s source',
+    async (identity) => {
+      const pending = deferred<AnalysisFetchResult>();
+      let requests = 0;
+      const h = harness({
+        fetchSessions: vi.fn(async () => sessionList(0n, generationA, ['one', 'two'])),
+        fetchAnalysis: vi.fn(async (id: string) => {
+          requests += 1;
+          return requests === 3 ? pending.promise : analysisResult(id, id);
+        }),
+      });
+      let interaction = resetInteraction();
+      const accepted = vi.fn(({ kind, previous, next }) => {
+        if (kind === 'replacement' && previous) {
+          interaction = reconcileInteraction(interaction, previous, next);
+        }
+      });
+      const controller = createSessionController({
+        dependencies: h.dependencies,
+        onSelectionChanged: () => {
+          interaction = resetInteraction();
+        },
+        onAnalysisAccepted: accepted,
+      });
+      controller.start();
+      await waitFor(() => !get(controller).loading);
+      controller.select('two');
+      await waitFor(() => !get(controller).loading);
+      controller.select('one');
+      expect(get(controller).indexed?.analysis.session.id).toBe('one');
+      interaction = { ...interaction, pinnedCallIndex: 1, selectedItemId: 'a' };
+      const result = analysisResult('one', 'updated');
+      if (result.status !== 'ok') throw new Error('Expected analysis');
+      if (identity === 'removed') result.analysis.modelCalls[0].sourceRecordId = 'new-call';
+      if (identity === 'moved') {
+        result.analysis.modelCalls[0].sourceRecordId = 'call2';
+        result.analysis.modelCalls[1].sourceRecordId = 'call1';
+      }
+      pending.resolve(result);
+      await waitFor(() => accepted.mock.calls.length === 3);
+      expect(accepted.mock.calls[2][0].kind).toBe('replacement');
+      expect(interaction.pinnedCallIndex).toBe(
+        identity === 'removed' ? null : identity === 'moved' ? 2 : 1,
+      );
+      expect(interaction.selectedItemId).toBe('a');
+      controller.dispose();
+    },
+  );
+
+  it('does not reconcile unchanged cached analysis on a 304', async () => {
+    let requests = 0;
+    const h = harness({
+      fetchAnalysis: vi.fn(async (id: string) => {
+        requests += 1;
+        return requests === 1
+          ? analysisResult(id, 'initial')
+          : { status: 'notModified' as const, etag: '"initial"' };
+      }),
+    });
+    const accepted = vi.fn();
+    const controller = createSessionController({
+      dependencies: h.dependencies,
+      onAnalysisAccepted: accepted,
+    });
+    controller.start();
+    await waitFor(() => !get(controller).loading);
+    const previous = get(controller).indexed;
+    controller.retry();
+    await waitFor(() => requests === 2);
+    expect(get(controller).indexed).toBe(previous);
+    expect(accepted).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  it.each(['active', 'degraded'] as const)(
+    'adopts restart HTTP availability: %s',
+    async (availability) => {
+      const pending = deferred<SessionListResult>();
+      let requests = 0;
+      const h = harness({
+        fetchSessions: vi.fn(async () => (++requests === 1 ? sessionList() : pending.promise)),
+      });
+      const controller = createSessionController({ dependencies: h.dependencies });
+      controller.start();
+      await waitFor(() => !get(controller).loading);
+      h.events()?.onOpen();
+      h.events()?.onCatalogue({ generation: generationB, revision: 0n });
+      h.events()?.onAvailability({ generation: generationB, availability });
+      pending.resolve({ ...sessionList(0n, generationB), availability });
+      await waitFor(() => requests >= 3 && !get(controller).refreshing);
+      expect(get(controller).liveStatus).toBe(
+        availability === 'active' ? 'live' : 'live updates unavailable',
+      );
+      controller.dispose();
+    },
+  );
+
+  it.each(['active', 'degraded'] as const)(
+    'keeps newer matching SSE status over older HTTP: %s',
+    async (availability) => {
+      const pending = deferred<SessionListResult>();
+      let requests = 0;
+      const h = harness({
+        fetchSessions: vi.fn(async () => (++requests === 1 ? sessionList() : pending.promise)),
+      });
+      const controller = createSessionController({ dependencies: h.dependencies });
+      controller.start();
+      await waitFor(() => !get(controller).loading);
+      h.events()?.onOpen();
+      h.events()?.onAvailability({ generation: generationA, availability });
+      pending.resolve({
+        ...sessionList(),
+        availability: availability === 'active' ? 'degraded' : 'active',
+      });
+      await waitFor(() => requests === 2);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(get(controller).liveStatus).toBe(
+        availability === 'active' ? 'live' : 'live updates unavailable',
+      );
+      controller.dispose();
+    },
+  );
+
+  it('uses HTTP status without SSE but never makes a closed stream live', async () => {
+    const h = harness();
+    const controller = createSessionController({ dependencies: h.dependencies });
+    controller.start();
+    await waitFor(() => !get(controller).loading);
+    h.events()?.onOpen();
+    await waitFor(() => get(controller).liveStatus === 'live');
+    h.events()?.onClosed();
+    controller.retry();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(get(controller).liveStatus).toBe('live updates unavailable');
+    controller.dispose();
+  });
+
+  it('ignores old-generation status after HTTP adoption and keeps status truthful on failure', async () => {
+    let generation = generationA;
+    let fail = false;
+    const h = harness({
+      fetchSessions: vi.fn(async () => {
+        if (fail) throw new Error('catalogue unavailable');
+        return sessionList(0n, generation);
+      }),
+    });
+    const controller = createSessionController({ dependencies: h.dependencies });
+    controller.start();
+    await waitFor(() => !get(controller).loading);
+    generation = generationB;
+    h.events()?.onOpen();
+    await waitFor(
+      () =>
+        get(controller).liveStatus === 'live' &&
+        vi.mocked(h.dependencies.fetchSessions).mock.calls.length === 2,
+    );
+    fail = true;
+    h.events()?.onAvailability({ generation: generationA, availability: 'degraded' });
+    await waitFor(() => get(controller).catalogueWarning !== '');
+    expect(get(controller).liveStatus).toBe('live');
+    h.events()?.onReconnecting();
+    expect(get(controller).liveStatus).toBe('reconnecting');
+    controller.dispose();
+    const snapshot = get(controller);
+    h.events()?.onAvailability({ generation: generationB, availability: 'active' });
+    expect(get(controller)).toBe(snapshot);
   });
 
   it('keeps controller instances isolated', async () => {

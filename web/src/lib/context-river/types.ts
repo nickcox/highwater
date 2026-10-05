@@ -22,6 +22,10 @@ export interface RibbonPoint {
   x: number;
   y0: number;
   y1: number;
+  /** Pixel-capped endpoints cannot be handled by a uniform horizontal transform alone. */
+  xBasis?:
+    | { kind: 'boundary'; beforeModelCall: number }
+    | { kind: 'singleton'; callIndex: number; side: -1 | 1 };
 }
 
 export interface RibbonSegment {
@@ -34,6 +38,7 @@ export interface RibbonSegment {
   path: string;
   hitPath: string;
   isSubpixel: boolean;
+  linear?: boolean;
   /** Present only for the optional Item types presentation. */
   groupKind?: import('../types').ContextItemKind;
   memberItemIds?: string[];
@@ -52,6 +57,9 @@ export interface LineageConnectorLayout {
   toItemId: string;
   compactionId: string;
   path: string;
+  sourceX: number;
+  sourceY: number;
+  summaryY: number;
 }
 
 export interface ContextRiverLayout {

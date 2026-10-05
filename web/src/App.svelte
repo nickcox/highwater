@@ -1,7 +1,35 @@
 <script lang="ts">
-  import { afterUpdate, onMount, tick } from 'svelte';
-  import { get } from 'svelte/store';
-  import type { SessionListItem } from './lib/api/client';
+  import { afterUpdate, beforeUpdate, onMount, tick } from 'svelte';
+  import {
+    readPresentationPreferences,
+    writePresentationPreferences,
+    type PresentationPreferences,
+  } from './lib/state/presentation-preferences';
+  import { inspectorSections } from './lib/state/inspector-sections';
+  let presentation = readPresentationPreferences();
+  let itemSections = inspectorSections();
+  let callSections = inspectorSections();
+  function updatePresentation(next: PresentationPreferences): void {
+    presentation = next;
+    writePresentationPreferences(next);
+  }
+  let previousFocus: Element | null = null;
+  beforeUpdate(() => {
+    previousFocus = document.activeElement;
+  });
+  afterUpdate(() => {
+    if (
+      previousFocus &&
+      !previousFocus.isConnected &&
+      (document.activeElement === document.body || !document.activeElement?.isConnected)
+    ) {
+      const target =
+        document.getElementById('selected-item-summary') ??
+        document.getElementById('pinned-call-summary') ??
+        document.getElementById(visualizationView === 'river' ? 'river-tab' : 'composition-tab');
+      target?.focus({ preventScroll: true });
+    }
+  });
   import CallDetails from './lib/components/CallDetails.svelte';
   import CallComposition from './lib/components/CallComposition.svelte';
   import ContextRiverNavigation from './lib/components/ContextRiverNavigation.svelte';
@@ -20,16 +48,16 @@
   import type { IndexedAnalysis, InteractionState } from './lib/types';
   import { estimateQuality } from './lib/estimate-quality';
   import type { RiverNavigationCommand, RiverViewportStatus } from './lib/context-river/viewport';
-  import {
-    createSessionController,
-    type SessionControllerSnapshot,
-  } from './lib/state/session-controller';
+  import { stepCallTarget } from './lib/context-river/viewport';
+  import { createSessionController } from './lib/state/session-controller';
 
   let interaction: InteractionState = resetInteraction();
+  let appRoot: HTMLElement;
   let visualizationView: 'river' | 'composition' = 'river';
   let compositionScope: 'atCall' | 'cumulative' = 'cumulative';
   let compositionEndpointNotice = '';
   let navigationCommand: RiverNavigationCommand | null = null;
+  let riverComponent: { dismissEconomics: () => boolean } | null = null;
   let navigationCommandId = 0;
   let viewDetailsRequestId = 0;
   let findInLifespansRequest: { requestId: number; itemId: string } | null = null;
@@ -83,6 +111,8 @@
     },
     onSelectionChanged: () => {
       interaction = resetInteraction();
+      itemSections = inspectorSections();
+      callSections = inspectorSections();
       visualizationView = 'river';
       compositionScope = 'cumulative';
       compositionEndpointNotice = '';
@@ -92,29 +122,10 @@
       resetViewportStatus();
     },
   });
-  let sessionState: SessionControllerSnapshot = get(sessionController);
-  let sessions: SessionListItem[] = [];
-  let selectedSessionId: string | null = null;
+  // Analysis identity is an explicit reactive boundary: request/status publications
+  // must not invalidate geometry and projections when the analysis is unchanged.
   let indexed: IndexedAnalysis | null = null;
-  let loading = true;
-  let sessionListError = '';
-  let analysisError = '';
-  let catalogueWarning = '';
-  let analysisWarning = '';
-  let selectedRemoved = false;
-  let liveStatus: SessionControllerSnapshot['liveStatus'] = 'reconnecting';
-
-  $: sessionState = $sessionController;
-  $: sessions = sessionState.sessions;
-  $: selectedSessionId = sessionState.selectedSessionId;
-  $: indexed = sessionState.indexed;
-  $: loading = sessionState.loading;
-  $: sessionListError = sessionState.sessionListError;
-  $: analysisError = sessionState.analysisError;
-  $: catalogueWarning = sessionState.catalogueWarning;
-  $: analysisWarning = sessionState.analysisWarning;
-  $: selectedRemoved = sessionState.selectedRemoved;
-  $: liveStatus = sessionState.liveStatus;
+  $: if (indexed !== $sessionController.indexed) indexed = $sessionController.indexed;
   $: quality = indexed ? estimateQuality(indexed.analysis) : null;
   $: pinnedCall =
     interaction.pinnedCallIndex === null
@@ -219,7 +230,7 @@
   }
 
   function viewSelectedItemDetails(): void {
-    const requestedSessionId = selectedSessionId;
+    const requestedSessionId = $sessionController.selectedSessionId;
     const requestedItemId = selectedItem?.id ?? null;
     const requestId = ++viewDetailsRequestId;
     if (requestedItemId === null) {
@@ -233,7 +244,7 @@
     void tick().then(() => {
       if (
         requestId !== viewDetailsRequestId ||
-        requestedSessionId !== selectedSessionId ||
+        requestedSessionId !== $sessionController.selectedSessionId ||
         interaction.selectedItemId !== requestedItemId ||
         !indexed?.itemById.has(requestedItemId)
       ) {
@@ -264,6 +275,27 @@
     });
   }
 
+  function inspectCall(index: number): void {
+    if (!indexed?.callByIndex.has(index)) return;
+    const sessionId = $sessionController.selectedSessionId;
+    const sourceId = indexed.callByIndex.get(index)?.sourceRecordId;
+    const itemId = interaction.selectedItemId;
+    const requestId = ++viewDetailsRequestId;
+    pinCall(index);
+    void tick().then(() => {
+      if (
+        requestId !== viewDetailsRequestId ||
+        sessionId !== $sessionController.selectedSessionId ||
+        interaction.selectedItemId !== itemId ||
+        pinnedCall?.sourceRecordId !== sourceId
+      )
+        return;
+      const heading = document.getElementById('pinned-call-summary');
+      heading?.scrollIntoView({ block: 'nearest' });
+      heading?.focus({ preventScroll: true });
+    });
+  }
+
   function clearSelection(): void {
     interaction = resetInteraction();
     compositionEndpointNotice = '';
@@ -272,6 +304,11 @@
 
   function navigate(kind: 'fit' | 'zoom-in' | 'zoom-out' | 'latest'): void {
     navigationCommand = { id: ++navigationCommandId, kind };
+  }
+
+  function stepToCall(callIndex: number): void {
+    pinCall(callIndex);
+    navigationCommand = { id: ++navigationCommandId, kind: 'ensure-call', callIndex };
   }
 
   function jumpToCall(callIndex: number): void {
@@ -355,12 +392,26 @@
     interaction = { ...interaction, selectedItemId: id };
   }
 
+  function selectLifespanItem(id: string, callIndex?: number): void {
+    selectItem(id);
+    if (callIndex !== undefined) pinCall(callIndex);
+  }
+
   function emptyClick(index: number): void {
     if (navigationCommand?.kind === 'reveal-item') navigationCommand = null;
     interaction = { ...interaction, selectedItemId: null, pinnedCallIndex: index };
   }
 
   function handleEscape(): void {
+    const disclosure =
+      document.activeElement?.closest('details[open]') ??
+      document.querySelector('.view-options[open]');
+    if (disclosure instanceof HTMLDetailsElement) {
+      disclosure.open = false;
+      disclosure.querySelector('summary')?.focus();
+      return;
+    }
+    if (riverComponent?.dismissEconomics()) return;
     if (interaction.selectedItemId !== null || interaction.pinnedCallIndex !== null) {
       interaction = escapeInteraction(interaction);
       if (
@@ -375,46 +426,94 @@
   }
 
   function handleWindowKey(event: KeyboardEvent): void {
-    if (
-      event.key === 'Escape' &&
-      (interaction.selectedItemId !== null ||
-        interaction.pinnedCallIndex !== null ||
-        !viewportStatus.isFitAll)
-    ) {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
       event.preventDefault();
       handleEscape();
+      return;
+    }
+    if (
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.shiftKey ||
+      visualizationView !== 'river'
+    )
+      return;
+    const direction =
+      event.key === 'ArrowLeft' || event.key === 'h'
+        ? -1
+        : event.key === 'ArrowRight' || event.key === 'l'
+          ? 1
+          : null;
+    if (direction === null) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const bodyTarget = target === document.body && document.querySelectorAll('main').length === 1;
+    if (!bodyTarget && !appRoot?.contains(target)) return;
+    // Single-letter shortcuts are active only while the workspace has focus.
+    if ((event.key === 'h' || event.key === 'l') && bodyTarget) return;
+    if (
+      target.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="tab"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="listbox"], [role="menu"], [role="radio"]',
+      )
+    )
+      return;
+    const callIndex = stepCallTarget(
+      callIndices,
+      interaction.pinnedCallIndex,
+      viewportStatus,
+      direction,
+    );
+    // Consume even at boundaries so an arrow cannot unexpectedly pan the chart.
+    event.preventDefault();
+    if (callIndex !== null) {
+      if (bodyTarget)
+        appRoot.querySelector<HTMLElement>('.river-scroll')?.focus({ preventScroll: true });
+      stepToCall(callIndex);
     }
   }
 </script>
 
 <svelte:window onkeydown={handleWindowKey} onresize={placeHoverCard} />
 
-<main>
+<main bind:this={appRoot}>
   <header class="titlebar">
     <div>
       <h1>TokenPlume</h1>
-      <p class="live-status" data-testid="live-status">Live updates: {liveStatus}</p>
+      <p class="live-status" data-testid="live-status">
+        Live updates: {$sessionController.liveStatus}
+      </p>
+      {#if $sessionController.refreshing && !$sessionController.loading}
+        <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
+      {/if}
+      {#if ($sessionController.liveStatus !== 'live' || $sessionController.sessions.length === 0) && !$sessionController.catalogueWarning && !$sessionController.analysisWarning && !$sessionController.sessionListError && !$sessionController.analysisError}
+        <button type="button" onclick={() => sessionController.retry()}>Refresh</button>
+      {/if}
     </div>
-    {#if sessions.length > 0}<SessionPicker
-        {sessions}
-        selectedId={selectedSessionId}
+    {#if $sessionController.sessions.length > 0}<SessionPicker
+        sessions={$sessionController.sessions}
+        selectedId={$sessionController.selectedSessionId}
         onSelect={selectSession}
       />{/if}
   </header>
 
-  {#if catalogueWarning || analysisWarning}
+  {#if $sessionController.catalogueWarning || $sessionController.analysisWarning}
     <section class="refresh-warning" role="status" aria-label="Refresh warnings">
-      {#if catalogueWarning}<p>{catalogueWarning}</p>{/if}
-      {#if analysisWarning}<p>{analysisWarning}</p>{/if}
+      {#if $sessionController.catalogueWarning}<p>{$sessionController.catalogueWarning}</p>{/if}
+      {#if $sessionController.analysisWarning}<p>{$sessionController.analysisWarning}</p>{/if}
+      <button type="button" onclick={() => sessionController.retry()}>Refresh</button>
     </section>
   {/if}
-  {#if sessionListError}
+  {#if $sessionController.sessionListError}
     <section class="state error">
       <h2>Could not discover sessions</h2>
-      <p>{sessionListError}</p>
+      <p>{$sessionController.sessionListError}</p>
+      <button type="button" onclick={() => sessionController.retry()}>Retry</button>
     </section>
-  {:else if sessions.length === 0 && !loading}
-    {#if selectedRemoved}
+  {:else if $sessionController.sessions.length === 0 && !$sessionController.loading}
+    {#if $sessionController.selectedRemoved}
       <section class="state">
         <h2>Selected session is no longer available</h2>
         <p>Choose another session after one appears in the session directory.</p>
@@ -425,29 +524,33 @@
         <p>Point TokenPlume at a session directory with <code>--session-root</code>.</p>
       </section>
     {/if}
-  {:else if selectedRemoved}
+  {:else if $sessionController.selectedRemoved}
     <section class="state">
       <h2>Selected session is no longer available</h2>
       <p>Choose another session from the refreshed list.</p>
     </section>
-  {:else if loading}
+  {:else if $sessionController.loading}
     <section class="state"><p>Analysing session…</p></section>
-  {:else if analysisError}
+  {:else if $sessionController.analysisError}
     <section class="state error">
       <h2>Could not render this session</h2>
-      <p>{analysisError}</p>
-      <p>Select another session above.</p>
+      <p>{$sessionController.analysisError}</p>
+      <button type="button" onclick={() => sessionController.retry()}>Retry</button>
     </section>
   {:else if indexed}
-    <SessionSummary {indexed} />
+    {#key $sessionController.selectedSessionId}<SessionSummary {indexed} />{/key}
 
-    <div class="exploration-grid">
+    <div class="exploration-grid" class:occupied={selectedItem !== null || pinnedCall !== null}>
       <section class="panel river-panel">
         <div class="panel-head">
           <div>
             <h2>{explorationTitle}</h2>
             {#if visualizationView === 'river' && quality}
-              <ChartHelp {quality} onOpenDiagnostics={openSessionDetails} />
+              <ChartHelp
+                {quality}
+                isVisible={visualizationView === 'river'}
+                onOpenDiagnostics={openSessionDetails}
+              />
             {/if}
           </div>
           <div class="panel-actions">
@@ -501,24 +604,33 @@
           hidden={visualizationView !== 'river'}
         >
           {#if indexed.analysis.modelCalls.length > 0}
-            <ContextRiverNavigation
-              viewport={viewportStatus}
-              {callIndices}
-              onJumpToCall={jumpToCall}
-              onZoomToRange={zoomToRange}
-              onLatest={jumpToLatest}
-              onFitAll={() => navigate('fit')}
-              onZoomIn={() => navigate('zoom-in')}
-              onZoomOut={() => navigate('zoom-out')}
-            />
+            {#key $sessionController.selectedSessionId}
+              <ContextRiverNavigation
+                isVisible={visualizationView === 'river'}
+                viewport={viewportStatus}
+                {callIndices}
+                pinnedCallIndex={interaction.pinnedCallIndex}
+                onSelectCall={stepToCall}
+                onLatest={jumpToLatest}
+                onFitAll={() => navigate('fit')}
+                onZoomIn={() => navigate('zoom-in')}
+                onZoomOut={() => navigate('zoom-out')}
+              />
+            {/key}
             <div class="chart-area">
-              {#key selectedSessionId}
+              {#key $sessionController.selectedSessionId}
                 <ContextRiver
+                  bind:this={riverComponent}
                   {indexed}
-                  {interaction}
+                  preferences={presentation}
+                  onPreferencesChange={updatePresentation}
+                  pinnedCallIndex={interaction.pinnedCallIndex}
+                  hoveredCallIndex={interaction.hoveredCallIndex}
                   selectedItemId={interaction.selectedItemId}
                   hoveredItemId={interaction.hoveredItemId}
                   {navigationCommand}
+                  onJumpToCall={jumpToCall}
+                  onZoomToRange={zoomToRange}
                   isVisible={visualizationView === 'river'}
                   onViewportChange={updateViewport}
                   onSelectionVisibility={updateSelectionVisibility}
@@ -568,7 +680,7 @@
           tabindex="0"
           hidden={visualizationView !== 'composition'}
         >
-          {#key selectedSessionId}
+          {#key $sessionController.selectedSessionId}
             <CallComposition
               {indexed}
               pinnedCallIndex={interaction.pinnedCallIndex}
@@ -588,7 +700,13 @@
         </div>
       </section>
 
-      <aside id="inspector" class="inspector-column" aria-label="Inspector" tabindex="-1">
+      <aside
+        id="inspector"
+        class="inspector-column"
+        class:empty={!pinnedCall && !selectedItem}
+        aria-label="Inspector"
+        tabindex="-1"
+      >
         {#if !pinnedCall && !selectedItem}
           <section class="panel inspector-empty-prompt">
             <div class="panel-head"><div><h2>Inspect workspace details</h2></div></div>
@@ -602,6 +720,7 @@
                 <div><h2>Model call</h2></div>
               </div>
               <CallDetails
+                sections={callSections}
                 call={pinnedCall}
                 {indexed}
                 pinned
@@ -621,6 +740,9 @@
               </div>
               <ItemDetails
                 item={selectedItem}
+                sections={itemSections}
+                onClear={() => selectItem(null)}
+                onInspectCall={inspectCall}
                 {indexed}
                 callIndex={interaction.pinnedCallIndex ?? interaction.hoveredCallIndex}
                 pinnedCallIndex={interaction.pinnedCallIndex}
@@ -643,13 +765,12 @@
       </aside>
 
       <section class="panel lifespan-panel">
-        {#key selectedSessionId}
+        {#key $sessionController.selectedSessionId}
           <ContextLifespans
             {indexed}
-            {interaction}
             selectedItemId={interaction.selectedItemId}
             pinnedCallIndex={interaction.pinnedCallIndex}
-            onSelectItem={selectItem}
+            onSelectItem={selectLifespanItem}
             onHoverItem={hoverItem}
             findRequest={findInLifespansRequest}
           />
@@ -668,8 +789,8 @@
   }
   :global(body) {
     margin: 0;
-    background: radial-gradient(circle at 20% -10%, #19264a 0, #0b1020 38%), #0b1020;
-    color: #e8ecf5;
+    background: var(--page);
+    color: var(--text);
     font:
       14px/1.45 Inter,
       ui-sans-serif,
@@ -678,9 +799,9 @@
   }
   :global(button),
   :global(select) {
-    background: #151e35;
-    border: 1px solid #34415f;
-    color: #e2e8f3;
+    background: var(--surface);
+    border: 1px solid var(--control-border);
+    color: var(--text);
     border-radius: 7px;
     padding: 7px 9px;
   }
@@ -713,7 +834,7 @@
   }
   h1 {
     margin: 0;
-    font-size: 28px;
+    font-size: 24px;
     letter-spacing: -0.03em;
   }
   .titlebar p,
@@ -725,9 +846,9 @@
     font-size: 12px;
   }
   .panel {
-    background: linear-gradient(180deg, #121a30, #0f1629);
-    border: 1px solid #26324f;
-    border-radius: 13px;
+    background: var(--surface);
+    border: 0;
+    border-radius: var(--radius);
     padding: 15px;
     margin-top: 14px;
     min-width: 0;
@@ -742,6 +863,12 @@
   }
   .panel-head > * {
     min-width: 0;
+  }
+  .river-panel > .panel-head > div:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
   }
   h2 {
     font-size: 15px;
@@ -782,11 +909,35 @@
   .exploration-grid {
     display: grid;
     min-width: 0;
-    grid-template-columns: minmax(0, 1fr) minmax(0, min(36vw, 420px));
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto;
     align-items: start;
     gap: 14px;
     margin-top: 14px;
+  }
+  .exploration-grid.occupied {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .inspector-column.empty {
+    grid-column: 1;
+    grid-row: 2;
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+  .inspector-empty-prompt {
+    padding: 0;
+  }
+  .inspector-empty-prompt .panel-head {
+    display: none;
+  }
+  .inspector-empty-prompt p {
+    display: inline;
+    margin: 0 12px 0 0;
+    font-size: 12px;
+  }
+  .exploration-grid:not(.occupied) .lifespan-panel {
+    grid-row: 3;
   }
   .river-panel {
     grid-column: 1;
@@ -800,10 +951,16 @@
     margin: 0 0 10px;
     border-bottom: 1px solid #293651;
   }
+  .visualization-tabs button {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+  }
   .visualization-tabs button[aria-selected='true'] {
-    border-color: #829fd2;
-    background: #26385d;
-    color: #fff;
+    border-color: var(--accent);
+    background: transparent;
+    color: var(--accent);
   }
   .visualization-panel {
     min-width: 0;
@@ -912,7 +1069,8 @@
       display: inline-flex;
       align-items: center;
     }
-    .exploration-grid {
+    .exploration-grid,
+    .exploration-grid.occupied {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto;
     }

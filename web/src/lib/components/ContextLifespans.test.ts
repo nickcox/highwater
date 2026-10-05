@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { indexAnalysis } from '../analysis';
-import { resetInteraction } from '../state/interaction';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import ContextLifespans from './ContextLifespans.svelte';
@@ -37,11 +36,49 @@ async function expandLifespans(): Promise<void> {
 }
 
 describe('ContextLifespans browsing', () => {
+  it('distinguishes pointer positions from label and keyboard activation, without pinning on hover', async () => {
+    const onSelectItem = vi.fn();
+    const onHoverItem = vi.fn();
+    const view = render(ContextLifespans, {
+      props: {
+        indexed: indexAnalysis(testAnalysis()),
+        onSelectItem,
+        onHoverItem,
+        pinnedCallIndex: 4,
+      },
+    });
+    await expandLifespans();
+    const row = view.container.querySelector('[data-lifespan-item-id="a"]')!;
+    const segment = row.querySelector('.segment')!;
+    const track = row.querySelector('.track')!;
+    vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({ left: 100, width: 300 } as DOMRect);
+    await fireEvent.pointerEnter(segment, { clientX: 180 });
+    expect(onHoverItem).toHaveBeenCalled();
+    expect(onSelectItem).not.toHaveBeenCalled();
+    await fireEvent.click(segment, { detail: 1, clientX: 190 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('a', 2);
+    await fireEvent.click(segment, { detail: 1, clientX: 101 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('a', 1);
+    await fireEvent.click(segment, { detail: 1, clientX: 399 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('a', 2);
+    await fireEvent.click(segment, { detail: 0, clientX: 399 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('a');
+    await fireEvent.click(row.querySelector('.item-label')!, { detail: 1 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('a');
+    const gap = view.container.querySelectorAll('[data-lifespan-item-id="gap"] .segment');
+    vi.spyOn(
+      view.container.querySelector('[data-lifespan-item-id="gap"] .track')!,
+      'getBoundingClientRect',
+    ).mockReturnValue({ left: 100, width: 300 } as DOMRect);
+    await fireEvent.click(gap[0], { detail: 1, clientX: 250 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('gap', 1);
+    await fireEvent.click(gap[1], { detail: 1, clientX: 250 });
+    expect(onSelectItem).toHaveBeenLastCalledWith('gap', 4);
+  });
   it('does not repeat instructions already represented by labels and contextual help', () => {
     const { container } = render(ContextLifespans, {
       props: {
         indexed: indexAnalysis(testAnalysis()),
-        interaction: resetInteraction(),
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
       },
@@ -65,7 +102,6 @@ describe('ContextLifespans browsing', () => {
     render(ContextLifespans, {
       props: {
         indexed: indexAnalysis(analysis),
-        interaction: resetInteraction(),
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
       },
@@ -94,7 +130,6 @@ describe('ContextLifespans browsing', () => {
     render(ContextLifespans, {
       props: {
         indexed: indexAnalysis(testAnalysis()),
-        interaction: { ...resetInteraction(), selectedItemId: 'a' },
         selectedItemId: 'a',
         onSelectItem,
         onHoverItem: emptyHover,
@@ -115,7 +150,6 @@ describe('ContextLifespans browsing', () => {
     const { container } = render(ContextLifespans, {
       props: {
         indexed,
-        interaction: resetInteraction(),
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
       },
@@ -160,7 +194,6 @@ describe('ContextLifespans browsing', () => {
     const indexed = indexAnalysis(testAnalysis());
     const props = {
       indexed,
-      interaction: { ...resetInteraction(), selectedItemId: 'summary', pinnedCallIndex: 2 },
       selectedItemId: 'summary',
       pinnedCallIndex: 2,
       onSelectItem: vi.fn(),
@@ -195,7 +228,7 @@ describe('ContextLifespans browsing', () => {
     expect(container.querySelector('.row.selected')).toBeTruthy();
     await fireEvent.change(scope, { target: { value: 'presentAtPin' } });
 
-    await rerender({ ...props, pinnedCallIndex: null, interaction: resetInteraction() });
+    await rerender({ ...props, pinnedCallIndex: null });
     expect(scope).toHaveValue('all');
     expect(
       screen.getByRole('heading', { name: 'Context lifespans · 4 items' }),
@@ -207,7 +240,6 @@ describe('ContextLifespans browsing', () => {
     const onSelectItem = vi.fn<(id: string) => void>();
     const props = {
       indexed: indexAnalysis(testAnalysis()),
-      interaction: resetInteraction(),
       onSelectItem,
       onHoverItem: emptyHover,
     };
@@ -230,7 +262,6 @@ describe('ContextLifespans browsing', () => {
     render(ContextLifespans, {
       props: {
         indexed: indexAnalysis(testAnalysis()),
-        interaction: { ...resetInteraction(), selectedItemId: 'a' },
         selectedItemId: 'a',
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
@@ -248,7 +279,6 @@ describe('ContextLifespans browsing', () => {
     stubScrollIntoView();
     const props = {
       indexed: indexAnalysis(testAnalysis()),
-      interaction: { ...resetInteraction(), selectedItemId: 'a' },
       selectedItemId: 'a',
       onSelectItem: vi.fn(),
       onHoverItem: emptyHover,
@@ -272,7 +302,6 @@ describe('ContextLifespans browsing', () => {
     render(ContextLifespans, {
       props: {
         indexed: indexAnalysis(sessionScenario('terminalSummaryOnly')),
-        interaction: resetInteraction(),
         onSelectItem,
         onHoverItem: emptyHover,
       },

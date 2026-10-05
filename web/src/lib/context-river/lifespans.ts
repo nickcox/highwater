@@ -1,4 +1,29 @@
-import type { ContextItem } from '../types';
+import type { ContextItem, PresenceRange } from '../types';
+
+/** Resolve the full-session ordinal axis, clamped to real calls in this segment. */
+export function nearestLifespanCall(
+  callIndices: readonly number[],
+  range: PresenceRange,
+  fraction: number,
+): number | null {
+  if (callIndices.length === 0 || !Number.isFinite(fraction)) return null;
+  const lowerBound = (value: number) => {
+    let low = 0;
+    let high = callIndices.length;
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2);
+      if (callIndices[middle] < value) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+  const first = lowerBound(range.startCall);
+  const end = lowerBound(range.endCall);
+  const last = end < callIndices.length && callIndices[end] === range.endCall ? end : end - 1;
+  if (first > last || first >= callIndices.length) return null;
+  const position = Math.round(Math.max(0, Math.min(1, fraction)) * (callIndices.length - 1));
+  return callIndices[Math.max(first, Math.min(last, position))];
+}
 
 export type LifespanSortMode = 'tokenTurns' | 'size' | 'firstAppearance' | 'presenceCount';
 

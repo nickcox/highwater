@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   callAxisTicks,
+  nearestLifespanCall,
   presenceCount,
   sizeComparisonProfileId,
   sizeEstimateTokens,
@@ -9,6 +10,20 @@ import {
 import { testAnalysis } from './test-data';
 
 describe('lifespans', () => {
+  it('pins the nearest ordinal-axis call, clamped to the activated range and real indices', () => {
+    const calls = [2, 7, 20, 41];
+    const range = { startCall: 7, endCall: 20 };
+    expect(nearestLifespanCall(calls, range, 0)).toBe(7);
+    expect(nearestLifespanCall(calls, range, 1)).toBe(20);
+    expect(nearestLifespanCall(calls, range, 0.4)).toBe(7);
+    expect(nearestLifespanCall(calls, range, 0.6)).toBe(20);
+    expect(nearestLifespanCall(calls, { startCall: 8, endCall: 19 }, 0.5)).toBeNull();
+    expect(nearestLifespanCall(calls, { startCall: 8, endCall: 30 }, 0.5)).toBe(20);
+    expect(nearestLifespanCall(calls, { startCall: 41, endCall: 41 }, 0)).toBe(41);
+    expect(nearestLifespanCall([7], { startCall: 7, endCall: 7 }, 0.9)).toBe(7);
+    expect(nearestLifespanCall([], range, 0.5)).toBeNull();
+    expect(nearestLifespanCall(calls, range, NaN)).toBeNull();
+  });
   it('counts separate ranges rather than filling gaps', () => {
     const gap = testAnalysis().contextItems.find((item) => item.id === 'gap')!;
     expect(presenceCount(gap)).toBe(2);

@@ -298,6 +298,59 @@ describe('call-specific Composition projection and treemap', () => {
     expect(cache.get(indexed, 'cumulative', null)?.scopeEndCallIndex).toBe(4);
   });
 
+  it('retains only the latest endpoint per scope and releases replaced analysis entries', () => {
+    const indexed = indexAnalysis(scopedCumulativeAnalysis());
+    const cache = createCompositionProjectionCache();
+    const atCall = cache.get(indexed, 'atCall', 2);
+    let previous = cache.get(indexed, 'cumulative', 1);
+    for (let visit = 0; visit < 300; visit += 1) {
+      const endpoint = (visit % 4) + 1;
+      const next = cache.get(indexed, 'cumulative', endpoint);
+      expect(next).toEqual(projectCumulativeComposition(indexed, endpoint));
+      expect(cache.get(indexed, 'cumulative', endpoint)).toBe(next);
+      if (visit > 0) expect(next).not.toBe(previous);
+      previous = next;
+    }
+    expect(cache.get(indexed, 'atCall', 2)).toBe(atCall);
+    const old = cache.get(indexed, 'cumulative', 1);
+    cache.get(indexed, 'cumulative', 2);
+    expect(cache.get(indexed, 'cumulative', 1)).not.toBe(old);
+    const replacement = indexAnalysis(scopedCumulativeAnalysis());
+    cache.get(replacement, 'atCall', 2);
+    expect(cache.get(indexed, 'atCall', 2)).not.toBe(atCall);
+  });
+
+  it('bounds retained entries while visiting a long history in both scopes', () => {
+    const indexed = indexAnalysis(sessionScenario('longSession'));
+    const calls = indexed.analysis.modelCalls;
+    const cache = createCompositionProjectionCache();
+    expect(cache.retainedEntryCount).toBe(0);
+    for (let visit = 0; visit < 400; visit += 1) {
+      const endpoint = calls[visit % calls.length].index;
+      expect(cache.get(indexed, 'cumulative', endpoint)).toEqual(
+        projectCumulativeComposition(indexed, endpoint),
+      );
+      cache.get(indexed, 'atCall', endpoint);
+      expect(cache.retainedEntryCount).toBe(2);
+    }
+    cache.get(indexAnalysis(compositionScenario(20)), 'cumulative', null);
+    expect(cache.retainedEntryCount).toBe(1);
+  });
+
+  it('preserves unavailable estimate evidence in both scopes', () => {
+    const analysis = scopedCumulativeAnalysis();
+    const item = analysis.contextItems[3];
+    item.tokenEstimates[0].noteCodes = ['unsupportedTokenizer'];
+    const indexed = indexAnalysis(analysis);
+    const atCall = projectCallComposition(indexed, 1)!.items.find((entry) => entry.id === item.id)!;
+    const cumulative = projectCumulativeComposition(indexed, 1)!.items.find(
+      (entry) => entry.id === item.id,
+    )!;
+    expect(cumulative.tokens).toBeNull();
+    expect(cumulative.explanations).toEqual(atCall.explanations);
+    expect(cumulative.estimateMethods).toEqual(atCall.estimateMethods);
+  });
+
   it('fits long tile and group labels within their measured bounds', () => {
     expect(fitCompositionLabel('Assistant messages', 75, 9).length).toBeLessThan(
       'Assistant messages'.length,

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { IndexedAnalysis } from '../types';
-  import { itemColor } from '../context-river/colors';
+  import { itemColor, itemTextColor } from '../context-river/colors';
   import { formatMetric, formatPercent } from '../context-river/format';
   import CopyButton from './CopyButton.svelte';
   import {
@@ -542,14 +542,23 @@
                 width={rectangle.width}
                 height={rectangle.height}
                 fill={itemColor(rectangle.item.id)}
-                fill-opacity="0.58"
+                fill-opacity="1"
                 class:partial={rectangle.item.estimateCoverage !== 'complete'}
               />
               {#if rectangle.labelFits && rectangle.labelText}
                 <g clip-path={`url(#${tileClipId(rectangle.optionIndex)})`} aria-hidden="true">
-                  <text x={rectangle.x + 5} y={rectangle.y + 16}>{rectangle.labelText}</text>
+                  <text
+                    style:fill={itemTextColor(rectangle.item.id)}
+                    x={rectangle.x + 5}
+                    y={rectangle.y + 16}>{rectangle.labelText}</text
+                  >
                   {#if rectangle.height >= 49}
-                    <text class="tile-value" x={rectangle.x + 5} y={rectangle.y + 31}>
+                    <text
+                      style:fill={itemTextColor(rectangle.item.id)}
+                      class="tile-value"
+                      x={rectangle.x + 5}
+                      y={rectangle.y + 31}
+                    >
                       {formatMetric(rectangle.item.tokens)}{rectangle.item.share === null
                         ? ''
                         : ` · ${formatPercent(rectangle.item.share)}`}
@@ -842,12 +851,12 @@
     overflow: auto;
     border: 1px solid #34415f;
     border-radius: 8px;
-    background: #0b1223;
+    background: var(--plot);
   }
   .composition-treemap {
     display: block;
     max-width: 100%;
-    background: #0b1223;
+    background: var(--plot);
   }
   .composition-treemap:focus-visible,
   .composition-list:focus-visible {
@@ -871,7 +880,7 @@
     cursor: pointer;
   }
   .composition-treemap g[role='option'] rect {
-    stroke: #111a2c;
+    stroke: var(--plot);
     stroke-width: 1;
   }
   .composition-treemap:focus g[role='option'].active rect {
@@ -903,7 +912,7 @@
     padding: 3px;
     border: 1px solid #34415f;
     border-radius: 8px;
-    background: #0b1223;
+    background: var(--plot);
     overscroll-behavior: contain;
   }
   .composition-row {
@@ -923,7 +932,7 @@
   }
   .composition-row.selected {
     border-color: #fff;
-    background: #17223a;
+    background: var(--action);
   }
   .composition-row.unavailable {
     color: #aebbd0;

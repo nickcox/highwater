@@ -4,8 +4,12 @@ import { indexAnalysis } from '../analysis';
 import { compositionScenario } from '../testing/composition-scenarios';
 import { sessionScenario } from '../testing/session-scenarios';
 import CallComposition from './CallComposition.svelte';
+import * as composition from '../composition';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function props(overrides: Record<string, unknown> = {}) {
   return {
@@ -24,6 +28,23 @@ function props(overrides: Record<string, unknown> = {}) {
 }
 
 describe('CallComposition', () => {
+  it('does not reproject or relayout for selection-only and presentation-only updates', async () => {
+    const cache = composition.createCompositionProjectionCache();
+    const get = vi.spyOn(cache, 'get');
+    vi.spyOn(composition, 'createCompositionProjectionCache').mockReturnValue(cache);
+    const layout = vi.spyOn(composition, 'layoutCompositionTreemap');
+    const initial = props({ indexed: indexAnalysis(compositionScenario(20)) });
+    const view = render(CallComposition, { props: initial });
+    const projectionCalls = get.mock.calls.length;
+    const layoutCalls = layout.mock.calls.length;
+    await view.rerender({ selectedItemId: 'composition-item-000' });
+    await fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(get).toHaveBeenCalledTimes(projectionCalls);
+    expect(layout).toHaveBeenCalledTimes(layoutCalls);
+    expect(document.querySelector('.selected-composition-item')).toHaveTextContent(
+      'Dominant call item',
+    );
+  });
   it('labels all-unavailable totals as Unknown in both scopes', async () => {
     const indexed = indexAnalysis(sessionScenario('unavailableGeometry'));
     render(CallComposition, { props: props({ indexed, pinnedCallIndex: 2 }) });

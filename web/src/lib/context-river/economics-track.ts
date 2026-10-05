@@ -1,9 +1,10 @@
 import type { CacheRatioDiscontinuity, ModelCall, SessionAnalysis } from '../types';
 import { isPiSource } from '../cost-basis';
+import { ECONOMICS_POLICIES, type EconomicsCacheCategory } from '../economics-policy';
 
 export type EconomicsTrackMode = 'cache' | 'cost' | 'off';
 export type CacheViewMode = 'tokens' | 'share';
-export type CacheSegmentKind = 'cacheRead' | 'cacheWrite' | 'fresh' | 'uncached' | 'nonRead';
+export type CacheSegmentKind = EconomicsCacheCategory;
 export type CacheMarkStatus = 'complete' | 'zero' | 'partial' | 'missing' | 'unsupported';
 export type CacheShareStatus = 'complete' | 'zeroPrompt' | 'unavailable';
 export type CostMarkStatus = 'known' | 'zero' | 'partial' | 'missing';
@@ -100,12 +101,9 @@ const OPENAI_RESPONSES_POLICIES = new Set([
   'openai-codex-responses-cache-read-v1',
 ]);
 
-const POLICY_CATEGORIES: Record<string, CacheSegmentKind[]> = {
-  [ANTHROPIC_POLICY]: ['cacheRead', 'cacheWrite', 'fresh'],
-  [OPENAI_CHAT_POLICY]: ['cacheRead', 'uncached'],
-  'openai-responses-cache-read-v1': ['cacheRead', 'nonRead'],
-  'openai-codex-responses-cache-read-v1': ['cacheRead', 'nonRead'],
-};
+const POLICY_CATEGORIES: Record<string, readonly CacheSegmentKind[]> = Object.fromEntries(
+  Object.entries(ECONOMICS_POLICIES).map(([id, policy]) => [id, policy.categories]),
+);
 
 const CATEGORY_LABELS: Record<CacheSegmentKind, { label: string; shortLabel: string }> = {
   cacheRead: { label: 'Cache read', shortLabel: 'Read' },

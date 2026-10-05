@@ -4,6 +4,8 @@
 
   export let quality: EstimateQuality;
   export let onOpenDiagnostics: () => void = () => {};
+  export let isVisible = true;
+  $: if (!isVisible) close(false);
 
   let container: HTMLDivElement | null = null;
   let trigger: HTMLButtonElement | null = null;
@@ -68,16 +70,6 @@
 <svelte:window onresize={placePopover} onscroll={placePopover} />
 
 <div class="chart-help" bind:this={container}>
-  <span
-    class="quality-indicator"
-    class:warning={quality.tone === 'warning'}
-    class:unavailable={quality.tone === 'unavailable'}
-  >
-    {quality.label}
-    {#if quality.tone !== 'unavailable'}<span aria-hidden="true"
-        >{quality.tone === 'warning' ? ' ⚠' : ' ⓘ'}</span
-      >{/if}
-  </span>
   <button
     bind:this={trigger}
     type="button"
@@ -124,24 +116,12 @@
 
 <style>
   .chart-help {
-    display: grid;
-    grid-template-columns: max-content max-content;
+    display: flex;
     align-items: center;
     gap: 6px 12px;
     min-height: 30px;
     color: #aebbd0;
     font-size: 12px;
-  }
-  .quality-indicator {
-    color: #b8c9e4;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .quality-indicator.warning {
-    color: #ffd28d;
-  }
-  .quality-indicator.unavailable {
-    color: #ffd28d;
   }
   .help-trigger {
     cursor: pointer;
@@ -149,8 +129,8 @@
     white-space: nowrap;
     border: 1px solid #34415f;
     border-radius: 6px;
-    color: #dce6f7;
-    background: #111a2d;
+    color: var(--text);
+    background: var(--surface);
     font: inherit;
   }
   .help-trigger:hover {
@@ -173,7 +153,7 @@
     padding: 14px 16px;
     border: 1px solid #465574;
     border-radius: 9px;
-    background: #11182c;
+    background: var(--surface);
     color: #d5deed;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     font-size: 13px;

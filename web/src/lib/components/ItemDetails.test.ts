@@ -4,10 +4,99 @@ import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import ItemDetails from './ItemDetails.svelte';
+import { inspectorSections } from '../state/inspector-sections';
 
 afterEach(cleanup);
 
 describe('ItemDetails presence feedback', () => {
+  it('omits the bulk-collapse action and preserves manually chosen sections across panel reopening', async () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const sections = {
+      ...inspectorSections(),
+      identifiers: true,
+      preview: true,
+      expandedPreview: true,
+    };
+    const item = {
+      ...indexed.itemById.get('a')!,
+      preview: {
+        kind: 'toolResult' as const,
+        text: 'Compact preview',
+        expandedText: 'Expanded preview',
+        truncated: false,
+        expandedTruncated: false,
+      },
+    };
+    const view = render(ItemDetails, { props: { item, indexed, sections, pinnedCallIndex: 1 } });
+    expect(screen.queryByRole('button', { name: 'Collapse details' })).toBeNull();
+    expect(view.container.querySelector('.technical-identifiers')).toHaveAttribute('open', '');
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await view.rerender({ item: null });
+    await view.rerender({ item });
+    expect(view.container.querySelector('.technical-identifiers')).toHaveAttribute('open', '');
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    const identifiers = view.container.querySelector(
+      '.technical-identifiers',
+    ) as HTMLDetailsElement;
+    identifiers.open = false;
+    await fireEvent(identifiers, new Event('toggle'));
+    await view.rerender({ item: null });
+    await view.rerender({ item });
+    expect(view.container.querySelector('.technical-identifiers')).not.toHaveAttribute('open', '');
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.queryByRole('button', { name: 'Collapse details' })).toBeNull();
+  });
+  it('restores read-more choices, switches truncation hints, and omits the control without extra content', async () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const item = {
+      ...indexed.itemById.get('a')!,
+      preview: {
+        kind: 'toolResult' as const,
+        text: 'Compact',
+        expandedText: 'Expanded <img src=x>',
+        truncated: true,
+        expandedTruncated: true,
+      },
+    };
+    const sections = { ...inspectorSections(), preview: true, expandedPreview: true };
+    const view = render(ItemDetails, { props: { item, indexed, sections } });
+    expect(view.container.querySelector('.preview-details details')).toBeNull();
+    expect(view.container.querySelector('.preview-details pre')).toHaveTextContent(
+      'Expanded <img src=x>',
+    );
+    expect(view.container.querySelector('img')).toBeNull();
+    expect(screen.getByText('Expanded preview truncated.')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(view.container.querySelector('.content-preview')).toHaveTextContent('Compact');
+    expect(screen.getByText(/Compact preview truncated/)).toBeInTheDocument();
+    expect(screen.queryByText('Expanded preview truncated.')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    await view.rerender({ item: null });
+    await view.rerender({ item });
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await view.rerender({
+      item: {
+        ...item,
+        preview: { ...item.preview, expandedText: 'Compact', expandedTruncated: false },
+      },
+    });
+    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show less' })).toBeNull();
+    expect(view.container.querySelector('.preview-details pre')).toBeNull();
+  });
+
   it('keeps a selected item absent at the pinned call and offers explicit reveal', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const onRevealInRiver = vi.fn();

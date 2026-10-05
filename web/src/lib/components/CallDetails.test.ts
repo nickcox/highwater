@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
 import CallDetails from './CallDetails.svelte';
+
+afterEach(cleanup);
 
 function renderCall(addedItemIds: string[], droppedItemIds: string[]) {
   const indexed = indexAnalysis(testAnalysis());
@@ -15,6 +17,20 @@ function renderCall(addedItemIds: string[], droppedItemIds: string[]) {
 }
 
 describe('CallDetails change lists', () => {
+  it('labels reported usage Input and Output without changing the underlying counts', () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[0];
+    call.reportedPromptTokens = 12345;
+    call.reportedCompletionTokens = 678;
+    const { container } = render(CallDetails, { props: { call, indexed, pinned: true } });
+    const metrics = container.querySelector('.essential-metrics')!;
+    expect([...metrics.querySelectorAll('dt')].map((node) => node.textContent)).toContain('Input');
+    expect([...metrics.querySelectorAll('dt')].map((node) => node.textContent)).not.toContain(
+      'Prompt',
+    );
+    expect(screen.getByText('Input').nextElementSibling).toHaveTextContent('12.3K');
+    expect(screen.getByText('Output').nextElementSibling).toHaveTextContent('678');
+  });
   it('renders tool metadata as noninteractive text with an explicit failure label', () => {
     const indexed = indexAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
@@ -29,7 +45,51 @@ describe('CallDetails change lists', () => {
     expect(container.querySelector('.tool-chip button')).toBeNull();
   });
 
-  it('omits the dropped-items disclosure when nothing was dropped', () => {
+  it('uses plain headings inside a single Context changes disclosure', () => {
+    const { container } = renderCall(['a'], ['gap']);
+    const changes = container.querySelector('.change-lists')!;
+    expect(changes.closest('details')).not.toBeNull();
+    expect(changes.querySelectorAll('details, summary')).toHaveLength(0);
+    expect(changes.querySelectorAll('h4')).toHaveLength(2);
+    expect(changes.querySelectorAll('ul[role="list"]')).toHaveLength(2);
+    expect(changes.querySelector('h4')).toHaveTextContent('Added items (1)');
+    expect(changes.querySelectorAll('h4')[1]).toHaveTextContent('Dropped items (1)');
+  });
+
+  it('preserves context order even when a later item has a larger estimate', () => {
+    const { container } = renderCall(['retained', 'a'], []);
+    expect(
+      [...container.querySelectorAll('.change-lists button')].map((button) =>
+        button.getAttribute('aria-label'),
+      ),
+    ).toEqual(['Select added item retained tail', 'Select added item bash: npm test']);
+  });
+
+  it('uses the preceding call profile for dropped groups, including nonconsecutive call indices', () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const previous = indexed.analysis.modelCalls[1];
+    previous.index = 17;
+    previous.tokenizationProfileId = 'previous-profile';
+    previous.tokenAnalysis.calculatedVisibleTokens = 100;
+    const call = indexed.analysis.modelCalls[2];
+    call.index = 31;
+    indexed.itemById.get('a')!.tokenEstimates.push({
+      ...indexed.itemById.get('a')!.tokenEstimates[0],
+      profileId: 'previous-profile',
+      tokens: 40,
+    });
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(
+      screen.getByRole('button', { name: 'Select dropped item bash: npm test' }),
+    ).toHaveAccessibleDescription(
+      'Estimated 40 tokens; 100% of estimated dropped tokens (call 17)',
+    );
+    expect(
+      screen.getByText('Share of estimated dropped tokens · previous call 17'),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the dropped-items group when nothing was dropped', () => {
     const { container } = renderCall(['a'], []);
 
     expect(screen.getByText('Added items (1)')).toBeInTheDocument();
@@ -37,7 +97,7 @@ describe('CallDetails change lists', () => {
     expect(container.querySelector('.change-lists')).toHaveClass('single');
   });
 
-  it('omits the added-items disclosure when nothing was added', () => {
+  it('omits the added-items group when nothing was added', () => {
     const { container } = renderCall([], ['gap']);
 
     expect(screen.queryByText('Added items (0)')).not.toBeInTheDocument();

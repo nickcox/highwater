@@ -193,21 +193,26 @@ function ageAtPosition(
     : endpointPosition - firstPresencePosition;
 }
 
-function makeItem(
-  item: ContextItem,
-  sourceOrder: number,
-  tokens: number | null,
-  ageAtCall: number | null,
-  estimateMethods: TokenizationMethod[],
-  estimateCoverage: TokenCoverage,
-  explanations: CompositionExplanation[],
-  knownContributionCount: number,
-  missingContributionCount: number,
-  partialEstimateContributionCount: number,
-  unavailableCoverageContributionCount: number,
-  scopePresenceCount: number,
-  overflowed: boolean,
-): CallCompositionItem {
+type CompositionItemInput = Omit<
+  CallCompositionItem,
+  'id' | 'kind' | 'kindLabel' | 'label' | 'share' | 'estimateMethod'
+> & { item: ContextItem };
+
+function makeItem({
+  item,
+  sourceOrder,
+  tokens,
+  ageAtCall,
+  estimateMethods,
+  estimateCoverage,
+  explanations,
+  knownContributionCount,
+  missingContributionCount,
+  partialEstimateContributionCount,
+  unavailableCoverageContributionCount,
+  scopePresenceCount,
+  overflowed,
+}: CompositionItemInput): CallCompositionItem {
   return {
     id: item.id,
     kind: item.kind,
@@ -237,9 +242,9 @@ function assignShares(items: CallCompositionItem[], total: number | null): void 
   }
 }
 
-function finishProjection<T extends CompositionProjectionBase>(
+function finishProjection(
   base: Omit<
-    T,
+    CompositionProjectionBase,
     | 'groups'
     | 'measuredItemCount'
     | 'unmeasuredItemCount'
@@ -249,7 +254,7 @@ function finishProjection<T extends CompositionProjectionBase>(
     | 'hasPositiveWeights'
     | 'allMeasuredZero'
   >,
-): T {
+): CompositionProjectionBase {
   const groups = groupsFor(base.items);
   const measuredItemCount = base.items.filter((item) => item.tokens !== null).length;
   const unmeasuredItemCount = base.items.length - measuredItemCount;
@@ -281,7 +286,7 @@ function finishProjection<T extends CompositionProjectionBase>(
     unavailableCoverageItemCallCount,
     hasPositiveWeights,
     allMeasuredZero,
-  } as T;
+  };
 }
 
 /** Build a point-in-time projection using only the inspected call's applicable item estimates. */
@@ -328,38 +333,42 @@ export function projectCallComposition(
     const estimateCoverage: TokenCoverage =
       tokens === null ? 'unavailable' : (estimate?.coverage ?? 'unavailable');
     items.push(
-      makeItem(
+      makeItem({
         item,
         sourceOrder,
         tokens,
-        ageAtPosition(firstPosition, callPosition),
+        ageAtCall: ageAtPosition(firstPosition, callPosition),
         estimateMethods,
         estimateCoverage,
-        (estimate?.noteCodes ?? []).map(explanationFor),
-        known,
-        missing,
-        partial,
-        unavailableCoverage,
-        1,
-        false,
-      ),
+        explanations: (estimate?.noteCodes ?? []).map(explanationFor),
+        knownContributionCount: known,
+        missingContributionCount: missing,
+        partialEstimateContributionCount: partial,
+        unavailableCoverageContributionCount: unavailableCoverage,
+        scopePresenceCount: 1,
+        overflowed: false,
+      }),
     );
   });
 
-  return finishProjection<CallCompositionProjection>({
-    callIndex,
-    profileId: call.tokenizationProfileId,
-    profileIds: call.tokenizationProfileId ? [call.tokenizationProfileId] : [],
+  return {
+    ...finishProjection({
+      callIndex,
+      profileId: call.tokenizationProfileId,
+      profileIds: call.tokenizationProfileId ? [call.tokenizationProfileId] : [],
+      scope: 'atCall',
+      scopeStartCallIndex: call.index,
+      scopeEndCallIndex: call.index,
+      scopeCallCount: 1,
+      items,
+      measuredTokenTotal: measuredTokenTotal,
+      numericItemCallCount,
+      totalItemCallCount: items.length,
+      totalOverflow,
+    }),
     scope: 'atCall',
-    scopeStartCallIndex: call.index,
-    scopeEndCallIndex: call.index,
-    scopeCallCount: 1,
-    items,
-    measuredTokenTotal: measuredTokenTotal,
-    numericItemCallCount,
-    totalItemCallCount: items.length,
-    totalOverflow,
-  });
+    callIndex,
+  };
 }
 
 interface ItemAccumulator {
@@ -390,7 +399,6 @@ export function projectCumulativeComposition(
       : calls.findIndex((call) => call.index === endpointCallIndex);
   if (endpointCallIndex !== null && endpointPosition < 0) return null;
   const includedCalls = endpointPosition < 0 ? [] : calls.slice(0, endpointPosition + 1);
-  const positionByCallIndex = new Map(calls.map((call, position) => [call.index, position]));
   const sourceOrderById = new Map(
     indexed.analysis.contextItems.map((item, order) => [item.id, order]),
   );
@@ -434,6 +442,11 @@ export function projectCumulativeComposition(
       const estimate = call.tokenizationProfileId
         ? (indexed.itemEstimateByProfile.get(itemId)?.get(call.tokenizationProfileId) ?? null)
         : null;
+      // Evidence exists independently of whether a numeric estimate is available.
+      if (estimate) {
+        accumulator.methods.add(estimate.method);
+        for (const code of estimate.noteCodes) accumulator.explanationCodes.add(code);
+      }
       const tokens = safeTokens(estimate?.tokens);
       if (estimate?.coverage === 'partial') accumulator.partialEstimateContributionCount += 1;
       if (estimate?.coverage === 'unavailable')
@@ -444,8 +457,6 @@ export function projectCumulativeComposition(
       }
       numericItemCallCount += 1;
       accumulator.knownContributionCount += 1;
-      accumulator.methods.add(estimate.method);
-      for (const code of estimate.noteCodes) accumulator.explanationCodes.add(code);
 
       if (accumulator.totalTokens > Number.MAX_SAFE_INTEGER - tokens) accumulator.overflowed = true;
       else if (!accumulator.overflowed) accumulator.totalTokens += tokens;
@@ -471,41 +482,46 @@ export function projectCumulativeComposition(
               accumulator.unavailableCoverageContributionCount > 0
             ? 'partial'
             : 'complete';
-      return makeItem(
-        accumulator.item,
-        accumulator.sourceOrder,
+      return makeItem({
+        item: accumulator.item,
+        sourceOrder: accumulator.sourceOrder,
         tokens,
-        ageAtPosition(accumulator.firstPresencePosition, endpointPosition),
-        [...accumulator.methods].sort(),
+        ageAtCall: ageAtPosition(accumulator.firstPresencePosition, endpointPosition),
+        estimateMethods: [...accumulator.methods].sort(),
         estimateCoverage,
-        [...accumulator.explanationCodes].sort().map(explanationFor),
-        accumulator.knownContributionCount,
-        accumulator.missingContributionCount,
-        accumulator.partialEstimateContributionCount,
-        accumulator.unavailableCoverageContributionCount,
-        accumulator.scopePresenceCount,
+        explanations: [...accumulator.explanationCodes].sort().map(explanationFor),
+        knownContributionCount: accumulator.knownContributionCount,
+        missingContributionCount: accumulator.missingContributionCount,
+        partialEstimateContributionCount: accumulator.partialEstimateContributionCount,
+        unavailableCoverageContributionCount: accumulator.unavailableCoverageContributionCount,
+        scopePresenceCount: accumulator.scopePresenceCount,
         overflowed,
-      );
+      });
     });
 
   const profileIdList = [...profileIds].sort();
-  return finishProjection<CumulativeCompositionProjection>({
-    callIndex: endpointCallIndex,
-    profileId: profileIdList.length === 1 ? profileIdList[0] : null,
-    profileIds: profileIdList,
+  return {
+    ...finishProjection({
+      callIndex: endpointCallIndex,
+      profileId: profileIdList.length === 1 ? profileIdList[0] : null,
+      profileIds: profileIdList,
+      scope: 'cumulative',
+      scopeStartCallIndex: includedCalls[0]?.index ?? null,
+      scopeEndCallIndex: includedCalls[includedCalls.length - 1]?.index ?? null,
+      scopeCallCount: includedCalls.length,
+      items,
+      measuredTokenTotal,
+      numericItemCallCount,
+      totalItemCallCount,
+      totalOverflow,
+    }),
     scope: 'cumulative',
-    scopeStartCallIndex: includedCalls[0]?.index ?? null,
-    scopeEndCallIndex: includedCalls[includedCalls.length - 1]?.index ?? null,
-    scopeCallCount: includedCalls.length,
-    items,
-    measuredTokenTotal,
-    numericItemCallCount,
-    totalItemCallCount,
-    totalOverflow,
-  });
+  };
 }
 
 export interface CompositionProjectionCache {
+  /** Narrow retention diagnostic; not a measurement of the surrounding object graph. */
+  readonly retainedEntryCount: number;
   get(
     indexed: IndexedAnalysis,
     scope: CompositionScope,
@@ -513,25 +529,31 @@ export interface CompositionProjectionCache {
   ): CompositionProjection | null;
 }
 
-/** Cache projections for one accepted indexed analysis and endpoint; UI-only changes reuse them. */
+/** At most two entries: latest endpoint per scope for the current immutable analysis identity. */
 export function createCompositionProjectionCache(): CompositionProjectionCache {
-  const analyses = new WeakMap<IndexedAnalysis, Map<string, CompositionProjection | null>>();
+  let currentAnalysis: IndexedAnalysis | null = null;
+  const projections = new Map<
+    CompositionScope,
+    { endpoint: number | null; projection: CompositionProjection | null }
+  >();
   return {
+    get retainedEntryCount() {
+      return projections.size;
+    },
     get(indexed, scope, endpointCallIndex) {
-      const key = `${scope}:${endpointCallIndex ?? 'whole'}`;
-      let projections = analyses.get(indexed);
-      if (!projections) {
-        projections = new Map();
-        analyses.set(indexed, projections);
+      if (currentAnalysis !== indexed) {
+        projections.clear();
+        currentAnalysis = indexed;
       }
-      if (projections.has(key)) return projections.get(key) ?? null;
+      const cached = projections.get(scope);
+      if (cached?.endpoint === endpointCallIndex) return cached.projection;
       const projection =
         scope === 'atCall'
           ? endpointCallIndex === null
             ? null
             : projectCallComposition(indexed, endpointCallIndex)
           : projectCumulativeComposition(indexed, endpointCallIndex);
-      projections.set(key, projection);
+      projections.set(scope, { endpoint: endpointCallIndex, projection });
       return projection;
     },
   };

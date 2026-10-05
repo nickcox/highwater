@@ -1,12 +1,28 @@
 <script lang="ts">
-  import { afterUpdate, beforeUpdate, onMount, tick } from 'svelte';
-  import type { IndexedAnalysis, InteractionState } from '../types';
+  import { afterUpdate, beforeUpdate, onMount } from 'svelte';
+  import type { IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
+  import {
+    anchorForCall as callAnchor,
+    anchorForCallRange as rangeAnchor,
+    anchorAtPlotX,
+    requestedRangeSpacing,
+    resolveSpacing,
+    type RequestedRange,
+    type ViewportAdjustment,
+  } from './navigation';
   import { itemColor } from './colors';
+  import { installRiverDom, pointerInput, capturePointer, releasePointer } from './dom-interaction';
   import EconomicsTrack from './EconomicsTrack.svelte';
+  import EconomicsBreakdown from './EconomicsBreakdown.svelte';
+  import GroupBreakdown from './GroupBreakdown.svelte';
+  import { createOverlayFocus } from './overlay-focus';
+  import {
+    economicsAnchorVisible,
+    positionEconomicsBreakdown as positionOverlay,
+  } from './overlay-position';
   import EventGlyph from './EventGlyph.svelte';
   import {
-    hasNumericCacheData,
     projectCachePresentation,
     type CacheViewMode,
     type EconomicsEventBreakdown,
@@ -15,8 +31,10 @@
   import { clientXToViewBox, nearestCallIndex } from './hit-testing';
   import { nonOverlappingCallLabelPositions } from './axis-labels';
   import { chartUnitLabel } from './format';
+  import RiverPrecisionNavigation from '../components/RiverPrecisionNavigation.svelte';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
   import { layoutCallColumns, layoutContextRiver } from './layout';
+  import { projectCallColumns, projectRiverHorizontally } from './horizontal-projection';
   import type { ContextRiverLayout } from './types';
   import { formatVerticalTick, verticalScaleTicks, visibleStackSample } from './vertical-scale';
   import { hasVisibleItemPresence, itemPresentAtCall, nearestPresentCall } from './reveal';
@@ -33,11 +51,11 @@
     pointersAfterDown,
     pointersAfterUp,
     type GestureEffect,
-    type GesturePointer,
   } from './gestures';
   import {
     captureViewportAnchor,
     clampScrollLeft,
+    comfortableCallScroll,
     latestScrollTarget,
     scrollTargetForAnchor,
     visibleCallRange,
@@ -48,10 +66,13 @@
   } from './viewport';
 
   export let indexed: IndexedAnalysis;
-  export let interaction: InteractionState;
+  export let pinnedCallIndex: number | null = null;
+  export let hoveredCallIndex: number | null = null;
   export let selectedItemId: string | null = null;
   export let hoveredItemId: string | null = null;
   export let navigationCommand: RiverNavigationCommand | null = null;
+  export let onJumpToCall: (index: number) => void = () => {};
+  export let onZoomToRange: (start: number, end: number) => void = () => {};
   export let isVisible = true;
   export let onViewportChange: (status: RiverViewportStatus) => void = () => {};
   export let onSelectionVisibility: (
@@ -63,8 +84,82 @@
   export let onSelectItem: (id: string) => void;
   export let onEmptyClick: (index: number) => void;
   export let onEscape: () => void;
+  export let preferences: PresentationPreferences = defaultPresentationPreferences();
+  export let onPreferencesChange: (value: PresentationPreferences) => void = () => {};
+  import {
+    defaultPresentationPreferences,
+    type PresentationPreferences,
+  } from '../state/presentation-preferences';
+  let appliedPreferences: PresentationPreferences | null = null;
+  let viewOptions: HTMLDetailsElement;
+  let precisionMessage = '';
+  let economicsTrigger: HTMLButtonElement;
+  let economicsHeader: HTMLDivElement;
+  $: if (preferences !== appliedPreferences) {
+    appliedPreferences = preferences;
+    applyPreferences(preferences);
+  }
 
-  type RequestedRange = { startCallIndex: number; endCallIndex: number };
+  function changePreferences(next: PresentationPreferences): void {
+    preferences = next;
+    onPreferencesChange(next);
+  }
+  function applyPreferences(next: PresentationPreferences): void {
+    setVerticalScaleMode(next.river.verticalScale);
+    riverLayoutMode = next.river.layout;
+    if (riverDisplayMode !== next.river.display) closeGroupBreakdown(false);
+    riverDisplayMode = next.river.display;
+    const mode = next.economics.expanded ? next.economics.lastMode : 'off';
+    if (mode === 'off' && economicsTrackMode !== 'off') {
+      const focus = document.activeElement;
+      const inside =
+        focus instanceof Node &&
+        (economicsHeader?.contains(focus) ||
+          host?.querySelector('.economics-track-svg')?.contains(focus) ||
+          economicsBreakdownElement?.contains(focus));
+      closeEconomicsBreakdown(false);
+      economicsInspectFocus.cancel();
+      economicsReadout = '';
+      economicsEventBreakdown = null;
+      economicsBreakdownStyle = '';
+      if (inside) economicsTrigger?.focus();
+    }
+    cacheViewMode = next.economics.cacheView;
+    economicsTrackMode = mode;
+  }
+  function setDisplay(mode: RiverDisplayMode): void {
+    changePreferences({ ...preferences, river: { ...preferences.river, display: mode } });
+  }
+  function setLayout(mode: RiverLayoutMode): void {
+    changePreferences({ ...preferences, river: { ...preferences.river, layout: mode } });
+  }
+  function setScale(mode: VerticalScaleMode): void {
+    changePreferences({ ...preferences, river: { ...preferences.river, verticalScale: mode } });
+  }
+  function setCacheView(mode: CacheViewMode): void {
+    changePreferences({ ...preferences, economics: { ...preferences.economics, cacheView: mode } });
+  }
+  function closeViewOptions(): void {
+    if (!viewOptions?.open) return;
+    const hadFocus = viewOptions.contains(document.activeElement);
+    viewOptions.open = false;
+    if (hadFocus && isVisible) viewOptions.querySelector('summary')?.focus();
+  }
+  function optionsKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && viewOptions.open) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeViewOptions();
+    }
+  }
+  $: nonDefaultStatus = [
+    verticalScaleMode === 'visible' ? 'Visible-call scale' : '',
+    riverDisplayMode === 'itemTypes' ? 'Item types' : '',
+    riverLayoutMode === 'compact' ? 'Compact' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   type VerticalScaleMode = 'session' | 'visible';
   type RiverLayoutMode = 'balanced' | 'compact';
   type RiverDisplayMode = 'items' | 'itemTypes';
@@ -86,8 +181,16 @@
   let economicsReadout = '';
   let economicsEventBreakdown: EconomicsEventBreakdown | null = null;
   let groupBreakdown: { kind: string; memberIds: string[]; callIndex: number | null } | null = null;
-  let groupBreakdownElement: HTMLDivElement | null = null;
   let groupBreakdownReturnElement: HTMLElement | SVGElement | null = null;
+  const groupFocus = createOverlayFocus();
+  const economicsInspectFocus = createOverlayFocus();
+  $: groupFocus.observeIdentity(indexed);
+  $: economicsInspectFocus.observeIdentity(indexed);
+  $: groupMemberLabels = groupBreakdown
+    ? groupBreakdown.memberIds
+        .slice(0, 12)
+        .map((id) => displayItemLabel(indexed.itemById.get(id), id))
+    : [];
   let hoveredGroup: { kind: string; total: number; callIndex: number | null } | null = null;
   let economicsBreakdownElement: HTMLDivElement | null = null;
   let economicsBreakdownStyle = '';
@@ -105,7 +208,7 @@
   let lastPublishedStatus = '';
   let lastSelectionVisibilityKey = '';
   let lastColumns: ViewportCallPosition[] = [];
-  let pendingAdjustment: 'fit' | { kind: 'anchor'; anchor: ViewportAnchor } | null = null;
+  let pendingAdjustment: ViewportAdjustment | null = null;
   let dragSelection: { startClientX: number; currentClientX: number } | null = null;
   let gestureState = emptyGestureState();
   let clickSuppressionTimer: number | null = null;
@@ -114,6 +217,8 @@
 
   $: height = riverLayoutMode === 'balanced' ? 500 : 420;
   const margin = { top: 36, right: 24, bottom: 54, left: 42 };
+  // Width is a presentation transform, not a reason to rebuild item-call stacks/paths.
+  const geometryWidth = 960;
   const condensedTargetSpacing = 52;
   const dragThreshold = 7;
   const zoomMultiplier = 1.5;
@@ -137,7 +242,8 @@
     callCount > 1 && callSpacing !== null
       ? Math.max(observedWidth, margin.left + margin.right + (callCount - 1) * callSpacing)
       : Math.max(1, observedWidth);
-  $: scaleColumns = layoutCallColumns(indexed, width, margin);
+  $: canonicalColumns = layoutCallColumns(indexed, geometryWidth, margin);
+  $: scaleColumns = projectCallColumns(canonicalColumns, geometryWidth, width, margin);
   $: visiblePlotLeft = Math.max(margin.left, viewportScrollLeft - measuredChartOffsetX);
   $: visiblePlotRight = Math.min(
     width - margin.right,
@@ -154,8 +260,11 @@
       : {
           itemId: selectedItemId,
           visible: selectedItemVisibleInRiver(selectedItemId, riverDisplayMode, river.ribbons, {
-            left: selectionPlotLeft,
-            right: selectionPlotRight,
+            left:
+              (selectionPlotLeft - horizontalProjection.offset) / (horizontalProjection.scale || 1),
+            right:
+              (selectionPlotRight - horizontalProjection.offset) /
+              (horizontalProjection.scale || 1),
           }),
         };
   $: selectionVisibilityKey = JSON.stringify(selectionVisibility);
@@ -166,6 +275,9 @@
   $: if (lastVisibility !== isVisible) {
     lastVisibility = isVisible;
     if (!isVisible) {
+      closeViewOptions();
+      groupFocus.cancel();
+      economicsInspectFocus.cancel();
       cancelAllGestureState();
       onHoverCall(null);
       onHoverItem(null);
@@ -181,18 +293,20 @@
       ? visibleStackSample(scaleColumns, visiblePlotLeft, visiblePlotRight)
       : emptyVisibleScaleSample;
   $: verticalDomainMax = verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : undefined;
-  $: river = layoutContextRiver(
+  $: canonicalRiver = layoutContextRiver(
     indexed,
     {
-      width,
+      width: geometryWidth,
       height,
       margin,
       minimumVisibleThickness: 1,
       verticalDomainMax,
       groupByKind: riverDisplayMode === 'itemTypes',
     },
-    scaleColumns,
+    canonicalColumns,
   );
+  $: horizontalProjection = projectRiverHorizontally(canonicalRiver, geometryWidth, width, margin);
+  $: river = horizontalProjection.layout;
   $: cachePresentation = projectCachePresentation(indexed.analysis);
   $: verticalAxisMaximum =
     verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : river.maxTotalDisplayWeight;
@@ -236,7 +350,7 @@
   $: callLabelPositions = nonOverlappingCallLabelPositions(
     river.columns,
     condensedTargetSpacing,
-    interaction.pinnedCallIndex,
+    pinnedCallIndex,
   );
   $: guidePositions = callLabelPositions;
   $: zoomFactor = fitCallSpacing > 0 ? Math.max(1, effectiveCallSpacing / fitCallSpacing) : 1;
@@ -266,18 +380,27 @@
       callSpacing !== null &&
       (positionSignature !== lastPositionSignature || observedWidth !== lastObservedWidth)
     ) {
-      const anchor = captureViewportAnchor(
-        lastColumns,
-        host.scrollLeft,
-        measuredClientWidth(),
-        chartContentOffsetX(),
-      );
+      const anchor =
+        observedWidth !== lastObservedWidth
+          ? anchorAtPlotX(
+              lastColumns,
+              host.scrollLeft + lastObservedWidth / 2 - measuredChartOffsetX,
+              observedWidth / 2,
+            )
+          : captureViewportAnchor(
+              lastColumns,
+              host.scrollLeft,
+              measuredClientWidth(),
+              chartContentOffsetX(),
+            );
       if (anchor) pendingAdjustment = { kind: 'anchor', anchor };
     }
   });
 
   afterUpdate(() => {
     if (!host) return;
+    if (groupBreakdownReturnElement && !groupBreakdownReturnElement.isConnected)
+      groupBreakdownReturnElement = null;
     applyPendingAdjustment();
     if (navigationCommand && navigationCommand.id !== lastCommandId) {
       if (navigationCommand.kind !== 'reveal-item' || canExecuteReveal()) {
@@ -295,10 +418,11 @@
           measuredClientWidth() / 2,
         );
         if (range) {
-          const targetSpacing =
-            range.intervalCount === 0
-              ? fitInnerWidth / (Math.min(15, callCount) - 1)
-              : fitInnerWidth / range.intervalCount;
+          const targetSpacing = requestedRangeSpacing(
+            range.intervalCount,
+            fitInnerWidth,
+            callCount,
+          );
           setCallSpacing(Math.min(maximumCallSpacing, targetSpacing), range.anchor);
         } else {
           requestedRange = null;
@@ -317,84 +441,55 @@
   });
 
   onMount(() => {
-    if (hasNumericCacheData(indexed.analysis)) economicsTrackMode = 'cache';
-
-    const onScroll = () => {
-      syncScaleViewportMetrics();
-      publishViewport();
-      refreshEconomicsOverlay();
-    };
-    const onDocumentScroll = () => refreshEconomicsOverlay();
-    const onWheel = (event: WheelEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || callCount < 2) return;
-      event.preventDefault();
-      const deltaPixels =
-        event.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? event.deltaY * 16
-          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? event.deltaY * Math.max(1, host.clientHeight)
-            : event.deltaY;
-      zoomAt(event.clientX, Math.exp(-deltaPixels * wheelZoomSensitivity));
-    };
-    const onWindowPointerMove = (event: PointerEvent) => handleGesturePointerMove(event);
-    const onWindowPointerUp = (event: PointerEvent) => handleGesturePointerUp(event);
-    const onWindowPointerCancel = (event: PointerEvent) => handleGesturePointerCancel(event);
-    const onWindowLostPointerCapture = (event: PointerEvent) => handleGesturePointerCancel(event);
-    const onWindowKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'Space') spaceHeld = false;
-    };
-    const onWindowBlur = () => {
-      spaceHeld = false;
-      cancelAllGestureState();
-    };
-    host.addEventListener('scroll', onScroll, { passive: true });
-    host.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('pointermove', onWindowPointerMove);
-    window.addEventListener('pointerup', onWindowPointerUp);
-    window.addEventListener('pointercancel', onWindowPointerCancel);
-    window.addEventListener('lostpointercapture', onWindowLostPointerCapture);
-    window.addEventListener('keyup', onWindowKeyUp);
-    window.addEventListener('blur', onWindowBlur);
-
-    const measure = () => {
-      if (host.clientWidth > 0) {
-        if (observedWidth !== host.clientWidth) observedWidth = host.clientWidth;
-        hasObservedWidth = true;
+    const disposeDom = installRiverDom(host, {
+      onScroll: () => {
         syncScaleViewportMetrics();
         publishViewport();
         refreshEconomicsOverlay();
-      }
-    };
-    measure();
-    document.addEventListener('scroll', onDocumentScroll, true);
-    window.addEventListener('resize', measure);
-
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver((entries) => {
-        const nextWidth = entries[0]?.contentRect.width;
-        if (nextWidth && nextWidth > 0) {
+      },
+      onDocumentScroll: refreshEconomicsOverlay,
+      onWheel: (event) => {
+        if (!(event.metaKey || event.ctrlKey) || callCount < 2) return;
+        event.preventDefault();
+        const deltaPixels =
+          event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? event.deltaY * 16
+            : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+              ? event.deltaY * Math.max(1, host.clientHeight)
+              : event.deltaY;
+        zoomAt(event.clientX, Math.exp(-deltaPixels * wheelZoomSensitivity));
+      },
+      onPointerMove: handleGesturePointerMove,
+      onPointerUp: handleGesturePointerUp,
+      onPointerCancel: handleGesturePointerCancel,
+      onKeyUp: (event) => {
+        if (event.code === 'Space') spaceHeld = false;
+      },
+      onBlur: () => {
+        spaceHeld = false;
+        cancelAllGestureState();
+      },
+      onResize: (nextWidth, source) => {
+        if (observedWidth !== nextWidth) {
+          const interruptedGesture = gestureState.pointers.length > 0;
+          cancelAllGestureState();
+          if (interruptedGesture) gestureState = { ...gestureState, suppressClick: true };
           observedWidth = nextWidth;
-          hasObservedWidth = true;
-          syncScaleViewportMetrics();
         }
-      });
-      observer.observe(host);
-    }
+        hasObservedWidth = true;
+        syncScaleViewportMetrics();
+        if (source === 'element') {
+          publishViewport();
+          refreshEconomicsOverlay();
+        }
+      },
+    });
     return () => {
+      groupFocus.dispose();
+      economicsInspectFocus.dispose();
       cancelAllGestureState();
       if (clickSuppressionTimer !== null) window.clearTimeout(clickSuppressionTimer);
-      observer?.disconnect();
-      host.removeEventListener('scroll', onScroll);
-      document.removeEventListener('scroll', onDocumentScroll, true);
-      host.removeEventListener('wheel', onWheel);
-      window.removeEventListener('pointermove', onWindowPointerMove);
-      window.removeEventListener('pointerup', onWindowPointerUp);
-      window.removeEventListener('pointercancel', onWindowPointerCancel);
-      window.removeEventListener('lostpointercapture', onWindowLostPointerCapture);
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('keyup', onWindowKeyUp);
-      window.removeEventListener('blur', onWindowBlur);
+      disposeDom();
     };
   });
 
@@ -461,6 +556,9 @@
       canZoomOut,
       totalCallCount: callCount,
       hasOverflow: ready && scrollWidth > clientWidth + 1,
+      centerCallIndex: ready
+        ? nearestCallIndex(host.scrollLeft + clientWidth / 2 - contentOffsetX, river.columns)
+        : null,
       ...range,
     };
   }
@@ -502,95 +600,39 @@
     syncScaleViewportMetrics();
   }
 
-  function anchorForCall(callIndex: number, offsetFromViewportLeft: number): ViewportAnchor | null {
-    const call = indexed.callByIndex.get(callIndex);
-    if (!call) return null;
-    return { callIndex, sourceRecordId: call.sourceRecordId ?? null, offsetFromViewportLeft };
+  function anchorForCall(callIndex: number, offset: number): ViewportAnchor | null {
+    return callAnchor(viewportColumns, callIndex, offset);
   }
 
-  function anchorForCallRange(
-    startCallIndex: number,
-    endCallIndex: number,
-    offsetFromViewportLeft: number,
-  ): { intervalCount: number; anchor: ViewportAnchor } | null {
-    const startPosition = river.columns.findIndex((column) => column.callIndex === startCallIndex);
-    const endPosition = river.columns.findIndex((column) => column.callIndex === endCallIndex);
-    if (startPosition < 0 || endPosition < 0) return null;
-    if (startPosition === endPosition) {
-      const anchor = anchorForCall(startCallIndex, offsetFromViewportLeft);
-      return anchor ? { intervalCount: 0, anchor } : null;
-    }
-    const firstColumn = river.columns[Math.min(startPosition, endPosition)];
-    const lastColumn = river.columns[Math.max(startPosition, endPosition)];
-    if (!firstColumn || !lastColumn) return null;
-    const firstCall = indexed.callByIndex.get(firstColumn.callIndex);
-    const lastCall = indexed.callByIndex.get(lastColumn.callIndex);
-    if (!firstCall || !lastCall) return null;
-    return {
-      intervalCount: Math.abs(endPosition - startPosition),
-      anchor: {
-        callIndex: firstColumn.callIndex,
-        sourceRecordId: firstCall.sourceRecordId ?? null,
-        nextCallIndex: lastColumn.callIndex,
-        nextSourceRecordId: lastCall.sourceRecordId ?? null,
-        fractionToNext: 0.5,
-        offsetFromViewportLeft,
-      },
-    };
+  function anchorForCallRange(startCallIndex: number, endCallIndex: number, offset: number) {
+    return rangeAnchor(viewportColumns, startCallIndex, endCallIndex, offset);
   }
 
   function anchorAtClientX(clientX: number): ViewportAnchor | null {
-    if (river.columns.length === 0) return null;
     const x = Math.min(width - margin.right, Math.max(margin.left, viewBoxX(clientX)));
-    const rightPosition = river.columns.findIndex((column) => column.x >= x);
-    const left =
-      rightPosition < 0
-        ? river.columns[river.columns.length - 1]
-        : rightPosition === 0
-          ? river.columns[0]
-          : river.columns[rightPosition - 1];
-    const right = rightPosition > 0 ? river.columns[rightPosition] : undefined;
-    if (!left) return null;
-    const leftCall = indexed.callByIndex.get(left.callIndex);
-    const rightCall = right ? indexed.callByIndex.get(right.callIndex) : null;
     const rect = host.getBoundingClientRect();
-    return {
-      callIndex: left.callIndex,
-      sourceRecordId: leftCall?.sourceRecordId ?? null,
-      ...(right && rightCall
-        ? {
-            nextCallIndex: right.callIndex,
-            nextSourceRecordId: rightCall.sourceRecordId ?? null,
-            fractionToNext: Math.min(1, Math.max(0, (x - left.x) / (right.x - left.x))),
-          }
-        : {}),
-      offsetFromViewportLeft: clientX - rect.left - host.clientLeft,
-    };
+    return anchorAtPlotX(viewportColumns, x, clientX - rect.left - host.clientLeft);
   }
 
   function setCallSpacing(nextSpacing: number | null, anchor: ViewportAnchor | null = null): void {
-    let resolvedSpacing: number | null;
-    if (nextSpacing === null || fitCallSpacing <= 0 || nextSpacing <= fitCallSpacing * 1.005) {
-      resolvedSpacing = null;
-      pendingAdjustment = 'fit';
-    } else {
-      resolvedSpacing = Math.min(maximumCallSpacing, Math.max(fitCallSpacing, nextSpacing));
-    }
-    const scaleUnchanged = callSpacing === resolvedSpacing;
-    callSpacing = resolvedSpacing;
-    if (anchor) {
-      if (scaleUnchanged && resolvedSpacing !== null) {
-        const target = scrollTargetForAnchor(
-          anchor,
-          viewportColumns,
-          measuredClientWidth(),
-          measuredScrollWidth(),
-          chartContentOffsetX(),
-        );
-        if (target !== null) setScrollLeft(target);
-      } else if (resolvedSpacing !== null) {
-        pendingAdjustment = { kind: 'anchor', anchor };
-      }
+    const decision = resolveSpacing(
+      callSpacing,
+      nextSpacing,
+      fitCallSpacing,
+      maximumCallSpacing,
+      anchor,
+    );
+    callSpacing = decision.spacing;
+    if (decision.adjustment) pendingAdjustment = decision.adjustment;
+    if (decision.immediateAnchor) {
+      const target = scrollTargetForAnchor(
+        decision.immediateAnchor,
+        viewportColumns,
+        measuredClientWidth(),
+        measuredScrollWidth(),
+        chartContentOffsetX(),
+      );
+      if (target !== null) setScrollLeft(target);
     }
   }
 
@@ -645,6 +687,7 @@
     if (!item || item.presence.length === 0) return;
     // Explicit reveal is an item-level action; leave the aggregate presentation so
     // the requested item's own ribbon becomes visible and focusable.
+    setDisplay('items');
     riverDisplayMode = 'items';
     const viewportCenter =
       selectionPlotRight > selectionPlotLeft
@@ -658,7 +701,7 @@
       item.presence,
       river.columns,
       Number.isFinite(viewportCenter) ? viewportCenter : fallbackX,
-      interaction.pinnedCallIndex,
+      pinnedCallIndex,
     );
     if (targetCall === null) return;
     const anchor = anchorForCall(targetCall, measuredClientWidth() / 2);
@@ -690,6 +733,19 @@
     if (command.kind === 'latest') {
       requestedRange = null;
       setScrollLeft(latestScrollTarget(measuredScrollWidth(), measuredClientWidth()));
+      return;
+    }
+    if (command.kind === 'ensure-call') {
+      const column = viewportColumns.find((value) => value.callIndex === command.callIndex);
+      if (!column) return;
+      const target = comfortableCallScroll(
+        column.x + chartContentOffsetX(),
+        host.scrollLeft,
+        measuredClientWidth(),
+        measuredScrollWidth(),
+      );
+      if (Math.abs(target - host.scrollLeft) > 0.5) requestedRange = null;
+      setScrollLeft(target);
       return;
     }
     if (command.kind === 'range') {
@@ -726,33 +782,6 @@
     return true;
   }
 
-  function pointerInput(event: PointerEvent): GesturePointer & { shiftKey: boolean } {
-    return {
-      pointerId: event.pointerId,
-      pointerType: event.pointerType,
-      button: event.button,
-      x: event.clientX,
-      y: event.clientY,
-      shiftKey: event.shiftKey,
-    };
-  }
-
-  function capturePointer(pointerId: number): void {
-    try {
-      host.setPointerCapture(pointerId);
-    } catch {
-      /* jsdom and browsers without active-pointer capture support may reject this */
-    }
-  }
-
-  function releasePointer(pointerId: number): void {
-    try {
-      if (host.hasPointerCapture?.(pointerId)) host.releasePointerCapture(pointerId);
-    } catch {
-      /* Capture may already have been released by the browser. */
-    }
-  }
-
   function scheduleClickSuppression(): void {
     if (clickSuppressionTimer !== null) window.clearTimeout(clickSuppressionTimer);
     clickSuppressionTimer = window.setTimeout(() => {
@@ -765,10 +794,10 @@
     for (const effect of effects) {
       switch (effect.kind) {
         case 'capture':
-          effect.pointerIds.forEach(capturePointer);
+          effect.pointerIds.forEach((id) => capturePointer(host, id));
           break;
         case 'release':
-          effect.pointerIds.forEach(releasePointer);
+          effect.pointerIds.forEach((id) => releasePointer(host, id));
           break;
         case 'clear-selection':
           dragSelection = null;
@@ -824,6 +853,7 @@
   }
 
   function handleGesturePointerMove(event: PointerEvent): void {
+    if (!gestureState.pointers.some((pointer) => pointer.pointerId === event.pointerId)) return;
     const transition = transitionPointerMove(gestureState, pointerInput(event), {
       dragThreshold,
     });
@@ -863,13 +893,22 @@
   }
 
   function setEconomicsTrackMode(mode: EconomicsTrackMode): void {
-    economicsTrackMode = mode;
-    if (mode === 'off') cacheViewMode = 'tokens';
-    if (mode === 'off') {
-      economicsReadout = '';
-      economicsEventBreakdown = null;
-      economicsBreakdownStyle = '';
-    }
+    changePreferences({
+      ...preferences,
+      economics: {
+        ...preferences.economics,
+        expanded: mode !== 'off',
+        lastMode: mode === 'off' ? preferences.economics.lastMode : mode,
+      },
+    });
+  }
+
+  /** Consume one Escape stage without clearing the shared investigation. */
+  export function dismissEconomics(): boolean {
+    if (!isVisible || economicsTrackMode === 'off') return false;
+    setEconomicsTrackMode('off');
+    economicsTrigger?.focus({ preventScroll: true });
+    return true;
   }
 
   function updateEconomicsReadout(readout: string): void {
@@ -924,26 +963,24 @@
         returnElement ??
         (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     }
-    groupBreakdown = { kind, memberIds, callIndex };
-    void tick().then(() => {
-      if (groupBreakdownElement?.isConnected) {
-        document.getElementById('group-breakdown-close')?.focus();
-      }
-    });
+    const next = { kind, memberIds, callIndex };
+    groupBreakdown = next;
+    groupFocus.focusAfterUpdate(
+      () => document.getElementById('group-breakdown-close'),
+      () => groupBreakdown !== null && isVisible,
+    );
   }
 
   function closeGroupBreakdown(returnFocus = true): void {
     const returnElement = groupBreakdownReturnElement;
     groupBreakdown = null;
     groupBreakdownReturnElement = null;
-    if (returnFocus && returnElement?.isConnected) void tick().then(() => returnElement.focus());
-  }
-
-  function handleGroupBreakdownKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      closeGroupBreakdown();
+    groupFocus.cancel();
+    if (returnFocus && returnElement?.isConnected) {
+      groupFocus.focusAfterUpdate(
+        () => returnElement,
+        () => groupBreakdown === null && isVisible,
+      );
     }
   }
 
@@ -961,116 +998,31 @@
   }
 
   function revealGroupMembers(): void {
-    riverDisplayMode = 'items';
+    setDisplay('items');
     closeGroupBreakdown(false);
-  }
-
-  function economicsAnchorPoint(): { x: number; y: number } | null {
-    if (!economicsEventBreakdown || !host) return null;
-    const track = host.querySelector<SVGSVGElement>('.economics-track-svg');
-    if (!track) return null;
-    const trackBounds = track.getBoundingClientRect();
-    const trackWidth = Number(track.getAttribute('width')) || track.viewBox.baseVal.width;
-    const scaleX = trackWidth > 0 ? trackBounds.width / trackWidth : 1;
-    const scaleY =
-      track.viewBox.baseVal.height > 0 ? trackBounds.height / track.viewBox.baseVal.height : 1;
-    return {
-      x: trackBounds.left + economicsEventBreakdown.anchorX * scaleX,
-      y: trackBounds.top + economicsEventBreakdown.anchorY * scaleY,
-    };
-  }
-
-  function economicsVisibleBounds(): {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-  } | null {
-    if (!host) return null;
-    const hostBounds = host.getBoundingClientRect();
-    const plotBounds = host.parentElement?.getBoundingClientRect();
-    const left = Math.max(0, hostBounds.left, plotBounds?.left ?? -Infinity);
-    const right = Math.min(
-      window.innerWidth,
-      hostBounds.right,
-      plotBounds?.right ?? Number.POSITIVE_INFINITY,
-    );
-    const top = Math.max(0, hostBounds.top, plotBounds?.top ?? -Infinity);
-    const bottom = Math.min(
-      window.innerHeight,
-      hostBounds.bottom,
-      plotBounds?.bottom ?? Number.POSITIVE_INFINITY,
-    );
-    return right >= left && bottom >= top ? { left, right, top, bottom } : null;
-  }
-
-  function economicsAnchorVisible(): boolean {
-    const point = economicsAnchorPoint();
-    const bounds = economicsVisibleBounds();
-    if (!point || !bounds) return false;
-    return (
-      point.x >= bounds.left &&
-      point.x <= bounds.right &&
-      point.y >= bounds.top &&
-      point.y <= bounds.bottom
-    );
   }
 
   function refreshEconomicsOverlay(): void {
     economicsOverlayRevision += 1;
-    if (economicsEventBreakdown && !economicsAnchorVisible()) closeEconomicsBreakdown(false);
+    if (economicsEventBreakdown && host && !economicsAnchorVisible(host, economicsEventBreakdown))
+      closeEconomicsBreakdown(false);
   }
 
   function positionEconomicsBreakdown(_revision: number): string {
-    if (!economicsEventBreakdown || !economicsBreakdownElement || window.innerWidth <= 620)
-      return '';
-    const point = economicsAnchorPoint();
-    const track = host?.querySelector<SVGSVGElement>('.economics-track-svg');
-    if (!point || !track) return '';
-    const trackBounds = track.getBoundingClientRect();
-    const elementBounds = economicsBreakdownElement.getBoundingClientRect();
-    const hostBounds = host.getBoundingClientRect();
-    const width = Math.min(300, Math.max(120, elementBounds.width || 300));
-    const height = elementBounds.height || 160;
-    const minLeft = Math.max(8, hostBounds.left + 8);
-    const maxLeft = Math.max(
-      minLeft,
-      Math.min(window.innerWidth - width - 8, hostBounds.right - width - 8),
-    );
-    const left = Math.max(minLeft, Math.min(maxLeft, point.x - width / 2));
-    const scaleY =
-      track.viewBox.baseVal.height > 0 ? trackBounds.height / track.viewBox.baseVal.height : 1;
-    const laneTop = trackBounds.top + economicsEventBreakdown.laneTop * scaleY;
-    const laneBottom =
-      trackBounds.top +
-      (economicsEventBreakdown.laneTop + economicsEventBreakdown.laneHeight) * scaleY;
-    const below = laneBottom + 8;
-    const above = laneTop - height - 8;
-    const top =
-      below + height <= window.innerHeight - 8
-        ? below
-        : above >= 8
-          ? above
-          : Math.max(8, Math.min(window.innerHeight - height - 8, below));
-    return `left:${left}px;top:${top}px;width:${width}px`;
+    return host ? positionOverlay(host, economicsBreakdownElement, economicsEventBreakdown) : '';
   }
 
   function closeEconomicsBreakdown(returnFocus = true): void {
     economicsTrackComponent?.closeEventBreakdown(returnFocus);
   }
 
-  function handleEconomicsBreakdownKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      closeEconomicsBreakdown();
-    }
-  }
-
   function inspectEconomicsEvent(callIndex: number): void {
     closeEconomicsBreakdown(false);
     onPinCall(callIndex);
-    void tick().then(() => document.getElementById(`economics-call-${callIndex}`)?.focus());
+    economicsInspectFocus.focusAfterUpdate(
+      () => document.getElementById(`economics-call-${callIndex}`),
+      () => isVisible && indexed.callByIndex.has(callIndex),
+    );
   }
 
   function economicsMarkClick(event: MouseEvent, index: number): void {
@@ -1116,7 +1068,7 @@
   ): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      const callIndex = interaction.pinnedCallIndex;
+      const callIndex = pinnedCallIndex;
       const membersAtCall =
         callIndex === null
           ? memberIds
@@ -1198,56 +1150,71 @@
   }
 </script>
 
-<div class="vertical-scale-controls">
-  <div class="scale-toggle" role="group" aria-label="Vertical scale">
-    <span class="scale-label">Vertical scale</span>
-    <button
-      type="button"
-      class:active={verticalScaleMode === 'session'}
-      aria-pressed={verticalScaleMode === 'session'}
-      onclick={() => setVerticalScaleMode('session')}>Session scale</button
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<details class="view-options" bind:this={viewOptions} onkeydown={optionsKey}>
+  <summary>View options</summary>
+  <div class="vertical-scale-controls">
+    <div class="scale-toggle" role="group" aria-label="Vertical scale">
+      <span class="scale-label">Vertical scale</span>
+      <button
+        type="button"
+        class:active={verticalScaleMode === 'session'}
+        aria-pressed={verticalScaleMode === 'session'}
+        onclick={() => setScale('session')}>Session scale</button
+      >
+      <button
+        type="button"
+        class:active={verticalScaleMode === 'visible'}
+        aria-pressed={verticalScaleMode === 'visible'}
+        onclick={() => setScale('visible')}>Visible calls</button
+      >
+    </div>
+    <div class="scale-toggle" role="group" aria-label="River layout">
+      <span class="scale-label">Layout</span>
+      <button
+        type="button"
+        class:active={riverLayoutMode === 'balanced'}
+        aria-pressed={riverLayoutMode === 'balanced'}
+        onclick={() => setLayout('balanced')}>Balanced</button
+      >
+      <button
+        type="button"
+        class:active={riverLayoutMode === 'compact'}
+        aria-pressed={riverLayoutMode === 'compact'}
+        onclick={() => setLayout('compact')}>Compact River</button
+      >
+    </div>
+    <div class="scale-toggle" role="group" aria-label="River display">
+      <span class="scale-label">Display</span>
+      <button
+        type="button"
+        class:active={riverDisplayMode === 'items'}
+        aria-pressed={riverDisplayMode === 'items'}
+        onclick={() => setDisplay('items')}>Items</button
+      >
+      <button
+        type="button"
+        class:active={riverDisplayMode === 'itemTypes'}
+        aria-pressed={riverDisplayMode === 'itemTypes'}
+        onclick={() => setDisplay('itemTypes')}>Item types</button
+      >
+    </div>
+    <button type="button" onclick={() => changePreferences(defaultPresentationPreferences())}
+      >Reset view preferences</button
     >
-    <button
-      type="button"
-      class:active={verticalScaleMode === 'visible'}
-      aria-pressed={verticalScaleMode === 'visible'}
-      onclick={() => setVerticalScaleMode('visible')}>Visible calls</button
-    >
+    <RiverPrecisionNavigation
+      callIndices={indexed.analysis.modelCalls.map((value) => value.index)}
+      ready={hasObservedWidth}
+      {onJumpToCall}
+      {onZoomToRange}
+      onDone={closeViewOptions}
+      bind:message={precisionMessage}
+      hideMessage={true}
+    />
   </div>
-  <div class="scale-toggle" role="group" aria-label="River layout">
-    <span class="scale-label">Layout</span>
-    <button
-      type="button"
-      class:active={riverLayoutMode === 'balanced'}
-      aria-pressed={riverLayoutMode === 'balanced'}
-      onclick={() => (riverLayoutMode = 'balanced')}>Balanced</button
-    >
-    <button
-      type="button"
-      class:active={riverLayoutMode === 'compact'}
-      aria-pressed={riverLayoutMode === 'compact'}
-      onclick={() => (riverLayoutMode = 'compact')}>Compact River</button
-    >
-  </div>
-  <div class="scale-toggle" role="group" aria-label="River display">
-    <span class="scale-label">Display</span>
-    <button
-      type="button"
-      class:active={riverDisplayMode === 'items'}
-      aria-pressed={riverDisplayMode === 'items'}
-      onclick={() => {
-        riverDisplayMode = 'items';
-        groupBreakdown = null;
-      }}>Items</button
-    >
-    <button
-      type="button"
-      class:active={riverDisplayMode === 'itemTypes'}
-      aria-pressed={riverDisplayMode === 'itemTypes'}
-      onclick={() => (riverDisplayMode = 'itemTypes')}>Item types</button
-    >
-  </div>
-</div>
+</details>
+{#if nonDefaultStatus}<p class="view-status">{nonDefaultStatus}</p>{/if}
+{#if precisionMessage}<p class="view-status" role="status">{precisionMessage}</p>{/if}
 <div class="chart-frame">
   <div class="chart-plot">
     <div
@@ -1297,7 +1264,7 @@
             width="8"
             height="8"
             patternUnits="userSpaceOnUse"
-            patternTransform="rotate(35)"
+            patternTransform={`matrix(${1 / (horizontalProjection.scale || 1)} 0 0 1 ${-horizontalProjection.offset / (horizontalProjection.scale || 1)} 0) rotate(35)`}
           >
             <rect width="8" height="8" fill="#46516a" />
             <path d="M0 0V8" stroke="#8793aa" stroke-width="2" opacity=".65" />
@@ -1333,7 +1300,7 @@
             <g
               class="call-target"
               class:condensed={callTargetStride > 1}
-              class:pinned={interaction.pinnedCallIndex === column.callIndex}
+              class:pinned={pinnedCallIndex === column.callIndex}
               role="button"
               tabindex="0"
               aria-label={`Pin model call ${column.callIndex}`}
@@ -1368,70 +1335,78 @@
           </g>
         {/each}
 
-        {#each river.lineageConnectors as connector (connector.key)}
-          <path
-            class="lineage-connector"
-            class:visible={connectorVisible(connector.fromItemId)}
-            d={connector.path}
-          />
-        {/each}
-
-        {#each river.ribbons as ribbon (ribbon.key)}
-          {@const isGroup = ribbon.groupKind !== undefined}
-          {@const ribbonLabel = isGroup
-            ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
-            : itemAccessibleLabel(ribbon.itemId)}
-          <g
-            class="ribbon-group"
-            class:group-ribbon={isGroup}
-            class:selected={!isGroup && interaction.selectedItemId === ribbon.itemId}
-            class:hovered={!isGroup && interaction.hoveredItemId === ribbon.itemId}
-            class:unknown={indexed.analysis.displayWeightUnit === 'unavailable'}
-          >
+        <g transform={horizontalProjection.transform} data-testid="river-ribbon-geometry">
+          {#each river.lineageConnectors as connector (connector.key)}
             <path
-              class="ribbon"
-              class:subpixel={ribbon.isSubpixel}
-              d={ribbon.path}
-              fill={indexed.analysis.displayWeightUnit === 'unavailable'
-                ? 'url(#unknown-geometry)'
-                : itemColor(ribbon.itemId)}
-              stroke={ribbon.isSubpixel ? itemColor(ribbon.itemId) : 'none'}
-              stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+              class="lineage-connector"
+              vector-effect="non-scaling-stroke"
+              class:visible={connectorVisible(connector.fromItemId)}
+              d={connector.path}
             />
-            <path
-              class="ribbon-hit"
-              pointer-events="fill"
-              d={ribbon.hitPath}
-              role="button"
-              tabindex="0"
-              aria-label={ribbonLabel}
-              aria-pressed={!isGroup && interaction.selectedItemId === ribbon.itemId}
-              onpointerenter={(event) =>
-                isGroup
-                  ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
-                  : onHoverItem(ribbon.itemId, event)}
-              onpointermove={(event) =>
-                isGroup
-                  ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
-                  : onHoverItem(ribbon.itemId, event)}
-              onpointerleave={() => {
-                if (isGroup) hoveredGroup = null;
-                else onHoverItem(null);
-              }}
-              onclick={(event) =>
-                isGroup
-                  ? activateGroup(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
-                  : selectRibbon(event, ribbon.itemId)}
-              onkeydown={(event) =>
-                isGroup
-                  ? activateGroupFromKeyboard(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
-                  : selectFromKeyboard(event, ribbon.itemId)}
-            >
-              <title>{ribbonLabel}</title>
-            </path>
-          </g>
-        {/each}
+          {/each}
 
+          {#each river.ribbons as ribbon (ribbon.key)}
+            {@const isGroup = ribbon.groupKind !== undefined}
+            {@const ribbonLabel = isGroup
+              ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
+              : itemAccessibleLabel(ribbon.itemId)}
+            <g
+              class="ribbon-group"
+              class:group-ribbon={isGroup}
+              class:selected={!isGroup && selectedItemId === ribbon.itemId}
+              class:hovered={!isGroup && hoveredItemId === ribbon.itemId}
+              class:unknown={indexed.analysis.displayWeightUnit === 'unavailable'}
+            >
+              <path
+                class="ribbon"
+                vector-effect="non-scaling-stroke"
+                class:subpixel={ribbon.isSubpixel}
+                d={ribbon.path}
+                fill={indexed.analysis.displayWeightUnit === 'unavailable'
+                  ? 'url(#unknown-geometry)'
+                  : itemColor(ribbon.itemId)}
+                stroke={ribbon.isSubpixel ? itemColor(ribbon.itemId) : 'none'}
+                stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+              />
+              <path
+                class="ribbon-hit"
+                vector-effect="non-scaling-stroke"
+                pointer-events="fill"
+                d={ribbon.hitPath}
+                role="button"
+                tabindex="0"
+                aria-label={ribbonLabel}
+                aria-pressed={!isGroup && selectedItemId === ribbon.itemId}
+                onpointerenter={(event) =>
+                  isGroup
+                    ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
+                    : onHoverItem(ribbon.itemId, event)}
+                onpointermove={(event) =>
+                  isGroup
+                    ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
+                    : onHoverItem(ribbon.itemId, event)}
+                onpointerleave={() => {
+                  if (isGroup) hoveredGroup = null;
+                  else onHoverItem(null);
+                }}
+                onclick={(event) =>
+                  isGroup
+                    ? activateGroup(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
+                    : selectRibbon(event, ribbon.itemId)}
+                onkeydown={(event) =>
+                  isGroup
+                    ? activateGroupFromKeyboard(
+                        event,
+                        ribbon.groupKind!,
+                        ribbon.memberItemIds ?? [],
+                      )
+                    : selectFromKeyboard(event, ribbon.itemId)}
+              >
+                <title>{ribbonLabel}</title>
+              </path>
+            </g>
+          {/each}
+        </g>
         {#if selectionRect && selectionRect.width > 0}
           <rect
             class="zoom-selection"
@@ -1441,8 +1416,8 @@
             height={river.innerHeight}
           />
         {/if}
-        {#if interaction.hoveredCallIndex !== null}
-          {@const column = columnByCall.get(interaction.hoveredCallIndex)}
+        {#if hoveredCallIndex !== null}
+          {@const column = columnByCall.get(hoveredCallIndex)}
           {#if column}<line
               class="crosshair"
               x1={column.x}
@@ -1451,8 +1426,8 @@
               y2={height - margin.bottom}
             />{/if}
         {/if}
-        {#if interaction.pinnedCallIndex !== null}
-          {@const column = columnByCall.get(interaction.pinnedCallIndex)}
+        {#if pinnedCallIndex !== null}
+          {@const column = columnByCall.get(pinnedCallIndex)}
           {#if column}<line
               class="pin-line"
               x1={column.x}
@@ -1482,153 +1457,164 @@
       {/if}
       <div
         class="economics-track-header"
+        bind:this={economicsHeader}
         role="group"
         aria-label="Economics track controls and legend"
         onpointerdown={(event) => event.stopPropagation()}
         onclick={(event) => event.stopPropagation()}
       >
-        <div class="economics-track-controls">
-          <div class="scale-toggle" role="group" aria-label="Economics track">
-            <span class="scale-label">Economics</span>
-            <button
-              type="button"
-              class:active={economicsTrackMode === 'cache'}
-              aria-pressed={economicsTrackMode === 'cache'}
-              onclick={() => setEconomicsTrackMode('cache')}>Cache</button
-            >
-            <button
-              type="button"
-              class:active={economicsTrackMode === 'cost'}
-              aria-pressed={economicsTrackMode === 'cost'}
-              onclick={() => setEconomicsTrackMode('cost')}>Cost</button
-            >
-            <button
-              type="button"
-              class:active={economicsTrackMode === 'off'}
-              aria-pressed={economicsTrackMode === 'off'}
-              onclick={() => setEconomicsTrackMode('off')}>Off</button
-            >
-          </div>
-          {#if economicsTrackMode === 'cache'}
-            <div class="scale-toggle cache-view-toggle" role="group" aria-label="Cache view">
-              <span class="scale-label">Cache view</span>
-              <button
-                type="button"
-                class:active={cacheViewMode === 'tokens'}
-                aria-pressed={cacheViewMode === 'tokens'}
-                onclick={() => (cacheViewMode = 'tokens')}>Tokens</button
-              >
-              <button
-                type="button"
-                class:active={cacheViewMode === 'share'}
-                aria-pressed={cacheViewMode === 'share'}
-                onclick={() => (cacheViewMode = 'share')}>Share (%)</button
-              >
-            </div>
-          {/if}
-          <span class="track-title">
-            {economicsTrackMode === 'cache'
-              ? cacheViewMode === 'share'
-                ? `Cache share per call · ${usageMappingLabel} prompt-token denominator · fixed 0–100% axis`
-                : `Prompt tokens per call · ${usageMappingLabel} · session-wide scale`
-              : economicsTrackMode === 'cost'
-                ? `${costCopy.label} per call · USD · session-wide scale · ${costCopy.trackCaveat}`
-                : 'Economics off · details remain available in the inspector'}
-          </span>
-        </div>
-        {#if economicsTrackMode !== 'off'}
-          <div class="track-legend-groups essential-legend">
-            {#if economicsTrackMode === 'cache'}
-              <div class="track-legend-group" aria-label="Token categories">
-                <span class="legend-group-title">Token categories</span>
-                <div class="track-legend">
-                  {#each cachePresentation.categories as category (category.kind)}
-                    <span
-                      ><i class={`swatch ${category.kind}`}
-                      ></i>{category.label}{category.availability === 'measuredZero'
-                        ? ' · 0 in this session'
-                        : ''}</span
-                    >
-                  {:else}
-                    <span class="legend-muted">No supported numeric cache categories</span>
-                  {/each}
-                </div>
-              </div>
-              {#if cachePresentation.notes.length > 0}
-                <span class="inline-availability"
-                  >{cachePresentation.notes[cachePresentation.mixedPolicy ? 1 : 0]}</span
+        <button
+          bind:this={economicsTrigger}
+          class="economics-disclosure"
+          type="button"
+          aria-expanded={economicsTrackMode !== 'off'}
+          aria-controls="economics-expanded"
+          onclick={() =>
+            setEconomicsTrackMode(
+              economicsTrackMode === 'off' ? preferences.economics.lastMode : 'off',
+            )}
+        >
+          Cache &amp; cost · {economicsTrackMode === 'off' ? 'Expand' : 'Collapse'}
+        </button>
+        <div id="economics-expanded" hidden={economicsTrackMode === 'off'}>
+          {#if economicsTrackMode !== 'off'}
+            <div class="economics-track-controls">
+              <div class="scale-toggle" role="group" aria-label="Economics track">
+                <span class="scale-label">Economics</span>
+                <button
+                  type="button"
+                  class:active={economicsTrackMode === 'cache'}
+                  aria-pressed={economicsTrackMode === 'cache'}
+                  onclick={() => setEconomicsTrackMode('cache')}>Cache</button
                 >
-              {/if}
-              <div class="track-legend-group" aria-label="Events">
-                <span class="legend-group-title">Events</span>
-                <div class="track-legend">
-                  <span
-                    ><EventGlyph kind="ratioChange" direction="rise" size={16} />Share rise/drop</span
+                <button
+                  type="button"
+                  class:active={economicsTrackMode === 'cost'}
+                  aria-pressed={economicsTrackMode === 'cost'}
+                  onclick={() => setEconomicsTrackMode('cost')}>Cost</button
+                >
+                <button
+                  type="button"
+                  aria-pressed={false}
+                  onclick={() => setEconomicsTrackMode('off')}>Off</button
+                >
+              </div>
+              {#if economicsTrackMode === 'cache'}
+                <div class="scale-toggle cache-view-toggle" role="group" aria-label="Cache view">
+                  <span class="scale-label">Cache view</span>
+                  <button
+                    type="button"
+                    class:active={cacheViewMode === 'tokens'}
+                    aria-pressed={cacheViewMode === 'tokens'}
+                    onclick={() => setCacheView('tokens')}>Tokens</button
                   >
-                  <span><EventGlyph kind="compaction" size={16} />Compaction</span>
-                  <span><EventGlyph kind="targetChange" size={16} />Model / provider change</span>
+                  <button
+                    type="button"
+                    class:active={cacheViewMode === 'share'}
+                    aria-pressed={cacheViewMode === 'share'}
+                    onclick={() => setCacheView('share')}>Share (%)</button
+                  >
                 </div>
-              </div>
-            {:else}
-              <div class="track-legend-group" aria-label="Cost values">
-                <span class="legend-group-title">Cost values</span>
-                <div class="track-legend">
-                  <span><i class="swatch cost"></i>{costCopy.totalLabel} · USD</span>
+              {/if}
+              <span class="track-title">
+                {economicsTrackMode === 'cache'
+                  ? cacheViewMode === 'share'
+                    ? `Cache share per call · ${usageMappingLabel} prompt-token denominator · fixed 0–100% axis`
+                    : `Prompt tokens per call · ${usageMappingLabel} · session-wide scale`
+                  : economicsTrackMode === 'cost'
+                    ? `${costCopy.label} per call · USD · session-wide scale · ${costCopy.trackCaveat}`
+                    : 'Economics off · details remain available in the inspector'}
+              </span>
+            </div>
+          {/if}
+          {#if economicsTrackMode !== 'off'}
+            <div class="track-legend-groups essential-legend">
+              {#if economicsTrackMode === 'cache'}
+                <div class="track-legend-group" aria-label="Token categories">
+                  <span class="legend-group-title">Token categories</span>
+                  <div class="track-legend">
+                    {#each cachePresentation.categories as category (category.kind)}
+                      <span
+                        ><i class={`swatch ${category.kind}`}
+                        ></i>{category.label}{category.availability === 'measuredZero'
+                          ? ' · 0 in this session'
+                          : ''}</span
+                      >
+                    {:else}
+                      <span class="legend-muted">No supported numeric cache categories</span>
+                    {/each}
+                  </div>
                 </div>
-              </div>
+                {#each cachePresentation.notes as note}<span class="inline-availability"
+                    >{note}</span
+                  >{/each}
+              {:else}
+                <div class="track-legend-group" aria-label="Cost values">
+                  <span class="legend-group-title">Cost values</span>
+                  <div class="track-legend">
+                    <span><i class="swatch cost"></i>{costCopy.totalLabel} · USD</span>
+                  </div>
+                </div>
+              {/if}
+            </div>
+            <details class="economics-legend">
+              <summary>Events &amp; data quality</summary>
               <div class="track-legend-group" aria-label="Events">
                 <span class="legend-group-title">Events</span>
                 <div class="track-legend">
+                  {#if economicsTrackMode === 'cache'}<span
+                      ><EventGlyph kind="ratioChange" direction="rise" size={16} />Share rise/drop</span
+                    >{/if}
                   <span><EventGlyph kind="compaction" size={16} />Compaction</span>
                   <span><EventGlyph kind="targetChange" size={16} />Model / provider change</span>
                 </div>
               </div>
-            {/if}
-            <div class="track-legend-group" aria-label="Data quality">
-              <span class="legend-group-title">Data quality</span>
-              <div class="track-legend">
-                <span><i class="swatch uncertain"></i>Partial / unsupported</span>
-                <span><i class="swatch missing"></i>Missing</span>
-                <span><i class="swatch zero"></i>Measured zero</span>
+              <div class="track-legend-group" aria-label="Data quality">
+                <span class="legend-group-title">Data quality</span>
+                <div class="track-legend">
+                  <span><i class="swatch uncertain"></i>Partial / unsupported</span>
+                  <span><i class="swatch missing"></i>Missing</span>
+                  <span><i class="swatch zero"></i>Measured zero</span>
+                </div>
               </div>
-            </div>
-          </div>
-          {#if economicsTrackMode === 'cache'}
-            <details class="economics-legend">
-              <summary>Legend and data quality</summary>
-              <p class="availability-summary">
-                <b>Data availability.</b>
-                {cachePresentation.summary}
-              </p>
-              <p class="availability-summary">
-                Fresh / uncached input uses each policy's exact label below.
-              </p>
-              <ul class="availability-list">
-                {#each cachePresentation.categories as category (category.kind)}
-                  <li>
-                    <b>{category.label}</b>: {cacheAvailabilityLabel(category)}{category.note
-                      ? ` · ${category.note}`
-                      : ''}
-                  </li>
-                {/each}
-                {#each cachePresentation.notes as note (note)}<li>{note}</li>{/each}
-              </ul>
-              <p class="availability-summary">
-                Share (%) divides each applicable bucket by that call's audited positive
-                prompt-token denominator. Missing, partial, unsupported, and zero-prompt calls
-                remain distinct.
-              </p>
             </details>
-          {:else}
-            <details class="economics-legend">
-              <summary>Legend and data quality</summary>
-              <p class="availability-summary">
-                <b>Data availability.</b>
-                {costCopy.note} Unavailable values are not zero.
-              </p>
-            </details>
+            {#if economicsTrackMode === 'cache'}
+              <details class="economics-legend">
+                <summary>Legend and data quality</summary>
+                <p class="availability-summary">
+                  <b>Data availability.</b>
+                  {cachePresentation.summary}
+                </p>
+                <p class="availability-summary">
+                  Fresh / uncached input uses each policy's exact label below.
+                </p>
+                <ul class="availability-list">
+                  {#each cachePresentation.categories as category (category.kind)}
+                    <li>
+                      <b>{category.label}</b>: {cacheAvailabilityLabel(category)}{category.note
+                        ? ` · ${category.note}`
+                        : ''}
+                    </li>
+                  {/each}
+                  {#each cachePresentation.notes as note (note)}<li>{note}</li>{/each}
+                </ul>
+                <p class="availability-summary">
+                  Share (%) divides each applicable bucket by that call's audited positive
+                  prompt-token denominator. Missing, partial, unsupported, and zero-prompt calls
+                  remain distinct.
+                </p>
+              </details>
+            {:else}
+              <details class="economics-legend">
+                <summary>Legend and data quality</summary>
+                <p class="availability-summary">
+                  <b>Data availability.</b>
+                  {costCopy.note} Unavailable values are not zero.
+                </p>
+              </details>
+            {/if}
           {/if}
-        {/if}
+        </div>
       </div>
       {#if economicsTrackMode !== 'off'}
         <EconomicsTrack
@@ -1639,8 +1625,8 @@
           mode={economicsTrackMode}
           cacheView={cacheViewMode}
           compact={riverLayoutMode === 'compact'}
-          pinnedCallIndex={interaction.pinnedCallIndex}
-          hoveredCallIndex={interaction.hoveredCallIndex}
+          {pinnedCallIndex}
+          {hoveredCallIndex}
           {onPinCall}
           {onHoverCall}
           onMarkClick={economicsMarkClick}
@@ -1651,81 +1637,25 @@
     </div>
   </div>
   {#if groupBreakdown}
-    <div
-      bind:this={groupBreakdownElement}
-      class="group-breakdown"
-      role="dialog"
-      tabindex="-1"
-      aria-label={`Item type ${groupLabel(groupBreakdown.kind)} breakdown`}
-      onkeydown={handleGroupBreakdownKeydown}
-    >
-      <div class="event-breakdown-header">
-        <strong>Item type: {groupLabel(groupBreakdown.kind)}</strong>
-        <button
-          id="group-breakdown-close"
-          type="button"
-          aria-label="Close item type breakdown"
-          onclick={() => closeGroupBreakdown()}>×</button
-        >
-      </div>
-      <p>
-        {groupBreakdown.memberIds.length} members{groupBreakdown.callIndex === null
-          ? ''
-          : ` at call ${groupBreakdown.callIndex}`}. Grouped geometry is presentation-only;
-        individual item identities and totals are unchanged.
-      </p>
-      <ul>
-        {#each groupBreakdown.memberIds.slice(0, 12) as memberId (memberId)}
-          <li>{itemAccessibleLabel(memberId)}</li>
-        {/each}
-      </ul>
-      {#if groupBreakdown.memberIds.length > 12}<p>Showing the first 12 members.</p>{/if}
-      <button type="button" onclick={revealGroupMembers}>Show items here</button>
-    </div>
+    <GroupBreakdown
+      label={groupLabel(groupBreakdown.kind)}
+      memberLabels={groupMemberLabels}
+      memberCount={groupBreakdown.memberIds.length}
+      callIndex={groupBreakdown.callIndex}
+      onClose={() => closeGroupBreakdown()}
+      onShowItems={revealGroupMembers}
+    />
   {/if}
   {#if economicsEventBreakdown}
-    <div
-      bind:this={economicsBreakdownElement}
-      class="event-breakdown"
-      role="dialog"
-      tabindex="-1"
-      aria-label="Economics event breakdown"
-      style={economicsBreakdownStyle}
-      onkeydown={handleEconomicsBreakdownKeydown}
-    >
-      <div class="event-breakdown-header">
-        <strong
-          >{economicsEventBreakdown.events.length}
-          {economicsEventBreakdown.events.length === 1 ? 'event' : 'events'} · calls
-          {economicsEventBreakdown.callIndices.join(', ')}</strong
-        >
-        <button
-          id={`${economicsEventBreakdown.id}-close`}
-          type="button"
-          aria-label="Close event breakdown"
-          onclick={() => closeEconomicsBreakdown()}>×</button
-        >
-      </div>
-      <button
-        type="button"
-        class="zoom-events-button"
-        disabled={!canZoomIn || economicsEventBreakdown.callIndices.length === 0}
-        onclick={zoomEconomicsEvents}>Zoom to these calls</button
-      >
-      <ul>
-        {#each economicsEventBreakdown.events as event (event.id)}
-          <li>
-            <span class="event-list-label">
-              <EventGlyph kind={event.kind} direction={event.direction} size={18} />
-              {event.label} · call {event.callIndex}
-            </span>
-            <button type="button" onclick={() => inspectEconomicsEvent(event.callIndex)}>
-              Inspect call {event.callIndex}
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </div>
+    <EconomicsBreakdown
+      breakdown={economicsEventBreakdown}
+      bind:element={economicsBreakdownElement}
+      positionStyle={economicsBreakdownStyle}
+      {canZoomIn}
+      onClose={() => closeEconomicsBreakdown()}
+      onZoom={zoomEconomicsEvents}
+      onInspect={inspectEconomicsEvent}
+    />
   {/if}
   {#if economicsTrackMode !== 'off'}
     <div class="economics-readout" aria-label="Economics call readout">
@@ -1735,6 +1665,24 @@
 </div>
 
 <style>
+  .view-options {
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .view-options > summary {
+    width: fit-content;
+    padding: 4px 0;
+    color: var(--secondary);
+  }
+  .view-status {
+    color: var(--accent);
+    font-size: 12px;
+    margin: 4px 0;
+  }
+  .economics-disclosure {
+    justify-self: start;
+    font: inherit;
+  }
   .vertical-scale-controls {
     display: flex;
     flex-wrap: wrap;
@@ -1760,14 +1708,14 @@
     padding: 4px 9px;
     border: 1px solid #34435e;
     border-radius: 6px;
-    background: #121d32;
-    color: #c3cee1;
+    background: var(--surface);
+    color: var(--text);
     font: inherit;
     cursor: pointer;
   }
   .scale-toggle button.active {
-    border-color: #88a8e2;
-    background: #223657;
+    border-color: var(--accent);
+    background: var(--action);
     color: #fff;
   }
   .scale-toggle button:focus-visible {
@@ -1787,9 +1735,10 @@
     gap: 6px;
     margin: 0 0 8px;
     padding: 8px 10px;
-    border: 1px solid #293857;
-    border-radius: 8px;
-    background: #10192d;
+    border: 0;
+    border-top: 1px solid var(--separator);
+    border-radius: 0;
+    background: var(--plot);
   }
   .economics-track-controls {
     display: flex;
@@ -1883,84 +1832,6 @@
     position: relative;
     min-width: 0;
     max-width: 100%;
-  }
-  .event-breakdown,
-  .group-breakdown {
-    position: fixed;
-    z-index: 6;
-    width: min(300px, calc(100vw - 16px));
-    max-height: min(220px, calc(100vh - 16px));
-    overflow: auto;
-    padding: 8px;
-    color: #e8edf7;
-    background: #17233c;
-    border: 1px solid #6e86b2;
-    border-radius: 7px;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
-  }
-  .event-breakdown-header,
-  .event-breakdown li {
-    display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .event-breakdown-header {
-    color: #fff;
-    font-size: 12px;
-  }
-  .event-breakdown-header button {
-    padding: 1px 6px;
-    font-size: 15px;
-    line-height: 1.1;
-  }
-  .group-breakdown {
-    position: static;
-    z-index: 6;
-    width: min(340px, calc(100vw - 16px));
-    margin-top: 8px;
-    padding: 9px;
-    color: #e8edf7;
-    background: #17233c;
-    border: 1px solid #6e86b2;
-    border-radius: 7px;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
-  }
-  .group-breakdown p {
-    margin: 7px 0;
-    color: #bac5d8;
-    font-size: 11px;
-  }
-  .group-breakdown ul {
-    max-height: 150px;
-    overflow: auto;
-    margin: 7px 0;
-    padding-left: 18px;
-    color: #d7e0ef;
-    font-size: 11px;
-  }
-  .event-breakdown ul {
-    display: grid;
-    gap: 7px;
-    margin: 7px 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: 11px;
-  }
-  .event-breakdown li > span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .event-list-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .event-breakdown li button {
-    flex: 0 0 auto;
-    padding: 3px 6px;
-    font-size: 10px;
-    white-space: nowrap;
   }
   .economics-readout {
     min-height: 28px;
@@ -2087,8 +1958,8 @@
     left: 0;
     width: 42px;
     height: 410px;
-    border-right: 1px solid #66748d;
-    background: #0c1324;
+    border-right: 1px solid var(--control-border);
+    background: var(--plot);
     pointer-events: none;
   }
   .vertical-axis-tick {
@@ -2145,12 +2016,12 @@
   }
   svg {
     display: block;
-    background: #0c1324;
+    background: var(--plot);
     border-radius: 10px;
     touch-action: pan-y;
   }
   .plot-background {
-    fill: #0c1324;
+    fill: var(--plot);
   }
   .weight-gridline {
     stroke: #35425b;
@@ -2272,12 +2143,6 @@
   @media (max-width: 620px) {
     .vertical-scale-controls {
       display: block;
-    }
-    .event-breakdown {
-      position: static;
-      width: 100%;
-      max-height: 180px;
-      margin: 8px 0 0;
     }
     .economics-track-controls {
       align-items: start;

@@ -19,6 +19,8 @@ export interface RiverViewportStatus extends VisibleCallRange {
   canZoomOut: boolean;
   totalCallCount: number;
   hasOverflow: boolean;
+  /** Nearest real call to the measured viewport centre. */
+  centerCallIndex?: number | null;
 }
 
 export type RiverNavigationCommand =
@@ -27,6 +29,7 @@ export type RiverNavigationCommand =
   | { id: number; kind: 'zoom-in' }
   | { id: number; kind: 'zoom-out' }
   | { id: number; kind: 'call'; callIndex: number }
+  | { id: number; kind: 'ensure-call'; callIndex: number }
   | { id: number; kind: 'range'; startCallIndex: number; endCallIndex: number }
   | {
       id: number;
@@ -34,6 +37,38 @@ export type RiverNavigationCommand =
       itemId: string;
       referenceCallIndex: number | null;
     };
+
+export function stepCallTarget(
+  calls: readonly number[],
+  pinned: number | null,
+  viewport: RiverViewportStatus,
+  direction: -1 | 1,
+): number | null {
+  if (!viewport.ready || calls.length === 0) return null;
+  if (pinned === null && viewport.isFitAll) return direction === 1 ? calls[0] : null;
+  const reference = pinned ?? viewport.centerCallIndex;
+  const position = reference === null || reference === undefined ? -1 : calls.indexOf(reference);
+  if (position < 0) return null;
+  return calls[position + direction] ?? null;
+}
+
+/** Scroll only enough to place the target within a 15% inset; never change spacing. */
+export function comfortableCallScroll(
+  x: number,
+  scrollLeft: number,
+  clientWidth: number,
+  scrollWidth: number,
+): number {
+  const inset = clientWidth * 0.15;
+  const offset = x - scrollLeft;
+  const target =
+    offset < inset
+      ? x - inset
+      : offset > clientWidth - inset
+        ? x - clientWidth + inset
+        : scrollLeft;
+  return clampScrollLeft(target, scrollWidth, clientWidth);
+}
 
 export interface ViewportAnchor {
   callIndex: number;

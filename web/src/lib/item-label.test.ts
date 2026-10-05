@@ -31,6 +31,21 @@ describe('displayItemLabel', () => {
     expect(displayItemLabel(first)).toBe('Read · /repo/src/alpha/config.ts');
   });
 
+  it.each(['Read', 'Write', 'Edit'])(
+    'keeps %s result explicit when shortening file paths',
+    (tool) => {
+      const items = testAnalysis().contextItems;
+      const first = { ...items[0], label: `${tool} result · /repo/src/alpha/config.ts` };
+      const second = { ...items[1], label: `${tool} result · /repo/tests/alpha/config.ts` };
+      const labels = conciseLifespanLabels([first, second]);
+      expect(labels.get(first.id)).toBe(`${tool} result · src/alpha/config.ts`);
+      expect(labels.get(second.id)).toBe(`${tool} result · tests/alpha/config.ts`);
+      expect(displayItemLabel(first)).toBe(first.label);
+      const assistant = { ...first, label: `Assistant · ${tool.toLowerCase()}` };
+      expect(conciseLifespanLabels([assistant]).get(first.id)).toBe(assistant.label);
+    },
+  );
+
   it('splits tool prefixes before interpreting relative and Windows paths', () => {
     const items = testAnalysis().contextItems;
     const relative = { ...items[0], label: 'Read · web/src/App.svelte' };

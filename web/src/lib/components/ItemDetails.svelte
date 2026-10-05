@@ -5,6 +5,14 @@
   import { describeTokenDiagnostic } from '../diagnostics';
   import CopyButton from './CopyButton.svelte';
   import {
+    inspectorSections,
+    rememberSection,
+    type InspectorSections,
+  } from '../state/inspector-sections';
+  export let sections: InspectorSections = inspectorSections();
+  export let onClear: (() => void) | null = null;
+  export let onInspectCall: (index: number) => void = () => {};
+  import {
     coverageLabel,
     exposureLabel,
     formatMetric,
@@ -17,8 +25,6 @@
   export let pinnedCallIndex: number | null = null;
   export let onSelectItem: (id: string) => void = () => {};
   export let onRevealInRiver: (id: string) => void = () => {};
-
-  let root: HTMLElement;
 
   $: sourceCompactions = item ? (indexed.compactionBySourceId.get(item.id) ?? []) : [];
   $: summaryCompaction = item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null;
@@ -97,17 +103,9 @@
       )
       .join(', ');
   }
-
-  function backToItemSummary(): void {
-    if (!root) return;
-    root.querySelectorAll('details').forEach((details) => (details.open = false));
-    const heading = root.querySelector('h3');
-    heading?.scrollIntoView({ block: 'nearest' });
-    heading?.focus();
-  }
 </script>
 
-<section class="item-details" aria-live="polite" bind:this={root}>
+<section class="item-details" aria-live="polite">
   {#if item}
     <header class="item-identity">
       <div>
@@ -116,9 +114,6 @@
           {displayItemLabel(item)}
         </h3>
       </div>
-      <button type="button" class="summary-return" onclick={backToItemSummary}>
-        Back to item summary
-      </button>
     </header>
     {#if item.presence.length === 0}
       <p class="presence-note">
@@ -127,26 +122,48 @@
     {:else if absentAtPinnedCall && pinnedCall}
       <p class="presence-note">
         This item is not present at pinned call {pinnedCall.index}. Its inspector remains selected.
-        <button type="button" onclick={() => onRevealInRiver(item.id)}>Reveal in River</button>
       </p>
     {/if}
-    {#if item.preview?.text}<p class="content-preview">
-        <b>Content preview</b>
-        {item.preview.text}
+    {#if onClear}<button type="button" onclick={onClear}>Clear item</button>{/if}
+    {#if item.presence.length > 0}<button type="button" onclick={() => onRevealInRiver(item.id)}
+        >Reveal in River</button
+      >{/if}
+    {#if selectedCall}<button type="button" onclick={() => onInspectCall(selectedCall.index)}
+        >Inspect call {selectedCall.index}</button
+      >{/if}
+    {#if selectedEstimate && (selectedEstimate.coverage !== 'complete' || selectedEstimate.method === 'characterHeuristic')}<p
+        class="presence-note"
+      >
+        Estimate: {selectedEstimate.coverage} · {methodLabel(selectedEstimate.method)}
       </p>{/if}
-    {#if item.preview?.truncated}<p class="preview-note">
-        Compact preview truncated; technical identifiers are available below.
-      </p>{/if}
-    {#if hasExpandedPreview && item.preview}
-      <details class="preview-details">
-        <summary>Show more context</summary>
-        <pre>{item.preview.expandedText}</pre>
-        {#if item.preview.expandedTruncated}<p class="preview-note">
-            Expanded preview truncated.
-          </p>{/if}
-      </details>
-    {/if}
-
+    <details use:rememberSection={{ state: sections, key: 'preview' }}>
+      <summary>Content preview</summary>
+      <div class="preview-details">
+        {#if hasExpandedPreview && sections.expandedPreview && item.preview}
+          <pre>{item.preview.expandedText}</pre>
+          {#if item.preview.expandedTruncated}<p class="preview-note">
+              Expanded preview truncated.
+            </p>{/if}
+        {:else}
+          {#if item.preview?.text}<p class="content-preview">
+              <b>Content preview</b>
+              {item.preview.text}
+            </p>{:else}<p class="preview-note">No content preview is available.</p>{/if}
+          {#if item.preview?.truncated}<p class="preview-note">
+              Compact preview truncated; technical identifiers are available below.
+            </p>{/if}
+        {/if}
+        {#if hasExpandedPreview}
+          <button
+            type="button"
+            class="preview-toggle"
+            aria-expanded={sections.expandedPreview}
+            onclick={() => (sections.expandedPreview = !sections.expandedPreview)}
+            >{sections.expandedPreview ? 'Show less' : 'Show more'}</button
+          >
+        {/if}
+      </div>
+    </details>
     <dl class="essential-metrics">
       <div>
         <dt>Lifetime</dt>
@@ -164,10 +181,10 @@
         <dt>
           {#if selectedCall && selectedEstimate}
             {pinnedCallIndex !== null
-              ? `Tokens at pinned call · ${formatMetric(selectedEstimate.tokens)}`
+              ? 'Tokens at pinned call'
               : usingLatestFallback
-                ? `Tokens at last included call · ${formatMetric(selectedEstimate.tokens)}`
-                : `Tokens at call · ${formatMetric(selectedEstimate.tokens)}`}
+                ? 'Tokens at last included call'
+                : 'Tokens at call'}
           {:else if pinnedCallIndex !== null}
             Tokens at pinned call · unavailable
           {:else}
@@ -183,25 +200,34 @@
         </dd>
       </div>
       <div>
-        <dt>Estimate basis</dt>
+        <dt>Whole-session exposure · estimated token-turns</dt>
         <dd>
-          {#if selectedCall && selectedEstimate}
-            {selectedProfile
-              ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
-              : methodLabel(selectedEstimate.method)}
-            · call {selectedCall.index}
-          {:else if pinnedCallIndex !== null}
-            No applicable estimate at pinned call {pinnedCallIndex}
-          {:else}
-            No applicable model-call estimate
-          {/if}
+          {exposureLabel(item.tokenTurns, 'calculatedTokens')}
+          {#if item.tokenTurnsCoverage.coveredCalls < item.tokenTurnsCoverage.totalCalls}<small
+              >Partial exposure · {coverageLabel(
+                item.tokenTurnsCoverage.coveredCalls,
+                item.tokenTurnsCoverage.totalCalls,
+              )} calls covered</small
+            >{/if}
+          {#if item.tokenEstimates.some((estimate) => estimate.coverage !== 'complete' || estimate.method === 'characterHeuristic')}<small
+              >Includes partial, heuristic or unavailable profile estimates.</small
+            >{/if}
         </dd>
       </div>
-      <div>
-        <dt>Whole-session exposure · estimated token-turns</dt>
-        <dd>{exposureLabel(item.tokenTurns, 'calculatedTokens')}</dd>
-      </div>
     </dl>
+    <details use:rememberSection={{ state: sections, key: 'basis' }}>
+      <summary>Estimate basis &amp; coverage</summary>
+      {#if selectedCall && selectedEstimate}
+        {selectedProfile
+          ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
+          : methodLabel(selectedEstimate.method)} · call {selectedCall.index}
+      {:else if pinnedCallIndex !== null}
+        No applicable estimate at pinned call {pinnedCallIndex}
+      {:else}
+        No applicable model-call estimate
+      {/if}
+      · {selectedEstimate?.coverage ?? 'unavailable'}
+    </details>
 
     {#if directPredecessors.length > 0 || directSuccessors.length > 0}
       <div class="lineage-actions">
@@ -225,7 +251,7 @@
       </div>
     {/if}
 
-    <details class="item-diagnostics">
+    <details class="item-diagnostics" use:rememberSection={{ state: sections, key: 'diagnostics' }}>
       <summary>Token estimates and diagnostics</summary>
       <dl class="detail-rows">
         <div>
@@ -318,7 +344,10 @@
       {/if}
     </details>
 
-    <details class="technical-identifiers">
+    <details
+      class="technical-identifiers"
+      use:rememberSection={{ state: sections, key: 'identifiers' }}
+    >
       <summary>Technical identifiers</summary>
       <dl class="identifier-list">
         {#if selectedEstimate}<div>
@@ -375,17 +404,12 @@
     align-items: flex-start;
     gap: 8px;
     padding: 4px 0 7px;
-    background: #121a30;
+    background: var(--surface);
   }
   .item-identity > div {
     display: grid;
     min-width: 0;
     gap: 5px;
-  }
-  .summary-return {
-    flex: 0 0 auto;
-    padding: 4px 6px;
-    font-size: 10px;
   }
   .item-identity span {
     display: inline-block;
@@ -393,7 +417,7 @@
     border: 1px solid #3a496a;
     border-radius: 999px;
     padding: 2px 7px;
-    font-size: 11px;
+    font-size: 12px;
   }
   h3 {
     color: #fff;
@@ -420,9 +444,6 @@
     color: #9caac0;
     font-size: 12px;
   }
-  .presence-note button {
-    margin-left: 7px;
-  }
   details {
     margin-top: 10px;
   }
@@ -435,9 +456,28 @@
     outline-offset: 3px;
     border-radius: 2px;
   }
+  .preview-toggle {
+    display: block;
+    width: fit-content;
+    margin: 7px 0 0 auto;
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: var(--secondary);
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  .preview-toggle:hover {
+    text-decoration: underline;
+    background: var(--plot);
+  }
+  .preview-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .preview-details pre {
     color: #e1e7f2;
-    background: #0b1223;
+    background: var(--plot);
     border-radius: 6px;
     margin: 7px 0 0;
     padding: 8px;
@@ -448,13 +488,13 @@
   .essential-metrics,
   .detail-rows {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 7px 14px;
     margin: 10px 0 0;
   }
   dt {
-    color: #8996ad;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   dd {
     margin: 1px 0 0;
@@ -464,8 +504,8 @@
   .essential-metrics dd small {
     display: block;
     margin-top: 2px;
-    color: #9caac0;
-    font-size: 10px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .lineage-actions {
     display: grid;
@@ -479,8 +519,8 @@
     gap: 5px;
   }
   .relations span {
-    color: #8996ad;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .relations button {
     max-width: 100%;

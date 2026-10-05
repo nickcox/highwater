@@ -2,10 +2,12 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { indexAnalysis } from '../analysis';
 import { resetInteraction } from '../state/interaction';
+import { defaultPresentationPreferences } from '../state/presentation-preferences';
 import { testAnalysis } from './test-data';
 import ContextRiver from './ContextRiver.svelte';
 import type { IndexedAnalysis } from '../types';
 import type { RiverNavigationCommand, RiverViewportStatus } from './viewport';
+import * as layout from './layout';
 
 function economicsTrackButton(container: HTMLElement, name: string): HTMLButtonElement {
   const button = [
@@ -245,14 +247,100 @@ afterEach(() => {
 });
 
 describe('ContextRiver continuous viewport integration', () => {
+  it('bounds layout work across hover, selection, zoom, pan and hidden updates', async () => {
+    const geometry = vi.spyOn(layout, 'layoutContextRiver');
+    const columns = vi.spyOn(layout, 'layoutCallColumns');
+    const indexed = longAnalysis(160);
+    const view = render(ContextRiver, {
+      props: { indexed, ...resetInteraction(), ...callbacks() },
+    });
+    const initialGeometry = geometry.mock.calls.length;
+    const initialColumns = columns.mock.calls.length;
+    await view.rerender({
+      hoveredCallIndex: 2,
+      hoveredItemId: indexed.analysis.contextItems[0].id,
+    });
+    await view.rerender({
+      selectedItemId: indexed.analysis.contextItems[0].id,
+      pinnedCallIndex: 2,
+    });
+    expect(geometry.mock.calls.length - initialGeometry).toBe(0);
+    expect(columns.mock.calls.length - initialColumns).toBe(0);
+    await view.rerender({ navigationCommand: { id: 1, kind: 'zoom-in' } });
+    expect(geometry.mock.calls.length - initialGeometry).toBe(0);
+    riverClientWidth = 200;
+    await fireEvent(window, new Event('resize'));
+    await view.rerender({ navigationCommand: { id: 2, kind: 'fit' } });
+    await waitFor(() =>
+      expect(view.container.querySelector('svg')?.getAttribute('width')).toBe('200'),
+    );
+    expect(geometry.mock.calls.length - initialGeometry).toBe(0);
+    expect(columns.mock.calls.length - initialColumns).toBe(0);
+    const beforePan = geometry.mock.calls.length;
+    const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
+    host.scrollLeft = 50;
+    await fireEvent.scroll(host);
+    expect(geometry.mock.calls.length - beforePan).toBe(0);
+    await view.rerender({ isVisible: false });
+    await view.rerender({ selectedItemId: null, hoveredCallIndex: null });
+    expect(geometry.mock.calls.length - beforePan).toBe(0);
+    geometry.mockRestore();
+    columns.mockRestore();
+  });
+  it('ensures stepped calls are visible without changing spacing or rebuilding geometry', async () => {
+    const geometry = vi.spyOn(layout, 'layoutContextRiver');
+    const handlers = callbacks();
+    const view = render(ContextRiver, {
+      props: { indexed: longAnalysis(160), ...resetInteraction(), ...handlers },
+    });
+    await view.rerender({ navigationCommand: { id: 1, kind: 'zoom-in' } });
+    const host = view.container.querySelector('.river-scroll') as HTMLElement;
+    const width = view.container.querySelector('svg')!.getAttribute('width');
+    const scroll = host.scrollLeft;
+    const centre = handlers.onViewportChange.mock.lastCall![0].centerCallIndex!;
+    const count = geometry.mock.calls.length;
+    await view.rerender({ navigationCommand: { id: 2, kind: 'ensure-call', callIndex: centre } });
+    expect(host.scrollLeft).toBe(scroll);
+    await view.rerender({ navigationCommand: { id: 3, kind: 'ensure-call', callIndex: 160 } });
+    expect(host.scrollLeft).toBeGreaterThan(scroll);
+    expect(view.container.querySelector('svg')!.getAttribute('width')).toBe(width);
+    expect(geometry.mock.calls.length).toBe(count);
+    geometry.mockRestore();
+  });
+
+  it('still rebuilds stacks for analysis, height, grouping and visible-scale domain changes', async () => {
+    const geometry = vi.spyOn(layout, 'layoutContextRiver');
+    const view = render(ContextRiver, {
+      props: { indexed: longAnalysis(160), ...resetInteraction(), ...callbacks() },
+    });
+    const settings = defaultPresentationPreferences();
+    let previous = geometry.mock.calls.length;
+    settings.river.layout = 'compact';
+    await view.rerender({ preferences: structuredClone(settings) });
+    expect(geometry.mock.calls.length).toBeGreaterThan(previous);
+    previous = geometry.mock.calls.length;
+    settings.river.display = 'itemTypes';
+    await view.rerender({ preferences: structuredClone(settings) });
+    expect(geometry.mock.calls.length).toBeGreaterThan(previous);
+    previous = geometry.mock.calls.length;
+    settings.river.verticalScale = 'visible';
+    await view.rerender({ preferences: structuredClone(settings) });
+    expect(geometry.mock.calls.length).toBeGreaterThan(previous);
+    previous = geometry.mock.calls.length;
+    await view.rerender({ indexed: longAnalysis(161) });
+    expect(geometry.mock.calls.length).toBeGreaterThan(previous);
+    geometry.mockRestore();
+  });
+
   it('shares the call axis with a bounded keyboard cache track and pins without selecting an item', async () => {
     const indexed = economicsAnalysis();
     const handlers = callbacks();
     const interaction = { ...resetInteraction(), selectedItemId: 'a' };
     const view = render(ContextRiver, {
-      props: { indexed, interaction, ...handlers },
+      props: { indexed, ...interaction, ...handlers },
     });
 
+    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost · Expand' }));
     await waitFor(() =>
       expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
     );
@@ -303,7 +391,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const handlers = callbacks();
     const interaction = { ...resetInteraction(), selectedItemId: 'gap', pinnedCallIndex: 2 };
     const view = render(ContextRiver, {
-      props: { indexed, interaction, selectedItemId: 'gap', ...handlers },
+      props: { indexed, ...interaction, selectedItemId: 'gap', ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -315,7 +403,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       selectedItemId: 'gap',
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 2, endCallIndex: 3 },
       ...handlers,
@@ -331,7 +419,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       selectedItemId: 'gap',
       navigationCommand: {
         id: 2,
@@ -358,12 +446,12 @@ describe('ContextRiver continuous viewport integration', () => {
       pinnedCallIndex: 80,
     };
     const view = render(ContextRiver, {
-      props: { indexed, interaction, ...handlers },
+      props: { indexed, ...interaction, ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 10, endCallIndex: 11 },
       ...handlers,
     });
@@ -378,7 +466,7 @@ describe('ContextRiver continuous viewport integration', () => {
     };
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       navigationCommand: command,
       isVisible: false,
       ...handlers,
@@ -386,7 +474,7 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(host.scrollLeft).toBe(beforeReveal);
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       navigationCommand: null,
       isVisible: true,
       ...handlers,
@@ -395,7 +483,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       navigationCommand: command,
       isVisible: false,
       ...handlers,
@@ -403,7 +491,7 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(host.scrollLeft).toBe(beforeReveal);
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       navigationCommand: command,
       isVisible: true,
       ...handlers,
@@ -418,8 +506,9 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = economicsAnalysis();
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
+    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost · Expand' }));
     await waitFor(() =>
       expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
     );
@@ -433,7 +522,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed: economicsAnalysis(),
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       ...handlers,
     });
     expect(view.getByRole('button', { name: 'Cost' })).toHaveAttribute('aria-pressed', 'true');
@@ -452,12 +541,12 @@ describe('ContextRiver continuous viewport integration', () => {
       pinnedCallIndex: 80,
     };
     const view = render(ContextRiver, {
-      props: { indexed, interaction, ...handlers },
+      props: { indexed, ...interaction, ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await view.rerender({
       indexed,
-      interaction,
+      ...interaction,
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 80, endCallIndex: 81 },
       ...handlers,
     });
@@ -465,6 +554,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const scrollLeft = host.scrollLeft;
     const riverWidth = host.querySelector('svg')?.getAttribute('width');
 
+    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost · Expand' }));
     await fireEvent.click(economicsTrackButton(view.container, 'Cache'));
     await waitFor(() =>
       expect(
@@ -494,25 +584,31 @@ describe('ContextRiver continuous viewport integration', () => {
     const view = render(ContextRiver, {
       props: {
         indexed: indexAnalysis(testAnalysis()),
-        interaction: resetInteraction(),
+        ...resetInteraction(),
         ...handlers,
       },
     });
-    expect(view.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.getByRole('button', { name: 'Cache & cost · Expand' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await view.rerender({
       indexed: economicsAnalysis(),
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       ...handlers,
     });
-    expect(view.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.getByRole('button', { name: 'Cache & cost · Expand' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
     expect(view.container.querySelector('.economics-track-svg')).toBeNull();
   });
   it('starts fitted, zooms continuously, and returns to Fit all without changing selection', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     await waitFor(() =>
       expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
@@ -526,7 +622,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const zoomIn: RiverNavigationCommand = { id: 1, kind: 'zoom-in' };
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: zoomIn,
       ...handlers,
     });
@@ -565,14 +661,14 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 2, kind: 'latest' },
       ...handlers,
     });
     await waitFor(() => expect(host.scrollLeft).toBe(117));
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 3, kind: 'fit' },
       ...handlers,
     });
@@ -583,7 +679,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 4, kind: 'range', startCallIndex: 2, endCallIndex: 3 },
       ...handlers,
     });
@@ -594,7 +690,7 @@ describe('ContextRiver continuous viewport integration', () => {
     );
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 5, kind: 'fit' },
       ...handlers,
     });
@@ -609,7 +705,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = longAnalysis(160);
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -621,7 +717,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 80, endCallIndex: 81 },
       ...handlers,
     });
@@ -643,7 +739,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = longAnalysis(520);
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     await waitFor(() =>
       expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
@@ -653,7 +749,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 260, endCallIndex: 261 },
       ...handlers,
     });
@@ -675,7 +771,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -740,7 +836,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -786,7 +882,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = longAnalysis(160);
     const handlers = callbacks();
     const interaction = { ...resetInteraction(), pinnedCallIndex: 38 };
-    const view = render(ContextRiver, { props: { indexed, interaction, ...handlers } });
+    const view = render(ContextRiver, { props: { indexed, ...interaction, ...handlers } });
     await waitFor(() =>
       expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
         expect.objectContaining({ isFitAll: true }),
@@ -811,7 +907,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -821,7 +917,7 @@ describe('ContextRiver continuous viewport integration', () => {
     );
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 2, endCallIndex: 3 },
       ...handlers,
     });
@@ -852,7 +948,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -902,7 +998,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'fit' },
       ...handlers,
     });
@@ -962,7 +1058,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -979,7 +1075,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'range', startCallIndex: 3, endCallIndex: 4 },
       ...handlers,
     });
@@ -1020,7 +1116,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(analysis);
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     await waitFor(() =>
       expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
@@ -1045,7 +1141,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     await waitFor(() =>
       expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
@@ -1064,7 +1160,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -1074,7 +1170,7 @@ describe('ContextRiver continuous viewport integration', () => {
     );
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'zoom-in' },
       ...handlers,
     });
@@ -1147,7 +1243,7 @@ describe('ContextRiver continuous viewport integration', () => {
       const indexed = indexAnalysis(testAnalysis());
       const handlers = callbacks();
       const view = render(ContextRiver, {
-        props: { indexed, interaction: resetInteraction(), ...handlers },
+        props: { indexed, ...resetInteraction(), ...handlers },
       });
       const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
       await waitFor(() =>
@@ -1212,7 +1308,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -1248,7 +1344,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'zoom-in' },
       ...handlers,
     });
@@ -1290,7 +1386,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed, interaction: resetInteraction(), ...handlers },
+      props: { indexed, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -1327,7 +1423,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const initial = indexAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
-      props: { indexed: initial, interaction: resetInteraction(), ...handlers },
+      props: { indexed: initial, ...resetInteraction(), ...handlers },
     });
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     await waitFor(() =>
@@ -1337,7 +1433,7 @@ describe('ContextRiver continuous viewport integration', () => {
     );
     await view.rerender({
       indexed: initial,
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       navigationCommand: { id: 1, kind: 'zoom-in' },
       ...handlers,
     });
@@ -1347,7 +1443,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await view.rerender({
       indexed: appendedAnalysis(),
-      interaction: resetInteraction(),
+      ...resetInteraction(),
       ...handlers,
     });
     await waitFor(() =>

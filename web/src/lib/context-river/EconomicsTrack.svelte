@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { afterUpdate, tick } from 'svelte';
+  import { afterUpdate, onDestroy } from 'svelte';
+  import { createOverlayFocus } from './overlay-focus';
   import type { IndexedAnalysis } from '../types';
   import { formatCost, formatInteger, formatPercent } from './format';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
@@ -20,6 +21,9 @@
   } from './economics-track';
 
   export let indexed: IndexedAnalysis;
+  const eventFocus = createOverlayFocus();
+  $: eventFocus.observeIdentity(indexed);
+  onDestroy(() => eventFocus.dispose());
   export let columns: readonly CallColumn[];
   export let width: number;
   export let mode: Exclude<EconomicsTrackMode, 'off'>;
@@ -320,32 +324,39 @@
     ) {
       const staleTriggerId = openEventClusterId;
       openEventClusterId = null;
-      void tick().then(() => focusEventTrigger(staleTriggerId));
+      eventFocus.focusAfterUpdate(
+        () => eventTrigger(staleTriggerId),
+        () => openEventClusterId === null,
+      );
     }
   });
 
   function openEventBreakdown(cluster: TrackEventCluster): void {
-    openEventClusterId = cluster.id;
-    void tick().then(() => {
-      document.getElementById(`${cluster.id}-close`)?.focus();
-    });
+    const id = cluster.id;
+    openEventClusterId = id;
+    eventFocus.focusAfterUpdate(
+      () => document.getElementById(`${id}-close`),
+      () => openEventClusterId === id,
+    );
   }
 
   export function closeEventBreakdown(returnFocus = true): void {
     const clusterId = openEventClusterId;
     openEventClusterId = null;
+    eventFocus.cancel();
     if (returnFocus && clusterId) {
-      void tick().then(() => focusEventTrigger(clusterId));
+      eventFocus.focusAfterUpdate(
+        () => eventTrigger(clusterId),
+        () => openEventClusterId === null,
+      );
     }
   }
 
-  function focusEventTrigger(triggerId: string): void {
-    const trigger = document.getElementById(triggerId);
-    if (trigger) {
-      trigger.focus();
-      return;
-    }
-    document.querySelector<HTMLElement>('.economics-track-header button')?.focus();
+  function eventTrigger(triggerId: string): HTMLElement | null {
+    return (
+      document.getElementById(triggerId) ??
+      document.querySelector<HTMLElement>('.economics-track-header button')
+    );
   }
 
   function handleEventKeydown(event: KeyboardEvent, cluster: TrackEventCluster): void {
@@ -794,15 +805,15 @@
   .economics-track-svg {
     display: block;
     max-width: none;
-    background: #0c1324;
+    background: var(--plot);
     touch-action: pan-y;
   }
   .track-background {
-    fill: #0c1324;
+    fill: var(--plot);
     pointer-events: none;
   }
   .track-plot {
-    fill: #0d1729;
+    fill: var(--plot);
     pointer-events: none;
   }
   .track-gridline {
@@ -872,7 +883,7 @@
     outline: none;
   }
   .cache-segment {
-    stroke: #0c1324;
+    stroke: var(--plot);
     stroke-width: 0.6;
   }
   .cache-segment.cacheRead {
@@ -889,7 +900,7 @@
     fill: url(#economics-nonread-pattern);
   }
   .economics-mark.zero .zero-mark {
-    fill: #0c1324;
+    fill: var(--plot);
     stroke: #d7e1f3;
     stroke-width: 1.5;
   }
@@ -923,7 +934,7 @@
   }
   .cost-dot {
     fill: #7ddbb7;
-    stroke: #0c1324;
+    stroke: var(--plot);
     stroke-width: 1;
   }
   .cost-dot.partial {
@@ -931,7 +942,7 @@
     stroke-width: 2;
   }
   .cost-zero {
-    fill: #0c1324;
+    fill: var(--plot);
     stroke: #7ddbb7;
     stroke-width: 1.5;
   }

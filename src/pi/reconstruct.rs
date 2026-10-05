@@ -380,7 +380,7 @@ fn tool_result_label(
     let Some(argument) = argument else {
         return fallback();
     };
-    format!("{display_name} · {argument}")
+    format!("{display_name} result · {argument}")
 }
 
 fn tool_result_fallback(tool_name: Option<&str>) -> String {
@@ -834,8 +834,9 @@ mod tests {
         }
         assert_eq!(
             digest.finalize().to_hex().as_str(),
-            // M8 renamed serialized-size/image-length Debug fields; values/order are unchanged.
-            "3e435e4b909ad520f8b5d669be97f6f464594b9cb170c209350d8ca35ce7c605"
+            // Explicit tool-result labels; restoring the old label format reproduces
+            // the previous digest with all other fields and ordering unchanged.
+            "87081db8b3d1e5d5b1ff8190941d56390f56c09b5e5a6bada4589867f9b07cc8"
         );
     }
 
@@ -1219,16 +1220,28 @@ mod tests {
         );
         assert_eq!(
             item_label_for_record(&session, "r1"),
-            "Read · src/analysis/mod.rs"
+            "Read result · src/analysis/mod.rs"
         );
-        assert_eq!(item_label_for_record(&session, "r2"), "Write · src/new.rs");
-        assert_eq!(item_label_for_record(&session, "r3"), "Edit · src/old.rs");
+        assert_eq!(
+            item_label_for_record(&session, "r2"),
+            "Write result · src/new.rs"
+        );
+        assert_eq!(
+            item_label_for_record(&session, "r3"),
+            "Edit result · src/old.rs"
+        );
         assert_eq!(
             item_label_for_record(&session, "r4"),
-            "Bash · cargo test --workspace"
+            "Bash result · cargo test --workspace"
         );
-        assert_eq!(item_label_for_record(&session, "r5"), "Grep · toolCallId");
-        assert_eq!(item_label_for_record(&session, "r6"), "Find · **/*.rs");
+        assert_eq!(
+            item_label_for_record(&session, "r5"),
+            "Grep result · toolCallId"
+        );
+        assert_eq!(
+            item_label_for_record(&session, "r6"),
+            "Find result · **/*.rs"
+        );
         assert_eq!(
             item_label_for_record(&session, "r7"),
             item_label_for_record(&session, "r1")
@@ -1343,7 +1356,10 @@ mod tests {
         assert_eq!(item_label_for_record(&session, "r3"), "Read result");
         assert_eq!(item_label_for_record(&session, "r4"), "Bash result");
         assert_eq!(item_label_for_record(&session, "r5"), "Write result");
-        assert_eq!(item_label_for_record(&session, "r6"), "Read · src/known.rs");
+        assert_eq!(
+            item_label_for_record(&session, "r6"),
+            "Read result · src/known.rs"
+        );
         assert_eq!(item_label_for_record(&session, "r7"), "Bash result");
     }
 
@@ -1385,7 +1401,7 @@ mod tests {
 
         assert_eq!(
             item_label_for_record(&session, "r-right"),
-            "Read · right.rs"
+            "Read result · right.rs"
         );
         assert!(!session
             .context_items

@@ -1,0 +1,40 @@
+:root {
+  --page: #11171c;
+  --surface: #161e24;
+  --plot: #131b21;
+  --text: #e5edf0;
+  --secondary: #a5b4be;
+  --separator: #2b3942;
+  --control-border: #526570;
+  --accent: #9cd8c5;
+  --action: #253f39;
+  --warning: #ffd28d;
+  --error: #ffc0ae;
+  --radius: 8px;
+  --control-radius: 5px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+input {
+  color: var(--text);
+  background: var(--plot);
+  border: 1px solid var(--control-border);
+}
+summary {
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

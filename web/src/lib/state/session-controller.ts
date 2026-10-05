@@ -20,6 +20,7 @@ export interface SessionControllerSnapshot {
   selectedSessionId: string | null;
   indexed: IndexedAnalysis | null;
   loading: boolean;
+  refreshing: boolean;
   sessionListError: string;
   analysisError: string;
   catalogueWarning: string;
@@ -57,7 +58,6 @@ interface SelectedAnalysisRequest {
   controller: AbortController;
   sessionId: string;
   generation: string | null;
-  preserveInteraction: boolean;
 }
 
 const DEFAULT_DEPENDENCIES: SessionControllerDependencies = {
@@ -72,6 +72,7 @@ const INITIAL_SNAPSHOT: SessionControllerSnapshot = {
   selectedSessionId: null,
   indexed: null,
   loading: true,
+  refreshing: false,
   sessionListError: '',
   analysisError: '',
   catalogueWarning: '',
@@ -97,8 +98,7 @@ export function createSessionController(
   let latestObservedRevision: bigint | null = null;
   let listEtag: string | null = null;
   let listInitialized = false;
-  let reconciliationEpoch = 0;
-  let listRequest: { controller: AbortController; epoch: number } | null = null;
+  let listRequest: { controller: AbortController } | null = null;
   let listDirty = false;
   let listForce = false;
   let listReconnect = false;
@@ -107,12 +107,18 @@ export function createSessionController(
   let analysisWaitingForCatalogue = false;
   let transportState: 'connecting' | 'open' | 'reconnecting' | 'closed' = 'connecting';
   let reportedAvailability: LiveAvailability | null = null;
+  // Matching-generation SSE observations outrank HTTP requests started before them.
+  let availabilityRevision = 0;
   let stopEvents: (() => void) | null = null;
   const indexedCache = new Map<string, { etag: string | null; indexed: IndexedAnalysis }>();
   const INDEXED_CACHE_CAPACITY = 3;
 
   function update(patch: Partial<SessionControllerSnapshot>): void {
-    snapshot = { ...snapshot, ...patch };
+    snapshot = {
+      ...snapshot,
+      ...patch,
+      refreshing: listRequest !== null || analysisRequest !== null,
+    };
     state.set(snapshot);
   }
 
@@ -146,29 +152,22 @@ export function createSessionController(
     return left > right ? left : right;
   }
 
-  function adoptGeneration(
-    generation: string,
-    revision: bigint | null = null,
-    abortCurrentList = true,
-  ): boolean {
+  // Only the current authoritative HTTP response can adopt a generation.
+  function adoptGeneration(generation: string, revision: bigint): boolean {
     if (catalogueGeneration === generation) {
       latestObservedRevision = maxRevision(latestObservedRevision, revision);
       return false;
     }
     catalogueGeneration = generation;
+    reportedAvailability = null;
+    updateLiveStatus();
     appliedRevision = null;
     latestObservedRevision = revision;
     listEtag = null;
-    reconciliationEpoch += 1;
     analysisRequest?.controller.abort();
     analysisRequest = null;
     analysisDirty = snapshot.selectedSessionId !== null;
     analysisWaitingForCatalogue = snapshot.selectedSessionId !== null;
-    if (abortCurrentList && listRequest) {
-      listRequest.controller.abort();
-      listDirty = true;
-      listForce = true;
-    }
     return true;
   }
 
@@ -184,31 +183,24 @@ export function createSessionController(
 
   function handleCatalogueInvalidation(event: CatalogueInvalidation): void {
     if (lifecycle === 'disposed') return;
-    if (catalogueGeneration !== null && event.generation !== catalogueGeneration) {
+    if (event.generation !== catalogueGeneration) {
       requestAuthoritativeReconciliation();
       return;
     }
-    const generationChanged = adoptGeneration(event.generation, event.revision);
-    if (
-      !generationChanged &&
-      latestObservedRevision !== null &&
-      appliedRevision !== null &&
-      event.revision <= appliedRevision
-    )
-      return;
-    void reconcileSessions(generationChanged);
+    latestObservedRevision = maxRevision(latestObservedRevision, event.revision);
+    if (appliedRevision !== null && event.revision <= appliedRevision) return;
+    void reconcileSessions();
   }
 
   function handleAvailabilityUpdate(event: AvailabilityUpdate): void {
     if (lifecycle === 'disposed') return;
-    if (catalogueGeneration !== null && event.generation !== catalogueGeneration) {
+    if (event.generation !== catalogueGeneration) {
       requestAuthoritativeReconciliation();
       return;
     }
-    const generationChanged = adoptGeneration(event.generation);
     reportedAvailability = event.availability;
+    availabilityRevision += 1;
     updateLiveStatus();
-    if (generationChanged) void reconcileSessions(true);
   }
 
   async function reconcileSessions(force = false, reconnect = false): Promise<void> {
@@ -220,23 +212,21 @@ export function createSessionController(
       return;
     }
     const controller = new AbortController();
-    const request = { controller, epoch: reconciliationEpoch };
+    const request = { controller };
     listRequest = request;
+    update({});
     const requestEtag = force ? null : listEtag;
-    const requestGeneration = catalogueGeneration;
+    const requestAvailabilityRevision = availabilityRevision;
     try {
       const result = await dependencies.fetchSessions(controller.signal, requestEtag);
       if (isDisposed() || controller.signal.aborted || listRequest !== request) return;
-      if (request.epoch !== reconciliationEpoch && result.generation === requestGeneration) return;
-
+      // Serialized list ownership, cancellation and identity checks guard publication.
       const previousAppliedRevision = appliedRevision;
-      const generationChanged = adoptGeneration(result.generation, result.revision, false);
+      const generationChanged = adoptGeneration(result.generation, result.revision);
       const revisionChanged =
         generationChanged ||
         previousAppliedRevision === null ||
         result.revision > previousAppliedRevision;
-      const sameGeneration = catalogueGeneration === result.generation;
-      if (!sameGeneration) return;
       const observedRevision = latestObservedRevision;
       if (!generationChanged && observedRevision !== null && result.revision < observedRevision) {
         listDirty = true;
@@ -265,6 +255,10 @@ export function createSessionController(
         update({ sessions: result.sessions });
         listInitialized = true;
       }
+      if (generationChanged || availabilityRevision === requestAvailabilityRevision) {
+        reportedAvailability = result.availability;
+        updateLiveStatus();
+      }
       listEtag = result.etag;
       appliedRevision = result.revision;
       latestObservedRevision = maxRevision(latestObservedRevision, result.revision);
@@ -282,7 +276,7 @@ export function createSessionController(
         const wasWaitingForCatalogue = analysisWaitingForCatalogue;
         analysisWaitingForCatalogue = false;
         if (revisionChanged || reconnect || analysisDirty || wasWaitingForCatalogue) {
-          requestSelectedAnalysis(true);
+          requestSelectedAnalysis();
         }
       }
     } catch (error) {
@@ -306,7 +300,10 @@ export function createSessionController(
         }
       }
     } finally {
-      if (listRequest === request) listRequest = null;
+      if (listRequest === request) {
+        listRequest = null;
+        if (!isDisposed()) update({});
+      }
       if (!isDisposed() && listDirty) {
         const nextForce = listForce;
         const nextReconnect = listReconnect;
@@ -359,10 +356,10 @@ export function createSessionController(
       analysisWarning: '',
       selectedRemoved: false,
     });
-    requestSelectedAnalysis(false);
+    requestSelectedAnalysis();
   }
 
-  function requestSelectedAnalysis(preserveInteraction: boolean): void {
+  function requestSelectedAnalysis(): void {
     const id = snapshot.selectedSessionId;
     if (lifecycle === 'disposed' || !id) return;
     if (analysisWaitingForCatalogue) {
@@ -378,12 +375,12 @@ export function createSessionController(
       controller: new AbortController(),
       sessionId: id,
       generation: catalogueGeneration,
-      preserveInteraction,
     };
     const cached = indexedCache.get(id);
     analysisRequest = request;
     analysisDirty = false;
     if (snapshot.indexed === null) update({ loading: true, analysisError: '' });
+    else update({});
     void runSelectedAnalysis(request, cached);
   }
 
@@ -413,10 +410,7 @@ export function createSessionController(
         const next = dependencies.indexAnalysis(result.analysis);
         if (!isCurrent()) return;
         const previous = snapshot.indexed;
-        const kind =
-          request.preserveInteraction && previous?.analysis.session.id === sessionId
-            ? 'replacement'
-            : 'selection';
+        const kind = previous?.analysis.session.id === sessionId ? 'replacement' : 'selection';
         options.onAnalysisAccepted?.({ kind, previous, next });
         update({ indexed: next, analysisWarning: '', analysisError: '' });
         cacheAnalysis(sessionId, { etag: result.etag, indexed: next });
@@ -452,7 +446,7 @@ export function createSessionController(
       }
       if (analysisDirty) {
         analysisDirty = false;
-        requestSelectedAnalysis(true);
+        requestSelectedAnalysis();
         return;
       }
       update({ loading: false });

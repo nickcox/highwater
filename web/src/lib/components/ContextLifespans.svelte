@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import type { ContextItemKind, IndexedAnalysis, InteractionState, PresenceRange } from '../types';
+  import type { ContextItemKind, IndexedAnalysis, PresenceRange } from '../types';
   import { conciseLifespanLabels, displayItemLabel } from '../item-label';
   import { itemColor } from '../context-river/colors';
   import {
     callAxisTicks,
+    nearestLifespanCall,
     presenceCount,
     sizeComparisonProfileId,
     sortLifespans,
@@ -38,10 +39,9 @@
   const SEARCH_LIMIT = 120;
 
   export let indexed: IndexedAnalysis;
-  export let interaction: InteractionState;
   export let selectedItemId: string | null = null;
   export let pinnedCallIndex: number | null = null;
-  export let onSelectItem: (id: string) => void;
+  export let onSelectItem: (id: string, callIndex?: number) => void;
   export let onHoverItem: (id: string | null, event?: PointerEvent) => void;
   export let findRequest: { requestId: number; itemId: string } | null = null;
 
@@ -129,6 +129,22 @@
     const index = callPositionByIndex.get(callIndex);
     if (index === undefined) return 0;
     return callCount <= 1 ? 50 : (index / (callCount - 1)) * 100;
+  }
+
+  function selectSegment(event: MouseEvent, id: string, range: PresenceRange): void {
+    // Keyboard and assistive activation are selection-only, like the item label.
+    if (event.detail === 0) {
+      onSelectItem(id);
+      return;
+    }
+    const track = (event.currentTarget as HTMLElement).closest('.track');
+    const bounds = track?.getBoundingClientRect();
+    const callIndex =
+      bounds && bounds.width > 0
+        ? nearestLifespanCall(callIndices, range, (event.clientX - bounds.left) / bounds.width)
+        : null;
+    if (callIndex === null) onSelectItem(id);
+    else onSelectItem(id, callIndex);
   }
 
   function segmentStyle(range: PresenceRange, color: string): string {
@@ -373,7 +389,7 @@
               <div
                 id={rowId(item.id)}
                 class="row"
-                class:selected={interaction.selectedItemId === item.id}
+                class:selected={selectedItemId === item.id}
                 tabindex="-1"
                 aria-label={`${fullItemLabel(item)}; ${kindLabel(item.kind)}; ${lifetimeLabel(item)}`}
                 data-lifespan-item-id={item.id}
@@ -381,14 +397,13 @@
                 <div class="label" title={fullItemLabel(item)}>
                   <span class="swatch" style={`background:${itemColor(item.id)}`}></span>
                   <div class="label-copy">
-                    {#if item.presence.length === 0}
-                      <button
-                        type="button"
-                        class="terminal-item"
-                        aria-label={`Select ${fullItemLabel(item)}; no model-call presence`}
-                        onclick={() => onSelectItem(item.id)}>{label}</button
-                      >
-                    {:else}<span class="item-label">{label}</span>{/if}
+                    <button
+                      type="button"
+                      class="item-label"
+                      class:terminal-item={item.presence.length === 0}
+                      aria-label={`Select ${fullItemLabel(item)}${item.presence.length === 0 ? '; no model-call presence' : ''}`}
+                      onclick={() => onSelectItem(item.id)}>{label}</button
+                    >
                     <small>{kindLabel(item.kind)} · {lifetimeLabel(item)}</small>
                   </div>
                 </div>
@@ -411,13 +426,13 @@
                       class="segment"
                       class:compacted={isCompactedEnd(item.id, range)}
                       aria-label={`${fullItemLabel(item)}, calls ${range.startCall} through ${range.endCall}`}
-                      aria-pressed={interaction.selectedItemId === item.id}
+                      aria-pressed={selectedItemId === item.id}
                       title={`${label}: calls ${range.startCall}–${range.endCall}`}
                       style={segmentStyle(range, itemColor(item.id))}
                       onpointerenter={(event) => onHoverItem(item.id, event)}
                       onpointermove={(event) => onHoverItem(item.id, event)}
                       onpointerleave={() => onHoverItem(null)}
-                      onclick={() => onSelectItem(item.id)}
+                      onclick={(event) => selectSegment(event, item.id, range)}
                     ></button>
                   {/each}
                 </div>
@@ -465,7 +480,7 @@
     align-items: start;
     margin: -2px -2px 8px;
     padding: 6px 2px;
-    background: #121a30;
+    background: var(--surface);
     cursor: pointer;
   }
   .disclosure-chevron {
@@ -486,8 +501,8 @@
     gap: 2px;
   }
   .disclosure-action {
-    color: #9fb4d8;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .lifespan-header:focus-visible {
     outline: 2px solid #9fc0ff;
@@ -532,8 +547,8 @@
   .browse-field {
     display: grid;
     gap: 3px;
-    color: #aebbd0;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .search-field {
     grid-template-columns: 1fr;
@@ -542,8 +557,8 @@
   .browse-controls select {
     min-width: 0;
     width: 100%;
-    background: #0b1223;
-    border: 1px solid #34415f;
+    background: var(--plot);
+    border: 1px solid var(--control-border);
     border-radius: 6px;
     color: #eef2f8;
     padding: 7px 8px;
@@ -569,8 +584,8 @@
     align-items: center;
     gap: 7px 12px;
     margin: 6px 0;
-    color: #9eabc1;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .lifespan-scope-status strong {
     color: #d9e1ef;
@@ -578,7 +593,7 @@
   .lifespan-scope-status button,
   .find-status button {
     padding: 4px 7px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .find-status button {
     margin-left: 7px;
@@ -588,8 +603,8 @@
     flex-wrap: wrap;
     gap: 6px 16px;
     margin: 7px 0;
-    color: #9eabc1;
-    font-size: 10px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .lifespan-legend span {
     display: inline-flex;
@@ -731,7 +746,7 @@
     color: #c9d2e1;
     text-align: left;
   }
-  .terminal-item {
+  .item-label {
     min-width: 0;
     width: 100%;
     padding: 0;
@@ -740,11 +755,11 @@
     background: transparent;
     font: inherit;
   }
-  .terminal-item:hover {
+  .item-label:hover {
     background: transparent;
     text-decoration: underline;
   }
-  .terminal-item:focus-visible {
+  .item-label:focus-visible {
     outline: 2px solid #9fc0ff;
     outline-offset: 1px;
   }
@@ -759,7 +774,7 @@
     height: 22px;
     position: relative;
     min-width: 0;
-    background: #0b1223;
+    background: var(--plot);
     border-radius: 5px;
     overflow: hidden;
   }

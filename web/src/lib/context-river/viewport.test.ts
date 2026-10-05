@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   captureViewportAnchor,
+  comfortableCallScroll,
+  stepCallTarget,
   clampScrollLeft,
   latestScrollTarget,
   resolveJumpCallIndex,
@@ -16,6 +18,41 @@ const columns = [
 ];
 
 describe('Context River viewport math', () => {
+  it('steps actual calls from the pin or centre, but starts at the first call in the overview', () => {
+    const viewport = {
+      ready: true,
+      isFitAll: false,
+      zoomFactor: 2,
+      canZoomIn: true,
+      canZoomOut: true,
+      totalCallCount: 3,
+      hasOverflow: true,
+      firstVisibleCallIndex: 4,
+      lastVisibleCallIndex: 8,
+      centerCallIndex: 4,
+    };
+    const calls = [1, 4, 8];
+    expect(stepCallTarget(calls, null, viewport, 1)).toBe(8);
+    expect(stepCallTarget(calls, null, viewport, -1)).toBe(1);
+    expect(stepCallTarget(calls, 1, viewport, -1)).toBeNull();
+    expect(stepCallTarget(calls, 8, viewport, 1)).toBeNull();
+    expect(stepCallTarget(calls, null, { ...viewport, isFitAll: true }, 1)).toBe(1);
+    expect(stepCallTarget(calls, null, { ...viewport, isFitAll: true }, -1)).toBeNull();
+    expect(stepCallTarget(calls, 4, { ...viewport, isFitAll: true }, -1)).toBe(1);
+    expect(stepCallTarget([], null, viewport, 1)).toBeNull();
+    expect(stepCallTarget([7], null, { ...viewport, isFitAll: true }, 1)).toBe(7);
+    expect(stepCallTarget([7], 7, viewport, 1)).toBeNull();
+    expect(stepCallTarget(calls, null, { ...viewport, ready: false }, 1)).toBeNull();
+  });
+  it('nudges only near/outside edges, with a 15% inset and scroll-bound clamping', () => {
+    expect(comfortableCallScroll(150, 100, 200, 1000)).toBe(100);
+    expect(comfortableCallScroll(120, 100, 200, 1000)).toBe(90);
+    expect(comfortableCallScroll(285, 100, 200, 1000)).toBe(115);
+    expect(comfortableCallScroll(500, 100, 200, 1000)).toBe(330);
+    expect(comfortableCallScroll(0, 0, 200, 1000)).toBe(0);
+    expect(comfortableCallScroll(1000, 800, 200, 1000)).toBe(800);
+    expect(comfortableCallScroll(100, 0, 200, 200)).toBe(0);
+  });
   it('clamps non-finite and out-of-range scroll offsets', () => {
     expect(clampScrollLeft(-20, 500, 100)).toBe(0);
     expect(clampScrollLeft(900, 500, 100)).toBe(400);

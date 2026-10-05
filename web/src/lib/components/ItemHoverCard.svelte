@@ -60,8 +60,8 @@
     max-width: 360px;
     padding: 10px;
     color: #c3ccdc;
-    background: #090e1b;
-    border: 1px solid #405077;
+    background: var(--surface);
+    border: 1px solid var(--control-border);
     border-radius: 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   }
@@ -77,7 +77,7 @@
     border: 1px solid #3a496a;
     border-radius: 999px;
     padding: 2px 7px;
-    font-size: 11px;
+    font-size: 12px;
   }
   header strong {
     color: #fff;
@@ -90,13 +90,13 @@
     margin: 0;
   }
   dl div {
-    background: #0b1223;
+    background: var(--plot);
     border-radius: 6px;
     padding: 6px 8px;
   }
   dt {
-    color: #8996ad;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   dd {
     margin: 1px 0 0;
@@ -112,8 +112,8 @@
     color: #c3ccdc;
   }
   .preview-note {
-    color: #9caac0;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .lineage {
     border-left: 3px dashed #ffb14e;

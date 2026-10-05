@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ContextRiverNavigation from './ContextRiverNavigation.svelte';
+import RiverPrecisionNavigation from './RiverPrecisionNavigation.svelte';
 import type { RiverViewportStatus } from '../context-river/viewport';
 
 afterEach(cleanup);
@@ -24,6 +25,8 @@ const navigationCallbacks = () => ({
   onFitAll: vi.fn<() => void>(),
   onZoomIn: vi.fn<() => void>(),
   onZoomOut: vi.fn<() => void>(),
+  onSelectCall: vi.fn<(index: number) => void>(),
+  onDone: vi.fn<() => void>(),
 });
 
 describe('ContextRiverNavigation', () => {
@@ -42,16 +45,16 @@ describe('ContextRiverNavigation', () => {
     expect(screen.getByRole('button', { name: 'Zoom out' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Latest' })).toBeEnabled();
     expect(screen.getByText('Zoom 3.2×')).toBeInTheDocument();
-    expect(screen.getByText('Go to…')).toBeInTheDocument();
-    expect((container.querySelector('.go-to-disclosure') as HTMLDetailsElement).open).toBe(false);
+    expect(screen.queryByText('Go to…')).toBeNull();
+    expect(container.querySelector('.go-to-disclosure')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next call' })).toBeInTheDocument();
   });
 
-  it('validates and clamps jump requests to available call indices', async () => {
+  it('validates and clamps precise jump requests to available call indices', async () => {
     const callbacks = navigationCallbacks();
-    render(ContextRiverNavigation, {
-      props: { viewport: zoomedViewport, callIndices: [1, 4, 8], ...callbacks },
+    render(RiverPrecisionNavigation, {
+      props: { ready: true, callIndices: [1, 4, 8], ...callbacks },
     });
-    await fireEvent.click(screen.getByText('Go to…'));
     const input = screen.getByRole('spinbutton', { name: 'Call number' });
     await fireEvent.input(input, { target: { value: '99' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Go' }));
@@ -69,10 +72,9 @@ describe('ContextRiverNavigation', () => {
 
   it('validates keyboard-selected call ranges and normalizes their direction', async () => {
     const callbacks = navigationCallbacks();
-    render(ContextRiverNavigation, {
-      props: { viewport: zoomedViewport, callIndices: [1, 4, 8], ...callbacks },
+    render(RiverPrecisionNavigation, {
+      props: { ready: true, callIndices: [1, 4, 8], ...callbacks },
     });
-    await fireEvent.click(screen.getByText('Go to…'));
     const start = screen.getByRole('spinbutton', { name: 'Range start call' });
     const end = screen.getByRole('spinbutton', { name: 'Range end call' });
     await fireEvent.input(start, { target: { value: '8' } });
@@ -85,23 +87,29 @@ describe('ContextRiverNavigation', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Enter whole-number start and end');
   });
 
-  it('opens Go to controls as a disclosure and closes it on Escape with focus restored', async () => {
-    render(ContextRiverNavigation, {
+  it('steps from the pin or viewport centre, starts at the first call in Fit all, and disables boundaries', async () => {
+    const callbacks = navigationCallbacks();
+    const view = render(ContextRiverNavigation, {
       props: {
-        viewport: zoomedViewport,
+        viewport: { ...zoomedViewport, centerCallIndex: 4 },
         callIndices: [1, 4, 8],
-        ...navigationCallbacks(),
+        pinnedCallIndex: 4,
+        ...callbacks,
       },
     });
-    const summary = screen.getByText('Go to…');
-    const details = document.querySelector('.go-to-disclosure') as HTMLDetailsElement;
-    await fireEvent.click(summary);
-    expect(details.open).toBe(true);
-    const input = screen.getByRole('spinbutton', { name: 'Call number' });
-    input.focus();
-    await fireEvent.keyDown(input, { key: 'Escape' });
-    expect(details.open).toBe(false);
-    expect(document.activeElement).toBe(summary);
+    await fireEvent.click(screen.getByRole('button', { name: 'Previous call' }));
+    expect(callbacks.onSelectCall).toHaveBeenLastCalledWith(1);
+    await fireEvent.click(screen.getByRole('button', { name: 'Next call' }));
+    expect(callbacks.onSelectCall).toHaveBeenLastCalledWith(8);
+    await view.rerender({ pinnedCallIndex: null });
+    await fireEvent.click(screen.getByRole('button', { name: 'Next call' }));
+    expect(callbacks.onSelectCall).toHaveBeenLastCalledWith(8);
+    await view.rerender({ viewport: { ...zoomedViewport, isFitAll: true }, pinnedCallIndex: null });
+    expect(screen.getByRole('button', { name: 'Previous call' })).toBeDisabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Next call' }));
+    expect(callbacks.onSelectCall).toHaveBeenLastCalledWith(1);
+    await view.rerender({ pinnedCallIndex: 8 });
+    expect(screen.getByRole('button', { name: 'Next call' })).toBeDisabled();
   });
 
   it('requests zoom, Fit all, and Latest without changing call selection', async () => {

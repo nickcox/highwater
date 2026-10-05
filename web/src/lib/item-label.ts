@@ -46,7 +46,7 @@ interface SuffixNode {
 }
 
 function splitSourcePath(label: string): ParsedSourcePath | null {
-  const match = label.trim().match(/^(Read|Write|Edit)\s*[·:]\s*(.+)$/i);
+  const match = label.trim().match(/^((?:Read|Write|Edit)(?: result)?)\s*[·:]\s*(.+)$/i);
   if (!match) return null;
 
   const prefix = match[1];

@@ -9,7 +9,7 @@ import type {
   RiverLayoutOptions,
 } from './types';
 
-function pathFor(points: readonly RibbonPoint[], linear: boolean): string {
+export function pathFor(points: readonly RibbonPoint[], linear: boolean): string {
   return (
     area<RibbonPoint>()
       .x((point) => point.x)
@@ -43,8 +43,16 @@ function padSingleton(
   const only = points[0]!;
   const halfWidth = Math.max(5, Math.min(step * 0.28, 18));
   return [
-    { ...only, x: Math.max(options.margin.left, only.x - halfWidth) },
-    { ...only, x: Math.min(options.width - options.margin.right, only.x + halfWidth) },
+    {
+      ...only,
+      x: Math.max(options.margin.left, only.x - halfWidth),
+      xBasis: { kind: 'singleton', callIndex: only.callIndex, side: -1 },
+    },
+    {
+      ...only,
+      x: Math.min(options.width - options.margin.right, only.x + halfWidth),
+      xBasis: { kind: 'singleton', callIndex: only.callIndex, side: 1 },
+    },
   ];
 }
 
@@ -265,6 +273,7 @@ export function layoutContextRiver(
             {
               callIndex: sourceCompaction.beforeModelCall,
               x: boundaryX(sourceCompaction.beforeModelCall),
+              xBasis: { kind: 'boundary', beforeModelCall: sourceCompaction.beforeModelCall },
               y0: middle,
               y1: middle,
             },
@@ -280,6 +289,7 @@ export function layoutContextRiver(
             {
               ...first,
               x: boundaryX(summaryCompaction.beforeModelCall),
+              xBasis: { kind: 'boundary', beforeModelCall: summaryCompaction.beforeModelCall },
             },
             ...points,
           ];
@@ -300,6 +310,7 @@ export function layoutContextRiver(
           path,
           hitPath: path,
           isSubpixel,
+          linear: touchesCompaction,
         });
       }
     }
@@ -330,6 +341,9 @@ export function layoutContextRiver(
                 fromItemId: edge.from,
                 toItemId: edge.to,
                 compactionId: compaction.id,
+                sourceX: sourcePoint.x,
+                sourceY,
+                summaryY,
                 path: `M ${sourcePoint.x} ${sourceY} C ${boundary - control} ${sourceY}, ${boundary + control} ${summaryY}, ${boundary} ${summaryY}`,
               },
             ];
