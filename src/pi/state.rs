@@ -38,6 +38,9 @@ pub(super) struct ReconstructionState {
     item_indices: HashMap<String, ItemIndex>,
     calls: Vec<NormalizedModelCall>,
     active: Vec<ItemIndex>,
+    system: system_context::SystemReplay,
+    global: Vec<ItemIndex>,
+    legacy_tools: Vec<ItemIndex>,
     compactions: Vec<PendingCompaction>,
     last_compaction: Option<String>,
 }
@@ -56,9 +59,30 @@ impl ReconstructionState {
             item_indices: HashMap::new(),
             calls: Vec::new(),
             active: Vec::new(),
+            system: system_context::SystemReplay::default(),
+            global: Vec::new(),
+            legacy_tools: Vec::new(),
             compactions: Vec::new(),
             last_compaction: None,
         }
+    }
+
+    pub(super) fn apply_system(&mut self, update: system_context::SystemUpdate, entry: &PiEntry) {
+        let items = self.system.apply(update, entry, &self.id);
+        if self.system.loadout_known {
+            self.legacy_tools.clear();
+        }
+        self.global = items
+            .into_iter()
+            .map(|item| {
+                insert_item(
+                    &mut self.items,
+                    &mut self.item_indices,
+                    item.id.clone(),
+                    item,
+                )
+            })
+            .collect();
     }
 
     pub(super) fn apply_message(
@@ -66,19 +90,41 @@ impl ReconstructionState {
         item: NormalizedContextItem,
         call: Option<Box<AssistantCall>>,
     ) {
+        if call.is_none() && item.kind == ContextItemKind::ToolDefinition {
+            // Legacy declaration records have no verified delta identity. Keep them
+            // out of summary lineage; an authoritative modern loadout supersedes them.
+            let index = insert_item(
+                &mut self.items,
+                &mut self.item_indices,
+                item.id.clone(),
+                item,
+            );
+            if !self.system.loadout_known {
+                self.legacy_tools.push(index);
+            }
+            return;
+        }
         let contextual = if let Some(call) = call {
             let index = self.calls.len() + 1;
             let context_item_ids = self
-                .active
+                .global
                 .iter()
+                .chain(&self.legacy_tools)
+                .chain(&self.active)
                 .map(|index| self.items[index.0].id.clone())
                 .collect();
-            for item_index in &self.active {
+            for item_index in self
+                .global
+                .iter()
+                .chain(&self.legacy_tools)
+                .chain(&self.active)
+            {
                 let item = &mut self.items[item_index.0];
                 extend_presence(item, index);
             }
             let contextual = assistant_response_is_contextual(call.stop_reason.as_deref());
             self.calls.push(NormalizedModelCall {
+                tool_loadout_known: self.system.loadout_known,
                 index,
                 source_record_id: item
                     .source_record_id
@@ -140,8 +186,11 @@ impl ReconstructionState {
             .iter()
             .map(|index| self.items[index.0].id.clone())
             .collect();
-        let retained_item_ids = retained
+        let retained_item_ids = self
+            .global
             .iter()
+            .chain(&self.legacy_tools)
+            .chain(retained.iter())
             .map(|index| self.items[index.0].id.clone())
             .collect();
         self.active.clear();

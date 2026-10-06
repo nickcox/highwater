@@ -31,6 +31,7 @@ pub(super) fn fake_session() -> NormalizedSession {
         working_directory: None,
         context_items: vec![item],
         model_calls: vec![NormalizedModelCall {
+            tool_loadout_known: false,
             index: 1,
             source_record_id: "call".into(),
             target: ModelTarget {

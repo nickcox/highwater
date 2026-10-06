@@ -32,7 +32,7 @@ pub(crate) use tokenization::TokenizationPolicy;
 
 pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 8;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 12;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 13;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -229,7 +229,9 @@ fn validate_payload_numbers(
                 }
             }
         }
-        TokenizationPayload::CompactionSummary(_)
+        TokenizationPayload::SystemPrompt { .. }
+        | TokenizationPayload::ToolDefinition { .. }
+        | TokenizationPayload::CompactionSummary(_)
         | TokenizationPayload::BranchSummary(_)
         | TokenizationPayload::CommandExecution { .. }
         | TokenizationPayload::Unavailable => {}
@@ -638,17 +640,33 @@ fn derive_calls(
             explanation_codes.push(DiagnosticCode::KnownFramingOverheadAvailable);
         }
         if !work.call.context_item_ids.iter().any(|id| {
-            item_lookup
-                .get(id.as_str())
-                .is_some_and(|item| item.kind == ContextItemKind::System)
+            item_lookup.get(id.as_str()).is_some_and(|item| {
+                item.kind == ContextItemKind::System
+                    && !matches!(
+                        item.payload,
+                        TokenizationPayload::SystemPrompt {
+                            complete: false,
+                            ..
+                        } | TokenizationPayload::Unavailable
+                    )
+            })
         }) {
             explanation_codes.push(DiagnosticCode::MissingSystemPrompt);
         }
-        if !work.call.context_item_ids.iter().any(|id| {
-            item_lookup
-                .get(id.as_str())
-                .is_some_and(|item| item.kind == ContextItemKind::ToolDefinition)
-        }) {
+        if !work.call.tool_loadout_known
+            && !work.call.context_item_ids.iter().any(|id| {
+                item_lookup.get(id.as_str()).is_some_and(|item| {
+                    item.kind == ContextItemKind::ToolDefinition
+                        && !matches!(
+                            item.payload,
+                            TokenizationPayload::ToolDefinition {
+                                complete: false,
+                                ..
+                            } | TokenizationPayload::Unavailable
+                        )
+                })
+            })
+        {
             explanation_codes.push(DiagnosticCode::MissingToolDefinitions);
         }
         if estimates.iter().any(|estimate| {
@@ -1689,6 +1707,7 @@ mod tests {
             item("d", 2, 3),
         ];
         let call = |index, ids: &[&str]| NormalizedModelCall {
+            tool_loadout_known: false,
             index,
             source_record_id: format!("call-{index}"),
             target: ModelTarget {
@@ -2120,6 +2139,7 @@ mod tests {
         }];
         session.context_items[0].last_model_call = 2;
         session.model_calls.push(NormalizedModelCall {
+            tool_loadout_known: false,
             index: 2,
             source_record_id: "call-2".into(),
             target: ModelTarget {

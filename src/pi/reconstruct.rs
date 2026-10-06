@@ -2,6 +2,11 @@
 mod interpret;
 #[path = "state.rs"]
 mod state;
+#[path = "system_context.rs"]
+mod system_context;
+#[cfg(test)]
+#[path = "system_context_tests.rs"]
+mod system_context_tests;
 use state::ReconstructionState;
 
 use super::{
@@ -133,11 +138,20 @@ fn reconstruct_selected(
                 state.apply_message(item, Some(call))
             }
             interpret::SelectedEntry::Message(item) => state.apply_message(item, None),
+            interpret::SelectedEntry::System(update) => {
+                state.apply_system(*update, &entries[*entry_index])
+            }
             interpret::SelectedEntry::Compaction {
                 item,
                 first_kept_position,
                 tokens_before,
             } => {
+                if entries[*entry_index].value.get("systemMessage").is_some() {
+                    state.apply_system(
+                        system_context::SystemUpdate::parse(&entries[*entry_index], true),
+                        &entries[*entry_index],
+                    );
+                }
                 state.apply_compaction(item, first_kept_position, tokens_before, &branch_positions)
             }
             interpret::SelectedEntry::Ignored => {}
@@ -859,6 +873,7 @@ mod tests {
     #[test]
     fn normalized_fixture_parity() {
         let mut digest = blake3::Hasher::new();
+        let mut legacy_digest = blake3::Hasher::new();
         for name in [
             "aborted-assistant",
             "branch",
@@ -873,13 +888,22 @@ mod tests {
             "terminal-compaction",
             "tools",
         ] {
-            digest.update(format!("{:?}", fixture(name)).as_bytes());
+            let normalized = format!("{:?}", fixture(name));
+            digest.update(normalized.as_bytes());
+            legacy_digest.update(
+                normalized
+                    .replace("tool_loadout_known: false, ", "")
+                    .as_bytes(),
+            );
         }
         assert_eq!(
-            digest.finalize().to_hex().as_str(),
-            // Source wall-clock instants are now retained on calls; other source
-            // reconstruction and accounting contracts remain unchanged.
+            legacy_digest.finalize().to_hex().as_str(),
             "7a6f8e5e21caef161601aba4110f024810988069086eaec2458079f6d15e76a1"
+        );
+        assert_eq!(
+            digest.finalize().to_hex().as_str(),
+            // Only the internal loadout-knowledge flag changes these older fixtures.
+            "d7ab15e0f00da6950219c6047bef9e717c92c34d14276bc578ebd757234a741b"
         );
     }
 

@@ -5,7 +5,7 @@ use crate::domain::{
 use blake3::Hasher;
 
 /// Version of the streaming canonical payload encoding used for fingerprints.
-pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 3;
+pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 4;
 const PREVIEW_LIMIT: usize = 160;
 const EXPANDED_PREVIEW_LIMIT: usize = 640;
 
@@ -153,6 +153,10 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
             builder.finish(PreviewKind::ToolResult)
         }
         TokenizationPayload::CustomMessage(content) => preview_content(content),
+        TokenizationPayload::SystemPrompt { text, .. }
+        | TokenizationPayload::ToolDefinition { text, .. } => {
+            bounded_preview(text, PreviewKind::Text)
+        }
         TokenizationPayload::CompactionSummary(summary)
         | TokenizationPayload::BranchSummary(summary) => {
             bounded_preview(summary, PreviewKind::Summary)
@@ -463,6 +467,14 @@ pub(crate) fn project_payload(
             let (text, partial, unavailable) = project_content(content, &mut notes);
             (text, partial, unavailable)
         }
+        TokenizationPayload::SystemPrompt { text, complete }
+        | TokenizationPayload::ToolDefinition { text, complete } => {
+            notes.push(DiagnosticCode::EstimatedProviderSerialization);
+            if !complete {
+                notes.push(DiagnosticCode::UnsupportedPayload);
+            }
+            (text.clone(), true, !complete)
+        }
         TokenizationPayload::CompactionSummary(summary) => (summary.clone(), false, false),
         TokenizationPayload::BranchSummary(summary) => (summary.clone(), false, false),
         TokenizationPayload::CommandExecution {
@@ -566,6 +578,16 @@ fn hash_payload(hasher: &mut Hasher, payload: &TokenizationPayload) {
         TokenizationPayload::CustomMessage(content) => {
             hash_tag(hasher, b"custom");
             hash_content(hasher, content);
+        }
+        TokenizationPayload::SystemPrompt { text, complete } => {
+            hash_tag(hasher, b"system-prompt");
+            hash_string(hasher, b"text", text);
+            hash_bool(hasher, b"complete", *complete);
+        }
+        TokenizationPayload::ToolDefinition { text, complete } => {
+            hash_tag(hasher, b"tool-definition");
+            hash_string(hasher, b"text", text);
+            hash_bool(hasher, b"complete", *complete);
         }
         TokenizationPayload::CompactionSummary(summary) => {
             hash_tag(hasher, b"compaction");
@@ -919,18 +941,18 @@ mod tests {
     }
 
     #[test]
-    fn encoded_image_field_rename_preserves_the_v3_fingerprint_contract() {
+    fn encoded_image_field_rename_preserves_the_v4_fingerprint_contract() {
         let payload = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
                 encoded_data_length: Some(8),
             })],
         });
-        assert_eq!(PAYLOAD_SCHEMA_VERSION, 3);
+        assert_eq!(PAYLOAD_SCHEMA_VERSION, 4);
         // Verified against the pre-M8 encoder (legacy `byte_length` field/tag).
         assert_eq!(
             payload_hash(&payload),
-            "515b86e4f4884777ae5d1256add149318ab766177368fff5f532337dfa279fb0"
+            "10b74ba9ed7fd575f7593af8a2bbd8d97a47a3de1d684977af6a9b1759b2f50e"
         );
         let absent = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {

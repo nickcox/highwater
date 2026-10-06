@@ -92,6 +92,8 @@ mod tests {
             kind: "message".into(),
             value: serde_json::json!({}),
             source_bytes: 2,
+            system_section_order: Vec::new(),
+            checkpoint_section_order: Vec::new(),
         }
     }
 

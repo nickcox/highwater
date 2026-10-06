@@ -8,6 +8,7 @@ pub(super) enum SelectedEntry {
         call: Box<AssistantCall>,
     },
     Message(NormalizedContextItem),
+    System(Box<system_context::SystemUpdate>),
     Compaction {
         item: NormalizedContextItem,
         first_kept_position: Option<usize>,
@@ -103,6 +104,11 @@ pub(super) fn interpret(
             "branch_summary" => "branchSummary",
             other => other,
         });
+    if role == "system" {
+        return Ok(SelectedEntry::System(Box::new(
+            system_context::SystemUpdate::parse(entry, false),
+        )));
+    }
     let id = format!("pi:{session_id}:entry:{}", entry.id);
     if role == "assistant" {
         let value = message_value.ok_or(SourceError::RequiredField {

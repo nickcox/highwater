@@ -713,6 +713,79 @@ test('Composition group headings stay clipped inside narrow adjacent groups', as
   }
 });
 
+test('recorded Pi system and tools are visible at call 1 and survive revision and compaction navigation', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses a sanitized production Rust export.');
+  const analysis = JSON.parse(
+    readFileSync(resolve('../fixtures/analysis/system-context.json'), 'utf8'),
+  ) as ReturnType<typeof testAnalysis>;
+  const systems = analysis.contextItems.filter((item) => item.kind === 'system');
+  const initial = systems.find((item) => item.firstModelCall === 1)!;
+  const later = systems.find((item) => item.firstModelCall === 2)!;
+  await mockApi(page, analysis);
+  await page.goto('/#session=browser-smoke&view=river&display=items&pin=1&range=1:1');
+  await assertLoaded(page);
+  const systemRibbon = page.getByRole('button', { name: 'System prompt', exact: true }).first();
+  await expect(systemRibbon).toBeVisible();
+  const ribbon = systemRibbon.locator('..').locator('.ribbon');
+  expect(
+    await ribbon.evaluate((node) => {
+      const b = (node as SVGGraphicsElement).getBBox();
+      return b.height;
+    }),
+  ).toBeGreaterThan(10);
+  await expect(page.getByRole('button', { name: /read definition/ }).first()).toBeVisible();
+  expect(
+    analysis.compactions.every((event) =>
+      event.sourceItemIds.every(
+        (id) =>
+          !analysis.contextItems.some(
+            (item) => item.id === id && (item.kind === 'system' || item.kind === 'toolDefinition'),
+          ),
+      ),
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: '.playwright/calm-workspace/pi-system-river-call1.png',
+    fullPage: true,
+  });
+  await openViewOptions(page);
+  await page.getByRole('button', { name: 'Item types', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Item type System/ }).first()).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Item type legend' })).toContainText(
+    'Tool Definition',
+  );
+  await page.getByRole('button', { name: 'Items', exact: true }).click();
+  await page.getByRole('tab', { name: 'Composition' }).click();
+  await page.getByRole('button', { name: 'At call', exact: true }).click();
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  const initialRow = page.locator(`[data-composition-item="${initial.id}"]`);
+  await expect(initialRow).toBeVisible();
+  await expect(page.locator('.composition-list')).toContainText('read definition');
+  await expect(page.locator('.composition-list')).toContainText('bash definition');
+  await initialRow.click();
+  await page.screenshot({
+    path: '.playwright/calm-workspace/pi-system-composition-call1.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Inspect next call', exact: true }).click();
+  await expect(page.getByText(/not present at pinned call 2/)).toBeVisible();
+  await expect(initialRow).toHaveCount(0);
+  await expect(page.locator(`[data-composition-item="${later.id}"]`)).toBeVisible();
+  await page.getByRole('button', { name: 'Inspect next call', exact: true }).click();
+  await expect(page.locator(`[data-composition-item="${later.id}"]`)).toBeVisible();
+  await expect(page.locator('.composition-list')).not.toContainText('bash definition');
+  await page.getByRole('button', { name: 'Cumulative', exact: true }).click();
+  await expect(initialRow).toBeVisible();
+  await expect(page.locator(`[data-composition-item="${later.id}"]`)).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: '.playwright/calm-workspace/pi-system-composition-narrow.png',
+    fullPage: true,
+  });
+});
+
 test('Item types use distinct semantic colors consistently in ribbons and legend without changing individual colors', async ({
   page,
 }) => {

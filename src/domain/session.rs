@@ -31,6 +31,8 @@ pub(crate) struct NormalizedSession {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NormalizedModelCall {
+    /// Verified recorded loadout baseline, including an explicitly empty one.
+    pub tool_loadout_known: bool,
     pub index: usize,
     pub source_record_id: String,
     pub target: ModelTarget,
@@ -217,6 +219,16 @@ pub(crate) enum TokenizationPayload {
         is_error: bool,
     },
     CustomMessage(MessageContent),
+    /// Replayed logical instructions; provider wire framing remains estimated.
+    SystemPrompt {
+        text: String,
+        complete: bool,
+    },
+    /// Recorded declaration JSON, not a universal provider wire representation.
+    ToolDefinition {
+        text: String,
+        complete: bool,
+    },
     CompactionSummary(String),
     BranchSummary(String),
     // Source-neutral capability exercised by analysis tests; Pi command-shaped
