@@ -82,6 +82,33 @@ afterEach(() => {
 });
 
 describe('session controller', () => {
+  it('loads a known linked session directly instead of briefly loading the first session', async () => {
+    const h = harness({
+      fetchSessions: vi.fn(async () => sessionList(0n, generationA, ['one', 'two'])),
+    });
+    const controller = createSessionController({
+      dependencies: h.dependencies,
+      initialSessionId: 'two',
+    });
+    controller.start();
+    await waitFor(() => !get(controller).loading);
+    expect(get(controller).selectedSessionId).toBe('two');
+    expect(h.dependencies.fetchAnalysis).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(h.dependencies.fetchAnalysis).mock.calls[0][0]).toBe('two');
+    controller.dispose();
+  });
+
+  it('falls back to the first known session for an unavailable linked session', async () => {
+    const h = harness();
+    const controller = createSessionController({
+      dependencies: h.dependencies,
+      initialSessionId: 'gone',
+    });
+    controller.start();
+    await waitFor(() => !get(controller).loading);
+    expect(get(controller).selectedSessionId).toBe('one');
+    controller.dispose();
+  });
   it('owns initial loading and reports accepted analyses without owning interaction state', async () => {
     const h = harness();
     const accepted = vi.fn();

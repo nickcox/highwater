@@ -103,11 +103,7 @@ async fn session_analysis(
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let snapshot = state.catalog.snapshot()?;
-    let session = snapshot
-        .sessions
-        .iter()
-        .find(|session| session.id == id)
-        .ok_or(AppError::NotFound)?;
+    let session = resolve_session(&snapshot.sessions, &id)?;
     let response = state
         .analysis
         .response(std::path::PathBuf::from(&session.path), state.config)
@@ -115,6 +111,15 @@ async fn session_analysis(
         .map_err(AppError::Shared)?;
     response_for(&response, &headers)
 }
+fn resolve_session<'a>(sessions: &'a [SessionFile], id: &str) -> Result<&'a SessionFile, AppError> {
+    let mut matches = sessions.iter().filter(|session| session.id == id);
+    let session = matches.next().ok_or(AppError::NotFound)?;
+    if matches.next().is_some() {
+        return Err(AppError::AmbiguousSession);
+    }
+    Ok(session)
+}
+
 fn response_for(response: &CachedResponse, headers: &HeaderMap) -> Result<Response, AppError> {
     let mut builder = Response::builder().header(header::ETAG, response.etag.as_str());
     if etag_matches(headers, &response.etag) {

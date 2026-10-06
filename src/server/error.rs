@@ -128,12 +128,19 @@ pub(crate) enum AppError {
     ResponseBuild(#[from] axum::http::Error),
     #[error("unknown session")]
     NotFound,
+    #[error("ambiguous session reference")]
+    AmbiguousSession,
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, code, message) = match &self {
             Self::NotFound => NOT_FOUND,
+            Self::AmbiguousSession => (
+                StatusCode::CONFLICT,
+                "AMBIGUOUS_SESSION",
+                "multiple files share this session reference; remove duplicates or resolve the collision",
+            ),
             Self::Io(error) => io_details(error),
             Self::Source(error) => source_details(error),
             Self::Analysis(_) => (

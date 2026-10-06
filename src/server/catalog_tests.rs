@@ -47,7 +47,10 @@ fn recursive_discovery_preserves_canonical_identity_filtering_metadata_and_cance
     let sessions = discover(&root, None).expect("complete discovery");
     assert_eq!(sessions.len(), 2);
     for session in &sessions {
-        assert_eq!(session.id, session.path);
+        assert!(session.id.starts_with("pi-"));
+        assert_eq!(session.id.len(), 15);
+        assert!(session.id[3..].bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert_ne!(session.id, session.path);
         assert!(Path::new(&session.path).starts_with(&root));
     }
     assert!(sessions
@@ -67,4 +70,42 @@ fn recursive_discovery_preserves_canonical_identity_filtering_metadata_and_cance
     ));
     assert!(canonical_root(&root.join("missing")).is_err());
     assert!(canonical_root(&root.join("other_b.jsonl")).is_err());
+}
+
+#[test]
+fn native_session_references_survive_moves_renames_metadata_changes_and_appends() {
+    let first = TempRoot::new();
+    let second = TempRoot::new();
+    let a = first.0.join("original.jsonl");
+    let b = second.0.join("renamed.jsonl");
+    fs::write(
+        &a,
+        "{\"type\":\"session\",\"id\":\"stable-native-id\",\"cwd\":\"/private/one\"}\n",
+    )
+    .expect("first session");
+    fs::write(&b, "{\"type\":\"session\",\"id\":\"stable-native-id\",\"cwd\":\"/different/two\"}\n{\"type\":\"message\"}\n").expect("moved session");
+    let original = session_listing_metadata(&a, "original.jsonl").expect("metadata");
+    let moved = session_listing_metadata(&b, "renamed.jsonl").expect("metadata");
+    assert_eq!(original.reference, moved.reference);
+    assert!(original.reference.starts_with("pi-"));
+    assert_eq!(original.reference.len(), 15);
+    fs::write(&b, "{\"type\":\"session\",\"id\":\"another-native-id\"}\n")
+        .expect("different session");
+    assert_ne!(
+        original.reference,
+        session_listing_metadata(&b, "renamed.jsonl")
+            .expect("metadata")
+            .reference
+    );
+}
+
+#[test]
+fn incomplete_header_references_do_not_include_file_paths() {
+    let root = TempRoot::new();
+    let path = root.0.join("private-name.jsonl");
+    fs::write(&path, "").expect("empty file");
+    let metadata = session_listing_metadata(&path, "private-name.jsonl").expect("metadata");
+    assert!(metadata.reference.starts_with("pi-"));
+    assert_eq!(metadata.reference.len(), 15);
+    assert!(!metadata.reference.contains("private"));
 }

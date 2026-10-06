@@ -49,7 +49,47 @@
   import { estimateQuality } from './lib/estimate-quality';
   import type { RiverNavigationCommand, RiverViewportStatus } from './lib/context-river/viewport';
   import { stepCallTarget } from './lib/context-river/viewport';
-  import { createSessionController } from './lib/state/session-controller';
+  import {
+    createSessionController,
+    type SessionControllerSnapshot,
+  } from './lib/state/session-controller';
+  import {
+    parseViewLink,
+    isViewLinkFragment,
+    serializeViewLink,
+    validateViewLink,
+    viewLinkSignature,
+    viewLinkRange,
+    type ViewLinkState,
+  } from './lib/state/view-link';
+
+  const initialLink = parseViewLink(
+    typeof window === 'undefined' ? '' : window.location.hash,
+    presentation.river.display,
+  );
+  // Resolve grouping before the first geometry build; URL state wins over storage.
+  presentation = {
+    ...presentation,
+    river: {
+      ...presentation.river,
+      display: initialLink.state?.display ?? presentation.river.display,
+    },
+  };
+  let pendingViewLink: ViewLinkState | null = initialLink.state;
+  let viewLinkNotice = initialLink.notice;
+  let copyLinkNotice = '';
+  let fallbackViewUrl = '';
+  let fallbackLinkInput: HTMLInputElement;
+  let urlMounted = false;
+  let lastReadHash = typeof window === 'undefined' ? '' : window.location.hash;
+  let lastUrlSignature = '';
+  let replaceNextUrl = false;
+  let settledUrlCommandId = 0;
+  let urlNavigationRevision = 0;
+  let rangeUrlTimer: number | null = null;
+  let scheduledRangeUrl: { hash: string; signature: string } | null = null;
+  let viewRestoreQueued = false;
+  let urlViewportOverride: { range: ViewLinkState['range'] } | null = null;
 
   let interaction: InteractionState = resetInteraction();
   let appRoot: HTMLElement;
@@ -79,8 +119,10 @@
   let hoverCardPosition: { left: number; top: number } | null = null;
 
   const sessionController = createSessionController({
+    initialSessionId: initialLink.state?.session,
     onAnalysisAccepted: ({ kind, previous, next }) => {
       if (kind === 'replacement' && previous) {
+        replaceNextUrl = true;
         const previousPinnedCallIndex = interaction.pinnedCallIndex;
         interaction = reconcileInteraction(interaction, previous, next);
         if (
@@ -120,6 +162,8 @@
       findInLifespansRequest = null;
       riverSelectionVisibility = null;
       resetViewportStatus();
+      urlViewportOverride = null;
+      settledUrlCommandId = 0;
     },
   });
   // Analysis identity is an explicit reactive boundary: request/status publications
@@ -155,12 +199,219 @@
     resetViewportStatus();
   }
 
+  $: linkedView = $sessionController.selectedSessionId
+    ? ({
+        session: $sessionController.selectedSessionId,
+        view: visualizationView,
+        display: presentation.river.display,
+        scope: compositionScope,
+        pin: interaction.pinnedCallIndex,
+        item: interaction.selectedItemId,
+        range: urlViewportOverride
+          ? urlViewportOverride.range
+          : viewLinkRange(viewportStatus, callIndices),
+      } satisfies ViewLinkState)
+    : null;
+  $: linkedSignature = linkedView ? viewLinkSignature(linkedView, urlNavigationRevision) : '';
+  $: if (urlMounted && pendingViewLink && !$sessionController.loading) queueViewRestore();
+  $: if (
+    urlMounted &&
+    linkedView &&
+    indexed &&
+    !pendingViewLink &&
+    !$sessionController.loading &&
+    (visualizationView === 'composition' ||
+      callIndices.length === 0 ||
+      (viewportStatus.ready &&
+        (!navigationCommand || settledUrlCommandId === navigationCommand.id)))
+  )
+    syncViewUrl(linkedView, linkedSignature);
+
   onMount(() => {
+    urlMounted = true;
+    window.addEventListener('popstate', readViewUrl);
+    window.addEventListener('hashchange', readViewUrl);
     sessionController.start();
-    return () => sessionController.dispose();
+    return () => {
+      urlMounted = false;
+      cancelRangeUrl();
+      window.removeEventListener('popstate', readViewUrl);
+      window.removeEventListener('hashchange', readViewUrl);
+      sessionController.dispose();
+    };
   });
 
+  function readViewUrl(): void {
+    if (lastReadHash === window.location.hash) return;
+    lastReadHash = window.location.hash;
+    cancelRangeUrl();
+    const storedDisplay = readPresentationPreferences().river.display;
+    const parsed = parseViewLink(lastReadHash, storedDisplay);
+    if (lastReadHash && !isViewLinkFragment(lastReadHash)) return;
+    viewLinkNotice = parsed.notice;
+    copyLinkNotice = '';
+    fallbackViewUrl = '';
+    pendingViewLink =
+      parsed.state ??
+      ($sessionController.selectedSessionId
+        ? {
+            session: $sessionController.selectedSessionId,
+            view: 'river',
+            display: storedDisplay,
+            scope: 'cumulative',
+            range: null,
+            pin: null,
+            item: null,
+          }
+        : null);
+    if (
+      pendingViewLink &&
+      $sessionController.sessions.some((session) => session.id === pendingViewLink!.session) &&
+      pendingViewLink.session !== $sessionController.selectedSessionId
+    )
+      sessionController.select(pendingViewLink.session);
+  }
+
+  function queueViewRestore(): void {
+    if (viewRestoreQueued) return;
+    viewRestoreQueued = true;
+    // Apply outside the reactive derivation pass so inspector projections also
+    // observe the restored selection/pin, not only raw child props.
+    queueMicrotask(() => {
+      viewRestoreQueued = false;
+      if (urlMounted && !$sessionController.loading) restoreLinkedView($sessionController);
+    });
+  }
+
+  function restoreLinkedView(snapshot: SessionControllerSnapshot): void {
+    if (!pendingViewLink) return;
+    let requested = pendingViewLink;
+    if (!snapshot.sessions.some((session) => session.id === requested.session)) {
+      viewLinkNotice =
+        'The session in this view link is not available here. Showing the default view; choose a session or refresh after making it available.';
+      if (!snapshot.selectedSessionId) {
+        pendingViewLink = null;
+        return;
+      }
+      requested = {
+        session: snapshot.selectedSessionId,
+        view: 'river',
+        display: readPresentationPreferences().river.display,
+        scope: 'cumulative',
+        range: null,
+        pin: null,
+        item: null,
+      };
+    }
+    if (snapshot.selectedSessionId !== requested.session || !snapshot.indexed) return;
+    const validated = validateViewLink(requested, snapshot.indexed);
+    if (validated.notice)
+      viewLinkNotice = [viewLinkNotice, validated.notice].filter(Boolean).join(' ');
+    const state = validated.state;
+    interaction = { ...resetInteraction(), selectedItemId: state.item, pinnedCallIndex: state.pin };
+    visualizationView = state.view;
+    presentation = { ...presentation, river: { ...presentation.river, display: state.display } };
+    compositionScope = state.scope;
+    compositionEndpointNotice = '';
+    urlViewportOverride = { range: state.range };
+    navigationCommand = snapshot.indexed.analysis.modelCalls.length
+      ? state.range
+        ? {
+            id: ++navigationCommandId,
+            kind: 'range',
+            startCallIndex: state.range[0],
+            endCallIndex: state.range[1],
+          }
+        : { id: ++navigationCommandId, kind: 'fit' }
+      : null;
+    if (!navigationCommand) urlViewportOverride = null;
+    lastUrlSignature = viewLinkSignature(state, urlNavigationRevision);
+    pendingViewLink = null;
+  }
+
+  function navigationSettled(id: number): void {
+    settledUrlCommandId = id;
+    if (id === navigationCommand?.id) urlViewportOverride = null;
+  }
+
+  function cancelRangeUrl(): void {
+    if (rangeUrlTimer !== null) window.clearTimeout(rangeUrlTimer);
+    rangeUrlTimer = null;
+    scheduledRangeUrl = null;
+  }
+
+  function commitViewUrl(hash: string, signature: string, push: boolean): void {
+    try {
+      window.history[push ? 'pushState' : 'replaceState'](window.history.state, '', hash);
+      lastReadHash = hash;
+      lastUrlSignature = signature;
+      replaceNextUrl = false;
+    } catch {
+      viewLinkNotice =
+        'The browser could not update the view URL. Copy view link is still available.';
+    }
+  }
+
+  function syncViewUrl(state: ViewLinkState, signature: string): void {
+    const hash = serializeViewLink(state);
+    if (hash === window.location.hash && signature === lastUrlSignature) {
+      cancelRangeUrl();
+      replaceNextUrl = false;
+      return;
+    }
+    const push =
+      !replaceNextUrl &&
+      lastUrlSignature !== '' &&
+      signature !== lastUrlSignature &&
+      hash !== window.location.hash;
+    // Debounce continuous range movement, avoiding browser history API rate limits.
+    // Copy uses the current measured state, even while this address update is queued.
+    if (!replaceNextUrl && lastUrlSignature !== '' && signature === lastUrlSignature) {
+      if (scheduledRangeUrl?.hash === hash) return;
+      cancelRangeUrl();
+      scheduledRangeUrl = { hash, signature };
+      rangeUrlTimer = window.setTimeout(() => {
+        const scheduled = scheduledRangeUrl;
+        cancelRangeUrl();
+        if (urlMounted && scheduled) commitViewUrl(scheduled.hash, scheduled.signature, false);
+      }, 400);
+      return;
+    }
+    const previous = scheduledRangeUrl;
+    cancelRangeUrl();
+    if (push && previous) commitViewUrl(previous.hash, previous.signature, false);
+    commitViewUrl(hash, signature, push);
+  }
+
+  async function copyViewLink(): Promise<void> {
+    if (!linkedView || pendingViewLink) return;
+    const url = new URL(window.location.href);
+    // Query parameters are not app navigation; never copy URL credentials/tokens.
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = serializeViewLink(linkedView);
+    cancelRangeUrl();
+    commitViewUrl(url.hash, linkedSignature, false);
+    try {
+      await navigator.clipboard.writeText(url.href);
+      copyLinkNotice = 'View link copied. Recipients need access to this session.';
+      fallbackViewUrl = '';
+    } catch {
+      copyLinkNotice = 'Clipboard access is unavailable. Copy the view link below.';
+      fallbackViewUrl = url.href;
+      await tick();
+      fallbackLinkInput?.focus();
+      fallbackLinkInput?.select();
+    }
+  }
+
   function selectSession(sessionId: string): void {
+    pendingViewLink = null;
+    urlViewportOverride = null;
+    viewLinkNotice = '';
+    copyLinkNotice = '';
+    fallbackViewUrl = '';
     sessionController.select(sessionId);
   }
 
@@ -201,7 +452,7 @@
   }
 
   function updateViewport(status: RiverViewportStatus): void {
-    viewportStatus = status;
+    if (visualizationView === 'river') viewportStatus = status;
   }
 
   function updateSelectionVisibility(status: { itemId: string; visible: boolean } | null): void {
@@ -215,6 +466,7 @@
 
   function revealItemInRiver(itemId: string): void {
     if (!indexed?.itemById.has(itemId) || callIndices.length === 0) return;
+    urlNavigationRevision += 1;
     visualizationView = 'river';
     navigationCommand = {
       id: ++navigationCommandId,
@@ -303,6 +555,7 @@
   }
 
   function navigate(kind: 'fit' | 'zoom-in' | 'zoom-out' | 'latest'): void {
+    if (kind === 'fit' || kind === 'latest') urlNavigationRevision += 1;
     navigationCommand = { id: ++navigationCommandId, kind };
   }
 
@@ -312,6 +565,7 @@
   }
 
   function jumpToCall(callIndex: number): void {
+    urlNavigationRevision += 1;
     navigationCommand = { id: ++navigationCommandId, kind: 'call', callIndex };
   }
 
@@ -499,6 +753,15 @@
       />{/if}
   </header>
 
+  {#if viewLinkNotice || copyLinkNotice}
+    <p role="status" aria-label="View link status">{viewLinkNotice} {copyLinkNotice}</p>
+  {/if}
+  {#if fallbackViewUrl}
+    <label class="view-link-fallback"
+      >View link <input bind:this={fallbackLinkInput} readonly value={fallbackViewUrl} /></label
+    >
+  {/if}
+
   {#if $sessionController.catalogueWarning || $sessionController.analysisWarning}
     <section class="refresh-warning" role="status" aria-label="Refresh warnings">
       {#if $sessionController.catalogueWarning}<p>{$sessionController.catalogueWarning}</p>{/if}
@@ -554,6 +817,16 @@
             {/if}
           </div>
           <div class="panel-actions">
+            <button
+              type="button"
+              onclick={copyViewLink}
+              disabled={pendingViewLink !== null ||
+                (visualizationView === 'river' &&
+                  callIndices.length > 0 &&
+                  (!viewportStatus.ready ||
+                    (navigationCommand !== null && settledUrlCommandId !== navigationCommand.id)))}
+              >Copy view link</button
+            >
             <a
               class="mobile-view-details"
               href="#selected-item-summary"
@@ -633,6 +906,7 @@
                   onZoomToRange={zoomToRange}
                   isVisible={visualizationView === 'river'}
                   onViewportChange={updateViewport}
+                  onNavigationSettled={navigationSettled}
                   onSelectionVisibility={updateSelectionVisibility}
                   onHoverCall={hoverCall}
                   onPinCall={pinCall}
@@ -876,6 +1150,14 @@
   }
   .panel-head p {
     font-size: 12px;
+  }
+  .view-link-fallback {
+    display: block;
+  }
+  .view-link-fallback input {
+    display: block;
+    box-sizing: border-box;
+    width: min(100%, 64rem);
   }
   .panel-actions {
     display: flex;

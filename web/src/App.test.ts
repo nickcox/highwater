@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
+import { defaultPresentationPreferences } from './lib/state/presentation-preferences';
 import * as riverLayout from './lib/context-river/layout';
 import { testAnalysis } from './lib/context-river/test-data';
-import { liveAppendReplacementScenario } from './lib/testing/session-scenarios';
+import { liveAppendReplacementScenario, sessionScenario } from './lib/testing/session-scenarios';
 
 let modifyAnalysis: ((analysis: ReturnType<typeof testAnalysis>) => void) | null = null;
 let restoreViewportMeasurements = () => {};
@@ -51,6 +52,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/');
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => values.get(key) ?? null,
@@ -285,6 +287,156 @@ function deferred<T>(): {
   });
   return { promise, resolve, reject };
 }
+
+describe('view links', () => {
+  it('uses the stored grouping when a link has no display parameter', async () => {
+    const preferences = defaultPresentationPreferences();
+    preferences.river.display = 'itemTypes';
+    localStorage.setItem('tokenplume.presentation.v1', JSON.stringify(preferences));
+    const writes = vi.spyOn(localStorage, 'setItem');
+    window.history.replaceState(null, '', '/#session=one');
+    await renderLoaded();
+    const options = document.querySelector('.view-options') as HTMLDetailsElement;
+    options.open = true;
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Item types' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it('restores explicit Items over stored Item types without rewriting the preference', async () => {
+    const preferences = defaultPresentationPreferences();
+    preferences.river.display = 'itemTypes';
+    localStorage.setItem('tokenplume.presentation.v1', JSON.stringify(preferences));
+    const writes = vi.spyOn(localStorage, 'setItem');
+    window.history.replaceState(null, '', '/#session=one&display=items');
+    await renderLoaded();
+    const options = document.querySelector('.view-options') as HTMLDetailsElement;
+    options.open = true;
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Items' })).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(writes).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.display).toBe(
+      'itemTypes',
+    );
+    // A later history target with no display uses storage, not the transient URL override.
+    window.history.pushState(null, '', '/#session=one');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Item types' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  it('restores explicit Item types grouping without rewriting stored defaults', async () => {
+    window.history.replaceState(null, '', '/#session=one&display=itemTypes');
+    const writes = vi.spyOn(localStorage, 'setItem');
+    await renderLoaded();
+    const options = document.querySelector('.view-options') as HTMLDetailsElement;
+    options.open = true;
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Item types' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(writes).not.toHaveBeenCalled();
+    expect(new URLSearchParams(window.location.hash.slice(1)).get('display')).toBe('itemTypes');
+  });
+  it('restores a Composition link, scope, pin and an item absent at the pinned call without clearing it', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/#session=two&view=composition&scope=atCall&pin=3&item=a&range=2:4',
+    );
+    render(App);
+    await screen.findByText('Pinned call 3', { exact: true });
+    expect(screen.getByRole('tab', { name: 'Composition' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByText('Selected item')).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.hash.slice(1)).get('scope')).toBe('atCall');
+    expect(new URLSearchParams(window.location.hash.slice(1)).get('range')).toBe('2:4');
+  });
+
+  it('restores the latest history target while an older linked session request is still pending', async () => {
+    await renderLoaded();
+    const fetcher = vi.mocked(fetch);
+    const original = fetcher.getMockImplementation()!;
+    let resolveTwo!: (response: Response) => void;
+    const held = new Promise<Response>((resolve) => {
+      resolveTwo = resolve;
+    });
+    fetcher.mockImplementation((input, init) =>
+      String(input).includes('/two/') ? held : original(input, init),
+    );
+    window.history.pushState(null, '', '/#session=two&pin=3&item=a');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() =>
+      expect(fetcher.mock.calls.some(([input]) => String(input).includes('/two/'))).toBe(true),
+    );
+    window.history.pushState(null, '', '/#session=one&pin=2&item=summary');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await screen.findByText('Pinned call 2', { exact: true });
+    const stale = testAnalysis();
+    stale.session.id = 'two';
+    resolveTwo(
+      new Response(JSON.stringify(stale), { headers: { 'content-type': 'application/json' } }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByRole('combobox', { name: 'Session' })).toHaveValue('one');
+    expect(screen.getByText('Pinned call 2', { exact: true })).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.hash.slice(1)).get('item')).toBe('summary');
+  });
+
+  it('can copy an empty-call session without inventing a viewport or pin', async () => {
+    modifyAnalysis = (analysis) => Object.assign(analysis, sessionScenario('terminalSummaryOnly'));
+    render(App);
+    const button = await screen.findByRole('button', { name: 'Copy view link' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.click(button);
+    const input = await screen.findByRole('textbox', { name: 'View link' });
+    const params = new URLSearchParams(new URL((input as HTMLInputElement).value).hash.slice(1));
+    expect(params.get('session')).toBe('one');
+    expect(params.has('range')).toBe(false);
+    expect(params.has('pin')).toBe(false);
+  });
+
+  it('reports an unavailable session without applying its pin or item to the fallback session', async () => {
+    window.history.replaceState(null, '', '/#session=gone&pin=3&item=a');
+    render(App);
+    await screen.findByRole('heading', { name: 'Context River' });
+    expect(screen.getByRole('status', { name: 'View link status' })).toHaveTextContent(
+      'not available here',
+    );
+    expect(screen.queryByRole('region', { name: 'Pinned call 3' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
+  });
+
+  it('offers a selectable manual copy fallback without copying query tokens when the clipboard is unavailable', async () => {
+    window.history.replaceState(null, '', '/?token=private');
+    render(App);
+    const button = await screen.findByRole('button', { name: 'Copy view link' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.click(button);
+    const input = await screen.findByRole('textbox', { name: 'View link' });
+    expect(input).toHaveFocus();
+    expect((input as HTMLInputElement).value).toContain('#session=');
+    expect((input as HTMLInputElement).value).not.toContain('private');
+    expect(input).toHaveAttribute('readonly');
+    expect(screen.getByRole('status', { name: 'View link status' })).toHaveTextContent(
+      'Clipboard access is unavailable',
+    );
+  });
+});
 
 describe('Context River interactions', () => {
   it('guards call shortcuts during editing, composition, modifier shortcuts and foreign focus', async () => {

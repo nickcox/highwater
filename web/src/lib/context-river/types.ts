@@ -59,7 +59,13 @@ export interface LineageConnectorLayout {
   path: string;
   sourceX: number;
   sourceY: number;
+  sourceY0: number;
+  sourceY1: number;
+  targetX: number;
+  mergePath: string;
   summaryY: number;
+  summaryY0: number;
+  summaryY1: number;
 }
 
 export interface ContextRiverLayout {

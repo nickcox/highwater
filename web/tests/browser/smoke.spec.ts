@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { testAnalysis } from '../../src/lib/context-river/test-data';
+import { ITEM_TYPE_PALETTE } from '../../src/lib/context-river/colors';
 import { compositionScenario } from '../../src/lib/testing/composition-scenarios';
 import { sessionScenario } from '../../src/lib/testing/session-scenarios';
 
@@ -710,6 +711,260 @@ test('Composition group headings stay clipped inside narrow adjacent groups', as
       ).toBe(true);
     }
   }
+});
+
+test('Item types use distinct semantic colors consistently in ribbons and legend without changing individual colors', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses all nine synthetic categories.');
+  const allKinds = compositionScenario(27, true);
+  allKinds.displayWeightUnit = 'estimatedTokens';
+  allKinds.tokenAnalysis.chartUnit = 'estimatedTokens';
+  await mockApi(page, allKinds);
+  await page.goto('/#session=browser-smoke&display=items');
+  await assertLoaded(page);
+  const fills = await page
+    .locator('.ribbon-group .ribbon')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('fill')));
+  await openViewOptions(page);
+  await page.getByRole('button', { name: 'Item types', exact: true }).click();
+  const grouped = page.locator('.ribbon-group .ribbon');
+  await expect(grouped).toHaveCount(9);
+  const actual = await grouped.evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('fill')),
+  );
+  expect(new Set(actual).size).toBe(9);
+  expect([...actual].sort()).toEqual(Object.values(ITEM_TYPE_PALETTE).sort());
+  const ribbonRgb = await grouped.evaluateAll((nodes) =>
+    nodes.map((node) => getComputedStyle(node).fill).sort(),
+  );
+  const legendRgb = await page
+    .getByRole('group', { name: 'Item type legend' })
+    .locator('i')
+    .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).backgroundColor).sort());
+  expect(legendRgb).toEqual(ribbonRgb);
+  expect(
+    await grouped.evaluateAll((nodes) =>
+      nodes.every(
+        (node) =>
+          node.getAttribute('stroke') === 'none' ||
+          node.getAttribute('stroke') === node.getAttribute('fill'),
+      ),
+    ),
+  ).toBe(true);
+  await page.getByRole('button', { name: 'Items', exact: true }).click();
+  expect(
+    await page
+      .locator('.ribbon-group .ribbon')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('fill'))),
+  ).toEqual(fills);
+  const core = testAnalysis();
+  core.contextItems.find((item) => item.id === 'gap')!.kind = 'assistantMessage';
+  await mockApi(page, core);
+  await page.goto('/#session=browser-smoke&display=itemTypes');
+  await page.reload();
+  await assertLoaded(page);
+  await expect(page.locator('.ribbon-group .ribbon')).toHaveCount(5);
+  await page.screenshot({
+    path: '.playwright/calm-workspace/item-type-colors.png',
+    fullPage: true,
+  });
+});
+
+test('River display grouping follows the URL, reload and Back/Forward with saved defaults', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses deterministic session IDs.');
+  await mockApi(page);
+  await page.goto('/#session=browser-smoke&display=itemTypes');
+  await assertLoaded(page);
+  await openViewOptions(page);
+  await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Items', exact: true }).click();
+  await expect(page).toHaveURL(/display=items(?:&|$)/);
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.goForward();
+  await expect(page.getByRole('button', { name: 'Items', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.reload();
+  await assertLoaded(page);
+  await openViewOptions(page);
+  await expect(page.getByRole('button', { name: 'Items', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  // Explicitly store Item types, then drop URL state: use the saved preference.
+  await page.getByRole('button', { name: 'Item types', exact: true }).click();
+  await expect(page).toHaveURL(/display=itemTypes(?:&|$)/);
+  await page.goto('/#session=browser-smoke');
+  await assertLoaded(page);
+  await openViewOptions(page);
+  await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});
+
+test('view links copy, reload, and restore explicit navigation through Back and Forward', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses deterministic session IDs.');
+  await mockApi(page);
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'clipboard', {
+      value: {
+        writeText: async (text: string) => {
+          (window as unknown as { copiedViewLink: string }).copiedViewLink = text;
+        },
+      },
+    }),
+  );
+  await page.goto('/');
+  await assertLoaded(page);
+  await expect(page.getByRole('button', { name: 'Copy view link', exact: true })).toBeEnabled();
+  const initial = page.url();
+  const length = await page.evaluate(() => history.length);
+  await page.getByRole('button', { name: 'bash: npm test', exact: true }).hover();
+  expect(page.url()).toBe(initial);
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  await page.getByRole('button', { name: 'Next call', exact: true }).click();
+  await expect(page).toHaveURL(/pin=1/);
+  await page.getByRole('button', { name: 'Next call', exact: true }).click();
+  await expect(page).toHaveURL(/pin=2/);
+  const second = page.url();
+  expect(await page.evaluate(() => history.length)).toBe(length + 2);
+  await page.goBack();
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  await expect(page).toHaveURL(/pin=1/);
+  await page.goForward();
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
+  await expect(page).toHaveURL(second);
+  await page.getByRole('button', { name: 'Copy view link', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'View link status' })).toContainText(
+    'View link copied',
+  );
+  const copied = await page.evaluate(
+    () => (window as unknown as { copiedViewLink: string }).copiedViewLink,
+  );
+  expect(copied).toBe(page.url());
+  await page.goto(copied);
+  await assertLoaded(page);
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
+});
+
+test('view links restore Composition scope and absent items, and reject stale references safely', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses deterministic session IDs.');
+  await mockApi(page);
+  await page.goto('/#session=browser-smoke&view=composition&scope=atCall&pin=3&item=a&range=2:4');
+  await expect(page.locator('header select')).toHaveValue('browser-smoke');
+  await expect(page.getByRole('tab', { name: 'Composition', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 3');
+  await expect(page.getByText('Selected item', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/range=2%3A4/);
+  await page.getByRole('tab', { name: 'River', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copy view link', exact: true })).toBeEnabled();
+  await expect(page).toHaveURL(/item=a/);
+  await page.goto('/#session=browser-smoke&pin=999&item=gone&range=1:999');
+  await assertLoaded(page);
+  await expect(page.getByRole('status', { name: 'View link status' })).toContainText(
+    'no longer available',
+  );
+  await expect(page.locator('#pinned-call-summary')).toHaveCount(0);
+  await expect(page.getByText('Selected item', { exact: true })).toHaveCount(0);
+  await page.goto('/#session=gone&pin=3&item=a');
+  await assertLoaded(page);
+  await expect(page.getByRole('status', { name: 'View link status' })).toContainText(
+    'not available here',
+  );
+  await expect(page.locator('#pinned-call-summary')).toHaveCount(0);
+  await expect(page.getByText('Selected item', { exact: true })).toHaveCount(0);
+});
+
+test('pan and zoom replace the view fragment without flooding browser history', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses a known long fixture.');
+  await mockApi(page, sessionScenario('longSession'));
+  await page.goto('/');
+  await assertLoaded(page);
+  await expect(page.getByRole('button', { name: 'Copy view link', exact: true })).toBeEnabled();
+  const initial = page.url();
+  const length = await page.evaluate(() => history.length);
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Copy view link', exact: true })).toBeEnabled();
+  await expect(page).not.toHaveURL(initial);
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  const zoomed = page.url();
+  await page.locator('.river-scroll').evaluate((node) => {
+    node.scrollLeft += 400;
+  });
+  await expect(page).not.toHaveURL(zoomed);
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  const ranged = page.url();
+  await page.goto(ranged);
+  await assertLoaded(page);
+  await expect(page.getByRole('button', { name: 'Copy view link', exact: true })).toBeEnabled();
+  expect(new URLSearchParams(new URL(page.url()).hash.slice(1)).has('range')).toBe(true);
+});
+
+test('compaction sources blend into the actual summary without interactive or retained-item merge bands', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses a known compaction source/retained pair.');
+  await mockApi(page, testAnalysis());
+  await page.goto('/');
+  await assertLoaded(page);
+  const merges = page.locator('.compaction-merge');
+  await expect(merges).toHaveCount(1);
+  await expect(merges).toHaveAttribute('aria-hidden', 'true');
+  expect(await merges.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none');
+  const gradientId = await merges.evaluate((node) => node.getAttribute('fill')!.slice(5, -1));
+  const gradient = page.locator(`linearGradient[id="${gradientId}"]`);
+  await expect(gradient.locator('stop')).toHaveCount(2);
+  const summaryFill = await page
+    .locator('.ribbon-group')
+    .filter({
+      has: page.getByRole('button', { name: 'Compaction summary', exact: true }),
+    })
+    .locator('.ribbon')
+    .getAttribute('fill');
+  await expect(gradient.locator('stop').last()).toHaveAttribute('stop-color', summaryFill!);
+  const rest = Number(await merges.evaluate((node) => getComputedStyle(node).opacity));
+  await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
+  await expect(merges).toHaveClass(/emphasized/);
+  expect(Number(await merges.evaluate((node) => getComputedStyle(node).opacity))).toBeGreaterThan(
+    rest,
+  );
+  await expect(page.locator('.lineage-connector.visible')).toHaveCount(1);
+  await page.screenshot({
+    path: '.playwright/calm-workspace/compaction-merge-selected.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Clear item', exact: true }).click();
+  await page.screenshot({
+    path: '.playwright/calm-workspace/compaction-merge-default.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect(merges).toHaveCount(1);
+  expect(await merges.getAttribute('d')).not.toMatch(/NaN|Infinity/);
+  await openViewOptions(page);
+  await page.getByRole('button', { name: 'Item types', exact: true }).click();
+  await expect(merges).toHaveCount(0);
 });
 
 test('call timing follows each pinned response with qualified rates and explicit unavailable data', async ({
@@ -2300,7 +2555,12 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('.inspector-column')).toHaveClass(/empty/);
+  // Navigation restores from the fragment, not from presentation storage.
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  await expect(page.locator('#selected-item-summary')).toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1')),
+  ).not.toContain('browser-smoke');
   await openViewOptions(page);
   await page.getByRole('button', { name: 'Reset view preferences', exact: true }).click();
   await expect(page.locator('.view-status')).toHaveCount(0);
@@ -2416,6 +2676,12 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   expect(analysis.modelCalls[4].economics.promptTokens).toBe(70);
   expect(analysis.modelCalls[4].economics.cacheWriteStatus).toBe('reported');
   await assertLoaded(page);
+  await expect(page.locator('header select')).toHaveValue(/^pi-[0-9a-f]{12}$/);
+  await expect(page).toHaveURL(/#session=pi-[0-9a-f]{12}/);
+  const linkParams = new URLSearchParams(new URL(page.url()).hash.slice(1));
+  expect(linkParams.has('tp')).toBe(false);
+  expect(linkParams.has('v')).toBe(false);
+  expect(linkParams.get('session')).toBe(await page.locator('header select').inputValue());
   const chart = page.getByRole('application', { name: 'Context River' });
   await expect(page.getByTestId('visible-call-range')).toContainText('of');
   const ribbon = chart.locator('.ribbon-hit').first();
@@ -2458,5 +2724,10 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Pinned call 8' })).toBeVisible();
   await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.5×');
+  await page.reload();
+  await assertLoaded(page);
+  await expect(page.getByRole('region', { name: 'Pinned call 8' })).toBeVisible();
+  await expect(page.getByText('Selected item', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/#session=pi-[0-9a-f]{12}/);
   expect(pageErrors).toEqual([]);
 });

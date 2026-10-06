@@ -71,10 +71,18 @@ describe('layoutContextRiver', () => {
     expect(boundary.x).toBe((layout.columns[1].x + layout.columns[2].x) / 2);
     const source = layout.ribbons.find((ribbon) => ribbon.itemId === 'a')!;
     const sourceEnd = source.points[source.points.length - 1];
-    expect(sourceEnd.x).toBe(boundary.x);
-    expect(sourceEnd.y0).toBe(sourceEnd.y1);
+    expect(sourceEnd.x).toBe(layout.columns[1].x);
+    expect(sourceEnd.y1).toBeGreaterThan(sourceEnd.y0);
+    const merge = layout.lineageConnectors[0];
+    expect(merge.sourceX).toBe(sourceEnd.x);
+    expect(merge.sourceY0).toBe(sourceEnd.y0);
+    expect(merge.sourceY1).toBe(sourceEnd.y1);
+    expect(merge.targetX).toBe(boundary.x);
+    expect(merge.mergePath).toContain(' C ');
     const summary = layout.ribbons.find((ribbon) => ribbon.itemId === 'summary')!;
     expect(summary.points[0].x).toBe(boundary.x);
+    expect(merge.summaryY0).toBe(summary.points[0].y0);
+    expect(merge.summaryY1).toBe(summary.points[0].y1);
     const retained = layout.ribbons.find((ribbon) => ribbon.itemId === 'retained')!;
     expect(retained.points.some((point) => point.x < boundary.x)).toBe(true);
     expect(retained.points.some((point) => point.x > boundary.x)).toBe(true);
@@ -104,7 +112,7 @@ describe('layoutContextRiver', () => {
     expect(
       indexed.compactionsBySummaryId.get('summary')?.map((event) => event.beforeModelCall),
     ).toEqual([3, 4]);
-    expect(source.points[source.points.length - 1]?.x).toBe(firstBoundary.x);
+    expect(source.points[source.points.length - 1]?.x).toBe(layout.columns[1].x);
     expect(summary.points[0].x).toBe(firstBoundary.x);
     expect(layout.lineageConnectors.map((connector) => connector.compactionId)).toEqual([
       'compact-1',

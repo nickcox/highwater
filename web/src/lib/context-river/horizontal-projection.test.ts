@@ -53,16 +53,20 @@ describe('canonical horizontal River projection', () => {
           expect(projected.layout.compactions[i].x).toBeCloseTo(event.x, 8),
         );
         native.lineageConnectors.forEach((connector, i) => {
-          const actual = projected.layout.lineageConnectors[i].path
-            .match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!
-            .map(Number);
-          const expected = connector.path.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!.map(Number);
-          actual.forEach((number, j) =>
-            expect(j % 2 === 0 ? number * projected.scale + projected.offset : number).toBeCloseTo(
-              expected[j],
-              8,
-            ),
-          );
+          for (const field of ['path', 'mergePath'] as const) {
+            const actual = projected.layout.lineageConnectors[i][field]
+              .match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!
+              .map(Number);
+            const expected = connector[field].match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!.map(Number);
+            actual.forEach((number, j) =>
+              expect(
+                j % 2 === 0 ? number * projected.scale + projected.offset : number,
+              ).toBeCloseTo(expected[j], 8),
+            );
+          }
+          expect(
+            projected.layout.lineageConnectors[i].targetX * projected.scale + projected.offset,
+          ).toBeCloseTo(connector.targetX, 8);
         });
       }
     }

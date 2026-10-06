@@ -1,4 +1,5 @@
 import { scaleLinear } from 'd3-scale';
+import { compactionMergePaths } from './compaction-merge';
 import { area, curveLinear, curveMonotoneX } from 'd3-shape';
 import type { ContextItemKind, IndexedAnalysis } from '../types';
 import type {
@@ -265,7 +266,12 @@ export function layoutContextRiver(
         const sourceCompaction = (indexed.compactionBySourceId.get(item.id) ?? []).find(
           (compaction) => compaction.beforeModelCall === range.endCall + 1,
         );
-        if (sourceCompaction) {
+        const mergeTarget =
+          sourceCompaction &&
+          geometry.get(sourceCompaction.summaryItemId)?.get(sourceCompaction.beforeModelCall);
+        // Preserve existing historical interpolation; only replace the end cap.
+        if (mergeTarget) touchesCompaction = true;
+        if (sourceCompaction && !mergeTarget) {
           const last = points[points.length - 1];
           const middle = midpoint(last);
           points = [
@@ -295,7 +301,12 @@ export function layoutContextRiver(
           ];
           touchesCompaction = true;
         }
-        points = padSingleton(points, step, options);
+        // A merged singleton is padded only on the left; its right edge stays
+        // at the last actual call so the decorative flow owns the transition.
+        points =
+          points.length === 1 && mergeTarget
+            ? [padSingleton(points, step, options)[0], points[0]]
+            : padSingleton(points, step, options);
         const isSubpixel = points.some(
           (point) => point.y1 > point.y0 && point.y1 - point.y0 < options.minimumVisibleThickness,
         );
@@ -343,8 +354,21 @@ export function layoutContextRiver(
                 compactionId: compaction.id,
                 sourceX: sourcePoint.x,
                 sourceY,
+                sourceY0: sourcePoint.y0,
+                sourceY1: sourcePoint.y1,
+                targetX: boundary,
                 summaryY,
-                path: `M ${sourcePoint.x} ${sourceY} C ${boundary - control} ${sourceY}, ${boundary + control} ${summaryY}, ${boundary} ${summaryY}`,
+                summaryY0: summaryPoint.y0,
+                summaryY1: summaryPoint.y1,
+                ...compactionMergePaths(
+                  sourcePoint.x,
+                  sourcePoint.y0,
+                  sourcePoint.y1,
+                  boundary,
+                  summaryPoint.y0,
+                  summaryPoint.y1,
+                  control,
+                ),
               },
             ];
           });

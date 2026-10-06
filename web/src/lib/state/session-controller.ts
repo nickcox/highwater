@@ -84,6 +84,7 @@ const INITIAL_SNAPSHOT: SessionControllerSnapshot = {
 export function createSessionController(
   options: {
     dependencies?: Partial<SessionControllerDependencies>;
+    initialSessionId?: string;
     onAnalysisAccepted?: (acceptance: AnalysisAcceptance) => void;
     onSelectionChanged?: (change: SessionSelectionChange) => void;
   } = {},
@@ -98,6 +99,7 @@ export function createSessionController(
   let latestObservedRevision: bigint | null = null;
   let listEtag: string | null = null;
   let listInitialized = false;
+  let initialSelectionPending = true;
   let listRequest: { controller: AbortController } | null = null;
   let listDirty = false;
   let listForce = false;
@@ -264,11 +266,16 @@ export function createSessionController(
       latestObservedRevision = maxRevision(latestObservedRevision, result.revision);
       update({ sessionListError: '', catalogueWarning: '' });
       if (snapshot.sessions.length === 0) {
+        initialSelectionPending = false;
         if (snapshot.selectedSessionId !== null) removeSelectedSession();
         update({ loading: false });
       } else if (snapshot.selectedSessionId === null) {
         update({ loading: true });
-        select(snapshot.sessions[0].id);
+        const initial =
+          initialSelectionPending &&
+          snapshot.sessions.find((session) => session.id === options.initialSessionId);
+        initialSelectionPending = false;
+        select(initial ? initial.id : snapshot.sessions[0].id);
       } else if (!snapshot.sessions.some((session) => session.id === snapshot.selectedSessionId)) {
         removeSelectedSession();
       } else {

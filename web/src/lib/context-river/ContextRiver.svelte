@@ -1,4 +1,9 @@
+<script context="module" lang="ts">
+  let nextMergeId = 0;
+</script>
+
 <script lang="ts">
+  const mergeId = `compaction-merge-${nextMergeId++}`;
   import { afterUpdate, beforeUpdate, onMount } from 'svelte';
   import type { IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
@@ -11,7 +16,7 @@
     type RequestedRange,
     type ViewportAdjustment,
   } from './navigation';
-  import { itemColor } from './colors';
+  import { itemColor, itemTypeColor } from './colors';
   import { installRiverDom, pointerInput, capturePointer, releasePointer } from './dom-interaction';
   import EconomicsTrack from './EconomicsTrack.svelte';
   import EconomicsBreakdown from './EconomicsBreakdown.svelte';
@@ -75,6 +80,8 @@
   export let onZoomToRange: (start: number, end: number) => void = () => {};
   export let isVisible = true;
   export let onViewportChange: (status: RiverViewportStatus) => void = () => {};
+  export let onNavigationSettled: (id: number) => void = () => {};
+  let lastSettledCommandId = 0;
   export let onSelectionVisibility: (
     status: { itemId: string; visible: boolean } | null,
   ) => void = () => {};
@@ -403,7 +410,7 @@
       groupBreakdownReturnElement = null;
     applyPendingAdjustment();
     if (navigationCommand && navigationCommand.id !== lastCommandId) {
-      if (navigationCommand.kind !== 'reveal-item' || canExecuteReveal()) {
+      if (canExecuteNavigation()) {
         lastCommandId = navigationCommand.id;
         applyNavigationCommand(navigationCommand);
       }
@@ -501,7 +508,7 @@
     return Math.max(host?.scrollWidth ?? 0, width);
   }
 
-  function canExecuteReveal(): boolean {
+  function canExecuteNavigation(): boolean {
     if (!isVisible || !host || host.clientWidth <= 0) return false;
     if (Math.abs(host.clientWidth - observedWidth) > 0.5) {
       observedWidth = host.clientWidth;
@@ -571,6 +578,16 @@
       lastPublishedStatus = key;
       onViewportChange(status);
     }
+    if (
+      status.ready &&
+      lastCommandId !== null &&
+      !pendingAdjustment &&
+      !pendingRangeResize &&
+      lastCommandId !== lastSettledCommandId
+    ) {
+      lastSettledCommandId = lastCommandId;
+      onNavigationSettled(lastCommandId);
+    }
   }
 
   function setScrollLeft(value: number): void {
@@ -615,6 +632,7 @@
   }
 
   function setCallSpacing(nextSpacing: number | null, anchor: ViewportAnchor | null = null): void {
+    const previousSpacing = callSpacing;
     const decision = resolveSpacing(
       callSpacing,
       nextSpacing,
@@ -623,7 +641,12 @@
       anchor,
     );
     callSpacing = decision.spacing;
-    if (decision.adjustment) pendingAdjustment = decision.adjustment;
+    if (decision.adjustment) {
+      pendingAdjustment = decision.adjustment;
+      // A no-op Fit all does not trigger another geometry update. Apply its
+      // scroll reset now rather than leaving navigation acknowledgement pending.
+      if (callSpacing === previousSpacing) applyPendingAdjustment();
+    }
     if (decision.immediateAnchor) {
       const target = scrollTargetForAnchor(
         decision.immediateAnchor,
@@ -1253,12 +1276,27 @@
     >
       <span id="context-river-description" class="sr-only"
         >Context items flow horizontally through model calls. Dashed vertical markers indicate
-        compaction. {verticalAxisDescription}. {indexed.analysis.displayWeightUnit === 'unavailable'
+        compaction. In individual-item view, colour-blended connections show lossy summarization,
+        not conserved tokens or source contributions to the summary. {verticalAxisDescription}. {indexed
+          .analysis.displayWeightUnit === 'unavailable'
           ? 'Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths.'
           : ''}</span
       >
       <svg bind:this={svg} viewBox={`0 0 ${width} ${height}`} {width} {height}>
         <defs>
+          {#each river.lineageConnectors as connector, i (connector.key)}
+            <linearGradient
+              id={`${mergeId}-${i}`}
+              gradientUnits="userSpaceOnUse"
+              x1={connector.sourceX}
+              y1={connector.sourceY}
+              x2={connector.targetX}
+              y2={connector.sourceY}
+            >
+              <stop offset="0%" stop-color={itemColor(connector.fromItemId)} />
+              <stop offset="100%" stop-color={itemColor(connector.toItemId)} />
+            </linearGradient>
+          {/each}
           <pattern
             id="unknown-geometry"
             width="8"
@@ -1336,7 +1374,15 @@
         {/each}
 
         <g transform={horizontalProjection.transform} data-testid="river-ribbon-geometry">
-          {#each river.lineageConnectors as connector (connector.key)}
+          {#each river.lineageConnectors as connector, i (connector.key)}
+            <path
+              class="compaction-merge"
+              aria-hidden="true"
+              class:emphasized={connectorVisible(connector.fromItemId)}
+              class:summary-focused={(selectedItemId ?? hoveredItemId) === connector.toItemId}
+              d={connector.mergePath}
+              fill={`url(#${mergeId}-${i})`}
+            />
             <path
               class="lineage-connector"
               vector-effect="non-scaling-stroke"
@@ -1347,6 +1393,9 @@
 
           {#each river.ribbons as ribbon (ribbon.key)}
             {@const isGroup = ribbon.groupKind !== undefined}
+            {@const ribbonColor = ribbon.groupKind
+              ? itemTypeColor(ribbon.groupKind)
+              : itemColor(ribbon.itemId)}
             {@const ribbonLabel = isGroup
               ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
               : itemAccessibleLabel(ribbon.itemId)}
@@ -1364,8 +1413,8 @@
                 d={ribbon.path}
                 fill={indexed.analysis.displayWeightUnit === 'unavailable'
                   ? 'url(#unknown-geometry)'
-                  : itemColor(ribbon.itemId)}
-                stroke={ribbon.isSubpixel ? itemColor(ribbon.itemId) : 'none'}
+                  : ribbonColor}
+                stroke={ribbon.isSubpixel ? ribbonColor : 'none'}
                 stroke-width={ribbon.isSubpixel ? 1.25 : 0}
               />
               <path
@@ -1443,8 +1492,7 @@
           {#each [...new Set(river.ribbons
                 .map((ribbon) => ribbon.groupKind)
                 .filter(Boolean))] as kind}
-            <span><i style={`background:${itemColor(`kind:${kind}`)}`}></i>{groupLabel(kind!)}</span
-            >
+            <span><i style={`background:${itemTypeColor(kind!)}`}></i>{groupLabel(kind!)}</span>
           {/each}
           <small>Colors identify content types, not cache status.</small>
         </div>
@@ -2110,6 +2158,16 @@
     stroke: rgba(255, 255, 255, 0.75);
     stroke-width: 3;
     outline: none;
+  }
+  .compaction-merge {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .compaction-merge.summary-focused {
+    opacity: 0.55;
+  }
+  .compaction-merge.emphasized {
+    opacity: 0.8;
   }
   .lineage-connector {
     fill: none;

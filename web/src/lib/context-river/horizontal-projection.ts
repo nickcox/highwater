@@ -1,4 +1,5 @@
 import { pathFor } from './layout';
+import { compactionMergePaths } from './compaction-merge';
 import type { CallColumn, ContextRiverLayout, RibbonPoint, RiverLayoutOptions } from './types';
 
 /** Only call positions change with width: never re-read per-call item memberships/weights. */
@@ -102,7 +103,16 @@ export function projectRiverHorizontally(
     const boundary = boundaryById.get(connector.compactionId)!;
     return {
       ...connector,
-      path: `M ${connector.sourceX} ${connector.sourceY} C ${boundary - control} ${connector.sourceY}, ${boundary + control} ${connector.summaryY}, ${boundary} ${connector.summaryY}`,
+      targetX: boundary,
+      ...compactionMergePaths(
+        connector.sourceX,
+        connector.sourceY0,
+        connector.sourceY1,
+        boundary,
+        connector.summaryY0,
+        connector.summaryY1,
+        control,
+      ),
     };
   });
   return {

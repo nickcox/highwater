@@ -79,10 +79,14 @@ pub(super) fn canonical_root(root: &Path) -> Result<PathBuf, AppError> {
     Ok(canonical)
 }
 
-fn session_listing_metadata(
-    path: &Path,
-    file_name: &str,
-) -> std::io::Result<(String, Option<String>, Option<DateTime<Utc>>)> {
+struct ListingMetadata {
+    reference: String,
+    display_name: String,
+    working_directory: Option<String>,
+    started_at: Option<DateTime<Utc>>,
+}
+
+fn session_listing_metadata(path: &Path, file_name: &str) -> std::io::Result<ListingMetadata> {
     let first_line = BufReader::new(File::open(path)?)
         .lines()
         .next()
@@ -90,6 +94,24 @@ fn session_listing_metadata(
     let header = first_line
         .as_deref()
         .and_then(|line| serde_json::from_str::<Value>(line).ok());
+    let native_id = header
+        .as_ref()
+        .filter(|value| value.get("type").and_then(Value::as_str) == Some("session"))
+        .and_then(|value| value.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty());
+    let mut hasher = blake3::Hasher::new_derive_key("TokenPlume Pi session reference v1");
+    if let Some(id) = native_id {
+        hasher.update(b"id\0");
+        hasher.update(id.as_bytes());
+    } else {
+        // Incomplete/invalid files remain discoverable without exposing a path.
+        // Their fallback is header-based, not a portable native session identity.
+        hasher.update(b"header\0");
+        hasher.update(first_line.as_deref().unwrap_or_default().as_bytes());
+    }
+    let digest = hasher.finalize().to_hex();
+    let reference = format!("pi-{}", &digest.as_str()[..12]);
     let working_directory = header
         .as_ref()
         .and_then(|value| value.get("cwd"))
@@ -120,7 +142,12 @@ fn session_listing_metadata(
         (Some(project), None, Some(suffix)) => format!("{project} · {suffix}"),
         _ => stem.chars().take(48).collect(),
     };
-    Ok((display_name, working_directory, started_at))
+    Ok(ListingMetadata {
+        reference,
+        display_name,
+        working_directory,
+        started_at,
+    })
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -205,21 +232,20 @@ pub(super) fn discover(
                 .and_then(|name| name.to_str())
                 .unwrap_or_default()
                 .to_owned();
-            let (display_name, working_directory, started_at) =
-                session_listing_metadata(&canonical, &file_name)
-                    .map_err(|error| ScanError::Transient(error.to_string()))?;
+            let listing = session_listing_metadata(&canonical, &file_name)
+                .map_err(|error| ScanError::Transient(error.to_string()))?;
             let modified_nanos = metadata
                 .modified()
                 .ok()
                 .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
                 .map(|duration| duration.as_nanos());
             output.push(SessionFile {
-                id: canonical.to_string_lossy().into_owned(),
+                id: listing.reference,
                 path: canonical.to_string_lossy().into_owned(),
                 file_name,
-                display_name,
-                working_directory,
-                started_at,
+                display_name: listing.display_name,
+                working_directory: listing.working_directory,
+                started_at: listing.started_at,
                 byte_size: metadata.len(),
                 modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
                 modified_nanos,

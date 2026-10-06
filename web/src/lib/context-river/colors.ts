@@ -1,3 +1,22 @@
+import type { ContextItemKind } from '../types';
+
+// Semantic categories use explicit hues, not individual-ID hash slots.
+export const ITEM_TYPE_PALETTE = {
+  system: '#aab4c0',
+  toolDefinition: '#e2957b',
+  userMessage: '#7eafe3',
+  assistantMessage: '#64c4af',
+  toolResult: '#dab66c',
+  compactionSummary: '#bba0e3',
+  customMessage: '#da8faf',
+  branchSummary: '#b8c879',
+  other: '#d9d4c9',
+} as const satisfies Record<ContextItemKind, string>;
+
+export function itemTypeColor(kind: ContextItemKind): string {
+  return ITEM_TYPE_PALETTE[kind] ?? ITEM_TYPE_PALETTE.other;
+}
+
 export const ITEM_PALETTE = [
   '#8cacc9',
   '#83b8ac',

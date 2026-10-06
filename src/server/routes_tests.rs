@@ -13,6 +13,41 @@ async fn body(response: Response) -> bytes::Bytes {
 }
 
 #[tokio::test]
+async fn ambiguous_short_references_never_select_an_arbitrary_file() {
+    use axum::response::IntoResponse;
+    let first = SessionFile {
+        id: "pi-123456789abc".into(),
+        path: "/private/first.jsonl".into(),
+        file_name: "first.jsonl".into(),
+        display_name: "first".into(),
+        working_directory: None,
+        started_at: None,
+        byte_size: 1,
+        modified_at: None,
+        modified_nanos: None,
+    };
+    let mut second = first.clone();
+    second.path = "/private/second.jsonl".into();
+    let unique = [first.clone()];
+    assert_eq!(
+        resolve_session(&unique, &first.id).expect("unique").path,
+        first.path
+    );
+    assert!(matches!(
+        resolve_session(&unique, "missing"),
+        Err(AppError::NotFound)
+    ));
+    let duplicate = [first, second];
+    let error = resolve_session(&duplicate, "pi-123456789abc").expect_err("ambiguous");
+    let response = error.into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let bytes = body(response).await;
+    let json: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON");
+    assert_eq!(json["error"]["code"], "AMBIGUOUS_SESSION");
+    assert!(!String::from_utf8_lossy(&bytes).contains("/private"));
+}
+
+#[tokio::test]
 async fn exact_comma_separated_etags_keep_header_and_body_parity() {
     for value in ["\"test\"", " \"other\", \"test\" , \"last\" "] {
         assert!(etag_matches(&conditional(value), "\"test\""));
