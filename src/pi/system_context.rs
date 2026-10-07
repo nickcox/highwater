@@ -129,6 +129,7 @@ pub(super) struct SystemReplay {
     tools: Vec<(String, Revision)>,
     prompt: Option<Revision>,
     uncertain: bool,
+    loadout_declared: bool,
     pub(super) loadout_known: bool,
 }
 impl SystemReplay {
@@ -150,13 +151,11 @@ impl SystemReplay {
             self.uncertain = false;
         }
         self.uncertain |= !update.valid;
-        self.loadout_known = (if update.checkpoint {
-            false
+        self.loadout_declared = if update.checkpoint {
+            update.loadout_declared
         } else {
-            self.loadout_known
-        } || update.loadout_declared)
-            && !self.uncertain
-            && update.added.iter().all(|(_, _, valid)| *valid);
+            self.loadout_declared || update.loadout_declared
+        };
         if !update.content.is_empty() {
             self.content.push(update.content);
         }
@@ -256,6 +255,11 @@ impl SystemReplay {
                 self.tools.push((name, revision));
             }
         }
+        // Baseline knowledge survives malformed declarations so removing or repairing
+        // them can recover completeness. A no-op cannot hide an invalid active tool.
+        self.loadout_known = self.loadout_declared
+            && !self.uncertain
+            && self.tools.iter().all(|(_, revision)| revision.complete);
         // If a malformed delta leaves earlier tool definitions in place, their
         // prompt-level unknown-state marker prevents a complete request claim.
         self.prompt

@@ -101,6 +101,21 @@ describe('indexAnalysis', () => {
     return analysis;
   }
 
+  it('accepts only the audited Copilot API and requires all three prompt buckets', () => {
+    const a = analysisWithAuditedAnthropicCall();
+    const c = a.modelCalls[0];
+    c.provider = 'github-copilot';
+    c.api = 'openai-responses';
+    c.economics.policyId = 'github-copilot-responses-cache-v1';
+    a.economics.supportedPolicyIds = ['github-copilot-responses-cache-v1'];
+    expect(() => indexAnalysis(a)).not.toThrow();
+    c.api = 'openai-completions';
+    expect(() => indexAnalysis(a)).toThrow(/unsupported economics policy/);
+    c.api = 'openai-responses';
+    c.usage.cacheWrite = null;
+    expect(() => indexAnalysis(a)).toThrow(/incomplete normalized prompt buckets/);
+  });
+
   it('accepts only eligible adjacent cache-ratio changes and validates their provenance', () => {
     const analysis = analysisWithAdjacentCacheRatioChange();
     expect(() => indexAnalysis(analysis)).not.toThrow();

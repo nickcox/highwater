@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import copilotExport from '../../../../fixtures/analysis/copilot-economics.json';
 import { testAnalysis } from './test-data';
 import {
   projectCachePresentation,
@@ -48,6 +49,26 @@ function cacheCall(
 }
 
 describe('economics track projections', () => {
+  it('projects audited Copilot buckets and distinguishes zero, partial and missing calls', () => {
+    const track = projectCacheTrack(copilotExport as SessionAnalysis);
+    expect(track.points[1].status).toBe('complete');
+    expect(track.points[1].segments.map((s) => [s.kind, s.value])).toEqual([
+      ['cacheRead', 0],
+      ['cacheWrite', 55482],
+      ['fresh', 3],
+    ]);
+    expect(track.points[2].segments.map((s) => [s.kind, s.value])).toEqual([
+      ['cacheRead', 55482],
+      ['cacheWrite', 408],
+      ['fresh', 3],
+    ]);
+    expect(track.points.slice(3).map((p) => p.status)).toEqual([
+      'zero',
+      'partial',
+      'missing',
+      'unsupported',
+    ]);
+  });
   it('projects only complete audited cache buckets and preserves explicit zero', () => {
     const analysis = testAnalysis();
     cacheCall(analysis, 1, 'anthropic-messages-cache-v1', 10, 20, 30, 60);

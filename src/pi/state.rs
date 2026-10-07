@@ -159,7 +159,17 @@ impl ReconstructionState {
         first_kept_position: Option<usize>,
         tokens_before: Option<u64>,
         branch_positions: &HashMap<&str, usize>,
+        entry: &PiEntry,
     ) {
+        let previous_globals: HashSet<ItemIndex> = self
+            .global
+            .iter()
+            .chain(&self.legacy_tools)
+            .copied()
+            .collect();
+        if entry.value.get("systemMessage").is_some() {
+            self.apply_system(system_context::SystemUpdate::parse(entry, true), entry);
+        }
         let summary_id = item.id.clone();
         let record_id = item
             .source_record_id
@@ -190,6 +200,7 @@ impl ReconstructionState {
             .global
             .iter()
             .chain(&self.legacy_tools)
+            .filter(|index| previous_globals.contains(index))
             .chain(retained.iter())
             .map(|index| self.items[index.0].id.clone())
             .collect();

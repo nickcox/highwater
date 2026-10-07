@@ -315,6 +315,113 @@ fn legacy_tools_are_retained_without_lineage_and_modern_baseline_supersedes_them
     assert!(!s.lineage.iter().any(|edge| edge.from == legacy.id));
 }
 #[test]
+fn loadout_completeness_tracks_active_tools_across_noops_and_recovery() {
+    use crate::analysis::{analyze, AnalysisConfig, TokenizationPolicy};
+    for repair in [
+        json!({"role":"system","content":"","toolsRemoved":[{"name":"broken"}]}),
+        json!({"role":"system","content":"","toolsAdded":[tool("broken", "Fixed")]}),
+    ] {
+        let s = session(vec![
+            sys(
+                json!({"role":"system","content":"base","toolsAdded":[{"name":"broken","description":42,"parameters":null}]}),
+            ),
+            call(),
+            sys(json!({"role":"system","content":"","toolsAdded":[]})),
+            call(),
+            sys(json!({"role":"system","content":"","toolsAdded":[tool("read", "Read")]})),
+            call(),
+            sys(repair),
+            call(),
+        ]);
+        assert_eq!(
+            s.model_calls
+                .iter()
+                .map(|c| c.tool_loadout_known)
+                .collect::<Vec<_>>(),
+            [false, false, false, true],
+        );
+        let a = analyze(
+            s,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Auto,
+                perf_diagnostics: false,
+            },
+        )
+        .unwrap();
+        for (index, c) in a.model_calls.iter().enumerate() {
+            assert_eq!(
+                c.token_analysis
+                    .explanation_codes
+                    .contains(&"missingToolDefinitions".to_owned()),
+                index < 3
+            );
+        }
+    }
+}
+
+#[test]
+fn removing_the_last_invalid_tool_recovers_a_known_empty_loadout() {
+    let s = session(vec![
+        sys(json!({"role":"system","content":"base","toolsAdded":[{"name":"broken"}]})),
+        call(),
+        sys(json!({"role":"system","content":"","toolsRemoved":[{"name":"broken"}]})),
+        call(),
+    ]);
+    assert!(!s.model_calls[0].tool_loadout_known);
+    assert!(s.model_calls[1].tool_loadout_known);
+    assert!(s.model_calls[1].context_item_ids.iter().all(|id| s
+        .context_items
+        .iter()
+        .find(|i| &i.id == id)
+        .unwrap()
+        .kind
+        != ContextItemKind::ToolDefinition));
+}
+
+#[test]
+fn changed_checkpoints_retain_only_unchanged_global_revisions() {
+    let s = session(vec![
+        sys(
+            json!({"role":"system","content":"old","toolsAdded":[tool("read","Old"),tool("keep","Keep"),tool("remove","Remove")]}),
+        ),
+        sys(json!({"role":"user","content":"retained conversation"})),
+        call(),
+        json!({"type":"compaction","summary":"S","firstKeptEntryId":"r1","systemMessage":{"role":"system","content":"new","toolsAdded":[tool("read","Changed"),tool("keep","Keep"),tool("write","New")]}}),
+        call(),
+    ]);
+    let event = &s.compactions[0];
+    for item in &s.context_items {
+        if matches!(
+            item.kind,
+            ContextItemKind::System | ContextItemKind::ToolDefinition
+        ) {
+            assert!(!event.source_item_ids.contains(&item.id));
+            assert!(!s.lineage.iter().any(|edge| edge.from == item.id));
+            let unchanged = s.model_calls[0].context_item_ids.contains(&item.id)
+                && s.model_calls[1].context_item_ids.contains(&item.id);
+            assert_eq!(event.retained_item_ids.contains(&item.id), unchanged);
+            if unchanged {
+                assert_eq!(
+                    item.metadata.get("toolName").map(String::as_str),
+                    Some("keep")
+                );
+                assert_eq!(item.presence.len(), 1);
+                assert_eq!(item.first_model_call, 1);
+                assert_eq!(item.last_model_call, 2);
+            }
+        }
+    }
+    let user = s
+        .context_items
+        .iter()
+        .find(|i| i.kind == ContextItemKind::UserMessage)
+        .unwrap();
+    assert!(event.retained_item_ids.contains(&user.id));
+    assert_eq!(text_at(&s, 0), "old");
+    assert_eq!(text_at(&s, 1), "new");
+}
+
+#[test]
 fn malformed_tool_declaration_does_not_become_a_known_zero() {
     let s = session(vec![
         sys(

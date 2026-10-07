@@ -713,6 +713,38 @@ test('Composition group headings stay clipped inside narrow adjacent groups', as
   }
 });
 
+test('Copilot Responses shows read/write/fresh cache bars and qualified model-rate costs', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses a sanitized production Rust export.');
+  const analysis = JSON.parse(
+    readFileSync(resolve('../fixtures/analysis/copilot-economics.json'), 'utf8'),
+  ) as ReturnType<typeof testAnalysis>;
+  await mockApi(page, analysis);
+  await page.goto('/#session=browser-smoke&pin=2');
+  await assertLoaded(page);
+  await expandEconomics(page);
+  const fill = page.locator('#economics-call-2');
+  const hit = page.locator('#economics-call-3');
+  await expect(fill.locator('.cache-segment.cacheWrite')).toBeVisible();
+  await expect(fill.locator('.cache-segment.fresh')).toHaveCount(1);
+  await expect(hit.locator('.cache-segment.cacheRead')).toBeVisible();
+  await expect(hit.locator('.cache-segment.cacheWrite')).toBeVisible();
+  await page.getByText('Usage and economics', { exact: true }).click();
+  const details = page.getByRole('region', { name: 'Pinned call 2' });
+  await expect(details).toContainText('Fresh input');
+  await expect(fill).toHaveAttribute('aria-label', /55,485/);
+  await expect(fill).toHaveAttribute('aria-label', /55,482/);
+  await expect(details).toContainText('55.5K');
+  await expect(details).toContainText('Cache-write share');
+  await expect(details).toContainText(
+    'do not measure Copilot subscription charges or premium requests',
+  );
+  await expect(details).not.toContainText('Provider/API policy is unsupported');
+  await page.getByRole('button', { name: 'Next call', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Pinned call 3' })).toContainText('55.9K');
+});
+
 test('recorded Pi system and tools are visible at call 1 and survive revision and compaction navigation', async ({
   page,
 }) => {

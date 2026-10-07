@@ -92,7 +92,11 @@
   }
 
   function inputBucketLabel(policyId: string | null): string {
-    if (policyId === 'anthropic-messages-cache-v1') return 'Fresh input';
+    if (
+      policyId === 'anthropic-messages-cache-v1' ||
+      policyId === 'github-copilot-responses-cache-v1'
+    )
+      return 'Fresh input';
     if (policyId === 'openai-completions-cache-v1') return 'Uncached input';
     if (
       policyId === 'openai-responses-cache-read-v1' ||
@@ -120,7 +124,11 @@
   }
 
   function inputShareLabel(policyId: string | null): string {
-    if (policyId === 'anthropic-messages-cache-v1') return 'Fresh-input share';
+    if (
+      policyId === 'anthropic-messages-cache-v1' ||
+      policyId === 'github-copilot-responses-cache-v1'
+    )
+      return 'Fresh-input share';
     if (policyId === 'openai-completions-cache-v1') return 'Uncached-input share';
     return 'Fresh / uncached input share';
   }
@@ -316,6 +324,9 @@
         Token buckets follow the {usageMappingLabel} when supported; normalized zeros may reflect adapter
         defaults. {costCopy.note} Cache write 1h is retained source detail and is not added to aggregate
         cache-write totals.
+        {#if call.provider === 'github-copilot'}
+          These dollar figures do not measure Copilot subscription charges or premium requests.
+        {/if}
       </p>
       <dl class="detail-rows">
         <div>

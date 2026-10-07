@@ -95,6 +95,7 @@ fn export_live_contract() {
         "compaction",
         "context-entry-kinds",
         "economics-policies",
+        "copilot-economics",
         "errored-assistant",
         "failed-tool",
         "multiple-compactions",
@@ -490,7 +491,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 87);
+    assert_eq!(manifest.len(), 91);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

@@ -134,8 +134,9 @@
                 <dt>Cache-write limits</dt>
                 <dd>
                   {#if isPiSource(session.source)}
-                    Anthropic writes are aggregated across TTLs; OpenAI Responses cache-write detail
-                    is not retained by the pinned Pi adapter.
+                    Anthropic writes are aggregated across TTLs. Copilot Responses uses separately
+                    recorded writes; older direct OpenAI adapter zeros do not establish measured
+                    zero writes. See each call's audited policy.
                   {:else}
                     Cache-write detail follows the source normalization policy; see call details for
                     the policy and completeness status.

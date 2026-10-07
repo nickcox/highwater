@@ -22,6 +22,7 @@ enum Policy {
     OpenAiCompletions,
     OpenAiResponses,
     OpenAiCodexResponses,
+    GithubCopilotResponses,
 }
 
 impl From<CostBasis> for EconomicsCostBasis {
@@ -44,6 +45,9 @@ impl Policy {
             (Some("openai-codex"), Some("openai-codex-responses")) => {
                 Some(Self::OpenAiCodexResponses)
             }
+            (Some("github-copilot"), Some("openai-responses")) => {
+                Some(Self::GithubCopilotResponses)
+            }
             _ => None,
         }
     }
@@ -54,12 +58,13 @@ impl Policy {
             Self::OpenAiCompletions => "openai-completions-cache-v1",
             Self::OpenAiResponses => "openai-responses-cache-read-v1",
             Self::OpenAiCodexResponses => "openai-codex-responses-cache-read-v1",
+            Self::GithubCopilotResponses => "github-copilot-responses-cache-v1",
         }
     }
 
     fn cache_write_status(self) -> CacheWriteStatus {
         match self {
-            Self::AnthropicMessages => CacheWriteStatus::Reported,
+            Self::AnthropicMessages | Self::GithubCopilotResponses => CacheWriteStatus::Reported,
             Self::OpenAiCompletions => CacheWriteStatus::NotReported,
             Self::OpenAiResponses | Self::OpenAiCodexResponses => CacheWriteStatus::NotRetainedByPi,
         }
@@ -67,7 +72,9 @@ impl Policy {
 
     fn prompt_fields(self, usage: &ReportedUsage) -> [Option<u64>; 3] {
         match self {
-            Self::AnthropicMessages => [usage.input, usage.cache_read, usage.cache_write],
+            Self::AnthropicMessages | Self::GithubCopilotResponses => {
+                [usage.input, usage.cache_read, usage.cache_write]
+            }
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => {
                 [usage.input, usage.cache_read, None]
             }
@@ -76,14 +83,14 @@ impl Policy {
 
     fn prompt_field_count(self) -> usize {
         match self {
-            Self::AnthropicMessages => 3,
+            Self::AnthropicMessages | Self::GithubCopilotResponses => 3,
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => 2,
         }
     }
 
     fn cost_fields(self, cost: &ReportedCost) -> [Option<f64>; 5] {
         match self {
-            Self::AnthropicMessages => [
+            Self::AnthropicMessages | Self::GithubCopilotResponses => [
                 cost.input,
                 cost.output,
                 cost.cache_read,
@@ -98,14 +105,16 @@ impl Policy {
 
     fn cost_field_count(self) -> usize {
         match self {
-            Self::AnthropicMessages => 5,
+            Self::AnthropicMessages | Self::GithubCopilotResponses => 5,
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => 4,
         }
     }
 
     fn prompt_cost_fields(self, cost: &ReportedCost) -> Option<[f64; 3]> {
         match self {
-            Self::AnthropicMessages => Some([cost.input?, cost.cache_read?, cost.cache_write?]),
+            Self::AnthropicMessages | Self::GithubCopilotResponses => {
+                Some([cost.input?, cost.cache_read?, cost.cache_write?])
+            }
             Self::OpenAiCompletions => Some([cost.input?, cost.cache_read?, 0.0]),
             Self::OpenAiResponses | Self::OpenAiCodexResponses => None,
         }
@@ -280,8 +289,10 @@ fn derive_call(call: &NormalizedModelCall) -> CallEconomics {
     } else {
         None
     };
-    let cache_write_ratio = if policy == Policy::AnthropicMessages
-        && usage_completeness == EconomicsCompleteness::Complete
+    let cache_write_ratio = if matches!(
+        policy,
+        Policy::AnthropicMessages | Policy::GithubCopilotResponses
+    ) && usage_completeness == EconomicsCompleteness::Complete
     {
         usage
             .cache_write
@@ -292,7 +303,7 @@ fn derive_call(call: &NormalizedModelCall) -> CallEconomics {
     };
     let fresh_ratio = if matches!(
         policy,
-        Policy::AnthropicMessages | Policy::OpenAiCompletions
+        Policy::AnthropicMessages | Policy::OpenAiCompletions | Policy::GithubCopilotResponses
     ) && usage_completeness == EconomicsCompleteness::Complete
     {
         usage
@@ -541,6 +552,73 @@ mod tests {
             .parse(&mut Cursor::new(fixture))
             .expect("economics policy fixture parses");
         session.model_calls
+    }
+
+    #[test]
+    fn copilot_responses_preserves_three_buckets_and_qualified_model_rate_costs() {
+        let calls = PiSourceAdapter
+            .parse(&mut Cursor::new(include_str!(
+                "../../fixtures/pi/copilot-economics.jsonl"
+            )))
+            .unwrap()
+            .model_calls;
+        let (derived, summary) = derive(&calls);
+        let fill = &derived[1];
+        assert_eq!(
+            fill.policy_id.as_deref(),
+            Some("github-copilot-responses-cache-v1")
+        );
+        assert_eq!(fill.cache_write_status, CacheWriteStatus::Reported);
+        assert_eq!(fill.prompt_tokens, Some(55485));
+        assert_eq!(fill.cache_read_ratio, Some(0.0));
+        assert_eq!(fill.cache_write_ratio, Some(55482.0 / 55485.0));
+        assert_eq!(fill.fresh_ratio, Some(3.0 / 55485.0));
+        assert_eq!(fill.cost_completeness, EconomicsCompleteness::Complete);
+        assert!((fill.pi_prompt_cost.unwrap() - 0.138711).abs() < 1e-12);
+        assert!(fill
+            .explanation_codes
+            .contains(&"piModelRateCostBasis".into()));
+        assert!(
+            fill.cache_ratio_discontinuity.is_none(),
+            "provider switches are not cache discontinuities"
+        );
+        assert_eq!(derived[2].prompt_tokens, Some(55893));
+        assert_eq!(derived[2].cache_read_ratio, Some(55482.0 / 55893.0));
+        assert!(derived[2].cache_ratio_discontinuity.is_some());
+        assert_eq!(derived[3].prompt_tokens, Some(0));
+        assert_eq!(derived[3].cache_write_ratio, None);
+        assert_eq!(derived[3].pi_prompt_cost, Some(0.0));
+        assert_eq!(
+            derived[4].usage_completeness,
+            EconomicsCompleteness::Partial
+        );
+        assert_eq!(derived[4].prompt_tokens, None);
+        assert_eq!(
+            derived[5].usage_completeness,
+            EconomicsCompleteness::Missing
+        );
+        assert_eq!(
+            derived[6].usage_completeness,
+            EconomicsCompleteness::Unsupported
+        );
+        assert_eq!(summary.cache_read_eligible_calls, 4);
+        assert_eq!(summary.cache_read_prompt_tokens, Some(113378));
+        assert_eq!(summary.cache_read_tokens, Some(56482));
+        assert_eq!(summary.cache_read_ratio, Some(56482.0 / 113378.0));
+        let mut incomplete = calls[1].clone();
+        incomplete.reported_usage.cost.cache_write = None;
+        assert_eq!(
+            derive_call(&incomplete).cost_completeness,
+            EconomicsCompleteness::Partial
+        );
+        assert_eq!(derive_call(&incomplete).pi_prompt_cost, None);
+        incomplete.reported_usage.input = Some(MAX_SAFE_JSON_INTEGER);
+        assert_eq!(derive_call(&incomplete).prompt_tokens, None);
+        incomplete.target.provider = Some("openai".into());
+        assert_eq!(
+            derive_call(&incomplete).usage_completeness,
+            EconomicsCompleteness::Unsupported
+        );
     }
 
     #[test]

@@ -32,7 +32,7 @@ pub(crate) use tokenization::TokenizationPolicy;
 
 pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 8;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 13;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 15;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -653,19 +653,32 @@ fn derive_calls(
         }) {
             explanation_codes.push(DiagnosticCode::MissingSystemPrompt);
         }
-        if !work.call.tool_loadout_known
-            && !work.call.context_item_ids.iter().any(|id| {
-                item_lookup.get(id.as_str()).is_some_and(|item| {
-                    item.kind == ContextItemKind::ToolDefinition
-                        && !matches!(
-                            item.payload,
-                            TokenizationPayload::ToolDefinition {
-                                complete: false,
-                                ..
-                            } | TokenizationPayload::Unavailable
-                        )
-                })
+        let incomplete_tool_definitions = work.call.context_item_ids.iter().any(|id| {
+            item_lookup.get(id.as_str()).is_some_and(|item| {
+                item.kind == ContextItemKind::ToolDefinition
+                    && matches!(
+                        item.payload,
+                        TokenizationPayload::ToolDefinition {
+                            complete: false,
+                            ..
+                        } | TokenizationPayload::Unavailable
+                    )
             })
+        });
+        if incomplete_tool_definitions
+            || (!work.call.tool_loadout_known
+                && !work.call.context_item_ids.iter().any(|id| {
+                    item_lookup.get(id.as_str()).is_some_and(|item| {
+                        item.kind == ContextItemKind::ToolDefinition
+                            && !matches!(
+                                item.payload,
+                                TokenizationPayload::ToolDefinition {
+                                    complete: false,
+                                    ..
+                                } | TokenizationPayload::Unavailable
+                            )
+                    })
+                }))
         {
             explanation_codes.push(DiagnosticCode::MissingToolDefinitions);
         }

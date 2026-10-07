@@ -9,6 +9,14 @@ export const ECONOMICS_POLICIES = {
     hasWriteRatio: true,
     categories: ['cacheRead', 'cacheWrite', 'fresh'],
   },
+  'github-copilot-responses-cache-v1': {
+    provider: 'github-copilot',
+    api: 'openai-responses',
+    cacheWriteStatus: 'reported',
+    hasFreshRatio: true,
+    hasWriteRatio: true,
+    categories: ['cacheRead', 'cacheWrite', 'fresh'],
+  },
   'openai-completions-cache-v1': {
     provider: 'openai',
     api: 'openai-completions',

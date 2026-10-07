@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 87) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 91) throw new Error('Incomplete live Rust contract export.');
 
 function output(name: string): SessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -26,6 +26,30 @@ function output(name: string): SessionAnalysis {
 }
 
 describe('live production Rust -> indexAnalysis contract', () => {
+  it('indexes Copilot Responses three-bucket economics without inventing missing writes', () => {
+    const a = output('fixture-copilot-economics-auto');
+    expect(
+      JSON.parse(
+        readFileSync(join(process.cwd(), '../fixtures/analysis/copilot-economics.json'), 'utf8'),
+      ),
+    ).toEqual(a);
+    const indexed = indexAnalysis(a);
+    expect(indexed.analysis.modelCalls[1].economics).toMatchObject({
+      policyId: 'github-copilot-responses-cache-v1',
+      cacheWriteStatus: 'reported',
+      promptTokens: 55485,
+      cacheWriteRatio: 55482 / 55485,
+      freshRatio: 3 / 55485,
+      costCompleteness: 'complete',
+      cacheRatioDiscontinuity: null,
+    });
+    expect(a.modelCalls[2].economics.cacheReadRatio).toBe(55482 / 55893);
+    expect(a.modelCalls[3].economics.piPromptCost).toBe(0);
+    expect(a.modelCalls[4].economics.usageCompleteness).toBe('partial');
+    expect(a.modelCalls[5].economics.usageCompleteness).toBe('missing');
+    expect(a.modelCalls[6].economics.usageCompleteness).toBe('unsupported');
+    expect(a.economics.cacheReadPromptTokens).toBe(113378);
+  });
   it('keeps the browser system-context fixture equal to the production Rust response', () => {
     const captured = JSON.parse(
       readFileSync(join(process.cwd(), '../fixtures/analysis/system-context.json'), 'utf8'),
@@ -189,7 +213,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
     expect(manifest.schemaVersion).toBe(8);
-    expect(manifest.outputVersion).toBe(13);
+    expect(manifest.outputVersion).toBe(15);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

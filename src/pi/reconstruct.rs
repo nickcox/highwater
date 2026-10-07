@@ -145,15 +145,13 @@ fn reconstruct_selected(
                 item,
                 first_kept_position,
                 tokens_before,
-            } => {
-                if entries[*entry_index].value.get("systemMessage").is_some() {
-                    state.apply_system(
-                        system_context::SystemUpdate::parse(&entries[*entry_index], true),
-                        &entries[*entry_index],
-                    );
-                }
-                state.apply_compaction(item, first_kept_position, tokens_before, &branch_positions)
-            }
+            } => state.apply_compaction(
+                item,
+                first_kept_position,
+                tokens_before,
+                &branch_positions,
+                &entries[*entry_index],
+            ),
             interpret::SelectedEntry::Ignored => {}
         }
     }

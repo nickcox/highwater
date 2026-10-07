@@ -94,7 +94,10 @@ export interface CacheTrackProjection extends EconomicsTrackProjection<CacheTrac
   presentation: CachePresentationMetadata;
 }
 
-const ANTHROPIC_POLICY = 'anthropic-messages-cache-v1';
+const THREE_BUCKET_POLICIES = new Set([
+  'anthropic-messages-cache-v1',
+  'github-copilot-responses-cache-v1',
+]);
 const OPENAI_CHAT_POLICY = 'openai-completions-cache-v1';
 const OPENAI_RESPONSES_POLICIES = new Set([
   'openai-responses-cache-read-v1',
@@ -207,17 +210,17 @@ export function projectCachePresentation(
       availability = allCoveredValuesAreZero ? 'measuredZero' : 'available';
     }
     if (kind === 'nonRead') {
-      note = 'Responses input is not a separately measurable fresh/write split.';
+      note = 'Read-only Responses policies cannot establish a separate fresh/write split.';
     }
     if (
       kind === 'cacheWrite' &&
       categoryPolicyIds.some((policy) => OPENAI_RESPONSES_POLICIES.has(policy))
     ) {
-      // Responses never contributes a separate write series. This branch is defensive for future policy additions.
+      // These read-only Responses policies never contribute a separate write series.
       availability = 'notRetained';
       note = isPiSource(analysis.session.source)
-        ? 'Pi does not retain a separate Responses cache-write bucket.'
-        : 'The source does not retain a separate Responses cache-write bucket.';
+        ? 'The audited read-only policy does not establish separate cache-write detail from Pi.'
+        : 'The audited read-only policy does not establish separate cache-write detail from the source.';
     }
     return [
       {
@@ -253,8 +256,8 @@ export function projectCachePresentation(
   if (applicablePolicyIds.some((policy) => OPENAI_RESPONSES_POLICIES.has(policy))) {
     notes.push(
       isPiSource(analysis.session.source)
-        ? 'Responses non-cache-read input may include writes; Pi does not retain the write/fresh split.'
-        : 'Responses non-cache-read input may include writes; the source does not retain the write/fresh split.',
+        ? 'Read-only Responses policies: non-cache-read input may include writes; the audited Pi policy does not establish the write/fresh split.'
+        : 'Read-only Responses policies: non-cache-read input may include writes; the source policy does not establish the write/fresh split.',
     );
   }
   const mixedPolicy = applicablePolicyIds.length > 1;
@@ -313,9 +316,9 @@ function projectCacheCall(call: ModelCall, analysis: SessionAnalysis): CacheTrac
   }
   let segments: CacheTrackSegment[];
   let note = '';
-  if (economics.policyId === ANTHROPIC_POLICY) {
+  if (THREE_BUCKET_POLICIES.has(economics.policyId)) {
     if (cacheWrite === null) {
-      return incomplete('partial', 'Anthropic cache-write usage is incomplete.');
+      return incomplete('partial', 'Recorded cache-write usage is incomplete.');
     }
     segments = [
       { kind: 'cacheRead', label: 'Cache read', value: cacheRead },
