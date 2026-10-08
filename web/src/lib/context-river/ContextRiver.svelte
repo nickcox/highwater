@@ -36,7 +36,6 @@
   import { clientXToViewBox, nearestCallIndex } from './hit-testing';
   import { nonOverlappingCallLabelPositions } from './axis-labels';
   import { chartUnitLabel } from './format';
-  import RiverPrecisionNavigation from '../components/RiverPrecisionNavigation.svelte';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
   import { layoutCallColumns, layoutContextRiver } from './layout';
   import { projectCallColumns, projectRiverHorizontally } from './horizontal-projection';
@@ -76,8 +75,6 @@
   export let selectedItemId: string | null = null;
   export let hoveredItemId: string | null = null;
   export let navigationCommand: RiverNavigationCommand | null = null;
-  export let onJumpToCall: (index: number) => void = () => {};
-  export let onZoomToRange: (start: number, end: number) => void = () => {};
   export let isVisible = true;
   export let onViewportChange: (status: RiverViewportStatus) => void = () => {};
   export let onNavigationSettled: (id: number) => void = () => {};
@@ -99,7 +96,6 @@
   } from '../state/presentation-preferences';
   let appliedPreferences: PresentationPreferences | null = null;
   let viewOptions: HTMLDetailsElement;
-  let precisionMessage = '';
   let economicsTrigger: HTMLButtonElement;
   let economicsHeader: HTMLDivElement;
   $: if (preferences !== appliedPreferences) {
@@ -113,7 +109,6 @@
   }
   function applyPreferences(next: PresentationPreferences): void {
     setVerticalScaleMode(next.river.verticalScale);
-    riverLayoutMode = next.river.layout;
     if (riverDisplayMode !== next.river.display) closeGroupBreakdown(false);
     riverDisplayMode = next.river.display;
     const mode = next.economics.expanded ? next.economics.lastMode : 'off';
@@ -137,9 +132,6 @@
   function setDisplay(mode: RiverDisplayMode): void {
     changePreferences({ ...preferences, river: { ...preferences.river, display: mode } });
   }
-  function setLayout(mode: RiverLayoutMode): void {
-    changePreferences({ ...preferences, river: { ...preferences.river, layout: mode } });
-  }
   function setScale(mode: VerticalScaleMode): void {
     changePreferences({ ...preferences, river: { ...preferences.river, verticalScale: mode } });
   }
@@ -162,13 +154,11 @@
   $: nonDefaultStatus = [
     verticalScaleMode === 'visible' ? 'Visible-call scale' : '',
     riverDisplayMode === 'itemTypes' ? 'Item types' : '',
-    riverLayoutMode === 'compact' ? 'Compact' : '',
   ]
     .filter(Boolean)
     .join(' · ');
 
   type VerticalScaleMode = 'session' | 'visible';
-  type RiverLayoutMode = 'balanced' | 'compact';
   type RiverDisplayMode = 'items' | 'itemTypes';
 
   let host: HTMLDivElement;
@@ -179,7 +169,6 @@
   let selectionViewportScrollLeft = 0;
   let measuredChartOffsetX = 0;
   let verticalScaleMode: VerticalScaleMode = 'session';
-  let riverLayoutMode: RiverLayoutMode = 'balanced';
   let riverDisplayMode: RiverDisplayMode = 'items';
   let cacheViewMode: CacheViewMode = 'tokens';
   let economicsTrackMode: EconomicsTrackMode = 'off';
@@ -187,7 +176,12 @@
   $: usageMappingLabel = usageNormalizationLabel(indexed.analysis.session.source);
   let economicsReadout = '';
   let economicsEventBreakdown: EconomicsEventBreakdown | null = null;
-  let groupBreakdown: { kind: string; memberIds: string[]; callIndex: number | null } | null = null;
+  let groupBreakdown: {
+    kind: string;
+    memberIds: string[];
+    callIndex: number | null;
+    anchor: { x: number; y: number };
+  } | null = null;
   let groupBreakdownReturnElement: HTMLElement | SVGElement | null = null;
   const groupFocus = createOverlayFocus();
   const economicsInspectFocus = createOverlayFocus();
@@ -222,7 +216,7 @@
   let spaceHeld = false;
   let lastVisibility = true;
 
-  $: height = riverLayoutMode === 'balanced' ? 500 : 420;
+  const height = 500;
   const margin = { top: 36, right: 24, bottom: 54, left: 42 };
   // Width is a presentation transform, not a reason to rebuild item-call stacks/paths.
   const geometryWidth = 960;
@@ -775,7 +769,6 @@
       zoomToCallRange(command.startCallIndex, command.endCallIndex);
       return;
     }
-    zoomToCall(command.callIndex);
   }
 
   function viewBoxX(clientX: number): number {
@@ -980,17 +973,30 @@
     memberIds: string[],
     callIndex: number | null,
     returnElement: HTMLElement | SVGElement | null = null,
+    pointer?: { x: number; y: number },
   ): void {
     if (groupBreakdown === null) {
       groupBreakdownReturnElement =
         returnElement ??
         (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     }
-    const next = { kind, memberIds, callIndex };
+    const bounds = returnElement?.getBoundingClientRect();
+    // Keyboard activation anchors to the visible part of the originating ribbon;
+    // pointer activation uses the actual hit, not its potentially huge SVG bounds.
+    const anchor = pointer ?? {
+      x: bounds
+        ? (Math.max(8, bounds.left) + Math.min(window.innerWidth - 8, bounds.right)) / 2
+        : 8,
+      y: bounds
+        ? (Math.max(8, bounds.top) + Math.min(window.innerHeight - 8, bounds.bottom)) / 2
+        : 8,
+    };
+    const next = { kind, memberIds, callIndex, anchor };
     groupBreakdown = next;
     groupFocus.focusAfterUpdate(
       () => document.getElementById('group-breakdown-close'),
       () => groupBreakdown !== null && isVisible,
+      { preventScroll: true },
     );
   }
 
@@ -1003,6 +1009,7 @@
       groupFocus.focusAfterUpdate(
         () => returnElement,
         () => groupBreakdown === null && isVisible,
+        { preventScroll: true },
       );
     }
   }
@@ -1081,6 +1088,7 @@
       membersAtCall,
       callIndex,
       event.currentTarget instanceof SVGElement ? event.currentTarget : null,
+      { x: event.clientX, y: event.clientY },
     );
   }
 
@@ -1192,21 +1200,6 @@
         onclick={() => setScale('visible')}>Visible calls</button
       >
     </div>
-    <div class="scale-toggle" role="group" aria-label="River layout">
-      <span class="scale-label">Layout</span>
-      <button
-        type="button"
-        class:active={riverLayoutMode === 'balanced'}
-        aria-pressed={riverLayoutMode === 'balanced'}
-        onclick={() => setLayout('balanced')}>Balanced</button
-      >
-      <button
-        type="button"
-        class:active={riverLayoutMode === 'compact'}
-        aria-pressed={riverLayoutMode === 'compact'}
-        onclick={() => setLayout('compact')}>Compact River</button
-      >
-    </div>
     <div class="scale-toggle" role="group" aria-label="River display">
       <span class="scale-label">Display</span>
       <button
@@ -1222,22 +1215,9 @@
         onclick={() => setDisplay('itemTypes')}>Item types</button
       >
     </div>
-    <button type="button" onclick={() => changePreferences(defaultPresentationPreferences())}
-      >Reset view preferences</button
-    >
-    <RiverPrecisionNavigation
-      callIndices={indexed.analysis.modelCalls.map((value) => value.index)}
-      ready={hasObservedWidth}
-      {onJumpToCall}
-      {onZoomToRange}
-      onDone={closeViewOptions}
-      bind:message={precisionMessage}
-      hideMessage={true}
-    />
   </div>
 </details>
 {#if nonDefaultStatus}<p class="view-status">{nonDefaultStatus}</p>{/if}
-{#if precisionMessage}<p class="view-status" role="status">{precisionMessage}</p>{/if}
 <div class="chart-frame">
   <div class="chart-plot">
     <div
@@ -1438,6 +1418,11 @@
                   if (isGroup) hoveredGroup = null;
                   else onHoverItem(null);
                 }}
+                onmousedown={(event) => {
+                  // The breakdown owns focus after activation. Avoid the browser's
+                  // intermediate SVG/host focus ring without suppressing pointer gestures.
+                  if (isGroup) event.preventDefault();
+                }}
                 onclick={(event) =>
                   isGroup
                     ? activateGroup(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
@@ -1522,7 +1507,10 @@
               economicsTrackMode === 'off' ? preferences.economics.lastMode : 'off',
             )}
         >
-          Cache &amp; cost · {economicsTrackMode === 'off' ? 'Expand' : 'Collapse'}
+          <span class="disclosure-marker" aria-hidden="true"
+            >{economicsTrackMode === 'off' ? '▸' : '▾'}</span
+          >
+          <span>Cache &amp; cost</span>
         </button>
         <div id="economics-expanded" hidden={economicsTrackMode === 'off'}>
           {#if economicsTrackMode !== 'off'}
@@ -1672,7 +1660,6 @@
           {width}
           mode={economicsTrackMode}
           cacheView={cacheViewMode}
-          compact={riverLayoutMode === 'compact'}
           {pinnedCallIndex}
           {hoveredCallIndex}
           {onPinCall}
@@ -1687,6 +1674,7 @@
   {#if groupBreakdown}
     <GroupBreakdown
       label={groupLabel(groupBreakdown.kind)}
+      anchor={groupBreakdown.anchor}
       memberLabels={groupMemberLabels}
       memberCount={groupBreakdown.memberIds.length}
       callIndex={groupBreakdown.callIndex}
@@ -1729,7 +1717,25 @@
   }
   .economics-disclosure {
     justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--secondary);
     font: inherit;
+    font-size: 12px;
+  }
+  .economics-disclosure:hover {
+    background: transparent;
+    color: var(--text);
+  }
+  .disclosure-marker {
+    width: 10px;
+    text-align: center;
   }
   .vertical-scale-controls {
     display: flex;

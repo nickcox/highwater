@@ -387,13 +387,34 @@ async function assertLoaded(page: Page): Promise<void> {
 }
 
 async function expandEconomics(page: Page): Promise<void> {
-  const trigger = page.getByRole('button', { name: 'Cache & cost · Expand', exact: true });
-  if (await trigger.count()) await trigger.click();
+  const trigger = page.getByRole('button', { name: 'Cache & cost', exact: true });
+  if ((await trigger.count()) && (await trigger.getAttribute('aria-expanded')) === 'false')
+    await trigger.click();
 }
 async function openViewOptions(page: Page): Promise<void> {
   const options = page.locator('.view-options');
   if (!(await options.evaluate((node) => (node as HTMLDetailsElement).open)))
     await options.locator('summary').click();
+}
+
+async function restoreRiverRange(page: Page, start: number, end: number): Promise<void> {
+  const bounds = [Math.min(start, end), Math.max(start, end)];
+  await page.evaluate(([from, to]) => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    params.set('session', 'browser-smoke');
+    params.set('range', `${from}:${to}`);
+    window.location.hash = params.toString();
+  }, bounds);
+  await page.waitForFunction(([from, to]) => {
+    const host = document.querySelector('[data-testid="river-host"]');
+    if (!host) return false;
+    const box = host.getBoundingClientRect();
+    return [from, to].every((index) => {
+      const marker = host.querySelector(`[aria-label="Pin model call ${index}"]`);
+      const rect = marker?.getBoundingClientRect();
+      return rect && rect.left >= box.left - 1 && rect.right <= box.right + 1;
+    });
+  }, bounds);
 }
 
 async function captureBaselineState(page: Page, directory: string, name: string): Promise<void> {
@@ -1152,7 +1173,6 @@ test('compact call buttons and arrow/vim shortcuts step safely without stealing 
   await search.press('ArrowLeft');
   await expect(search).toHaveValue('hl');
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
-  await openViewOptions(page);
   await page.getByLabel('Call number').press('ArrowRight');
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
   await page.getByLabel('Call number').press('Escape');
@@ -1204,6 +1224,49 @@ test('Previous/Next select calls without dropping the item, changing zoom, or ne
   await previous.press('Enter');
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 3');
   await expect(page.locator('.go-to-disclosure')).toHaveCount(0);
+});
+
+test('Go to call pins its target and preserves Fit all, zoom and independent item selection', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses a deterministic long session.');
+  await mockApi(page, sessionScenario('longSession'));
+  await page.goto('/');
+  await assertLoaded(page);
+  await page.locator('.ribbon-hit').first().click();
+  const selected = await page.locator('#selected-item-summary').textContent();
+  const jump = async (value: string, index: number) => {
+    await expect(
+      page.getByRole('group', { name: 'Chart zoom and navigation' }).getByLabel('Call number'),
+    ).toBeVisible();
+    await expect(page.getByLabel('Range start call')).toHaveCount(0);
+    await expect(page.getByText('Precise navigation', { exact: true })).toHaveCount(0);
+    await page.getByLabel('Call number').fill(value);
+    await page.getByLabel('Call number').press('Enter');
+    await expect(page.locator('#pinned-call-summary')).toHaveText(`Pinned call ${index}`);
+    await expect(page.locator('#selected-item-summary')).toHaveText(selected!);
+    await expect(page.locator('.view-options')).not.toHaveAttribute('open', '');
+    await expect(page.getByLabel('Call number')).toBeFocused();
+  };
+  await jump('80', 80);
+  await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.0×');
+  for (let i = 0; i < 4; i++)
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  const zoom = await page.locator('.zoom-level').textContent();
+  const width = await page.locator('.river-scroll > svg').getAttribute('width');
+  await jump('160', 160);
+  expect(await page.locator('.zoom-level').textContent()).toBe(zoom);
+  expect(await page.locator('.river-scroll > svg').getAttribute('width')).toBe(width);
+  const host = (await page.getByTestId('river-host').boundingBox())!;
+  const marker = (await page
+    .getByRole('button', { name: 'Pin model call 160', exact: true })
+    .boundingBox())!;
+  expect(marker.x + marker.width / 2).toBeGreaterThan(host.x);
+  expect(marker.x + marker.width / 2).toBeLessThan(host.x + host.width);
+  await jump('999', 160);
+  expect(await page.locator('.zoom-level').textContent()).toBe(zoom);
+  await jump('1', 1);
+  expect(await page.locator('.zoom-level').textContent()).toBe(zoom);
 });
 
 test('unpinned stepping uses the measured viewport centre and nudges off-screen pins at unchanged zoom', async ({
@@ -1569,6 +1632,87 @@ test('cache and cost tracks share the river axis and expose a ratio change', asy
   await expect(track).toHaveCount(0);
 });
 
+for (const width of [1440, 390]) {
+  test(`Item type breakdown stays near the River without page or chart jumps at ${width}px`, async ({
+    page,
+  }) => {
+    test.skip(integrated, 'Uses deterministic mocked economics data.');
+    await page.setViewportSize({ width, height: 900 });
+    await mockApi(page, economicsScenario());
+    await page.goto('/#session=browser-smoke&display=itemTypes');
+    await assertLoaded(page);
+    await expandEconomics(page);
+    const group = page.locator('.group-ribbon .ribbon-hit').first();
+    await group.scrollIntoViewIfNeeded();
+    const snapshot = () =>
+      page.evaluate(() => ({
+        y: window.scrollY,
+        left: document.querySelector('[data-testid="river-host"]')!.scrollLeft,
+      }));
+    const before = await snapshot();
+    await page.evaluate(() => {
+      document.body.dataset.groupActivationFocus = '';
+      document.addEventListener(
+        'focusin',
+        (event) => {
+          document.body.dataset.groupActivationFocus = (event.target as Element).id || 'chart';
+        },
+        { once: true },
+      );
+    });
+    await group.click();
+    const dialog = page.getByRole('dialog', { name: /Item type .* breakdown/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Close item type breakdown' })).toBeFocused();
+    await expect(page.locator('body')).toHaveAttribute(
+      'data-group-activation-focus',
+      'group-breakdown-close',
+    );
+    await expect(dialog).not.toContainText('Grouped geometry is presentation-only');
+    expect(await snapshot()).toEqual(before);
+    expect(await dialog.evaluate((node) => getComputedStyle(node).position)).toBe('fixed');
+    const bounds = (await dialog.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(7);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - 7);
+    expect(bounds.y).toBeGreaterThanOrEqual(7);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(893);
+    await page.screenshot({ path: `.playwright/calm-workspace/item-type-breakdown-${width}.png` });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(group).toBeFocused();
+    expect(await snapshot()).toEqual(before);
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    expect(await snapshot()).toEqual(before);
+    await dialog.getByRole('button', { name: 'Close item type breakdown' }).click();
+    await expect(group).toBeFocused();
+    expect(await snapshot()).toEqual(before);
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await page.evaluate(() => window.scrollBy(0, 20));
+    await expect(dialog).toHaveCount(0);
+  });
+}
+
+test('scrolling a long item type member list does not dismiss its breakdown', async ({ page }) => {
+  test.skip(integrated, 'Uses a synthetic many-member group.');
+  await mockApi(page, compositionScenario(220));
+  await page.goto('/#session=browser-smoke&display=itemTypes');
+  await assertLoaded(page);
+  await page.locator('.group-ribbon .ribbon-hit').first().click();
+  const dialog = page.getByRole('dialog', { name: /Item type .* breakdown/ });
+  await expect(dialog).toBeVisible();
+  const y = await page.evaluate(() => window.scrollY);
+  const list = dialog.locator('ul');
+  expect(await list.evaluate((node) => node.scrollHeight)).toBeGreaterThan(
+    await list.evaluate((node) => node.clientHeight),
+  );
+  await list.evaluate((node) => (node.scrollTop = 40));
+  await expect(list).toHaveJSProperty('scrollTop', 40);
+  await expect(dialog).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(y);
+});
+
 test('cache share and grouped River views preserve exact identities', async ({ page }) => {
   test.skip(
     integrated,
@@ -1817,6 +1961,34 @@ test('vertical scale controls explain local ribbon heights and keep the axis anc
   );
 });
 
+test('Go to call remains with the zoom controls without overflow across toolbar sizes', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses sanitized API responses.');
+  await mockApi(page);
+  await page.goto('/');
+  await assertLoaded(page);
+  for (const width of [1440, 800, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const controls = page.getByRole('group', { name: 'Chart zoom and navigation' });
+    const input = controls.getByLabel('Call number');
+    await expect(input).toBeVisible();
+    await expect(controls.getByRole('button', { name: 'Go', exact: true })).toBeEnabled();
+    const box = (await controls.boundingBox())!;
+    const field = (await input.boundingBox())!;
+    expect(field.x).toBeGreaterThanOrEqual(box.x - 1);
+    expect(field.x + field.width).toBeLessThanOrEqual(box.x + box.width + 1);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
+    await openViewOptions(page);
+    await expect(page.locator('.view-options').getByLabel('Call number')).toHaveCount(0);
+    await page.locator('.view-options summary').press('Escape');
+    await page.screenshot({ path: `.playwright/calm-workspace/go-to-toolbar-${width}.png` });
+  }
+});
+
 test('navigation controls keep their slot when the visible-range status changes', async ({
   page,
 }) => {
@@ -2008,10 +2180,7 @@ test('range zoom keeps every requested marker visible at desktop, narrow, and re
   }
 
   async function zoomRange(start: number, end: number): Promise<void> {
-    await openViewOptions(page);
-    await page.getByLabel('Range start call').fill(String(start));
-    await page.getByLabel('Range end call').fill(String(end));
-    await page.getByRole('button', { name: 'Zoom to range' }).click();
+    await restoreRiverRange(page, start, end);
     await expectMarkersInsideViewport(Math.min(start, end), Math.max(start, end));
   }
 
@@ -2079,7 +2248,11 @@ test('native disclosures, Escape navigation, and exact-item emphasis work in a b
   await expect(goTo).toHaveAttribute('open', '');
   const callInput = page.getByLabel('Call number');
   await expect(callInput).toBeVisible();
+  await callInput.fill('3');
   await callInput.press('Escape');
+  await expect(callInput).toHaveValue('');
+  await expect(goTo).toHaveAttribute('open', '');
+  await goToSummary.press('Escape');
   await expect(goTo).not.toHaveAttribute('open', '');
   await expect(goToSummary).toBeFocused();
   await expect(page.getByText('Selected item', { exact: true })).toBeVisible();
@@ -2483,7 +2656,7 @@ test('Escape collapses economics before item, pin and Fit all stages', async ({ 
   await expandEconomics(page);
   await page.getByRole('button', { name: 'Share (%)', exact: true }).click();
   await page.keyboard.press('Escape');
-  const trigger = page.getByRole('button', { name: 'Cache & cost · Expand', exact: true });
+  const trigger = page.getByRole('button', { name: 'Cache & cost', exact: true });
   await expect(trigger).toBeFocused();
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.economics-track-svg')).toHaveCount(0);
@@ -2505,6 +2678,58 @@ test('Escape collapses economics before item, pin and Fit all stages', async ({ 
   );
 });
 
+test('Cache & cost uses a borderless disclosure with stable naming and remembered keyboard toggles', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses isolated presentation preferences and a sanitized API.');
+  await mockApi(page, economicsScenario());
+  await page.goto('/');
+  await assertLoaded(page);
+  const trigger = page.getByRole('button', { name: 'Cache & cost', exact: true });
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(trigger.locator('.disclosure-marker')).toHaveText('▸');
+  const style = await trigger.evaluate((node) => ({
+    border: getComputedStyle(node).borderTopWidth,
+    background: getComputedStyle(node).backgroundColor,
+    height: node.getBoundingClientRect().height,
+  }));
+  expect(style.border).toBe('0px');
+  expect(style.background).toBe('rgba(0, 0, 0, 0)');
+  expect(style.height).toBeGreaterThanOrEqual(28);
+  await page.screenshot({
+    path: '.playwright/calm-workspace/cache-cost-disclosure-collapsed.png',
+    fullPage: true,
+  });
+  await trigger.hover();
+  expect(await trigger.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
+    'rgba(0, 0, 0, 0)',
+  );
+  await trigger.press('Space');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(trigger.locator('.disclosure-marker')).toHaveText('▾');
+  await page.screenshot({
+    path: '.playwright/calm-workspace/cache-cost-disclosure-expanded.png',
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Share (%)', exact: true }).click();
+  await page.getByRole('button', { name: 'Cost', exact: true }).click();
+  await trigger.press('Enter');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.economics-track-svg')).toHaveCount(0);
+  await trigger.press('Enter');
+  await expect(page.getByRole('button', { name: 'Cost', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Cache', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await trigger.press('Space');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('blocked storage leaves quiet controls usable without private persistence', async ({
   page,
 }) => {
@@ -2520,8 +2745,9 @@ test('blocked storage leaves quiet controls usable without private persistence',
   await page.goto('/');
   await assertLoaded(page);
   await openViewOptions(page);
-  await page.getByRole('button', { name: 'Compact River', exact: true }).click();
-  await expect(page.locator('.view-status')).toHaveText('Compact');
+  await expect(page.getByRole('group', { name: 'River layout' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Visible calls', exact: true }).click();
+  await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
   await expandEconomics(page);
   await page.getByRole('button', { name: 'Cost', exact: true }).click();
   await expect(page.locator('.economics-track-svg')).toHaveAttribute(
@@ -2532,6 +2758,46 @@ test('blocked storage leaves quiet controls usable without private persistence',
   await assertLoaded(page);
   await expect(page.locator('.view-status')).toHaveCount(0);
   await expect(page.locator('.economics-track-svg')).toHaveCount(0);
+});
+
+test('retired Compact preference is ignored without losing scale, grouping or economics settings', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses seeded presentation preferences and a sanitized API.');
+  const legacy = JSON.stringify({
+    version: 1,
+    river: { verticalScale: 'visible', layout: 'compact', display: 'itemTypes' },
+    economics: { expanded: true, lastMode: 'cost', cacheView: 'share' },
+  });
+  await page.addInitScript(
+    (value) => localStorage.setItem('tokenplume.presentation.v1', value),
+    legacy,
+  );
+  await mockApi(page, economicsScenario());
+  await page.goto('/');
+  await assertLoaded(page);
+  await expect(page.locator('.river-scroll > svg')).toHaveAttribute('height', '500');
+  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '222');
+  await expect(page.locator('.view-status')).toHaveText('Visible-call scale · Item types');
+  expect(await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1'))).toBe(
+    legacy,
+  );
+  await openViewOptions(page);
+  await expect(page.getByRole('group', { name: 'River layout' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Compact River', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Balanced', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Items', exact: true }).click();
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!),
+  );
+  expect(stored.river).toEqual({ verticalScale: 'visible', display: 'items' });
+  expect(stored.economics).toEqual({ expanded: true, lastMode: 'cost', cacheView: 'share' });
+  await page.getByRole('button', { name: 'Cache', exact: true }).click();
+  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '300');
+  await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });
 
 test('empty inspector occupancy preserves fractional pan anchors and explicit range endpoints', async ({
@@ -2579,10 +2845,7 @@ test('empty inspector occupancy preserves fractional pan anchors and explicit ra
     .getByRole('button', { name: 'Clear item', exact: true })
     .click();
   await expect.poll(anchor).toBeCloseTo(before, 3);
-  await openViewOptions(page);
-  await page.getByRole('spinbutton', { name: 'Range start call' }).fill('80');
-  await page.getByRole('spinbutton', { name: 'Range end call' }).fill('81');
-  await page.getByRole('button', { name: 'Zoom to range', exact: true }).click();
+  await restoreRiverRange(page, 80, 81);
   await select();
   for (const call of [80, 81]) {
     const bounds = await page
@@ -2604,7 +2867,7 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   const options = page.locator('.view-options');
   const host = page.getByTestId('river-host');
   await expect(options).not.toHaveAttribute('open', '');
-  await expect(page.getByRole('button', { name: 'Cache & cost · Expand' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Cache & cost' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
@@ -2626,18 +2889,17 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   expect((await host.boundingBox())!.width).toBeCloseTo(occupiedWidth, 1);
   await openViewOptions(page);
   await page.getByRole('button', { name: 'Visible calls', exact: true }).click();
-  await page.getByRole('button', { name: 'Compact River', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(options).not.toHaveAttribute('open', '');
   await expect(options.locator('summary')).toBeFocused();
   await expect(page.locator('#selected-item-summary')).toBeVisible();
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
-  await expect(page.locator('.view-status')).toHaveText('Visible-call scale · Compact');
+  await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
   await expandEconomics(page);
   await page.getByRole('button', { name: 'Share (%)', exact: true }).click();
   await page.locator('#economics-call-1').focus();
   await page.getByRole('button', { name: 'Off', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Cache & cost · Expand' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Cache & cost' })).toBeFocused();
   await expandEconomics(page);
   await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -2655,7 +2917,7 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   );
   await page.reload();
   await assertLoaded(page);
-  await expect(page.locator('.view-status')).toHaveText('Visible-call scale · Compact');
+  await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
   await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -2667,13 +2929,22 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
     await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1')),
   ).not.toContain('browser-smoke');
   await openViewOptions(page);
-  await page.getByRole('button', { name: 'Reset view preferences', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Reset view preferences', exact: true }),
+  ).toHaveCount(0);
+  const economicsBefore = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).economics,
+  );
+  await page.getByRole('button', { name: 'Session scale', exact: true }).click();
   await expect(page.locator('.view-status')).toHaveCount(0);
-  await expect(page.locator('.economics-track-svg')).toHaveCount(0);
+  await expect(page.locator('.economics-track-svg')).toHaveCount(1);
   expect(
-    JSON.parse((await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1')))!)
-      .economics,
-  ).toEqual({ expanded: false, lastMode: 'cache', cacheView: 'tokens' });
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).economics,
+    ),
+  ).toEqual(economicsBefore);
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  await expect(page.locator('#selected-item-summary')).toBeVisible();
 });
 
 test('quiet workspace responsive evidence and actual rendered palette contrast', async ({

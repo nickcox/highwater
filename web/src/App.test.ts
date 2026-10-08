@@ -712,15 +712,22 @@ describe('Context River interactions', () => {
     expect(localStorage.getItem('tokenplume.presentation.v1')).toBeNull();
     const firstOptions = first.container.querySelector('.view-options') as HTMLDetailsElement;
     firstOptions.open = true;
-    await fireEvent.click(within(first.container).getByRole('button', { name: 'Compact River' }));
-    expect(within(first.container).getByText('Compact', { exact: true })).toBeInTheDocument();
+    expect(within(first.container).queryByRole('group', { name: 'River layout' })).toBeNull();
+    await fireEvent.click(within(first.container).getByRole('button', { name: 'Visible calls' }));
+    expect(
+      within(first.container).getByText('Visible-call scale', { exact: true }),
+    ).toBeInTheDocument();
     expect(second.container.querySelector('.view-status')).toBeNull();
-    expect(JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.layout).toBe(
-      'compact',
-    );
-    await fireEvent.click(
-      within(first.container).getByRole('button', { name: 'Reset view preferences' }),
-    );
+    expect(
+      JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.verticalScale,
+    ).toBe('visible');
+    expect(
+      JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river,
+    ).not.toHaveProperty('layout');
+    expect(
+      within(first.container).queryByRole('button', { name: 'Reset view preferences' }),
+    ).toBeNull();
+    await fireEvent.click(within(first.container).getByRole('button', { name: 'Session scale' }));
     expect(first.container.querySelector('.view-status')).toBeNull();
   });
 
@@ -728,7 +735,7 @@ describe('Context River interactions', () => {
     modifyAnalysis = withCacheEconomics;
     await renderLoaded();
     expect(document.querySelector('.economics-track-svg')).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Cache & cost · Expand' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cache & cost' }));
     expect(economicsTrackButton('Cache')).toHaveAttribute('aria-pressed', 'true');
     await fireEvent.click(economicsTrackButton('Cost'));
     expect(economicsTrackButton('Cost')).toHaveAttribute('aria-pressed', 'true');
@@ -763,17 +770,10 @@ describe('Context River interactions', () => {
     expect(container.querySelector('.selection-location-note')).toBeNull();
     expect(screen.getByText(/not present at pinned call 2/)).toBeInTheDocument();
 
-    const goTo = container.querySelector('.view-options') as HTMLDetailsElement;
-    goTo.open = true;
-    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Range start call' }), {
-      target: { value: '2' },
-    });
-    await fireEvent.input(screen.getByRole('spinbutton', { name: 'Range end call' }), {
-      target: { value: '3' },
-    });
-    await fireEvent.submit(container.querySelector('.range-form')!);
+    await fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     await waitFor(() => expect(container.querySelector('.selection-location-note')).not.toBeNull());
-    const widthAtRange = container.querySelector('.river-scroll svg')?.getAttribute('width');
+    const widthAtZoom = container.querySelector('.river-scroll svg')?.getAttribute('width');
 
     await fireEvent.click(
       within(container.querySelector('.item-details') as HTMLElement).getByRole('button', {
@@ -782,7 +782,7 @@ describe('Context River interactions', () => {
     );
     await waitFor(() => expect(container.querySelector('.selection-location-note')).toBeNull());
     expect(container.querySelector('.river-scroll')?.scrollLeft).toBe(0);
-    expect(container.querySelector('.river-scroll svg')?.getAttribute('width')).toBe(widthAtRange);
+    expect(container.querySelector('.river-scroll svg')?.getAttribute('width')).toBe(widthAtZoom);
     expect(screen.getByText('Pinned call 2')).toBeInTheDocument();
     expect(screen.getByText('Selected item')).toBeInTheDocument();
   });

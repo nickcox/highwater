@@ -16,13 +16,17 @@ export function createOverlayFocus(afterUpdate: () => Promise<unknown> = tick) {
     focusAfterUpdate(
       resolveTarget: () => HTMLElement | SVGElement | null,
       isCurrent: () => boolean = () => true,
+      focusOptions?: FocusOptions,
     ): void {
       if (disposed) return;
       const ticket = ++revision;
       void afterUpdate().then(() => {
         if (disposed || ticket !== revision || !isCurrent()) return;
         const target = resolveTarget();
-        if (target?.isConnected && !target.closest('[hidden]')) target.focus();
+        if (target?.isConnected && !target.closest('[hidden]')) {
+          if (focusOptions) target.focus(focusOptions);
+          else target.focus();
+        }
       });
     },
     cancel(): void {

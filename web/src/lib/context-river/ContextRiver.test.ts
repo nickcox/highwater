@@ -308,17 +308,13 @@ describe('ContextRiver continuous viewport integration', () => {
     geometry.mockRestore();
   });
 
-  it('still rebuilds stacks for analysis, height, grouping and visible-scale domain changes', async () => {
+  it('still rebuilds stacks for analysis, grouping and visible-scale domain changes', async () => {
     const geometry = vi.spyOn(layout, 'layoutContextRiver');
     const view = render(ContextRiver, {
       props: { indexed: longAnalysis(160), ...resetInteraction(), ...callbacks() },
     });
     const settings = defaultPresentationPreferences();
     let previous = geometry.mock.calls.length;
-    settings.river.layout = 'compact';
-    await view.rerender({ preferences: structuredClone(settings) });
-    expect(geometry.mock.calls.length).toBeGreaterThan(previous);
-    previous = geometry.mock.calls.length;
     settings.river.display = 'itemTypes';
     await view.rerender({ preferences: structuredClone(settings) });
     expect(geometry.mock.calls.length).toBeGreaterThan(previous);
@@ -340,7 +336,7 @@ describe('ContextRiver continuous viewport integration', () => {
       props: { indexed, ...interaction, ...handlers },
     });
 
-    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost · Expand' }));
+    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost' }));
     await waitFor(() =>
       expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
     );
@@ -508,7 +504,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
     });
-    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost · Expand' }));
+    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost' }));
     await waitFor(() =>
       expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
     );
@@ -554,7 +550,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const scrollLeft = host.scrollLeft;
     const riverWidth = host.querySelector('svg')?.getAttribute('width');
 
-    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost · Expand' }));
+    await fireEvent.click(view.getByRole('button', { name: 'Cache & cost' }));
     await fireEvent.click(economicsTrackButton(view.container, 'Cache'));
     await waitFor(() =>
       expect(
@@ -588,7 +584,7 @@ describe('ContextRiver continuous viewport integration', () => {
         ...handlers,
       },
     });
-    expect(view.getByRole('button', { name: 'Cache & cost · Expand' })).toHaveAttribute(
+    expect(view.getByRole('button', { name: 'Cache & cost' })).toHaveAttribute(
       'aria-expanded',
       'false',
     );
@@ -598,7 +594,7 @@ describe('ContextRiver continuous viewport integration', () => {
       ...resetInteraction(),
       ...handlers,
     });
-    expect(view.getByRole('button', { name: 'Cache & cost · Expand' })).toHaveAttribute(
+    expect(view.getByRole('button', { name: 'Cache & cost' })).toHaveAttribute(
       'aria-expanded',
       'false',
     );

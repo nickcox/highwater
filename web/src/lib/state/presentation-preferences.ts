@@ -2,7 +2,6 @@ export interface PresentationPreferences {
   version: 1;
   river: {
     verticalScale: 'session' | 'visible';
-    layout: 'balanced' | 'compact';
     display: 'items' | 'itemTypes';
   };
   economics: {
@@ -16,7 +15,7 @@ export const PRESENTATION_KEY = 'tokenplume.presentation.v1';
 export function defaultPresentationPreferences(): PresentationPreferences {
   return {
     version: 1,
-    river: { verticalScale: 'session', layout: 'balanced', display: 'items' },
+    river: { verticalScale: 'session', display: 'items' },
     economics: { expanded: false, lastMode: 'cache', cacheView: 'tokens' },
   };
 }
@@ -36,8 +35,6 @@ export function parsePresentationPreferences(raw: string | null): PresentationPr
     if (object(value.river)) {
       if (value.river.verticalScale === 'session' || value.river.verticalScale === 'visible')
         result.river.verticalScale = value.river.verticalScale;
-      if (value.river.layout === 'balanced' || value.river.layout === 'compact')
-        result.river.layout = value.river.layout;
       if (value.river.display === 'items' || value.river.display === 'itemTypes')
         result.river.display = value.river.display;
     }

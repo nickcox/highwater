@@ -100,7 +100,10 @@
     <ul>
       <li>Drag across a range to zoom; scroll horizontally or Shift-drag to pan.</li>
       <li>Use pinch or modifier-wheel zoom; ordinary page scrolling remains available.</li>
-      <li>Use Go to… for keyboard-accessible call and range navigation.</li>
+      <li>
+        Use Go to call beside the zoom controls to pin a call without changing zoom. Drag an area to
+        zoom to a range.
+      </li>
       <li>The lifespan list spans the full session; filter or search it to locate an item.</li>
       <li>Use Find in lifespans from Composition to open and focus a selected item's row.</li>
       <li>Escape closes this help first, then clears the selected item, the pin, and Fit all.</li>

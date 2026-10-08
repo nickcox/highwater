@@ -565,12 +565,7 @@
   }
 
   function jumpToCall(callIndex: number): void {
-    urlNavigationRevision += 1;
-    navigationCommand = { id: ++navigationCommandId, kind: 'call', callIndex };
-  }
-
-  function zoomToRange(startCallIndex: number, endCallIndex: number): void {
-    navigationCommand = { id: ++navigationCommandId, kind: 'range', startCallIndex, endCallIndex };
+    stepToCall(callIndex);
   }
 
   function jumpToLatest(): void {
@@ -884,6 +879,7 @@
                 {callIndices}
                 pinnedCallIndex={interaction.pinnedCallIndex}
                 onSelectCall={stepToCall}
+                onJumpToCall={jumpToCall}
                 onLatest={jumpToLatest}
                 onFitAll={() => navigate('fit')}
                 onZoomIn={() => navigate('zoom-in')}
@@ -902,8 +898,6 @@
                   selectedItemId={interaction.selectedItemId}
                   hoveredItemId={interaction.hoveredItemId}
                   {navigationCommand}
-                  onJumpToCall={jumpToCall}
-                  onZoomToRange={zoomToRange}
                   isVisible={visualizationView === 'river'}
                   onViewportChange={updateViewport}
                   onNavigationSettled={navigationSettled}

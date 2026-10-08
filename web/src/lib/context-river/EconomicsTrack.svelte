@@ -28,7 +28,6 @@
   export let width: number;
   export let mode: Exclude<EconomicsTrackMode, 'off'>;
   export let cacheView: CacheViewMode = 'tokens';
-  export let compact = false;
   export let pinnedCallIndex: number | null;
   export let hoveredCallIndex: number | null;
   export let onPinCall: (index: number) => void;
@@ -78,8 +77,8 @@
   }
   type TrackEventCluster = EconomicsEventCluster<TrackEvent>;
 
-  $: trackHeight = mode === 'cost' || compact ? 222 : 300;
-  $: eventHeaderTop = compact || mode === 'cost' ? 116 : 188;
+  $: trackHeight = mode === 'cost' ? 222 : 300;
+  $: eventHeaderTop = mode === 'cost' ? 116 : 188;
   const eventHeaderHeight = 16;
   $: eventLaneTop = eventHeaderTop + eventHeaderHeight + 2;
   $: eventLaneHeight = Math.max(44, trackHeight - eventLaneTop - 10);
@@ -87,7 +86,7 @@
   const eventMarkerHeight = 22;
   const eventCollisionGap = 6;
   const margin = { top: 14, right: 24, bottom: 62, left: 42 };
-  $: baseline = mode === 'cache' && !compact ? 180 : 108;
+  $: baseline = mode === 'cache' ? 180 : 108;
   $: innerHeight = baseline - margin.top;
   let activeCallIndex: number | null = null;
   let openEventClusterId: string | null = null;

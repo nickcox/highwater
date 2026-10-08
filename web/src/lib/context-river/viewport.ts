@@ -28,7 +28,6 @@ export type RiverNavigationCommand =
   | { id: number; kind: 'fit' }
   | { id: number; kind: 'zoom-in' }
   | { id: number; kind: 'zoom-out' }
-  | { id: number; kind: 'call'; callIndex: number }
   | { id: number; kind: 'ensure-call'; callIndex: number }
   | { id: number; kind: 'range'; startCallIndex: number; endCallIndex: number }
   | {

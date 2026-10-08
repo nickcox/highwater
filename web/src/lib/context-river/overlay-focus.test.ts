@@ -6,6 +6,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('can focus an overlay and return target without scrolling', async () => {
+  const button = document.createElement('button');
+  document.body.append(button);
+  const focus = vi.spyOn(button, 'focus');
+  const owner = createOverlayFocus(() => Promise.resolve());
+  owner.focusAfterUpdate(
+    () => button,
+    () => true,
+    { preventScroll: true },
+  );
+  await Promise.resolve();
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  owner.dispose();
+});
+
 it('rejects pending focus after close, replacement, disposal and superseding requests', async () => {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {

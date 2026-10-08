@@ -1,10 +1,13 @@
 <script lang="ts">
   import type { RiverViewportStatus } from '../context-river/viewport';
   import { stepCallTarget } from '../context-river/viewport';
+  import RiverCallJump from './RiverCallJump.svelte';
   export let viewport: RiverViewportStatus;
   export let callIndices: number[];
   export let pinnedCallIndex: number | null = null;
   export let onSelectCall: (index: number) => void = () => {};
+  export let onJumpToCall: (index: number) => void = (index) => onSelectCall(index);
+  let jumpMessage = '';
   export let onLatest: () => void;
   export let onFitAll: () => void;
   export let onZoomIn: () => void;
@@ -74,13 +77,21 @@
       disabled={!viewport.ready || noCalls || !viewport.hasOverflow}
       onclick={onLatest}>Latest</button
     >
+    <RiverCallJump
+      {callIndices}
+      ready={viewport.ready && isVisible}
+      {onJumpToCall}
+      bind:message={jumpMessage}
+      hideMessage={true}
+    />
   </div>
+  {#if jumpMessage}<p class="jump-message" role="status">{jumpMessage}</p>{/if}
 </div>
 
 <style>
   .viewport-navigation {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
     align-items: start;
     gap: 10px 16px;
     margin: 8px 0 12px;
@@ -107,6 +118,12 @@
     align-items: center;
     justify-content: flex-end;
     gap: 7px;
+  }
+  .jump-message {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--secondary);
+    font-size: 12px;
   }
   .step-call {
     width: 32px;
