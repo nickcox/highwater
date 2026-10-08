@@ -1,0 +1,9 @@
+INSERT INTO session_v2 VALUES ('ses_modern', NULL, '/synthetic/modern', 'Synthetic modern task', '2.0.20', 1, 100, NULL, NULL);
+INSERT INTO session_message VALUES
+('msg_system', 'ses_modern', 'system', 0, 1, 1, '{"text":"Synthetic recorded system update","time":{"created":1}}'),
+('msg_user', 'ses_modern', 'user', 1, 90, 90, '{"text":"Synthetic modern question","time":{"created":90}}'),
+('msg_tool', 'ses_modern', 'assistant', 2, 20, 25, '{"agent":"build","model":{"providerID":"openai","id":"gpt-4.1","variant":"default"},"time":{"created":20,"completed":25},"finish":"tool-calls","cost":0.01,"tokens":{"input":80,"output":20,"reasoning":5,"cache":{"read":10,"write":0}},"content":[{"type":"reasoning","text":"Synthetic recorded reasoning"},{"type":"text","text":"Synthetic assistant text"},{"type":"tool","id":"call_read","name":"read","state":{"status":"completed","input":{"path":"synthetic.txt"},"content":[{"type":"text","text":"Synthetic read result"}]},"time":{"created":21,"completed":24}}]}'),
+('msg_empty', 'ses_modern', 'assistant', 3, 30, 35, '{"agent":"build","model":{"providerID":"openai","id":"gpt-4.1"},"time":{"created":30,"completed":35},"finish":"stop","cost":0.02,"tokens":{"input":100,"output":10,"reasoning":0,"cache":{"read":20,"write":0}},"content":[]}'),
+('msg_synthetic', 'ses_modern', 'synthetic', 4, 40, 40, '{"text":"Synthetic continuation","time":{"created":40}}'),
+('msg_checkpoint', 'ses_modern', 'compaction', 5, 50, 55, '{"status":"completed","reason":"auto","summary":"Synthetic modern summary","recent":"Synthetic serialized recent exchange","time":{"created":50}}'),
+('msg_after', 'ses_modern', 'assistant', 6, 60, 65, '{"agent":"build","model":{"providerID":"openai","id":"gpt-4.1"},"time":{"created":60,"completed":65},"finish":"stop","cost":0,"tokens":{"input":50,"output":10,"reasoning":0,"cache":{"read":0,"write":0}},"content":[{"type":"text","text":"Synthetic final answer"}]}');

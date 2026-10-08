@@ -4,7 +4,7 @@ set -euo pipefail
 
 CASE=${1:-large}
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/tokenplume-benchmark.XXXXXX")
-PORT=${TOKENPLUME_BENCHMARK_PORT:-43291}
+PORT=${TOKENPLUME_BENCHMARK_PORT:-$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')}
 SERVER_LOG="$ROOT/server.log"
 RESPONSE="$ROOT/analysis.json"
 cleanup() {
@@ -15,7 +15,18 @@ cleanup() {
 trap cleanup EXIT
 
 python3 scripts/generate-benchmark-session.py --case "$CASE" --output "$ROOT/benchmark.jsonl"
-for index in 1 2 3 4 5; do cp "$ROOT/benchmark.jsonl" "$ROOT/benchmark-$index.jsonl"; done
+# Each cold instance needs a distinct native ID: duplicate portable references
+# are intentionally ambiguous, even when their filenames differ.
+python3 - "$ROOT" <<'PY'
+import json, pathlib, shutil, sys
+root = pathlib.Path(sys.argv[1])
+for index in range(1, 6):
+    with (root / 'benchmark.jsonl').open() as source, (root / f'benchmark-{index}.jsonl').open('w') as target:
+        header = json.loads(source.readline())
+        header['id'] += f'-{index}'
+        target.write(json.dumps(header) + '\n')
+        shutil.copyfileobj(source, target)
+PY
 cargo build --release >/dev/null
 ./target/release/tokenplume --session-root "$ROOT" --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!

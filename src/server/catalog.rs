@@ -246,9 +246,13 @@ pub(super) fn discover(
                 display_name: listing.display_name,
                 working_directory: listing.working_directory,
                 started_at: listing.started_at,
-                byte_size: metadata.len(),
+                byte_size: Some(metadata.len()),
                 modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
                 modified_nanos,
+                harness: "pi".into(),
+                parent_reference: None,
+                locator: None,
+                source_revision: None,
             });
         }
         Ok(())

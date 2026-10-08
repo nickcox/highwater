@@ -12,21 +12,21 @@ export interface CostBasisCopy {
 
 const COST_BASIS_COPY: Record<EconomicsCostBasis, CostBasisCopy> = {
   piModelRates: {
-    label: 'Pi-calculated cost',
-    totalLabel: 'Pi-calculated cost total',
-    promptLabel: 'Pi-calculated prompt cost',
+    label: 'Harness-recorded cost',
+    totalLabel: 'Harness-recorded cost total',
+    promptLabel: 'Harness-recorded prompt cost',
     componentPrefix: 'Pi-rate',
     basisLabel: 'Configured Pi model rates',
-    note: 'Cost amounts use configured Pi model rates, not provider-billed charges. Custom rates may be zero.',
+    note: 'Cost recorded by Pi using configured model rates, not provider-billed charges. Recorded zero does not necessarily mean free.',
     trackCaveat: 'not provider billed',
   },
   sourceModelRates: {
-    label: 'Source-calculated cost',
-    totalLabel: 'Source-calculated cost total',
-    promptLabel: 'Source-calculated prompt cost',
-    componentPrefix: 'Source-rate',
-    basisLabel: 'Configured source model rates',
-    note: 'Cost amounts use rates configured by the session source, not provider-billed charges.',
+    label: 'Harness-recorded cost',
+    totalLabel: 'Harness-recorded cost total',
+    promptLabel: 'Harness-recorded prompt cost',
+    componentPrefix: 'Harness-rate',
+    basisLabel: 'Configured harness model rates',
+    note: 'Cost recorded by the harness using its configured model rates, not provider-billed charges. Recorded zero does not necessarily mean free.',
     trackCaveat: 'not provider billed',
   },
   providerReported: {

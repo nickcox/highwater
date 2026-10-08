@@ -22,6 +22,8 @@ pub(crate) struct WatchSignals {
     pub dropped: AtomicU64,
     pub overflow: AtomicBool,
     pub watcher_failed: AtomicBool,
+    /// Latest aggregate source-read health, separate from permanent watch loss.
+    pub sources_degraded: AtomicBool,
     pub wake: Notify,
 }
 
@@ -42,6 +44,25 @@ pub(crate) fn start(
     sender: mpsc::Sender<WatchHint>,
     signals: Arc<WatchSignals>,
 ) -> notify::Result<WatcherHandle> {
+    start_target(root, sender, signals, None)
+}
+
+pub(crate) fn start_database(
+    database: &Path,
+    sender: mpsc::Sender<WatchHint>,
+    signals: Arc<WatchSignals>,
+) -> notify::Result<WatcherHandle> {
+    let root = database.parent().unwrap_or_else(|| Path::new("."));
+    start_target(root, sender, signals, Some(database.to_path_buf()))
+}
+
+fn start_target(
+    root: &Path,
+    sender: mpsc::Sender<WatchHint>,
+    signals: Arc<WatchSignals>,
+    database: Option<PathBuf>,
+) -> notify::Result<WatcherHandle> {
+    let recursive = database.is_none();
     let root = root.to_path_buf();
     let callback_root = root.clone();
     let callback_signals = Arc::clone(&signals);
@@ -53,7 +74,11 @@ pub(crate) fn start(
         }
         let hint = match result {
             Ok(event) => {
-                if !relevant_event(&event, &callback_root) {
+                let relevant = match &database {
+                    Some(database) => relevant_database_event(&event, database),
+                    None => relevant_event(&event, &callback_root),
+                };
+                if !relevant {
                     return;
                 }
                 callback_signals.received.fetch_add(1, Ordering::Relaxed);
@@ -76,7 +101,14 @@ pub(crate) fn start(
         }
     })?;
     let mut watcher = watcher;
-    watcher.watch(&root, RecursiveMode::Recursive)?;
+    watcher.watch(
+        &root,
+        if recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        },
+    )?;
     Ok(WatcherHandle { _watcher: watcher })
 }
 
@@ -108,6 +140,32 @@ fn relevant_event(event: &notify::Event, root: &PathBuf) -> bool {
     })
 }
 
+fn relevant_database_event(event: &notify::Event, database: &Path) -> bool {
+    if matches!(
+        event.kind,
+        EventKind::Access(_) | EventKind::Modify(ModifyKind::Metadata(MetadataKind::AccessTime))
+    ) {
+        return false;
+    }
+    if event.paths.is_empty() {
+        return true;
+    }
+    let mut wal = database.as_os_str().to_os_string();
+    wal.push("-wal");
+    let mut shm = database.as_os_str().to_os_string();
+    shm.push("-shm");
+    let shm_lifecycle = matches!(
+        event.kind,
+        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
+    );
+    event.paths.iter().any(|path| {
+        path == database
+            || path.as_os_str() == wal
+            || (shm_lifecycle && path.as_os_str() == shm)
+            || Some(path.as_path()) == database.parent()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,6 +190,54 @@ mod tests {
             },
             &root,
         ));
+    }
+
+    #[test]
+    fn database_hints_include_wal_and_replacement_but_ignore_read_activity() {
+        let database = PathBuf::from("/tmp/opencode.db");
+        for (path, kind, expected) in [
+            (
+                "/tmp/opencode.db-wal",
+                EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any)),
+                true,
+            ),
+            (
+                "/tmp/opencode.db",
+                EventKind::Modify(ModifyKind::Name(notify::event::RenameMode::To)),
+                true,
+            ),
+            (
+                "/tmp/opencode.db-shm",
+                EventKind::Create(CreateKind::File),
+                true,
+            ),
+            (
+                "/tmp/opencode.db-shm",
+                EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any)),
+                false,
+            ),
+            (
+                "/tmp/another.db-wal",
+                EventKind::Modify(ModifyKind::Any),
+                false,
+            ),
+            (
+                "/tmp/opencode.db-wal",
+                EventKind::Access(AccessKind::Any),
+                false,
+            ),
+        ] {
+            let event = notify::Event {
+                kind,
+                paths: vec![PathBuf::from(path)],
+                attrs: Default::default(),
+            };
+            assert_eq!(
+                relevant_database_event(&event, &database),
+                expected,
+                "{path}"
+            );
+        }
     }
 
     #[test]

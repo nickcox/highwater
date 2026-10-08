@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Analysis {
     pub schema_version: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reconstruction: Option<ReconstructionCoverage>,
     pub token_analysis: TokenAnalysisSummary,
     pub economics: EconomicsSummary,
     pub session: SessionSummary,
@@ -13,6 +15,13 @@ pub(crate) struct Analysis {
     pub context_items: Vec<ContextItem>,
     pub compactions: Vec<Compaction>,
     pub lineage: Vec<Lineage>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ReconstructionCoverage {
+    pub status: &'static str,
+    pub explanation_codes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

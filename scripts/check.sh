@@ -24,5 +24,8 @@ if [[ "$FULL" == 1 ]]; then
   npm --prefix web run test:browser
   scripts/browser-smoke-integrated.sh
   TOKENPLUME_BROWSER_BUILD_PROFILE=release scripts/browser-smoke-integrated.sh
+  scripts/browser-smoke-opencode-integrated.sh
+  TOKENPLUME_BROWSER_BUILD_PROFILE=release scripts/browser-smoke-opencode-integrated.sh
   scripts/benchmark-context-river.sh large
+  python3 scripts/benchmark-opencode.py --full
 fi

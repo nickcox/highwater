@@ -1,7 +1,7 @@
 use super::error::FlightError;
 use crate::{
     analysis::{analyze, AnalysisConfig, TokenizationPolicy},
-    pi::PiSourceAdapter,
+    source::{self, SessionLocator},
 };
 use std::{
     collections::HashMap,
@@ -32,11 +32,19 @@ fn write_failure_diagnostic(writer: &mut impl Write, error: &FlightError) {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct AnalysisCacheKey {
     pub path: PathBuf,
+    pub database_revision: Option<(String, [u8; 32])>,
     pub byte_size: u64,
     pub modified_nanos: u128,
     pub tokenization: TokenizationPolicy,
     pub schema_version: u32,
     pub output_version: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DatabaseFlightKey {
+    database: PathBuf,
+    native_id: String,
+    tokenization: TokenizationPolicy,
 }
 
 #[derive(Debug)]
@@ -61,6 +69,7 @@ pub(super) struct AnalysisFlight {
 pub(super) struct AnalysisState {
     pub entries: HashMap<AnalysisCacheKey, CachedEntry>,
     pub flights: HashMap<AnalysisCacheKey, Arc<AnalysisFlight>>,
+    database_flights: HashMap<DatabaseFlightKey, Arc<AnalysisFlight>>,
     clock: u64,
     capacity: usize,
     byte_capacity: usize,
@@ -85,6 +94,7 @@ impl AnalysisState {
         Self {
             entries: HashMap::new(),
             flights: HashMap::new(),
+            database_flights: HashMap::new(),
             clock: 0,
             capacity: capacity.max(1),
             byte_capacity: byte_capacity.max(1),
@@ -165,6 +175,146 @@ impl AnalysisService {
         // A reporter is ancillary, including injected reporters that unwind.
         // Never attempt another diagnostic here: the original sink may be broken.
         let _ = catch_unwind(AssertUnwindSafe(|| (self.reporter)(error)));
+    }
+
+    pub async fn response_source(
+        self: &Arc<Self>,
+        locator: SessionLocator,
+        config: AnalysisConfig,
+    ) -> SharedResult {
+        match locator {
+            SessionLocator::PiFile(path) => self.response(path, config).await,
+            SessionLocator::OpenCode {
+                database,
+                native_id,
+            } => {
+                let key = DatabaseFlightKey {
+                    database,
+                    native_id,
+                    tokenization: config.tokenization,
+                };
+                let (flight, start) = {
+                    let mut state = self
+                        .state
+                        .lock()
+                        .map_err(|_| Arc::new(FlightError::Unavailable))?;
+                    if let Some(flight) = state.database_flights.get(&key) {
+                        (Arc::clone(flight), false)
+                    } else {
+                        let (result, _) = watch::channel(None);
+                        let flight = Arc::new(AnalysisFlight { result });
+                        state
+                            .database_flights
+                            .insert(key.clone(), Arc::clone(&flight));
+                        (flight, true)
+                    }
+                };
+                if start {
+                    self.start_database(key, config, Arc::clone(&flight));
+                }
+                wait_for_flight(flight).await
+            }
+        }
+    }
+
+    fn start_database(
+        self: &Arc<Self>,
+        key: DatabaseFlightKey,
+        config: AnalysisConfig,
+        flight: Arc<AnalysisFlight>,
+    ) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            let result = match Arc::clone(&service.permits).acquire_owned().await {
+                Ok(permit) => {
+                    let worker_service = Arc::clone(&service);
+                    let worker_key = key.clone();
+                    match tokio::task::spawn_blocking(move || {
+                        let _permit = permit;
+                        worker_service.database_response(&worker_key, config)
+                    })
+                    .await
+                    {
+                        Ok(result) => result.map_err(Arc::new),
+                        Err(error) => Err(Arc::new(FlightError::Task(error))),
+                    }
+                }
+                Err(_) => Err(Arc::new(FlightError::Unavailable)),
+            };
+            let failure = result.as_ref().err().cloned();
+            if let Ok(mut state) = service.state.lock() {
+                flight.result.send_replace(Some(result));
+                state.database_flights.remove(&key);
+            } else {
+                flight.result.send_replace(Some(result));
+            }
+            if let Some(error) = failure {
+                service.report_failure(&error);
+            }
+        });
+    }
+
+    fn database_response(
+        &self,
+        locator: &DatabaseFlightKey,
+        config: AnalysisConfig,
+    ) -> Result<Arc<CachedResponse>, FlightError> {
+        use crate::{
+            opencode::{replay, storage, usage::OutputAccounting},
+            source::LoadError,
+        };
+        // Every request revalidates against a committed snapshot BEFORE a cache
+        // hit or 304. Database mtime/size and WAL notifications are not authority.
+        let snapshot_started = Instant::now();
+        let snapshot = storage::load_session(&locator.database, &locator.native_id, None)
+            .map_err(LoadError::Storage)
+            .map_err(FlightError::from)?;
+        if config.perf_diagnostics {
+            eprintln!(
+                "opencode_snapshot_perf snapshot_ms={:.3} source_bytes={} messages={} parts={}",
+                snapshot_started.elapsed().as_secs_f64() * 1000.0,
+                snapshot.source_bytes,
+                snapshot.messages.len(),
+                snapshot
+                    .messages
+                    .iter()
+                    .map(|message| message.parts.len())
+                    .sum::<usize>(),
+            );
+        }
+        let key = AnalysisCacheKey {
+            path: locator.database.clone(),
+            database_revision: Some((locator.native_id.clone(), *snapshot.revision.as_bytes())),
+            byte_size: 0,
+            modified_nanos: 0,
+            tokenization: config.tokenization,
+            schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
+            output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+        };
+        if let Some(response) = self
+            .state
+            .lock()
+            .map_err(|_| FlightError::Unavailable)?
+            .get(&key)
+        {
+            return Ok(response);
+        }
+        let replay = replay::reconstruct(snapshot, OutputAccounting::Unknown)
+            .map_err(LoadError::Replay)
+            .map_err(FlightError::from)?;
+        let analysis =
+            source::analyze_reconstructed(replay, config).map_err(FlightError::Analysis)?;
+        let body = serde_json::to_vec(&analysis).map_err(FlightError::Serialization)?;
+        let response = Arc::new(CachedResponse {
+            approximate_bytes: body.len(),
+            body: bytes::Bytes::from(body),
+            etag: etag_for_key(&key),
+        });
+        self.state
+            .lock()
+            .map_err(|_| FlightError::Unavailable)?
+            .insert(key, Arc::clone(&response));
+        Ok(response)
     }
 
     pub async fn response(self: &Arc<Self>, path: PathBuf, config: AnalysisConfig) -> SharedResult {
@@ -265,6 +415,22 @@ impl AnalysisService {
     }
 }
 
+async fn wait_for_flight(flight: Arc<AnalysisFlight>) -> SharedResult {
+    let mut receiver = flight.result.subscribe();
+    if let Some(result) = receiver.borrow().clone() {
+        return result;
+    }
+    receiver
+        .changed()
+        .await
+        .map_err(|_| Arc::new(FlightError::Unavailable))?;
+    let result = receiver
+        .borrow()
+        .clone()
+        .ok_or_else(|| Arc::new(FlightError::Unavailable))?;
+    result
+}
+
 /// Size/mtime identity deliberately preserves the existing cache contract; it
 /// cannot detect a rewrite that preserves both values. Never call on async workers.
 pub(super) fn analysis_cache_key(
@@ -281,6 +447,7 @@ pub(super) fn analysis_cache_key(
     let canonical_path = fs::canonicalize(path).map_err(FlightError::Io)?;
     Ok(AnalysisCacheKey {
         path: canonical_path,
+        database_revision: None,
         byte_size: metadata.len(),
         modified_nanos,
         tokenization: config.tokenization,
@@ -296,19 +463,19 @@ pub(super) fn execute_analysis(
 ) -> Result<Arc<CachedResponse>, FlightError> {
     let source_bytes = response_key.byte_size;
     let started = Instant::now();
-    let (normalized, parse_stats) = match PiSourceAdapter.parse_path_with_stats(&path) {
+    let loaded = match source::load(&SessionLocator::PiFile(path.clone()), None) {
         Ok(value) => value,
         Err(error) => {
             return Err(classify_parse_failure(
                 &path,
                 &response_key,
-                FlightError::Source(error),
+                FlightError::from(error),
             ))
         }
     };
     let parse_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
-    let analysis = analyze(normalized, config).map_err(FlightError::Analysis)?;
+    let analysis = analyze(loaded.normalized, config).map_err(FlightError::Analysis)?;
     let analysis_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
     let body = serde_json::to_vec(&analysis).map_err(FlightError::Serialization)?;
@@ -317,7 +484,7 @@ pub(super) fn execute_analysis(
     }
     if config.perf_diagnostics {
         eprintln!("analysis_perf parse_ms={parse_ms:.3} analyze_ms={analysis_ms:.3} serialize_ms={:.3} source_bytes={source_bytes} response_bytes={} entries={} selected_entries={} calls={} items={} presences={}",
-            started.elapsed().as_secs_f64() * 1000.0, body.len(), parse_stats.entries, parse_stats.selected_entries,
+            started.elapsed().as_secs_f64() * 1000.0, body.len(), loaded.stats.records, loaded.stats.selected_records,
             analysis.model_calls.len(), analysis.context_items.len(), analysis.context_items.iter().map(|item| item.presence_call_count).sum::<usize>());
     }
     Ok(Arc::new(CachedResponse {
@@ -351,6 +518,12 @@ fn fingerprint_matches(path: &Path, key: &AnalysisCacheKey) -> Result<bool, Flig
 pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(key.path.to_string_lossy().as_bytes());
+    if let Some((native_id, revision)) = &key.database_revision {
+        hasher.update(b"\0opencode\0");
+        hasher.update(&(native_id.len() as u64).to_le_bytes());
+        hasher.update(native_id.as_bytes());
+        hasher.update(revision);
+    }
     hasher.update(&key.byte_size.to_le_bytes());
     hasher.update(&key.modified_nanos.to_le_bytes());
     hasher.update(key.tokenization.as_str().as_bytes());

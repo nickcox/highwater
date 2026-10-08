@@ -144,7 +144,12 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 strip(&timed),
                 "timing changed non-timing fields: {fixture}"
             );
-            let bytes = serde_json::to_vec(&output).expect("JSON");
+            // Schema 9 adds optional source reconstruction qualifications. Pi
+            // keeps its existing payload; compare it to the schema-8 baseline
+            // with only the intentional envelope-version change removed.
+            let mut baseline = output.clone();
+            baseline.schema_version = 8;
+            let bytes = serde_json::to_vec(&baseline).expect("JSON");
             digest.update(&(bytes.len() as u64).to_le_bytes());
             digest.update(&bytes);
         }

@@ -460,6 +460,83 @@ fn export_live_contract() {
         Err(SourceError::InvalidStructure(_))
     ));
 
+    // Exercise the actual SQLite -> replay -> qualified public DTO path too.
+    let temporary = tempfile::tempdir().expect("synthetic OpenCode fixture");
+    let database = temporary.path().join("opencode.db");
+    let writer = rusqlite::Connection::open(&database).expect("synthetic database");
+    writer
+        .execute_batch(include_str!("../../fixtures/opencode/legacy-schema.sql"))
+        .expect("synthetic schema");
+    writer
+        .execute_batch(include_str!("../../fixtures/opencode/simple.sql"))
+        .expect("synthetic rows");
+    let snapshot = crate::opencode::storage::load_session(&database, "ses_synthetic", None)
+        .expect("read-only snapshot");
+    let replay = crate::opencode::replay::reconstruct(
+        snapshot,
+        crate::opencode::usage::OutputAccounting::Unknown,
+    )
+    .expect("legacy replay");
+    let opencode = crate::source::analyze_reconstructed(replay, config(TokenizationPolicy::Auto))
+        .expect("qualified analysis");
+    cases.push(("opencode-sqlite-auto".into(), opencode));
+    writer
+        .execute_batch(include_str!("../../fixtures/opencode/compaction.sql"))
+        .expect("synthetic compaction rows");
+    let snapshot = crate::opencode::storage::load_session(&database, "ses_synthetic", None)
+        .expect("compacted snapshot");
+    let replay = crate::opencode::replay::reconstruct(
+        snapshot,
+        crate::opencode::usage::OutputAccounting::Unknown,
+    )
+    .expect("compacted replay");
+    let compacted = crate::source::analyze_reconstructed(replay, config(TokenizationPolicy::Auto))
+        .expect("qualified compaction analysis");
+    cases.push(("opencode-compaction-auto".into(), compacted));
+
+    let modern_database = temporary.path().join("modern.db");
+    let modern_writer = rusqlite::Connection::open(&modern_database).expect("modern database");
+    modern_writer
+        .execute_batch(include_str!("../../fixtures/opencode/modern-schema.sql"))
+        .expect("modern schema");
+    modern_writer
+        .execute_batch(include_str!("../../fixtures/opencode/modern.sql"))
+        .expect("modern fixture");
+    for name in [
+        "opencode-modern-auto",
+        "opencode-modern-terminal-auto",
+        "opencode-modern-aggregate-auto",
+        "opencode-modern-adjacent-auto",
+    ] {
+        if name == "opencode-modern-terminal-auto" {
+            modern_writer.execute("INSERT INTO session_message VALUES ('msg_terminal', 'ses_modern', 'compaction', 10, 100, 100, ?1)",
+                [serde_json::json!({"status":"completed","reason":"manual","summary":"Synthetic terminal summary","recent":"Synthetic terminal recent","time":{"created":100}}).to_string()]).expect("terminal modern checkpoint");
+        }
+        if name == "opencode-modern-aggregate-auto" {
+            modern_writer.execute("UPDATE session_message SET data=json_set(data, '$.tokens', json(?1), '$.cost', 0.05) WHERE id='msg_checkpoint'",
+                [serde_json::json!({"input":12,"output":3,"reasoning":0,"cache":{"read":0,"write":0}}).to_string()]).expect("recorded aggregate usage");
+        }
+        if name == "opencode-modern-adjacent-auto" {
+            modern_writer
+                .execute("UPDATE session_message SET seq=seq+10 WHERE seq>=6", [])
+                .expect("make sequence room");
+            modern_writer.execute("INSERT INTO session_message VALUES ('msg_adjacent', 'ses_modern', 'compaction', 6, 56, 56, ?1)",
+                [serde_json::json!({"status":"completed","reason":"manual","summary":"Synthetic replacement summary","recent":"Synthetic replacement recent","time":{"created":56}}).to_string()]).expect("adjacent modern checkpoint");
+        }
+        let snapshot = crate::opencode::storage::load_session(&modern_database, "ses_modern", None)
+            .expect("modern snapshot");
+        let replay = crate::opencode::replay::reconstruct(
+            snapshot,
+            crate::opencode::usage::OutputAccounting::Unknown,
+        )
+        .expect("modern replay");
+        cases.push((
+            name.into(),
+            crate::source::analyze_reconstructed(replay, config(TokenizationPolicy::Auto))
+                .expect("qualified modern analysis"),
+        ));
+    }
+
     let export = std::env::var_os("TOKENPLUME_CONTRACT_DIR").map(PathBuf::from);
     if let Some(directory) = &export {
         assert!(
@@ -491,7 +568,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 91);
+    assert_eq!(manifest.len(), 97);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

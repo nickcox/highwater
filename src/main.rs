@@ -1,8 +1,10 @@
 mod analysis;
 mod api;
 mod domain;
+mod opencode;
 mod pi;
 mod server;
+mod source;
 
 use clap::Parser;
 

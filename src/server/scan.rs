@@ -79,8 +79,13 @@ impl ScanScheduler {
         changed
     }
 
-    pub(crate) fn watcher_healthy(&self) -> bool {
-        self.watcher_healthy
+    /// Partial source failures retain healthy catalogue entries but still rate
+    /// limit degraded requests. Successful scans can recover without reattaching
+    /// a watcher; real watcher loss remains degraded independently.
+    pub(crate) fn sources_failed(&mut self) {
+        if !self.shutdown {
+            self.degraded = true;
+        }
     }
 
     pub(crate) fn is_degraded(&self) -> bool {
@@ -199,6 +204,26 @@ mod tests {
 
     fn at(milliseconds: u64) -> Instant {
         Instant::now() + Duration::from_millis(milliseconds)
+    }
+
+    #[test]
+    fn source_failures_rate_limit_and_recover_without_masking_watcher_loss() {
+        let start = at(0);
+        let mut scheduler = ScanScheduler::new(true);
+        scheduler.request(start, false);
+        assert!(scheduler.try_start(start, false));
+        scheduler.scan_succeeded(false);
+        scheduler.sources_failed();
+        assert!(scheduler.is_degraded());
+        scheduler.request(start, false);
+        assert!(!scheduler.try_start(start + Duration::from_millis(10), false));
+        scheduler.timer(start + DEGRADED_SCAN_INTERVAL);
+        assert!(scheduler.try_start(start + DEGRADED_SCAN_INTERVAL, false));
+        assert!(scheduler.scan_succeeded(false));
+        assert!(!scheduler.is_degraded());
+        scheduler.watcher_failed();
+        scheduler.scan_succeeded(false);
+        assert!(scheduler.is_degraded());
     }
 
     #[test]

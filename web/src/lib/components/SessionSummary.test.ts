@@ -13,7 +13,7 @@ describe('SessionSummary', () => {
     expect(screen.getByText('Model calls')).toBeInTheDocument();
     expect(screen.getByText('Context items')).toBeInTheDocument();
     expect(screen.getByText('Peak calculated context')).toBeInTheDocument();
-    expect(screen.getByText('Pi-calculated cost')).toBeInTheDocument();
+    expect(screen.getByText('Harness-recorded cost')).toBeInTheDocument();
     expect(screen.queryByTestId('estimate-caveat')).not.toBeInTheDocument();
 
     const details = container.querySelector('details.session-details') as HTMLDetailsElement;
@@ -45,7 +45,7 @@ describe('SessionSummary', () => {
 
     expect(container).toHaveTextContent('Provider-reported cost');
     expect(container).toHaveTextContent('Provider-reported');
-    expect(container).not.toHaveTextContent('Pi-calculated');
+    expect(container).not.toHaveTextContent('Harness-recorded cost');
     expect(container).not.toHaveTextContent('configured Pi model rates');
   });
 });

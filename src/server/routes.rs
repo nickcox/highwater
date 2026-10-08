@@ -106,7 +106,12 @@ async fn session_analysis(
     let session = resolve_session(&snapshot.sessions, &id)?;
     let response = state
         .analysis
-        .response(std::path::PathBuf::from(&session.path), state.config)
+        .response_source(
+            session.locator.clone().unwrap_or_else(|| {
+                crate::source::SessionLocator::PiFile(std::path::PathBuf::from(&session.path))
+            }),
+            state.config,
+        )
         .await
         .map_err(AppError::Shared)?;
     response_for(&response, &headers)

@@ -3,8 +3,11 @@ mod assets;
 mod catalog;
 mod error;
 mod events;
+#[cfg(test)]
+mod opencode_tests;
 mod routes;
 mod scan;
+mod sources;
 use routes::router;
 #[path = "watch.rs"]
 mod watcher;
@@ -21,7 +24,7 @@ use axum::{
     http::{header, StatusCode},
     response::IntoResponse,
 };
-use catalog::{canonical_root, discover, ScanError, SessionCatalog};
+use catalog::{ScanError, SessionCatalog};
 use chrono::{DateTime, Utc};
 use clap::{Parser, ValueEnum};
 use error::AppError;
@@ -67,6 +70,9 @@ impl From<TokenizationArg> for TokenizationPolicy {
 pub(crate) struct Args {
     #[arg(long)]
     pub session_root: Option<PathBuf>,
+    /// OpenCode SQLite database (repeatable). Explicit Pi roots remain Pi-only unless set.
+    #[arg(long)]
+    pub opencode_db: Vec<PathBuf>,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
@@ -135,13 +141,20 @@ impl ScanCoordinator {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionFile {
     id: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     path: String,
     file_name: String,
     display_name: String,
     working_directory: Option<String>,
     started_at: Option<DateTime<Utc>>,
-    byte_size: u64,
+    byte_size: Option<u64>,
     modified_at: Option<DateTime<Utc>>,
+    harness: String,
+    parent_reference: Option<String>,
+    #[serde(skip)]
+    locator: Option<crate::source::SessionLocator>,
+    #[serde(skip)]
+    source_revision: Option<u64>,
     #[serde(skip)]
     modified_nanos: Option<u128>,
 }
@@ -183,18 +196,41 @@ async fn run_with_watcher(
     args: Args,
     start_watcher: WatcherStarter,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let configured_root = args.session_root.unwrap_or_else(|| {
-        PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".pi/agent/sessions")
-    });
-    let root = tokio::task::spawn_blocking(move || canonical_root(&configured_root)).await??;
+    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".local/share"));
+    let sources = tokio::task::spawn_blocking(move || {
+        sources::SourceSet::configured(args.session_root, args.opencode_db, &home, &data_home)
+    })
+    .await??;
+    let root = sources.pi_root.clone().unwrap_or_default();
     let generation = new_generation()?;
     let diagnostics = Arc::new(Diagnostics::default());
     let signals = Arc::new(watcher::WatchSignals::default());
     let (hint_sender, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
-    let watcher = start_watcher_or_degraded(&root, hint_sender, &signals, start_watcher);
-
-    let initial_root = root.clone();
-    let sessions = tokio::task::spawn_blocking(move || discover(&initial_root, None)).await??;
+    let mut watchers = Vec::new();
+    if let Some(pi_root) = &sources.pi_root {
+        if let Some(watcher) =
+            start_watcher_or_degraded(pi_root, hint_sender.clone(), &signals, start_watcher)
+        {
+            watchers.push(watcher);
+        }
+    }
+    for database in &sources.databases {
+        match watcher::start_database(database, hint_sender.clone(), Arc::clone(&signals)) {
+            Ok(watcher) => watchers.push(watcher),
+            Err(_) => {
+                signals.watcher_failed.store(true, Ordering::Release);
+            }
+        }
+    }
+    let scanner = Arc::new(sources::MixedScanner::new(&sources, Arc::clone(&signals)));
+    let initial_scanner = Arc::clone(&scanner);
+    let sessions =
+        tokio::task::spawn_blocking(move || initial_scanner.scan(Arc::new(AtomicBool::new(false))))
+            .await??;
     diagnostics
         .catalogue_sessions
         .store(sessions.len() as u64, Ordering::Relaxed);
@@ -204,7 +240,10 @@ async fn run_with_watcher(
     let (live_state, _live_receiver) = watch::channel(LiveState {
         generation: generation.clone(),
         revision: 0,
-        availability: if watcher.is_some() {
+        availability: if !signals.watcher_failed.load(Ordering::Acquire)
+            && !signals.sources_degraded.load(Ordering::Acquire)
+            && !watchers.is_empty()
+        {
             LiveAvailability::Active
         } else {
             LiveAvailability::Degraded
@@ -229,12 +268,31 @@ async fn run_with_watcher(
             signals: worker_signals,
             diagnostics: worker_diagnostics,
             shutdown: worker_shutdown,
-            scanner: Arc::new(|root, cancelled| discover(&root, Some(cancelled.as_ref()))),
+            scanner: Arc::new(move |_, cancelled| scanner.scan(cancelled)),
         },
         hint_receiver,
         control_receiver,
     ));
 
+    // SQLite data_version polling is an authoritative fallback for missed WAL
+    // notifications. It never hashes all message payloads on catalogue refresh.
+    let poller = if sources.databases.is_empty() {
+        None
+    } else {
+        let mut stop = shutdown.subscribe();
+        Some(tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            interval.tick().await;
+            loop {
+                tokio::select! {
+                    _ = stop.changed() => break,
+                    _ = interval.tick() => {
+                        if hint_sender.try_send(watcher::WatchHint::Filesystem).is_err() { signals.overflow.store(true, Ordering::Release); signals.wake.notify_one(); }
+                    }
+                }
+            }
+        }))
+    };
     let perf_diagnostics = args.perf_diagnostics;
     let state = AppState {
         catalog,
@@ -263,7 +321,10 @@ async fn run_with_watcher(
             "catalogue worker shutdown timed out; blocking catalogue work may still be running"
         ),
     }
-    drop(watcher);
+    if let Some(poller) = poller {
+        poller.abort();
+    }
+    drop(watchers);
     if perf_diagnostics {
         print_diagnostics(&diagnostics);
     }
@@ -515,12 +576,19 @@ async fn scan_worker(
                                 } else {
                                     diagnostics.watch_refreshes_unchanged.fetch_add(1, Ordering::Relaxed);
                                 }
-                                if scheduler.scan_succeeded(changed) {
-                                    let availability = if scheduler.watcher_healthy() {
-                                        LiveAvailability::Active
-                                    } else {
-                                        LiveAvailability::Degraded
-                                    };
+                                scheduler.scan_succeeded(changed);
+                                if signals.sources_degraded.load(Ordering::Acquire) {
+                                    scheduler.sources_failed();
+                                }
+                                let availability = if scheduler.is_degraded() {
+                                    LiveAvailability::Degraded
+                                } else {
+                                    LiveAvailability::Active
+                                };
+                                // Source health can recover even when retained
+                                // metadata is unchanged. Avoid redundant status
+                                // broadcasts for an ongoing partial failure.
+                                if changed || live_state.borrow().availability != availability {
                                     publish_live_state(&catalog, &live_state, availability);
                                 }
                                 for waiter in waiters.drain(..) {
@@ -618,8 +686,12 @@ mod tests {
             display_name: "fixture".into(),
             working_directory: None,
             started_at: None,
-            byte_size: 1,
+            byte_size: Some(1),
             modified_at: None,
+            harness: "pi".into(),
+            parent_reference: None,
+            locator: None,
+            source_revision: None,
             modified_nanos: None,
         }
     }
@@ -1682,6 +1754,7 @@ mod tests {
         let path = directory.path().join("never-created.jsonl");
         let key = AnalysisCacheKey {
             path: path.clone(),
+            database_revision: None,
             byte_size: 1,
             modified_nanos: 1,
             tokenization: TokenizationPolicy::Auto,
@@ -1716,6 +1789,7 @@ mod tests {
         let path = PathBuf::from("fixtures/pi/simple.jsonl");
         let key = |byte_size| AnalysisCacheKey {
             path: path.clone(),
+            database_revision: None,
             byte_size,
             modified_nanos: 0,
             tokenization: TokenizationPolicy::Heuristic,
@@ -1749,6 +1823,7 @@ mod tests {
         let path = PathBuf::from("fixtures/pi/simple.jsonl");
         let key = |byte_size| AnalysisCacheKey {
             path: path.clone(),
+            database_revision: None,
             byte_size,
             modified_nanos: 0,
             tokenization: config.tokenization,

@@ -272,8 +272,14 @@ export interface SessionSummary {
   missingProviderUsageCalls: number;
 }
 
+export interface ReconstructionCoverage {
+  status: 'partial';
+  explanationCodes: string[];
+}
+
 export interface SessionAnalysis {
   schemaVersion: number;
+  reconstruction?: ReconstructionCoverage;
   tokenAnalysis: TokenAnalysisSummary;
   economics: EconomicsSummary;
   session: SessionSummary;

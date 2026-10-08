@@ -51,6 +51,9 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
   const firstCall = analysis.modelCalls[0]?.index ?? 0;
   const lastCall = analysis.modelCalls[analysis.modelCalls.length - 1]?.index ?? 0;
   const terminalBoundary = lastCall + 1;
+  // A checkpoint may be replaced again before any recorded call uses it.
+  // It remains a structural summary, not fabricated context exposure.
+  const structuralSummaryIds = new Set(analysis.compactions.map((event) => event.summaryItemId));
   const terminalSummaryIds = new Set(
     analysis.compactions
       .filter((compaction) => compaction.beforeModelCall === terminalBoundary)
@@ -118,7 +121,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     }
     const isTerminalSummary = terminalSummaryIds.has(item.id);
     if (item.presence.length === 0) {
-      if (!isTerminalSummary || item.firstModelCall !== 0 || item.lastModelCall !== 0) {
+      if (!structuralSummaryIds.has(item.id) || item.firstModelCall !== 0 || item.lastModelCall !== 0) {
         throw new AnalysisValidationError(`Item ${item.id} has no presence ranges`);
       }
       presenceCallsByItem.set(item.id, new Set());

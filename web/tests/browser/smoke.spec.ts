@@ -383,7 +383,9 @@ async function mockApi(page: Page, sourceAnalysis = testAnalysis()): Promise<voi
 async function assertLoaded(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'TokenPlume' })).toBeVisible();
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
-  await expect(page.locator('header select')).toHaveValue(integrated ? /.+/ : 'browser-smoke');
+  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveValue(
+    integrated ? /.+/ : 'browser-smoke',
+  );
 }
 
 async function expandEconomics(page: Page): Promise<void> {
@@ -468,6 +470,47 @@ test('keyboard Retry recovers an analysis failure without switching sessions', a
   await page.keyboard.press('Enter');
   await assertLoaded(page);
   await expect(retry).toHaveCount(0);
+});
+
+test('session picker controls align on desktop and wrap cleanly on narrow screens', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Mocked API only.');
+  await mockApi(page);
+  await page.goto('/');
+  const harness = page.getByRole('combobox', { name: 'Harness' });
+  const search = page.getByRole('searchbox', { name: 'Search sessions' });
+  const session = page.getByRole('combobox', { name: 'Session' });
+  await expect(session).toBeVisible();
+  const controls = [harness, search, session];
+  const desktop = await Promise.all(controls.map((control) => control.boundingBox()));
+  for (const bounds of desktop) {
+    expect(bounds).not.toBeNull();
+    expect(bounds!.height).toBe(36);
+    expect(bounds!.y).toBe(desktop[0]!.y);
+  }
+  const appearance = await Promise.all(
+    controls.map((control) =>
+      control.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.padding, style.borderRadius, style.fontSize, style.backgroundColor];
+      }),
+    ),
+  );
+  expect(appearance[1]).toEqual(appearance[0]);
+  expect(appearance[2]).toEqual(appearance[0]);
+  await search.focus();
+  expect(await search.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const narrow = await Promise.all(controls.map((control) => control.boundingBox()));
+  expect(narrow[1]!.y).toBe(narrow[0]!.y);
+  expect(narrow[2]!.y).toBeGreaterThan(narrow[0]!.y + narrow[0]!.height);
+  for (const bounds of narrow) {
+    expect(bounds!.height).toBe(36);
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  }
 });
 
 test('mocked app loads a session, selects an item, and navigates the chart', async ({ page }) => {
@@ -993,7 +1036,7 @@ test('view links restore Composition scope and absent items, and reject stale re
   test.skip(integrated, 'Uses deterministic session IDs.');
   await mockApi(page);
   await page.goto('/#session=browser-smoke&view=composition&scope=atCall&pin=3&item=a&range=2:4');
-  await expect(page.locator('header select')).toHaveValue('browser-smoke');
+  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveValue('browser-smoke');
   await expect(page.getByRole('tab', { name: 'Composition', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -1622,7 +1665,7 @@ test('cache and cost tracks share the river axis and expose a ratio change', asy
     .toBe(await river.locator('svg').first().getAttribute('width'));
   const scrollLeft = await host.evaluate((element) => element.scrollLeft);
   await page.getByRole('button', { name: 'Cost', exact: true }).click();
-  await expect(page.getByText(/Pi-calculated cost per call/)).toBeVisible();
+  await expect(page.getByText(/Harness-recorded cost per call/)).toBeVisible();
   expect(await host.evaluate((element) => element.scrollLeft)).toBe(scrollLeft);
   expect(await track.getAttribute('width')).toBe(
     await river.locator('svg').first().getAttribute('width'),
@@ -2752,7 +2795,7 @@ test('blocked storage leaves quiet controls usable without private persistence',
   await page.getByRole('button', { name: 'Cost', exact: true }).click();
   await expect(page.locator('.economics-track-svg')).toHaveAttribute(
     'aria-label',
-    /Pi-calculated cost/,
+    /Harness-recorded cost/,
   );
   await page.reload();
   await assertLoaded(page);
@@ -3041,7 +3084,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
     readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8'),
   );
   const analysis = await (await analysisResponse).json();
-  expect(analysis.schemaVersion).toBe(8);
+  expect(analysis.schemaVersion).toBe(9);
   expect(analysis.economics.cacheReadEligibleCalls).toBe(8);
   expect(analysis.economics.supportedPolicyIds).toEqual(
     expect.arrayContaining(['openai-responses-cache-read-v1', 'anthropic-messages-cache-v1']),
@@ -3052,12 +3095,14 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   expect(analysis.modelCalls[4].economics.promptTokens).toBe(70);
   expect(analysis.modelCalls[4].economics.cacheWriteStatus).toBe('reported');
   await assertLoaded(page);
-  await expect(page.locator('header select')).toHaveValue(/^pi-[0-9a-f]{12}$/);
+  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveValue(/^pi-[0-9a-f]{12}$/);
   await expect(page).toHaveURL(/#session=pi-[0-9a-f]{12}/);
   const linkParams = new URLSearchParams(new URL(page.url()).hash.slice(1));
   expect(linkParams.has('tp')).toBe(false);
   expect(linkParams.has('v')).toBe(false);
-  expect(linkParams.get('session')).toBe(await page.locator('header select').inputValue());
+  expect(linkParams.get('session')).toBe(
+    await page.getByRole('combobox', { name: 'Session' }).inputValue(),
+  );
   const chart = page.getByRole('application', { name: 'Context River' });
   await expect(page.getByTestId('visible-call-range')).toContainText('of');
   const ribbon = chart.locator('.ribbon-hit').first();

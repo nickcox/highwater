@@ -12,6 +12,8 @@ use thiserror::Error;
 pub(super) enum FlightError {
     #[error("source session is invalid")]
     Source(#[source] SourceError),
+    #[error("source session cannot be loaded")]
+    SourceLoad(#[source] crate::source::LoadError),
     #[error("cannot read session")]
     Io(#[source] std::io::Error),
     #[error("session changed while it was being analysed")]
@@ -26,6 +28,15 @@ pub(super) enum FlightError {
     Task(#[source] tokio::task::JoinError),
     #[error("analysis service is unavailable")]
     Unavailable,
+}
+
+impl From<crate::source::LoadError> for FlightError {
+    fn from(error: crate::source::LoadError) -> Self {
+        match error {
+            crate::source::LoadError::Pi(error) => Self::Source(error),
+            other => Self::SourceLoad(other),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -68,12 +79,46 @@ fn source_details(error: &SourceError) -> Details {
     }
 }
 
+fn load_details(error: &crate::source::LoadError) -> Details {
+    use crate::{opencode::storage::StorageError, source::LoadError};
+    match error {
+        LoadError::Pi(error) => source_details(error),
+        LoadError::Replay(crate::opencode::replay::ReplayError::UnsupportedHistory) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "SESSION_REPLAY_UNSUPPORTED",
+            "source history uses unsupported replay semantics",
+        ),
+        LoadError::Replay(_) => INVALID_SOURCE,
+        LoadError::Storage(error) => match error {
+            StorageError::NotFound => NOT_FOUND,
+            StorageError::Busy | StorageError::Cancelled => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "SESSION_SOURCE_UNAVAILABLE",
+                "source session is temporarily unavailable",
+            ),
+            StorageError::UnsupportedLayout => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "SESSION_SOURCE_UNSUPPORTED",
+                "source storage layout is unsupported",
+            ),
+            StorageError::BudgetExceeded => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "SESSION_SOURCE_TOO_LARGE",
+                "source session exceeds the read budget",
+            ),
+            StorageError::Corrupt | StorageError::InvalidRecords => INVALID_SOURCE,
+            StorageError::Database(_) | StorageError::Io(_) => READ_FAILED,
+        },
+    }
+}
+
 impl FlightError {
     /// Fixed category only: never includes a cause, path, ID, transcript, or panic.
     pub(super) fn safe_diagnostic(&self) -> &'static str {
         match self {
             Self::Source(SourceError::Io(_)) | Self::Io(_) => "analysis_failure category=io",
             Self::Source(_) => "analysis_failure category=source",
+            Self::SourceLoad(_) => "analysis_failure category=source_load",
             Self::SourceChanged => "analysis_failure category=source_changed",
             Self::Fingerprint(_) => "analysis_failure category=fingerprint",
             Self::Analysis(_) => "analysis_failure category=invariant",
@@ -86,6 +131,7 @@ impl FlightError {
     fn details(&self) -> Details {
         match self {
             Self::Source(error) => source_details(error),
+            Self::SourceLoad(error) => load_details(error),
             Self::Io(error) => io_details(error),
             Self::SourceChanged => (
                 StatusCode::CONFLICT,
@@ -139,7 +185,7 @@ impl IntoResponse for AppError {
             Self::AmbiguousSession => (
                 StatusCode::CONFLICT,
                 "AMBIGUOUS_SESSION",
-                "multiple files share this session reference; remove duplicates or resolve the collision",
+                "multiple sources share this session reference; remove duplicates or resolve the collision",
             ),
             Self::Io(error) => io_details(error),
             Self::Source(error) => source_details(error),

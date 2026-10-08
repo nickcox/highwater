@@ -2,6 +2,7 @@ import type { ContextItemKind, IndexedAnalysis, SessionAnalysis } from './types'
 import { AnalysisValidationError } from './analysis-validation';
 import { assertEconomicsSummary } from './economics-validation';
 import { assertCallTiming } from './timing-validation';
+import { assertReconstruction } from './reconstruction';
 import { validateAndIndexAnalysis } from './analysis-structure';
 export { AnalysisValidationError } from './analysis-validation';
 
@@ -22,7 +23,7 @@ function normalizedKind(kind: string): ContextItemKind {
 }
 
 function validateEnvelope(input: SessionAnalysis): void {
-  if (input.schemaVersion !== 8) {
+  if (input.schemaVersion !== 9) {
     throw new AnalysisValidationError(`Unsupported analysis schema ${String(input.schemaVersion)}`);
   }
   if (input.displayWeightUnit !== input.tokenAnalysis.chartUnit) {
@@ -31,6 +32,7 @@ function validateEnvelope(input: SessionAnalysis): void {
   if (!['calculatedTokens', 'estimatedTokens', 'unavailable'].includes(input.displayWeightUnit)) {
     throw new AnalysisValidationError(`Unsupported chart unit ${String(input.displayWeightUnit)}`);
   }
+  assertReconstruction(input);
   assertEconomicsSummary(input.economics, input.modelCalls);
   input.modelCalls.forEach((call) => assertCallTiming(call, input.session.source === 'pi'));
   if (

@@ -46,6 +46,34 @@ async fn typed_causes_remain_inspectable_but_shared_http_and_diagnostics_are_red
             StatusCode::SERVICE_UNAVAILABLE,
             "SESSION_ANALYSIS_FAILED",
         ),
+        (
+            FlightError::from(crate::source::LoadError::Storage(
+                crate::opencode::storage::StorageError::Busy,
+            )),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "SESSION_SOURCE_UNAVAILABLE",
+        ),
+        (
+            FlightError::from(crate::source::LoadError::Storage(
+                crate::opencode::storage::StorageError::UnsupportedLayout,
+            )),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "SESSION_SOURCE_UNSUPPORTED",
+        ),
+        (
+            FlightError::from(crate::source::LoadError::Storage(
+                crate::opencode::storage::StorageError::BudgetExceeded,
+            )),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "SESSION_SOURCE_TOO_LARGE",
+        ),
+        (
+            FlightError::from(crate::source::LoadError::Replay(
+                crate::opencode::replay::ReplayError::UnsupportedHistory,
+            )),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "SESSION_REPLAY_UNSUPPORTED",
+        ),
     ];
     for (error, status, code) in errors {
         let diagnostic = error.safe_diagnostic();

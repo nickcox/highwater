@@ -290,7 +290,7 @@ export function testAnalysis(): SessionAnalysis {
   ];
   const itemEstimateCoverage = coverage(4, 4, 9, 9);
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     tokenAnalysis: {
       policy: 'heuristic',
       chartUnit: 'estimatedTokens',

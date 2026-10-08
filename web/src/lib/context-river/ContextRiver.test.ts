@@ -511,7 +511,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await fireEvent.click(view.getByRole('button', { name: 'Cost' }));
     const track = view.container.querySelector('.economics-track-svg') as SVGSVGElement;
-    expect(track.getAttribute('aria-label')).toContain('Pi-calculated cost');
+    expect(track.getAttribute('aria-label')).toContain('Harness-recorded cost');
     expect(view.container.querySelector('#economics-call-1')?.getAttribute('aria-label')).toContain(
       '0.0000000123',
     );

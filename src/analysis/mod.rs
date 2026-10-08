@@ -30,9 +30,9 @@ use tokenization::{
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 8;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 9;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 15;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 19;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -432,10 +432,10 @@ fn validate_normalized_session(
             if !expected.is_empty()
                 || item.first_model_call != 0
                 || item.last_model_call != 0
-                || !terminal_summary_ids.contains(item.id.as_str())
+                || !summary_ids.contains(item.id.as_str())
             {
                 return Err(invalid_session(format!(
-                    "item {} has no presence but is not a terminal compaction summary",
+                    "item {} has no presence but is not a structural compaction summary",
                     item.id
                 )));
             }
@@ -642,6 +642,9 @@ fn derive_calls(
         if !work.call.context_item_ids.iter().any(|id| {
             item_lookup.get(id.as_str()).is_some_and(|item| {
                 item.kind == ContextItemKind::System
+                    // A frozen mid-conversation update can be estimable without
+                    // establishing the missing historical instruction baseline.
+                    && item.metadata.get("systemUpdateOnly").map(String::as_str) != Some("true")
                     && !matches!(
                         item.payload,
                         TokenizationPayload::SystemPrompt {
@@ -1121,6 +1124,7 @@ fn assemble_analysis(
     }
     Analysis {
         schema_version: ANALYSIS_SCHEMA_VERSION,
+        reconstruction: None,
         token_analysis: analysis_summary,
         economics: economics_summary,
         session: SessionSummary {
@@ -2319,7 +2323,7 @@ mod tests {
         )
         .expect("analysis");
         let json = serde_json::to_value(&analysis).expect("json");
-        assert_eq!(json["schemaVersion"], 8);
+        assert_eq!(json["schemaVersion"], ANALYSIS_SCHEMA_VERSION);
         assert_eq!(json["economics"]["costBasis"], "unknown");
         assert_eq!(
             json["modelCalls"][0]["economics"]["usageCompleteness"],

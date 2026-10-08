@@ -22,8 +22,12 @@ async fn ambiguous_short_references_never_select_an_arbitrary_file() {
         display_name: "first".into(),
         working_directory: None,
         started_at: None,
-        byte_size: 1,
+        byte_size: Some(1),
         modified_at: None,
+        harness: "pi".into(),
+        parent_reference: None,
+        locator: None,
+        source_revision: None,
         modified_nanos: None,
     };
     let mut second = first.clone();

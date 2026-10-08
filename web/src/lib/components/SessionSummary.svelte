@@ -2,6 +2,7 @@
   import type { IndexedAnalysis } from '../types';
   import { estimateQuality } from '../estimate-quality';
   import { describeCostBasis, isPiSource } from '../cost-basis';
+  import { reconstructionLimitLabels } from '../reconstruction';
   import {
     chartUnitLabel,
     coverageLabel,
@@ -33,6 +34,20 @@
 </script>
 
 <section class="summary" aria-label="Session summary">
+  {#if analysis.reconstruction}
+    <aside aria-label="Reconstruction coverage" class="reconstruction-coverage">
+      <strong>Reconstructed conversation only.</strong> This is not a complete historical model
+      request. System instructions, tool declarations, and request transformations may be missing.
+      <details>
+        <summary>Reconstruction limits</summary>
+        <ul>
+          {#each analysis.reconstruction.explanationCodes as code}<li>
+              {reconstructionLimitLabels[code]}
+            </li>{/each}
+        </ul>
+      </details>
+    </aside>
+  {/if}
   <div class="primary-metrics">
     <div><span>Model calls</span><b>{formatInteger(analysis.modelCalls.length)}</b></div>
     <div><span>Context items</span><b>{formatInteger(analysis.contextItems.length)}</b></div>
@@ -266,6 +281,12 @@
   .summary {
     margin-top: 16px;
     min-width: 0;
+  }
+  .reconstruction-coverage {
+    color: var(--warning);
+    font-size: 12px;
+    margin-bottom: 12px;
+    overflow-wrap: anywhere;
   }
   .primary-metrics {
     display: grid;

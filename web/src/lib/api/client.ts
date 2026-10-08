@@ -6,8 +6,10 @@ export interface SessionListItem {
   displayName: string;
   workingDirectory: string | null;
   startedAt: string | null;
-  byteSize: number;
+  byteSize: number | null;
   modifiedAt: string | null;
+  harness?: 'pi' | 'opencode';
+  parentReference?: string | null;
 }
 
 export type LiveAvailability = 'active' | 'degraded';

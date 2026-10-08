@@ -53,9 +53,9 @@ const EXPLANATIONS: Record<string, EconomicsExplanation> = {
       'This is a calculation from configured model rates, not a provider invoice or exact billed charge.',
   },
   sourceModelRateCostBasis: {
-    title: 'Cost uses source model rates',
+    title: 'Cost uses harness model rates',
     impact:
-      'This is a calculation from rates configured by the session source, not a provider invoice or exact billed charge.',
+      'This cost was recorded by the harness using its configured model rates, not a provider invoice or exact billed charge.',
   },
   providerReportedCostBasis: {
     title: 'Cost was reported by the provider',
