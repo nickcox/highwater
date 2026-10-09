@@ -9,7 +9,7 @@ import { inspectorSections } from '../state/inspector-sections';
 afterEach(cleanup);
 
 describe('ItemDetails presence feedback', () => {
-  it('hides Inspect call only when its target is already pinned', async () => {
+  it('inspects first inclusion independently of estimate and pin, hiding only at that pin', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const onInspectCall = vi.fn();
     const view = render(ItemDetails, {
@@ -21,16 +21,28 @@ describe('ItemDetails presence feedback', () => {
         onInspectCall,
       },
     });
-    expect(screen.queryByRole('button', { name: /Inspect call/ })).toBeNull();
-    await view.rerender({ pinnedCallIndex: null });
-    await fireEvent.click(screen.getByRole('button', { name: 'Inspect call 1' }));
+    expect(screen.queryByRole('button', { name: /Inspect first included call/ })).toBeNull();
+    await view.rerender({ pinnedCallIndex: 2, callIndex: 2 });
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect first included call · 1' }));
     expect(onInspectCall).toHaveBeenLastCalledWith(1);
-    await view.rerender({ pinnedCallIndex: 2 });
-    expect(screen.getByRole('button', { name: 'Inspect call 1' })).toBeInTheDocument();
-    await view.rerender({ callIndex: 2 });
-    expect(screen.queryByRole('button', { name: /Inspect call/ })).toBeNull();
+    await view.rerender({ pinnedCallIndex: 4, callIndex: 4 });
+    expect(
+      screen.getByRole('button', { name: 'Inspect first included call · 1' }),
+    ).toBeInTheDocument();
     await view.rerender({ pinnedCallIndex: null, callIndex: null });
-    expect(screen.getByRole('button', { name: 'Inspect call 2' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Inspect first included call · 1' }),
+    ).toBeInTheDocument();
+    await view.rerender({ item: indexed.itemById.get('retained')! });
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect first included call · 2' }));
+    expect(onInspectCall).toHaveBeenLastCalledWith(2);
+    await view.rerender({ pinnedCallIndex: 2 });
+    expect(screen.queryByRole('button', { name: /Inspect first included call/ })).toBeNull();
+    await view.rerender({
+      item: { ...indexed.itemById.get('summary')!, presence: [] },
+      pinnedCallIndex: null,
+    });
+    expect(screen.queryByRole('button', { name: /Inspect first included call/ })).toBeNull();
   });
   it('closes the item from its identity header without invoking call inspection', async () => {
     const indexed = indexAnalysis(testAnalysis());

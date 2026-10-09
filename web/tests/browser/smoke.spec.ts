@@ -602,6 +602,33 @@ test('River ribbon activation pins first inclusion and explicit call inspection 
   await expect(laterItem).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('treemap selection offers first inclusion even when the item is present at the pinned call', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses deterministic mocked analysis.');
+  await mockApi(page);
+  await page.goto('/');
+  await assertLoaded(page);
+  await page.getByRole('button', { name: 'Pin model call 2', exact: true }).click();
+  await page.getByRole('tab', { name: 'Composition' }).click();
+  const tile = page.locator('.composition-treemap [data-composition-item="a"]');
+  await tile.click();
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
+  await page
+    .locator('.item-details')
+    .getByRole('button', { name: 'Inspect first included call · 1', exact: true })
+    .click();
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  await expect(tile).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Composition' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(
+    page.locator('.item-details').getByRole('button', { name: /Inspect first included call/ }),
+  ).toHaveCount(0);
+});
+
 test('Composition pins explicitly, shares selection state, and reveals from its inspector', async ({
   page,
 }) => {
@@ -3132,21 +3159,20 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
   await page.getByRole('button', { name: 'Pin model call 1', exact: true }).click();
-  await expect(
-    page.locator('.item-details').getByRole('button', { name: /Inspect call/ }),
-  ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Close pinned call', exact: true }).click();
-  // Unpinned inspection uses the item's last included call unless a call is hovered.
-  await page.locator('#selected-item-summary').hover();
-  await page
+  const inspectFirst = page
     .locator('.item-details')
-    .getByRole('button', { name: 'Inspect call 2', exact: true })
-    .click();
-  await expect(
-    page.locator('.item-details').getByRole('button', { name: /Inspect call/ }),
-  ).toHaveCount(0);
+    .getByRole('button', { name: 'Inspect first included call · 1', exact: true });
+  await expect(inspectFirst).toHaveCount(0);
+  await page.getByRole('button', { name: 'Pin model call 2', exact: true }).click();
+  await expect(inspectFirst).toBeVisible();
+  await inspectFirst.click();
+  await expect(inspectFirst).toHaveCount(0);
   await expect(page.locator('#pinned-call-summary')).toBeFocused();
-  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  await page.getByRole('button', { name: 'Close pinned call', exact: true }).click();
+  await expect(inspectFirst).toBeVisible();
+  await inspectFirst.click();
+  await expect(inspectFirst).toHaveCount(0);
   const output = process.env.TOKENPLUME_CALM_SCREENSHOTS;
   if (output) await captureBaselineState(page, output, 'desktop-selected-pinned');
   await expandEconomics(page);

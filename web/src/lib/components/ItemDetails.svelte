@@ -42,6 +42,9 @@
     pinnedCallIndex === null ? null : (indexed.callByIndex.get(pinnedCallIndex) ?? null);
   $: absentAtPinnedCall =
     item !== null && pinnedCall !== null && !pinnedCall.contextItemIds.includes(item.id);
+  $: firstIncludedCall = item?.presence.length
+    ? (indexed.callByIndex.get(item.presence[0].startCall) ?? null)
+    : null;
   $: latestPresentCall =
     item && item.presence.length > 0 ? (indexed.callByIndex.get(item.lastModelCall) ?? null) : null;
   $: selectedCall = (() => {
@@ -129,9 +132,10 @@
     {#if item.presence.length > 0}<button type="button" onclick={() => onRevealInRiver(item.id)}
         >Reveal in River</button
       >{/if}
-    {#if selectedCall && selectedCall.index !== pinnedCallIndex}<button
+    {#if firstIncludedCall && firstIncludedCall.index !== pinnedCallIndex}<button
         type="button"
-        onclick={() => onInspectCall(selectedCall.index)}>Inspect call {selectedCall.index}</button
+        onclick={() => onInspectCall(firstIncludedCall.index)}
+        >Inspect first included call · {firstIncludedCall.index}</button
       >{/if}
     {#if selectedEstimate && (selectedEstimate.coverage !== 'complete' || selectedEstimate.method === 'characterHeuristic')}<p
         class="presence-note"
