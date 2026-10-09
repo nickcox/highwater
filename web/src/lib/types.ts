@@ -81,7 +81,21 @@ export interface CoverageSummary {
 
 export type OutputReasoningRelationship = 'includesReasoning' | 'excludesReasoning' | 'unknown';
 
+export interface RecordedUsagePlaceholder {
+  reason: 'failedAttempt';
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheWrite1h: number | null;
+  reasoning: number | null;
+  totalTokens: number;
+  cost: Cost | null;
+}
+
 export interface Usage {
+  /** Raw default counters, excluded from accounting and comparison. */
+  placeholder: RecordedUsagePlaceholder | null;
   input: number | null;
   /** Normalized completion total, including reasoning exactly once when known. */
   output: number | null;

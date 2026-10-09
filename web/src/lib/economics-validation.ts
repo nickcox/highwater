@@ -86,6 +86,68 @@ function assertCallEconomics(call: ModelCall): void {
       `Call ${call.index} has an unsupported output/reasoning relationship`,
     );
   }
+  const placeholder = call.usage.placeholder;
+  if (placeholder !== null) {
+    if (
+      !placeholder ||
+      typeof placeholder !== 'object' ||
+      Array.isArray(placeholder) ||
+      placeholder.reason !== 'failedAttempt'
+    ) {
+      throw new AnalysisValidationError(
+        `Call ${call.index} has invalid usage placeholder evidence`,
+      );
+    }
+    for (const value of [
+      placeholder.input,
+      placeholder.output,
+      placeholder.cacheRead,
+      placeholder.cacheWrite,
+      placeholder.totalTokens,
+    ]) {
+      if (value !== 0)
+        throw new AnalysisValidationError(
+          `Call ${call.index} has nonzero or missing placeholder counters`,
+        );
+    }
+    for (const value of [placeholder.cacheWrite1h, placeholder.reasoning]) {
+      if (value !== null && value !== 0)
+        throw new AnalysisValidationError(`Call ${call.index} has invalid placeholder breakdowns`);
+    }
+    if (placeholder.cost !== null) {
+      const cost = placeholder.cost;
+      if (
+        !cost ||
+        typeof cost !== 'object' ||
+        Array.isArray(cost) ||
+        [cost.input, cost.output, cost.cacheRead, cost.cacheWrite, cost.total].some(
+          (value) => value !== null && value !== 0,
+        )
+      ) {
+        throw new AnalysisValidationError(`Call ${call.index} has invalid placeholder cost`);
+      }
+    }
+    if (
+      [
+        call.usage.input,
+        call.usage.output,
+        call.usage.recordedOutput,
+        call.usage.cacheRead,
+        call.usage.cacheWrite,
+        call.usage.cacheWrite1h,
+        call.usage.reasoning,
+        call.usage.totalTokens,
+        call.reportedPromptTokens,
+        call.reportedCompletionTokens,
+        call.reportedTotalTokens,
+      ].some((value) => value !== null) ||
+      call.cost !== null
+    ) {
+      throw new AnalysisValidationError(
+        `Call ${call.index} treats placeholder counters as measured usage`,
+      );
+    }
+  }
   const costValues = call.cost
     ? [
         call.cost.input,

@@ -139,7 +139,7 @@ pub(super) fn interpret(
                     .map(|time| time.timestamp_millis())
                     .filter(|ms| ms.unsigned_abs() <= MAX_SAFE_JSON_INTEGER),
             },
-            usage: parse_usage(value.get("usage"))?,
+            usage: parse_assistant_usage(value)?,
             stop_reason: value
                 .get("stopReason")
                 .and_then(Value::as_str)

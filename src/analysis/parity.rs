@@ -150,6 +150,11 @@ fn fixture_outputs_preserve_corrected_baseline() {
             let mut baseline = output.clone();
             baseline.schema_version = 8;
             let mut json = serde_json::to_string(&baseline).expect("JSON");
+            assert!(baseline
+                .model_calls
+                .iter()
+                .all(|call| call.usage.placeholder.is_none()));
+            json = json.replace("\"placeholder\":null,", "");
             for call in &baseline.model_calls {
                 assert_eq!(call.usage.recorded_output, call.usage.output);
                 // Remove exactly the additive fields in struct serialization

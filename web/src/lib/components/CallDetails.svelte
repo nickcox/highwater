@@ -197,7 +197,7 @@
     <dl class="essential-metrics">
       <div>
         <dt>Input</dt>
-        <dd>{formatMetric(call.reportedPromptTokens)}</dd>
+        <dd>{call.usage.placeholder ? 'Unavailable' : formatMetric(call.reportedPromptTokens)}</dd>
       </div>
       {#each recordedMetrics as metric}
         <div>
@@ -208,7 +208,11 @@
       <div>
         <dt>{costCopy.label}</dt>
         <dd>
-          {formatCost(call.cost?.total)}{#if call.economics.costCompleteness !== 'complete'}<small
+          {call.usage.placeholder
+            ? 'Unavailable'
+            : formatCost(
+                call.cost?.total,
+              )}{#if call.economics.costCompleteness !== 'complete'}<small
               >Components: {call.economics.costCompleteness}</small
             >{/if}
         </dd>
@@ -216,7 +220,9 @@
       <div>
         <dt>Provider usage</dt>
         <dd>
-          {call.reportedUsageCompleteness}{#if call.economics.usageCompleteness !== call.reportedUsageCompleteness}<small
+          {call.usage.placeholder
+            ? 'Unavailable'
+            : call.reportedUsageCompleteness}{#if call.economics.usageCompleteness !== call.reportedUsageCompleteness}<small
               >Audited policy: {call.economics.usageCompleteness}</small
             >{/if}
         </dd>
@@ -324,6 +330,28 @@
 
     <details class="usage-breakdown" use:rememberSection={{ state: sections, key: 'usage' }}>
       <summary>Usage and economics</summary>
+      {#if call.usage.placeholder}
+        {@const raw = call.usage.placeholder}
+        <p class="economics-note">
+          Failed or aborted attempt: recorded zeros are placeholders, not measured usage. Actual
+          token consumption and cost are unavailable; partial output does not establish usage.
+        </p>
+        <h4>Raw recorded placeholders</h4>
+        <dl class="detail-rows" aria-label="Raw recorded placeholders">
+          {#each [['Input', raw.input], ['Output', raw.output], ['Cache read', raw.cacheRead], ['Cache write', raw.cacheWrite], ['Cache write 1h', raw.cacheWrite1h], ['Reasoning', raw.reasoning], ['Total tokens', raw.totalTokens]] as [label, value]}
+            <div>
+              <dt>{label} (raw placeholder)</dt>
+              <dd>{formatMetric(value as number | null)}</dd>
+            </div>
+          {/each}
+          {#each [['Input', raw.cost?.input], ['Output', raw.cost?.output], ['Cache read', raw.cost?.cacheRead], ['Cache write', raw.cost?.cacheWrite], ['Total', raw.cost?.total]] as [label, value]}
+            <div>
+              <dt>{label} cost (raw placeholder)</dt>
+              <dd>{formatCost(value as number | null | undefined)}</dd>
+            </div>
+          {/each}
+        </dl>
+      {/if}
       <p class="economics-note">
         Token buckets follow the {usageMappingLabel} when supported; normalized zeros may reflect adapter
         defaults. {costCopy.note} Cache write 1h is retained source detail and is not added to aggregate

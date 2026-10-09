@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 100) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 104) throw new Error('Incomplete live Rust contract export.');
 
 function output(name: string): SessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -163,7 +163,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
   it.each(manifest.cases)('accepts and indexes $name without repairs', ({ name }) => {
     const analysis = output(name);
     const indexed = indexAnalysis(analysis);
-    expect(analysis.schemaVersion).toBe(10);
+    expect(analysis.schemaVersion).toBe(11);
     expect(indexed.callByIndex.size).toBe(analysis.modelCalls.length);
     expect(indexed.itemById.size).toBe(analysis.contextItems.length);
     for (const profile of analysis.tokenAnalysis.profiles)
@@ -316,8 +316,8 @@ describe('live production Rust -> indexAnalysis contract', () => {
   });
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
-    expect(manifest.schemaVersion).toBe(10);
-    expect(manifest.outputVersion).toBe(20);
+    expect(manifest.schemaVersion).toBe(11);
+    expect(manifest.outputVersion).toBe(21);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

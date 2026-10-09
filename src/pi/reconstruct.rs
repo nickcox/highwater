@@ -687,6 +687,51 @@ fn parse_safe_u64(value: Option<&Value>, field: &'static str) -> Result<Option<u
     Ok(None)
 }
 
+fn parse_assistant_usage(message: &Value) -> Result<ReportedUsage, SourceError> {
+    let usage = parse_usage(message.get("usage"))?;
+    // Pi initializes every core counter and cost component to zero before
+    // streaming. A failed/aborted all-zero record is not evidence that the
+    // provider measured zero consumption, even if partial content was saved.
+    let unsuccessful = matches!(
+        message.get("stopReason").and_then(Value::as_str),
+        Some("error" | "aborted")
+    );
+    let default_counters = [
+        usage.input,
+        usage.output,
+        usage.cache_read,
+        usage.cache_write,
+        usage.total_tokens,
+    ]
+    .iter()
+    .all(|value| *value == Some(0));
+    let default_breakdowns = [usage.cache_write_1h, usage.reasoning]
+        .iter()
+        .all(|value| value.is_none_or(|value| value == 0));
+    let default_cost = [
+        usage.cost.input,
+        usage.cost.output,
+        usage.cost.cache_read,
+        usage.cost.cache_write,
+        usage.cost.total,
+    ]
+    .iter()
+    .all(|value| value.is_none_or(|value| value == 0.0));
+    if unsuccessful && default_counters && default_breakdowns && default_cost {
+        Ok(ReportedUsage {
+            placeholder: Some(PlaceholderUsage {
+                cache_write_1h: usage.cache_write_1h,
+                reasoning: usage.reasoning,
+                cost: usage.cost,
+            }),
+            output_reasoning_relationship: usage.output_reasoning_relationship,
+            ..ReportedUsage::default()
+        })
+    } else {
+        Ok(usage)
+    }
+}
+
 fn parse_usage(value: Option<&Value>) -> Result<ReportedUsage, SourceError> {
     let Some(usage) = value else {
         return Ok(ReportedUsage::default());
@@ -694,6 +739,7 @@ fn parse_usage(value: Option<&Value>) -> Result<ReportedUsage, SourceError> {
     let cost = usage.get("cost");
     let output = parse_safe_u64(usage.get("output"), "usage.output")?;
     Ok(ReportedUsage {
+        placeholder: None,
         input: parse_safe_u64(usage.get("input"), "usage.input")?,
         output,
         recorded_output: output,
@@ -753,6 +799,77 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::{BufReader, Cursor};
+
+    #[test]
+    fn failed_default_usage_is_unavailable_but_retains_raw_placeholders() {
+        for stop in ["error", "aborted"] {
+            let message = serde_json::json!({"stopReason":stop,"content":[{"type":"text","text":"partial"}],
+                "usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,
+                "cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}}});
+            let usage = parse_assistant_usage(&message).expect("usage");
+            let raw = usage.placeholder.as_ref().expect("raw default usage");
+            assert_eq!(raw.reasoning, None);
+            assert_eq!(raw.cost.total, Some(0.0));
+            assert!(
+                usage.input.is_none() && usage.output.is_none() && usage.recorded_output.is_none()
+            );
+            assert!(
+                usage.cache_read.is_none()
+                    && usage.cache_write.is_none()
+                    && usage.total_tokens.is_none()
+            );
+            assert!(usage.cost.total.is_none());
+            for field in [
+                "input",
+                "output",
+                "cacheRead",
+                "cacheWrite",
+                "reasoning",
+                "totalTokens",
+                "cacheWrite1h",
+            ] {
+                let mut measured = message.clone();
+                measured["usage"][field] = serde_json::json!(1);
+                assert!(
+                    parse_assistant_usage(&measured)
+                        .expect("nonzero usage")
+                        .placeholder
+                        .is_none(),
+                    "{field}"
+                );
+            }
+            let mut measured_cost = message.clone();
+            measured_cost["usage"]["cost"]["total"] = serde_json::json!(0.01);
+            assert!(parse_assistant_usage(&measured_cost)
+                .expect("recorded cost")
+                .placeholder
+                .is_none());
+            let mut incomplete = message.clone();
+            incomplete["usage"]
+                .as_object_mut()
+                .expect("usage")
+                .remove("totalTokens");
+            assert!(parse_assistant_usage(&incomplete)
+                .expect("incomplete usage")
+                .placeholder
+                .is_none());
+            let mut unsafe_counter = message.clone();
+            unsafe_counter["usage"]["output"] = serde_json::json!(MAX_SAFE_JSON_INTEGER + 1);
+            assert!(parse_assistant_usage(&unsafe_counter).is_err());
+        }
+        let success = serde_json::json!({"stopReason":"stop","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0}});
+        let measured = parse_assistant_usage(&success).expect("measured zero");
+        assert!(measured.placeholder.is_none());
+        assert_eq!(measured.input, Some(0));
+        assert_eq!(measured.output, Some(0));
+        assert_eq!(measured.total_tokens, Some(0));
+        assert!(
+            parse_assistant_usage(&serde_json::json!({"stopReason":"error"}))
+                .expect("missing")
+                .placeholder
+                .is_none()
+        );
+    }
 
     #[test]
     fn recorded_pi_output_and_optional_reasoning_remain_separate_without_changing_totals() {
@@ -917,7 +1034,11 @@ mod tests {
             "tools",
         ] {
             let session = fixture(name);
-            let mut normalized = format!("{session:?}");
+            assert!(session
+                .model_calls
+                .iter()
+                .all(|call| call.reported_usage.placeholder.is_none()));
+            let mut normalized = format!("{session:?}").replace("placeholder: None, ", "");
             // Remove only the additive counter metadata to keep the original
             // replay baseline pinned: no normalized usage or history may change.
             for call in &session.model_calls {

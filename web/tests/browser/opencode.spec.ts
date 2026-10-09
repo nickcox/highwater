@@ -80,7 +80,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   await picker.selectOption(openCode.id);
   const response = await analysisResponse;
   const analysis = await response.json();
-  expect(analysis.schemaVersion).toBe(10);
+  expect(analysis.schemaVersion).toBe(11);
   expect(analysis.session.source).toBe('opencode');
   expect(analysis.reconstruction.status).toBe('partial');
   await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();

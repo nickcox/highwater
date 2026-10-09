@@ -83,6 +83,7 @@ const estimate = (tokens: number): ContextItemTokenEstimate => ({
   noteCodes: ['heuristicTokenizer'],
 });
 const usage = {
+  placeholder: null,
   input: 10,
   output: 2,
   recordedOutput: 2,
@@ -294,7 +295,7 @@ export function testAnalysis(): SessionAnalysis {
   ];
   const itemEstimateCoverage = coverage(4, 4, 9, 9);
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     tokenAnalysis: {
       policy: 'heuristic',
       chartUnit: 'estimatedTokens',

@@ -16,11 +16,18 @@ export function recordedResponseMetrics(usage: Usage): { label: string; value: s
   const metrics = [
     {
       label: 'Recorded output',
-      value: usage.recordedOutput === null ? 'Not recorded' : formatMetric(usage.recordedOutput),
+      value: usage.placeholder
+        ? 'Unavailable'
+        : usage.recordedOutput === null
+          ? 'Not recorded'
+          : formatMetric(usage.recordedOutput),
     },
   ];
-  if (usage.reasoning !== null) {
-    metrics.push({ label: 'Recorded reasoning', value: formatMetric(usage.reasoning) });
+  if (usage.reasoning !== null || usage.placeholder?.reasoning != null) {
+    metrics.push({
+      label: 'Recorded reasoning',
+      value: usage.placeholder ? 'Unavailable' : formatMetric(usage.reasoning),
+    });
   }
   return metrics;
 }

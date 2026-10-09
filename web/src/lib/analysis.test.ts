@@ -35,8 +35,8 @@ describe('indexAnalysis', () => {
 
   it('rejects the previous schema instead of silently displaying normalized output as recorded output', () => {
     const old = testAnalysis();
-    old.schemaVersion = 9;
-    expect(() => indexAnalysis(old)).toThrow(/Unsupported analysis schema 9/);
+    old.schemaVersion = 10;
+    expect(() => indexAnalysis(old)).toThrow(/Unsupported analysis schema 10/);
   });
   function analysisWithAuditedAnthropicCall() {
     const analysis = testAnalysis();

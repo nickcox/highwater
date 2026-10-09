@@ -71,6 +71,9 @@ pub(crate) enum OutputReasoningRelationship {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReportedUsage {
+    /// Raw default-zero counters from an unsuccessful attempt, not measurements.
+    /// Qualified accounting fields below remain absent when this is present.
+    pub placeholder: Option<PlaceholderUsage>,
     pub input: Option<u64>,
     /// Normalized completion total, including reasoning exactly once when known.
     pub output: Option<u64>,
@@ -82,6 +85,15 @@ pub(crate) struct ReportedUsage {
     pub cache_write_1h: Option<u64>,
     pub reasoning: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cost: ReportedCost,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PlaceholderUsage {
+    // The five core counters were explicitly recorded as zero. Keep optional
+    // breakdown missingness and original cost components for inspection.
+    pub cache_write_1h: Option<u64>,
+    pub reasoning: Option<u64>,
     pub cost: ReportedCost,
 }
 

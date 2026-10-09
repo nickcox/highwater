@@ -2,12 +2,16 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { testAnalysis } from '../../src/lib/context-river/test-data';
+import type { SessionAnalysis } from '../../src/lib/types';
 import { ITEM_TYPE_PALETTE } from '../../src/lib/context-river/colors';
 import { compositionScenario } from '../../src/lib/testing/composition-scenarios';
 import { sessionScenario } from '../../src/lib/testing/session-scenarios';
 
 const integrated = process.env.TOKENPLUME_BROWSER_INTEGRATED === '1';
 const generation = '0123456789abcdef0123456789abcdef';
+const failedUsageExport = JSON.parse(
+  readFileSync(new URL('../../../fixtures/analysis/failed-usage.json', import.meta.url), 'utf8'),
+) as SessionAnalysis;
 
 function economicsScenario(): ReturnType<typeof testAnalysis> {
   const analysis = testAnalysis();
@@ -880,6 +884,39 @@ test('recorded Pi system and tools are visible at call 1 and survive revision an
     path: '.playwright/calm-workspace/pi-system-composition-narrow.png',
     fullPage: true,
   });
+});
+
+test('failed default-zero usage breaks the input reference and keeps raw zeros in details', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses live Rust synthetic failed-attempt export.');
+  const analysis = structuredClone(failedUsageExport) as SessionAnalysis;
+  await mockApi(page, analysis);
+  await page.goto('/#session=browser-smoke&pin=2');
+  await assertLoaded(page);
+  const legend = page.getByRole('group', { name: 'Input reference legend' });
+  await expect(legend).toContainText('Call 2');
+  await expect(legend).toContainText('input comparison unavailable');
+  await expect(page.locator('.reported-input-line')).toHaveCount(2);
+  const inspector = page.getByRole('region', { name: 'Pinned call 2' });
+  await expect(inspector.locator('.essential-metrics')).toContainText('Unavailable');
+  await inspector.getByText('Usage and economics', { exact: true }).click();
+  await expect(inspector.locator('[aria-label="Raw recorded placeholders"]')).toContainText(
+    'Total tokens (raw placeholder)',
+  );
+  await expect(
+    inspector.getByText('Total tokens (raw placeholder)', { exact: true }).locator('..'),
+  ).toContainText('0');
+  await openViewOptions(page);
+  await page.getByRole('button', { name: 'Item types', exact: true }).click();
+  await expect(legend).toContainText('input comparison unavailable');
+  await expect(page.locator('.reported-input-line')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Next call', exact: true }).click();
+  await expect(legend).toContainText('Call 3');
+  await expect(legend).toContainText('input comparison unavailable');
+  await page.getByRole('button', { name: 'Next call', exact: true }).click();
+  await expect(legend).toContainText('Call 4');
+  await expect(legend).not.toContainText('input comparison unavailable');
 });
 
 test('reported input extends the visible stack without becoming an item type or intercepting navigation', async ({
@@ -3125,7 +3162,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
     readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8'),
   );
   const analysis = await (await analysisResponse).json();
-  expect(analysis.schemaVersion).toBe(10);
+  expect(analysis.schemaVersion).toBe(11);
   expect(analysis.economics.cacheReadEligibleCalls).toBe(8);
   expect(analysis.economics.supportedPolicyIds).toEqual(
     expect.arrayContaining(['openai-responses-cache-read-v1', 'anthropic-messages-cache-v1']),

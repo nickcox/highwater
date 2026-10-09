@@ -257,6 +257,7 @@ pub(crate) struct TransitionItemCounts {
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Usage {
+    pub placeholder: Option<RecordedUsagePlaceholder>,
     pub input: Option<u64>,
     /// Normalized completion total, not necessarily the raw source output bucket.
     pub output: Option<u64>,
@@ -267,6 +268,20 @@ pub(crate) struct Usage {
     pub cache_write_1h: Option<u64>,
     pub reasoning: Option<u64>,
     pub total_tokens: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecordedUsagePlaceholder {
+    pub reason: &'static str,
+    pub input: u64,
+    pub output: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
+    pub cache_write_1h: Option<u64>,
+    pub reasoning: Option<u64>,
+    pub total_tokens: u64,
+    pub cost: Option<Cost>,
 }
 
 #[derive(Debug, Clone, Serialize)]

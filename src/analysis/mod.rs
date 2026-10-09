@@ -30,9 +30,9 @@ use tokenization::{
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 10;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 11;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 20;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 21;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -167,6 +167,46 @@ fn require_safe_integer(value: u64, field: &str) -> Result<(), AnalysisError> {
 }
 
 fn validate_reported_usage(usage: &ReportedUsage, call_index: usize) -> Result<(), AnalysisError> {
+    if let Some(raw) = &usage.placeholder {
+        let counters_absent = [
+            usage.input,
+            usage.output,
+            usage.recorded_output,
+            usage.cache_read,
+            usage.cache_write,
+            usage.cache_write_1h,
+            usage.reasoning,
+            usage.total_tokens,
+        ]
+        .iter()
+        .all(Option::is_none);
+        let costs_absent = [
+            usage.cost.input,
+            usage.cost.output,
+            usage.cost.cache_read,
+            usage.cost.cache_write,
+            usage.cost.total,
+        ]
+        .iter()
+        .all(Option::is_none);
+        let raw_breakdowns_zero = [raw.cache_write_1h, raw.reasoning]
+            .iter()
+            .all(|value| value.is_none_or(|value| value == 0));
+        let raw_cost_zero = [
+            raw.cost.input,
+            raw.cost.output,
+            raw.cost.cache_read,
+            raw.cost.cache_write,
+            raw.cost.total,
+        ]
+        .iter()
+        .all(|value| value.is_none_or(|value| value == 0.0));
+        if !(counters_absent && costs_absent && raw_breakdowns_zero && raw_cost_zero) {
+            return Err(invalid_session(format!(
+                "call {call_index} has inconsistent usage placeholder evidence"
+            )));
+        }
+    }
     for (field, value) in [
         ("input", usage.input),
         ("output", usage.output),
@@ -1190,6 +1230,20 @@ fn to_api_call(
         model: work.call.target.model.clone(),
         api: work.call.target.api.clone(),
         usage: Usage {
+            placeholder: usage
+                .placeholder
+                .as_ref()
+                .map(|raw| RecordedUsagePlaceholder {
+                    reason: "failedAttempt",
+                    input: 0,
+                    output: 0,
+                    cache_read: 0,
+                    cache_write: 0,
+                    cache_write_1h: raw.cache_write_1h,
+                    reasoning: raw.reasoning,
+                    total_tokens: 0,
+                    cost: cost_dto(&raw.cost),
+                }),
             input: usage.input,
             output: usage.output,
             recorded_output: usage.recorded_output,
@@ -1208,7 +1262,7 @@ fn to_api_call(
         cumulative_reported_completion_tokens: derived.cumulative.completion,
         cumulative_reported_reasoning_tokens: derived.cumulative.reasoning,
         cumulative_reported_usage_completeness: derived.cumulative.completeness.as_str().into(),
-        cost: cost_dto(usage),
+        cost: cost_dto(&usage.cost),
         stop_reason: work.call.stop_reason.clone(),
         timing: timing::call_timing(work.call, pi_source),
         context_item_ids: work.call.context_item_ids.clone(),
@@ -1232,8 +1286,7 @@ fn to_api_call(
     }
 }
 
-fn cost_dto(usage: &ReportedUsage) -> Option<Cost> {
-    let cost = &usage.cost;
+fn cost_dto(cost: &ReportedCost) -> Option<Cost> {
     (cost.input.is_some()
         || cost.output.is_some()
         || cost.cache_read.is_some()
@@ -1511,6 +1564,110 @@ mod tests {
                 })
             );
         }
+    }
+
+    #[test]
+    fn inconsistent_placeholder_evidence_is_rejected_before_projection() {
+        use crate::pi::PiSourceAdapter;
+        let original = PiSourceAdapter
+            .parse_path_with_stats(std::path::Path::new("fixtures/pi/failed-usage.jsonl"))
+            .expect("fixture")
+            .0;
+        for mutation in 0..4 {
+            let mut session = original.clone();
+            let usage = &mut session.model_calls[1].reported_usage;
+            match mutation {
+                0 => usage.input = Some(0),
+                1 => usage.cost.total = Some(0.0),
+                2 => {
+                    usage.placeholder.as_mut().expect("raw").reasoning =
+                        Some(MAX_SAFE_JSON_INTEGER + 1)
+                }
+                _ => usage.placeholder.as_mut().expect("raw").cost.total = Some(f64::NAN),
+            }
+            let error = analyze(
+                session,
+                AnalysisConfig {
+                    tokenization: TokenizationPolicy::Auto,
+                    perf_diagnostics: false,
+                },
+            )
+            .expect_err("invalid evidence");
+            assert!(error.to_string().contains("placeholder evidence"));
+        }
+    }
+
+    #[test]
+    fn failed_usage_placeholders_do_not_become_measurements_or_complete_rollups() {
+        use crate::pi::PiSourceAdapter;
+        let session = PiSourceAdapter
+            .parse_path_with_stats(std::path::Path::new("fixtures/pi/failed-usage.jsonl"))
+            .expect("fixture")
+            .0;
+        let analysis = analyze(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Auto,
+                perf_diagnostics: false,
+            },
+        )
+        .expect("analysis");
+        assert_eq!(analysis.model_calls.len(), 6);
+        for call in &analysis.model_calls[1..3] {
+            assert!(call.usage.placeholder.is_some());
+            assert!(call.reported_prompt_tokens.is_none());
+            assert!(call.reported_completion_tokens.is_none());
+            assert!(call.reported_total_tokens.is_none());
+            assert_eq!(call.reported_usage_completeness, "missing");
+            assert!(call.cost.is_none());
+            assert_eq!(
+                call.economics.usage_completeness,
+                EconomicsCompleteness::Missing
+            );
+            assert_eq!(
+                call.economics.cost_completeness,
+                EconomicsCompleteness::Missing
+            );
+            assert!(call.economics.cache_read_ratio.is_none());
+            assert!(call.timing.effective_output_tokens_per_second.is_none());
+            assert!(call
+                .token_analysis
+                .calculated_visible_tokens
+                .is_some_and(|n| n > 0));
+            assert!(call.cumulative_reported_prompt_tokens.is_none());
+            assert!(call.cumulative_reported_completion_tokens.is_none());
+        }
+        assert_eq!(
+            analysis.model_calls[1].context_item_ids,
+            analysis.model_calls[3].context_item_ids
+        );
+        assert_eq!(
+            analysis.model_calls[1]
+                .token_analysis
+                .calculated_visible_tokens,
+            analysis.model_calls[3]
+                .token_analysis
+                .calculated_visible_tokens
+        );
+        assert_eq!(analysis.model_calls[3].reported_prompt_tokens, Some(150));
+        assert_eq!(analysis.model_calls[4].reported_prompt_tokens, Some(0));
+        assert_eq!(analysis.model_calls[4].reported_completion_tokens, Some(0));
+        assert_eq!(
+            analysis.model_calls[4]
+                .cost
+                .as_ref()
+                .expect("measured zero cost")
+                .total,
+            Some(0.0)
+        );
+        assert!(analysis.model_calls[4].usage.placeholder.is_none());
+        assert_eq!(analysis.model_calls[5].reported_prompt_tokens, Some(200));
+        assert!(analysis.model_calls[5].usage.placeholder.is_none());
+        assert!(analysis.session.reported_prompt_tokens.is_none());
+        assert!(analysis.session.reported_completion_tokens.is_none());
+        assert!(analysis.session.reported_cost_total.is_none());
+        assert_eq!(analysis.session.reported_usage_completeness, "partial");
+        assert_eq!(analysis.economics.cache_read_eligible_calls, 4);
     }
 
     #[test]
