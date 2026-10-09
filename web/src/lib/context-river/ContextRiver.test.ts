@@ -247,6 +247,46 @@ afterEach(() => {
 });
 
 describe('ContextRiver continuous viewport integration', () => {
+  it('renders a masked, non-item input reference in both grouping modes without changing source metrics', async () => {
+    const data = structuredClone(testAnalysis());
+    for (const call of data.modelCalls) {
+      call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 1000;
+      call.reportedUsageCompleteness = 'complete';
+    }
+    const indexed = indexAnalysis(data);
+    const before = JSON.stringify(indexed.analysis);
+    const actions = callbacks();
+    const view = render(ContextRiver, { props: { indexed, pinnedCallIndex: 1, ...actions } });
+    const legend = view.getByRole('group', { name: 'Input reference legend' });
+    expect(legend).toHaveTextContent('Unreconciled input');
+    expect(legend).toHaveTextContent('Call 1');
+    expect(legend.querySelector('button')).toBeNull();
+    const overlay = view.getByTestId('reported-input-overlay');
+    expect(overlay).toHaveAttribute('aria-hidden', 'true');
+    expect(overlay.querySelector('[role="button"], [tabindex]')).toBeNull();
+    expect(overlay.querySelector('.unreconciled-input')).toHaveAttribute('mask');
+    expect(view.container.querySelector('mask path')).not.toBeNull();
+    const preferences = defaultPresentationPreferences();
+    preferences.river.display = 'itemTypes';
+    await view.rerender({ preferences });
+    expect(view.getByRole('group', { name: 'Input reference legend' })).toHaveTextContent(
+      'Unreconciled input',
+    );
+    expect(view.getByRole('group', { name: 'Item type legend' })).not.toHaveTextContent(
+      'Unreconciled input',
+    );
+    expect(view.container.querySelector('[aria-label*="Item type Unreconciled"]')).toBeNull();
+    expect(JSON.stringify(indexed.analysis)).toBe(before);
+    expect(actions.onSelectItem).not.toHaveBeenCalled();
+  });
+
+  it('keeps references unavailable for structural geometry and missing usage', () => {
+    const view = render(ContextRiver, {
+      props: { indexed: indexAnalysis(testAnalysis()), ...callbacks() },
+    });
+    expect(view.container.querySelector('.reported-input-overlay')).toBeNull();
+    expect(view.queryByRole('group', { name: 'Input reference legend' })).toBeNull();
+  });
   it('bounds layout work across hover, selection, zoom, pan and hidden updates', async () => {
     const geometry = vi.spyOn(layout, 'layoutContextRiver');
     const columns = vi.spyOn(layout, 'layoutCallColumns');

@@ -882,6 +882,47 @@ test('recorded Pi system and tools are visible at call 1 and survive revision an
   });
 });
 
+test('reported input extends the visible stack without becoming an item type or intercepting navigation', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses synthetic comparison values.');
+  const analysis = structuredClone(testAnalysis());
+  for (const call of analysis.modelCalls) {
+    call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 1000;
+    call.reportedUsageCompleteness = 'complete';
+    call.usage = { ...call.usage, input: call.reportedPromptTokens, cacheRead: 0, cacheWrite: 0 };
+  }
+  await mockApi(page, analysis);
+  await page.goto('/#session=browser-smoke&pin=1');
+  await assertLoaded(page);
+  const legend = page.getByRole('group', { name: 'Input reference legend' });
+  await expect(legend).toContainText('Unreconciled input');
+  await expect(legend).toContainText('Call 1');
+  const geometry = await page
+    .locator('.reported-input-line')
+    .first()
+    .evaluate((node) => {
+      const point = (node as SVGPathElement).getPointAtLength(0);
+      return { x: point.x, y: point.y, events: getComputedStyle(node).pointerEvents };
+    });
+  expect(geometry.y).toBeCloseTo(446 - (410 * 1085) / 1095, 2);
+  expect(geometry.events).toBe('none');
+  await expect(page.locator('.unreconciled-input').first()).toHaveAttribute('mask', /input-mask/);
+  await page.getByRole('button', { name: 'Next call', exact: true }).click();
+  await expect(legend).toContainText('Call 2');
+  await openViewOptions(page);
+  await page.getByRole('button', { name: 'Item types', exact: true }).click();
+  await expect(legend).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Item type legend' })).not.toContainText(
+    'Unreconciled input',
+  );
+  await expect(page.getByRole('button', { name: /Item type Unreconciled/ })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
+    .toBe(true);
+});
+
 test('Item types use distinct semantic colors consistently in ribbons and legend without changing individual colors', async ({
   page,
 }) => {

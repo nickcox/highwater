@@ -38,6 +38,7 @@
   import { chartUnitLabel } from './format';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
   import { layoutCallColumns, layoutContextRiver } from './layout';
+  import { inputComparisons, inputScaleColumns, layoutInputReferences } from './reported-input';
   import { projectCallColumns, projectRiverHorizontally } from './horizontal-projection';
   import type { ContextRiverLayout } from './types';
   import { formatVerticalTick, verticalScaleTicks, visibleStackSample } from './vertical-scale';
@@ -244,7 +245,13 @@
       ? Math.max(observedWidth, margin.left + margin.right + (callCount - 1) * callSpacing)
       : Math.max(1, observedWidth);
   $: canonicalColumns = layoutCallColumns(indexed, geometryWidth, margin);
-  $: scaleColumns = projectCallColumns(canonicalColumns, geometryWidth, width, margin);
+  $: inputComparison = inputComparisons(indexed, canonicalColumns);
+  $: inputColumns = inputScaleColumns(canonicalColumns, inputComparison);
+  $: sessionVerticalMaximum = Math.max(
+    0,
+    ...inputColumns.map((column) => column.totalDisplayWeight),
+  );
+  $: scaleColumns = projectCallColumns(inputColumns, geometryWidth, width, margin);
   $: visiblePlotLeft = Math.max(margin.left, viewportScrollLeft - measuredChartOffsetX);
   $: visiblePlotRight = Math.min(
     width - margin.right,
@@ -293,7 +300,12 @@
     verticalScaleMode === 'visible'
       ? visibleStackSample(scaleColumns, visiblePlotLeft, visiblePlotRight)
       : emptyVisibleScaleSample;
-  $: verticalDomainMax = verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : undefined;
+  $: verticalDomainMax =
+    verticalScaleMode === 'visible'
+      ? visibleScaleSample.maxWeight
+      : inputComparison.size > 0
+        ? sessionVerticalMaximum
+        : undefined;
   $: canonicalRiver = layoutContextRiver(
     indexed,
     {
@@ -310,8 +322,16 @@
   $: river = horizontalProjection.layout;
   $: cachePresentation = projectCachePresentation(indexed.analysis);
   $: verticalAxisMaximum =
-    verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : river.maxTotalDisplayWeight;
+    verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : sessionVerticalMaximum;
   $: verticalAxisDomain = Math.max(1, verticalAxisMaximum);
+  $: inputReferences = layoutInputReferences(
+    river.columns,
+    inputComparison,
+    { width, height, margin, minimumVisibleThickness: 1 },
+    verticalAxisDomain,
+  );
+  $: hasInputGap = [...inputComparison.values()].some((comparison) => comparison.gap > 0);
+  $: activeInputComparison = inputComparison.get(pinnedCallIndex ?? hoveredCallIndex ?? -1);
   $: verticalAxisTicks = verticalScaleTicks(verticalAxisMaximum);
   $: verticalAxisTickData = verticalAxisTicks.map((value, position) => ({
     value,
@@ -1257,13 +1277,63 @@
       <span id="context-river-description" class="sr-only"
         >Context items flow horizontally through model calls. Dashed vertical markers indicate
         compaction. In individual-item view, colour-blended connections show lossy summarization,
-        not conserved tokens or source contributions to the summary. {verticalAxisDescription}. {indexed
-          .analysis.displayWeightUnit === 'unavailable'
+        not conserved tokens or source contributions to the summary. {verticalAxisDescription}. {inputComparison.size >
+        0
+          ? 'The dashed reported-input reference is recorded after each call. Hatched unreconciled input is its approximate excess over reconstructed content, not recovered items or cost attribution. Scaling includes the reference. Missing comparisons break the line.'
+          : ''}
+        {indexed.analysis.displayWeightUnit === 'unavailable'
           ? 'Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths.'
           : ''}</span
       >
       <svg bind:this={svg} viewBox={`0 0 ${width} ${height}`} {width} {height}>
         <defs>
+          {#if hasInputGap}
+            <pattern
+              id={`${mergeId}-input-hatch`}
+              width="8"
+              height="8"
+              patternUnits="userSpaceOnUse"
+            >
+              <rect width="8" height="8" fill="#8793aa" opacity=".08" />
+              <path
+                d="M-2 2L2-2M0 8L8 0M6 10L10 6"
+                stroke="#aab4c7"
+                stroke-width="1"
+                opacity=".45"
+              />
+            </pattern>
+            <mask
+              id={`${mergeId}-input-mask`}
+              maskUnits="userSpaceOnUse"
+              x={margin.left}
+              y={margin.top}
+              width={river.innerWidth}
+              height={river.innerHeight}
+              style="mask-type:luminance"
+            >
+              <rect
+                x={margin.left}
+                y={margin.top}
+                width={river.innerWidth}
+                height={river.innerHeight}
+                fill="white"
+              />
+              <g transform={horizontalProjection.transform}>
+                {#each river.ribbons as ribbon (ribbon.key)}
+                  <path
+                    d={ribbon.path}
+                    fill="black"
+                    stroke={ribbon.isSubpixel ? 'black' : 'none'}
+                    stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+                    vector-effect="non-scaling-stroke"
+                  />
+                {/each}
+                {#each river.lineageConnectors as connector (connector.key)}
+                  <path d={connector.mergePath} fill="black" />
+                {/each}
+              </g>
+            </mask>
+          {/if}
           {#each river.lineageConnectors as connector, i (connector.key)}
             <linearGradient
               id={`${mergeId}-${i}`}
@@ -1441,6 +1511,21 @@
             </g>
           {/each}
         </g>
+        {#if inputComparison.size > 0}
+          <g class="reported-input-overlay" aria-hidden="true" data-testid="reported-input-overlay">
+            {#each inputReferences as reference}
+              {#if hasInputGap && reference.fill}
+                <path
+                  class="unreconciled-input"
+                  d={reference.fill}
+                  fill={`url(#${mergeId}-input-hatch)`}
+                  mask={`url(#${mergeId}-input-mask)`}
+                />
+              {/if}
+              <path class="reported-input-line" d={reference.line} />
+            {/each}
+          </g>
+        {/if}
         {#if selectionRect && selectionRect.width > 0}
           <rect
             class="zoom-selection"
@@ -1480,6 +1565,30 @@
             <span><i style={`background:${itemTypeColor(kind!)}`}></i>{groupLabel(kind!)}</span>
           {/each}
           <small>Colors identify content types, not cache status.</small>
+        </div>
+      {/if}
+      {#if inputComparison.size > 0}
+        <div class="input-reference-legend" role="group" aria-label="Input reference legend">
+          <span><i class="input-reference-key"></i>Reported input</span>
+          {#if hasInputGap}<span><i class="input-gap-key"></i>Unreconciled input</span>{/if}
+          <small
+            >Reported input minus estimated reconstructed content; may include framing or estimation
+            differences. Not recovered items or cost attribution.</small
+          >
+          {#if activeInputComparison}
+            <span class="input-comparison-readout"
+              >Call {activeInputComparison.callIndex}: reconstructed {formatVerticalTick(
+                activeInputComparison.reconstructed,
+              )} · reported {formatVerticalTick(activeInputComparison.reported)} · {#if activeInputComparison.reconstructed > activeInputComparison.reported}estimate
+                exceeds reported by ~{formatVerticalTick(
+                  activeInputComparison.reconstructed - activeInputComparison.reported,
+                )}{:else}unreconciled ~{formatVerticalTick(activeInputComparison.gap)}{/if} tokens</span
+            >
+          {:else if pinnedCallIndex !== null || hoveredCallIndex !== null}
+            <span class="input-comparison-readout"
+              >Call {pinnedCallIndex ?? hoveredCallIndex}: input comparison unavailable</span
+            >
+          {/if}
         </div>
       {/if}
       {#if hoveredGroup}
@@ -2129,6 +2238,51 @@
     font-weight: 700;
     letter-spacing: 0.08em;
   }
+  .reported-input-overlay {
+    pointer-events: none;
+  }
+  .reported-input-line {
+    fill: none;
+    stroke: #bec8da;
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+    pointer-events: none;
+  }
+  .input-reference-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 1rem;
+    padding: 0.45rem 0.75rem;
+    color: #aab4c7;
+    font-size: 0.75rem;
+  }
+  .input-reference-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .input-reference-legend i {
+    display: inline-block;
+    width: 18px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+  .input-reference-key {
+    border-top: 2px dashed #bec8da;
+    margin-top: 8px;
+  }
+  .input-gap-key {
+    background: repeating-linear-gradient(135deg, transparent 0 4px, #aab4c775 4px 5px);
+    border: 1px solid #8793aa55;
+  }
+  .input-reference-legend small {
+    flex-basis: 100%;
+  }
+  .input-comparison-readout {
+    flex-basis: 100%;
+  }
+
   .ribbon-group {
     opacity: 0.88;
     transition: opacity 120ms ease;
