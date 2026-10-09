@@ -1090,9 +1090,13 @@
   function selectRibbon(event: MouseEvent, itemId: string): void {
     if (consumeSuppressedClick(event)) return;
     event.stopPropagation();
+    selectRibbonItem(itemId);
+  }
+
+  function selectRibbonItem(itemId: string): void {
     onSelectItem(itemId);
-    const callIndex = pointerCallAtX(event.clientX);
-    if (callIndex !== null) onPinCall(callIndex);
+    const firstCall = indexed.itemById.get(itemId)?.presence[0]?.startCall;
+    if (firstCall !== undefined && indexed.callByIndex.has(firstCall)) onPinCall(firstCall);
   }
 
   function activateGroup(event: MouseEvent, kind: string, memberIds: string[]): void {
@@ -1151,7 +1155,7 @@
   function selectFromKeyboard(event: KeyboardEvent, id: string): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onSelectItem(id);
+      selectRibbonItem(id);
     } else if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();

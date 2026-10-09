@@ -787,11 +787,11 @@ describe('Context River interactions', () => {
     expect(screen.getByText('Selected item')).toBeInTheDocument();
   });
 
-  it('empty-space click clears item selection while pinning a call', async () => {
+  it('empty-space click preserves item selection while pinning a call', async () => {
     const { container } = await renderLoaded();
     await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
     await fireEvent.click(container.querySelector('.plot-background')!, { clientX: 300 });
-    expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
+    expect(screen.getByText('Selected item')).toBeInTheDocument();
     expect(screen.getByText(/^Pinned call 2$/)).toBeInTheDocument();
   });
 
@@ -946,6 +946,9 @@ describe('Context River interactions', () => {
     expect(screen.getByText('Selected item')).toBeInTheDocument();
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
+    expect(screen.getByText(/^Pinned call 1$/)).toBeInTheDocument();
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByText(/^Pinned call 1$/)).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(screen.getByRole('button', { name: 'Fit all calls' })).toBeEnabled();
     await fireEvent.keyDown(window, { key: 'Escape' });
@@ -957,6 +960,8 @@ describe('Context River interactions', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
     const ribbon = screen.getByRole('button', { name: 'bash: npm test' });
     await fireEvent.click(ribbon);
+    expect(screen.getByText(/^Pinned call 1$/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
     ribbon.focus();
 
     await fireEvent.keyDown(ribbon, { key: 'Escape' });

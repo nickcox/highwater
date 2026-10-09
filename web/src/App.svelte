@@ -648,7 +648,7 @@
 
   function emptyClick(index: number): void {
     if (navigationCommand?.kind === 'reveal-item') navigationCommand = null;
-    interaction = { ...interaction, selectedItemId: null, pinnedCallIndex: index };
+    interaction = { ...interaction, pinnedCallIndex: index };
   }
 
   function handleEscape(): void {

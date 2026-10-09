@@ -803,6 +803,41 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(view.getByRole('button', { name: 'Pin model call 261' })).toBeInTheDocument();
   });
 
+  it('pointer and keyboard ribbon activation pin the first included call, not the pointer call', async () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const handlers = callbacks();
+    const view = render(ContextRiver, {
+      props: { indexed, ...resetInteraction(), ...handlers },
+    });
+    await waitFor(() =>
+      expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ready: true }),
+      ),
+    );
+    const ribbon = view.getByRole('button', { name: 'bash: npm test' });
+    await fireEvent.click(ribbon, { detail: 1, clientX: 280, clientY: 200 });
+    expect(handlers.onSelectItem).toHaveBeenLastCalledWith('a');
+    expect(handlers.onPinCall).toHaveBeenLastCalledWith(1);
+    for (const key of ['Enter', ' ']) {
+      await fireEvent.keyDown(ribbon, { key });
+      expect(handlers.onSelectItem).toHaveBeenLastCalledWith('a');
+      expect(handlers.onPinCall).toHaveBeenLastCalledWith(1);
+    }
+    expect(handlers.onPinCall).toHaveBeenCalledTimes(3);
+    await fireEvent.click(view.getByRole('button', { name: 'retained tail' }), { clientX: 280 });
+    expect(handlers.onSelectItem).toHaveBeenLastCalledWith('retained');
+    expect(handlers.onPinCall).toHaveBeenLastCalledWith(2);
+    await fireEvent.click(
+      view.getAllByRole('button', { name: '<img src=x onerror=alert(1)>' })[1],
+      {
+        clientX: 280,
+      },
+    );
+    expect(handlers.onSelectItem).toHaveBeenLastCalledWith('gap');
+    expect(handlers.onPinCall).toHaveBeenLastCalledWith(1);
+    expect(handlers.onEmptyClick).not.toHaveBeenCalled();
+  });
+
   it('dragging a call interval zooms to it while a click still selects an item', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const handlers = callbacks();

@@ -568,6 +568,40 @@ test('mocked app loads a session, selects an item, and navigates the chart', asy
   expect(pageErrors).toEqual([]);
 });
 
+test('River ribbon activation pins first inclusion and explicit call inspection preserves the item', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses deterministic mocked API responses.');
+  await mockApi(page);
+  await page.goto('/');
+  await assertLoaded(page);
+  const river = page.getByRole('application', { name: 'Context River' });
+  const item = river.getByRole('button', { name: 'bash: npm test', exact: true });
+  await page.getByRole('button', { name: 'Pin model call 4', exact: true }).click();
+  await item.click();
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  await page.getByRole('button', { name: 'Pin model call 4', exact: true }).click();
+  await expect(item).toHaveAttribute('aria-pressed', 'true');
+  await item.press('Enter');
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+  const laterItem = river.getByRole('button', { name: 'retained tail', exact: true });
+  await laterItem.press('Space');
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
+  await expect(laterItem).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('.plot-background').evaluate((node) => {
+    const bounds = node.getBoundingClientRect();
+    node.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        clientX: bounds.right - 1,
+        clientY: bounds.top + 1,
+      }),
+    );
+  });
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 4');
+  await expect(laterItem).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('Composition pins explicitly, shares selection state, and reveals from its inspector', async ({
   page,
 }) => {
