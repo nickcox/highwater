@@ -10,7 +10,6 @@
     type InspectorSections,
   } from '../state/inspector-sections';
   export let sections: InspectorSections = inspectorSections();
-  export let onClear: (() => void) | null = null;
   export let onInspectCall: (index: number) => void = () => {};
   import {
     coverageLabel,
@@ -117,8 +116,6 @@
           {displayItemLabel(item)}
         </h3>
       </div>
-      {#if onClear}<button type="button" aria-label="Close context item" onclick={onClear}>×</button
-        >{/if}
     </header>
     {#if item.presence.length === 0}
       <p class="presence-note">
@@ -411,11 +408,6 @@
     gap: 8px;
     padding: 4px 0 7px;
     background: var(--surface);
-  }
-  .item-identity > button {
-    flex-shrink: 0;
-    font-size: 18px;
-    padding: 1px 7px;
   }
   .item-identity > div {
     display: grid;

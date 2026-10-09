@@ -3022,10 +3022,7 @@ test('empty inspector occupancy preserves fractional pan anchors and explicit ra
     .evaluate((node) => (node as SVGElement).focus({ preventScroll: true }));
   await page.keyboard.press('Enter');
   expect((await host.boundingBox())!.width).toBeCloseTo(occupiedWidth, 1);
-  await page
-    .locator('.item-details')
-    .getByRole('button', { name: 'Close context item', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Close context item', exact: true }).click();
   await expect.poll(anchor).toBeCloseTo(before, 3);
   await restoreRiverRange(page, 80, 81);
   await select();
@@ -3036,6 +3033,43 @@ test('empty inspector occupancy preserves fractional pan anchors and explicit ra
     const viewport = (await host.boundingBox())!;
     expect(bounds!.x + bounds!.width / 2).toBeGreaterThanOrEqual(viewport.x);
     expect(bounds!.x + bounds!.width / 2).toBeLessThanOrEqual(viewport.x + viewport.width);
+  }
+});
+
+test('inspector close controls align with the outer panel titles on desktop and narrow layouts', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses deterministic mocked analysis.');
+  await mockApi(page);
+  await page.goto('/');
+  await assertLoaded(page);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
+    for (const [name, title] of [
+      ['Close pinned call', 'Model call'],
+      ['Close context item', 'Context item'],
+    ]) {
+      const close = page.getByRole('button', { name, exact: true });
+      const panel = page.locator('.inspector-column > .panel').filter({ has: close });
+      const heading = panel.getByRole('heading', { name: title, exact: true });
+      await close.scrollIntoViewIfNeeded();
+      const buttonBounds = (await close.boundingBox())!;
+      const headingBounds = (await heading.boundingBox())!;
+      expect(Math.abs(buttonBounds.y - headingBounds.y)).toBeLessThan(5);
+      expect(buttonBounds.x).toBeGreaterThan(headingBounds.x + headingBounds.width);
+      await expect(
+        panel.locator('.panel-head').getByRole('button', { name, exact: true }),
+      ).toBeVisible();
+    }
+    await page.getByRole('button', { name: 'Close context item', exact: true }).click();
+    await expect(page.locator('#selected-item-summary')).toHaveCount(0);
+    await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
+    await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
+    await page.getByRole('button', { name: 'Close pinned call', exact: true }).click();
+    await expect(page.locator('#pinned-call-summary')).toHaveCount(0);
+    await expect(page.locator('#selected-item-summary')).toBeVisible();
+    await page.getByRole('button', { name: 'Close context item', exact: true }).click();
   }
 });
 
@@ -3064,7 +3098,7 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   const item = page.locator('.item-details');
   await item.getByText('Technical identifiers', { exact: true }).click();
   await expect(item.locator('.technical-identifiers')).toHaveAttribute('open', '');
-  await item.getByRole('button', { name: 'Close context item', exact: true }).click();
+  await page.getByRole('button', { name: 'Close context item', exact: true }).click();
   await expect(page.locator('#selected-item-summary')).toHaveCount(0);
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
   await page.getByRole('button', { name: 'bash: npm test', exact: true }).press('Enter');

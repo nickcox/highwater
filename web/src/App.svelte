@@ -986,6 +986,13 @@
             <section class="panel">
               <div class="panel-head">
                 <div><h2>Model call</h2></div>
+                <button
+                  type="button"
+                  class="panel-close"
+                  aria-label="Close pinned call"
+                  onclick={() => (interaction = { ...interaction, pinnedCallIndex: null })}
+                  >×</button
+                >
               </div>
               <CallDetails
                 sections={callSections}
@@ -993,7 +1000,6 @@
                 {indexed}
                 pinned
                 onSelectItem={selectItem}
-                onClose={() => (interaction = { ...interaction, pinnedCallIndex: null })}
                 onPinCall={pinCall}
               />
             </section>
@@ -1005,11 +1011,16 @@
                   <h2>Context item</h2>
                   <p>Selected item</p>
                 </div>
+                <button
+                  type="button"
+                  class="panel-close"
+                  aria-label="Close context item"
+                  onclick={() => selectItem(null)}>×</button
+                >
               </div>
               <ItemDetails
                 item={selectedItem}
                 sections={itemSections}
-                onClear={() => selectItem(null)}
                 onInspectCall={inspectCall}
                 {indexed}
                 callIndex={interaction.pinnedCallIndex ?? interaction.hoveredCallIndex}
@@ -1275,6 +1286,12 @@
     overscroll-behavior: contain;
     scrollbar-color: #506385 #10172a;
     scrollbar-width: thin;
+  }
+  .panel-close {
+    flex-shrink: 0;
+    align-self: flex-start;
+    font-size: 18px;
+    padding: 1px 7px;
   }
   .inspector-column > .panel {
     min-width: 0;

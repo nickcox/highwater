@@ -32,7 +32,6 @@
   export let indexed: IndexedAnalysis;
   export let pinned = false;
   export let onSelectItem: (id: string) => void = () => {};
-  export let onClose: (() => void) | null = null;
   export let onPinCall: (index: number) => void = () => {};
 
   $: compaction = call?.compactionBefore
@@ -190,8 +189,6 @@
         </h3>
         <span>{call.provider ?? 'Unknown provider'} / {call.model ?? 'Unknown model'}</span>
       </div>
-      {#if onClose}<button type="button" aria-label="Close pinned call" onclick={onClose}>×</button
-        >{/if}
     </header>
 
     <dl class="essential-metrics">
@@ -725,10 +722,6 @@
     color: #aebbd0;
     font-size: 12px;
     overflow-wrap: anywhere;
-  }
-  header button {
-    font-size: 18px;
-    padding: 1px 7px;
   }
   .essential-metrics,
   .detail-rows,

@@ -787,6 +787,24 @@ describe('Context River interactions', () => {
     expect(screen.getByText('Selected item')).toBeInTheDocument();
   });
 
+  it('dismisses each inspector from its outer panel header without clearing the other', async () => {
+    const { container } = await renderLoaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
+    const itemClose = screen.getByRole('button', { name: 'Close context item' });
+    const callClose = screen.getByRole('button', { name: 'Close pinned call' });
+    expect(itemClose.closest('.panel-head')).toHaveTextContent('Context item');
+    expect(callClose.closest('.panel-head')).toHaveTextContent('Model call');
+    expect(container.querySelector('.item-identity button')).toBeNull();
+    expect(container.querySelector('.call-details header button')).toBeNull();
+    await fireEvent.click(itemClose);
+    expect(container.querySelector('#selected-item-summary')).toBeNull();
+    expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 1');
+    await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Close pinned call' }));
+    expect(container.querySelector('#pinned-call-summary')).toBeNull();
+    expect(container.querySelector('#selected-item-summary')).toHaveTextContent('bash: npm test');
+  });
+
   it('empty-space click preserves item selection while pinning a call', async () => {
     const { container } = await renderLoaded();
     await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
