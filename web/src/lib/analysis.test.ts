@@ -3,6 +3,41 @@ import { AnalysisValidationError, indexAnalysis } from './analysis';
 import { testAnalysis } from './context-river/test-data';
 
 describe('indexAnalysis', () => {
+  it.each([-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects unsafe recorded output %s independently of normalized output',
+    (value) => {
+      const analysis = testAnalysis();
+      analysis.modelCalls[0].usage.recordedOutput = value;
+      expect(() => indexAnalysis(analysis)).toThrow(/recordedOutput/);
+    },
+  );
+
+  it('rejects missing recorded-output fields and unsupported accounting relationships', () => {
+    const missing = testAnalysis();
+    delete (missing.modelCalls[0].usage as Partial<(typeof missing.modelCalls)[0]['usage']>)
+      .recordedOutput;
+    expect(() => indexAnalysis(missing)).toThrow(/recordedOutput/);
+    const invalid = testAnalysis();
+    invalid.modelCalls[0].usage.outputReasoningRelationship =
+      'guessed' as (typeof invalid.modelCalls)[0]['usage']['outputReasoningRelationship'];
+    expect(() => indexAnalysis(invalid)).toThrow(/output\/reasoning relationship/);
+  });
+
+  it('retains absent recorded counters without repairing them from normalized totals', () => {
+    const analysis = testAnalysis();
+    analysis.modelCalls[0].usage.recordedOutput = null;
+    analysis.modelCalls[0].usage.outputReasoningRelationship = 'unknown';
+    const usage = indexAnalysis(analysis).analysis.modelCalls[0].usage;
+    expect(usage.output).toBe(2);
+    expect(usage.recordedOutput).toBeNull();
+    expect(usage.reasoning).toBeNull();
+  });
+
+  it('rejects the previous schema instead of silently displaying normalized output as recorded output', () => {
+    const old = testAnalysis();
+    old.schemaVersion = 9;
+    expect(() => indexAnalysis(old)).toThrow(/Unsupported analysis schema 9/);
+  });
   function analysisWithAuditedAnthropicCall() {
     const analysis = testAnalysis();
     const call = analysis.modelCalls[0];

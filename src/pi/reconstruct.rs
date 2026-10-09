@@ -692,9 +692,14 @@ fn parse_usage(value: Option<&Value>) -> Result<ReportedUsage, SourceError> {
         return Ok(ReportedUsage::default());
     };
     let cost = usage.get("cost");
+    let output = parse_safe_u64(usage.get("output"), "usage.output")?;
     Ok(ReportedUsage {
         input: parse_safe_u64(usage.get("input"), "usage.input")?,
-        output: parse_safe_u64(usage.get("output"), "usage.output")?,
+        output,
+        recorded_output: output,
+        // Pi's normalized usage output already includes reasoning; keep the
+        // stored counter and never add an optional reasoning breakdown again.
+        output_reasoning_relationship: OutputReasoningRelationship::IncludesReasoning,
         cache_read: parse_safe_u64(usage.get("cacheRead"), "usage.cacheRead")?,
         cache_write: parse_safe_u64(usage.get("cacheWrite"), "usage.cacheWrite")?,
         cache_write_1h: parse_safe_u64(usage.get("cacheWrite1h"), "usage.cacheWrite1h")?,
@@ -748,6 +753,31 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::{BufReader, Cursor};
+
+    #[test]
+    fn recorded_pi_output_and_optional_reasoning_remain_separate_without_changing_totals() {
+        for reasoning in [None, Some(0), Some(30)] {
+            let mut value = serde_json::json!({"output":100});
+            if let Some(reasoning) = reasoning {
+                value["reasoning"] = serde_json::json!(reasoning);
+            }
+            let usage = parse_usage(Some(&value)).expect("Pi usage");
+            assert_eq!(usage.recorded_output, Some(100));
+            assert_eq!(usage.output, Some(100), "reasoning is not added twice");
+            assert_eq!(usage.reasoning, reasoning);
+            assert_eq!(
+                usage.output_reasoning_relationship,
+                OutputReasoningRelationship::IncludesReasoning
+            );
+        }
+        let absent = parse_usage(None).expect("no usage");
+        assert!(absent.recorded_output.is_none());
+        assert!(absent.reasoning.is_none());
+        assert_eq!(
+            absent.output_reasoning_relationship,
+            OutputReasoningRelationship::Unknown
+        );
+    }
 
     fn fixture(name: &str) -> NormalizedSession {
         let file = File::open(format!("fixtures/pi/{name}.jsonl")).expect("fixture");
@@ -886,7 +916,21 @@ mod tests {
             "terminal-compaction",
             "tools",
         ] {
-            let normalized = format!("{:?}", fixture(name));
+            let session = fixture(name);
+            let mut normalized = format!("{session:?}");
+            // Remove only the additive counter metadata to keep the original
+            // replay baseline pinned: no normalized usage or history may change.
+            for call in &session.model_calls {
+                let usage = &call.reported_usage;
+                assert_eq!(usage.recorded_output, usage.output);
+                normalized = normalized.replace(
+                    &format!(
+                        "recorded_output: {:?}, output_reasoning_relationship: {:?}, ",
+                        usage.recorded_output, usage.output_reasoning_relationship,
+                    ),
+                    "",
+                );
+            }
             digest.update(normalized.as_bytes());
             legacy_digest.update(
                 normalized

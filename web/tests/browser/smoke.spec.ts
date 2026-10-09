@@ -3084,7 +3084,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
     readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8'),
   );
   const analysis = await (await analysisResponse).json();
-  expect(analysis.schemaVersion).toBe(9);
+  expect(analysis.schemaVersion).toBe(10);
   expect(analysis.economics.cacheReadEligibleCalls).toBe(8);
   expect(analysis.economics.supportedPolicyIds).toEqual(
     expect.arrayContaining(['openai-responses-cache-read-v1', 'anthropic-messages-cache-v1']),

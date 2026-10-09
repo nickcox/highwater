@@ -144,14 +144,26 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 strip(&timed),
                 "timing changed non-timing fields: {fixture}"
             );
-            // Schema 9 adds optional source reconstruction qualifications. Pi
-            // keeps its existing payload; compare it to the schema-8 baseline
-            // with only the intentional envelope-version change removed.
+            // Keep the schema-8 metric baseline pinned. Schema 9 adds optional
+            // reconstruction coverage (absent for Pi), and schema 10 adds two
+            // recorded-counter fields without changing normalized math.
             let mut baseline = output.clone();
             baseline.schema_version = 8;
-            let bytes = serde_json::to_vec(&baseline).expect("JSON");
-            digest.update(&(bytes.len() as u64).to_le_bytes());
-            digest.update(&bytes);
+            let mut json = serde_json::to_string(&baseline).expect("JSON");
+            for call in &baseline.model_calls {
+                assert_eq!(call.usage.recorded_output, call.usage.output);
+                // Remove exactly the additive fields in struct serialization
+                // order; strings in previews are JSON-escaped and cannot match.
+                let addition = format!(
+                    "\"recordedOutput\":{},\"outputReasoningRelationship\":{},",
+                    serde_json::to_string(&call.usage.recorded_output).expect("counter"),
+                    serde_json::to_string(&call.usage.output_reasoning_relationship)
+                        .expect("relationship"),
+                );
+                json = json.replace(&addition, "");
+            }
+            digest.update(&(json.len() as u64).to_le_bytes());
+            digest.update(json.as_bytes());
         }
     }
     assert_eq!(

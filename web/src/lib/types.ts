@@ -79,9 +79,15 @@ export interface CoverageSummary {
   totalCalls: number;
 }
 
+export type OutputReasoningRelationship = 'includesReasoning' | 'excludesReasoning' | 'unknown';
+
 export interface Usage {
   input: number | null;
+  /** Normalized completion total, including reasoning exactly once when known. */
   output: number | null;
+  /** Source counter, never a sum inferred from reasoning or a tokenizer. */
+  recordedOutput: number | null;
+  outputReasoningRelationship: OutputReasoningRelationship;
   cacheRead: number | null;
   cacheWrite: number | null;
   cacheWrite1h: number | null;

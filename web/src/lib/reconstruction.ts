@@ -6,7 +6,7 @@ export const reconstructionLimitLabels: Record<string, string> = {
   missingHistoricalToolDefinitions: 'Historical tool declarations are not recorded completely.',
   unrecordedRequestTransforms: 'Plugins and provider request transformations may not be recorded.',
   unknownOutputAccounting:
-    'Output/reasoning overlap is unverified; ambiguous output totals are unavailable.',
+    'Output/reasoning overlap is unverified; recorded counters are kept separate.',
   unknownCompactionPrompt:
     'The exact prompt used to generate a compaction summary is not recorded.',
   unpairedCompactionSummary:

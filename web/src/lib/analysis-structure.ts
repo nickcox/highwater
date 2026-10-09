@@ -121,7 +121,11 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     }
     const isTerminalSummary = terminalSummaryIds.has(item.id);
     if (item.presence.length === 0) {
-      if (!structuralSummaryIds.has(item.id) || item.firstModelCall !== 0 || item.lastModelCall !== 0) {
+      if (
+        !structuralSummaryIds.has(item.id) ||
+        item.firstModelCall !== 0 ||
+        item.lastModelCall !== 0
+      ) {
         throw new AnalysisValidationError(`Item ${item.id} has no presence ranges`);
       }
       presenceCallsByItem.set(item.id, new Set());

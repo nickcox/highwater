@@ -258,7 +258,10 @@ pub(crate) struct TransitionItemCounts {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Usage {
     pub input: Option<u64>,
+    /// Normalized completion total, not necessarily the raw source output bucket.
     pub output: Option<u64>,
+    pub recorded_output: Option<u64>,
+    pub output_reasoning_relationship: crate::domain::OutputReasoningRelationship,
     pub cache_read: Option<u64>,
     pub cache_write: Option<u64>,
     pub cache_write_1h: Option<u64>,

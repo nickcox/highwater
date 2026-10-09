@@ -52,9 +52,9 @@ const fixtures = [
 // Capture values and iteration order of every consumer-facing index, not just the envelope.
 function serialize(value: unknown): string {
   return JSON.stringify(value, (key, entry) => {
-    // Keep the original analytical/index/projection goldens: schema 8 adds only
-    // clock/timing metadata, validated separately by the live contract suite.
-    if (key === 'timing') return undefined;
+    // Keep the original analytical/index/projection goldens: timing and the
+    // schema-10 recorded-counter additions have their own live contract tests.
+    if (['timing', 'recordedOutput', 'outputReasoningRelationship'].includes(key)) return undefined;
     if (key === 'schemaVersion') return 7;
     if (entry instanceof Map) return { map: [...entry] };
     if (entry instanceof Set) return { set: [...entry] };

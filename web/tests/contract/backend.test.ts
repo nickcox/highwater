@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 97) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 100) throw new Error('Incomplete live Rust contract export.');
 
 function output(name: string): SessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -26,6 +26,37 @@ function output(name: string): SessionAnalysis {
 }
 
 describe('live production Rust -> indexAnalysis contract', () => {
+  it.each([
+    ['inclusive', 'includesReasoning', 30, 30],
+    ['disjoint', 'excludesReasoning', 20, 30],
+    ['unknown', 'unknown', 20, null],
+  ] as const)(
+    'preserves source-neutral recorded counters with %s overlap',
+    (name, relationship, recorded, normalized) => {
+      const analysis = output(`usage-recorded-${name}`);
+      expect(analysis.session.source).toBe('future-harness');
+      const call = analysis.modelCalls[0];
+      expect(call.usage.recordedOutput).toBe(recorded);
+      expect(call.usage.reasoning).toBe(10);
+      expect(call.usage.outputReasoningRelationship).toBe(relationship);
+      expect(call.usage.output).toBe(normalized);
+      expect(call.reportedCompletionTokens).toBe(normalized);
+      expect(call.cumulativeReportedCompletionTokens).toBe(normalized);
+      expect(analysis.session.reportedCompletionTokens).toBe(normalized);
+      expect(call.timing.effectiveOutputTokensPerSecond).toBeNull();
+    },
+  );
+
+  it('copies Pi recorded output without double-counting optional reasoning', () => {
+    for (const name of ['fixture-simple-auto', 'fixture-copilot-economics-auto']) {
+      const analysis = output(name);
+      for (const call of analysis.modelCalls) {
+        expect(call.usage.recordedOutput).toBe(call.usage.output);
+        if (call.usage.recordedOutput !== null)
+          expect(call.usage.outputReasoningRelationship).toBe('includesReasoning');
+      }
+    }
+  });
   it('indexes SQLite OpenCode replay with explicit coverage and independent source cost', () => {
     const analysis = output('opencode-sqlite-auto');
     expect(analysis.session.source).toBe('opencode');
@@ -34,6 +65,8 @@ describe('live production Rust -> indexAnalysis contract', () => {
     expect(analysis.economics.costBasis).toBe('sourceModelRates');
     expect(analysis.modelCalls).toHaveLength(2);
     expect(analysis.modelCalls[0].usage.output).toBeNull();
+    expect(analysis.modelCalls[0].usage.recordedOutput).toBe(20);
+    expect(analysis.modelCalls[0].usage.outputReasoningRelationship).toBe('unknown');
     expect(analysis.modelCalls[0].usage.reasoning).toBe(5);
     expect(analysis.modelCalls[0].timing.durationMs).toBeNull();
     expect(analysis.modelCalls[0].economics.piPromptCost).toBeNull();
@@ -43,6 +76,10 @@ describe('live production Rust -> indexAnalysis contract', () => {
     const analysis = output('opencode-modern-auto');
     const indexed = indexAnalysis(analysis);
     expect(analysis.modelCalls).toHaveLength(3);
+    expect(analysis.modelCalls[0].usage.recordedOutput).toBe(20);
+    expect(analysis.modelCalls[0].usage.reasoning).toBe(5);
+    expect(analysis.modelCalls[0].usage.output).toBeNull();
+    expect(analysis.modelCalls[0].usage.outputReasoningRelationship).toBe('unknown');
     expect(analysis.modelCalls[1].sourceRecordId).toBe('msg_empty');
     expect(analysis.reconstruction?.explanationCodes).toContain('missingCompactionUsage');
     const checkpoint = analysis.compactions[0];
@@ -63,7 +100,9 @@ describe('live production Rust -> indexAnalysis contract', () => {
     expect(summary.presence).toEqual([]);
     expect(summary.ageAtFinalModelCall).toBeNull();
     const adjacent = output('opencode-modern-adjacent-auto');
-    const replaced = adjacent.contextItems.find((item) => item.sourceRecordId === 'msg_checkpoint' && item.kind === 'compactionSummary')!;
+    const replaced = adjacent.contextItems.find(
+      (item) => item.sourceRecordId === 'msg_checkpoint' && item.kind === 'compactionSummary',
+    )!;
     expect(replaced.presence).toEqual([]);
     expect(replaced.firstModelCall).toBe(0);
     expect(replaced.ageAtFinalModelCall).toBeNull();
@@ -124,7 +163,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
   it.each(manifest.cases)('accepts and indexes $name without repairs', ({ name }) => {
     const analysis = output(name);
     const indexed = indexAnalysis(analysis);
-    expect(analysis.schemaVersion).toBe(9);
+    expect(analysis.schemaVersion).toBe(10);
     expect(indexed.callByIndex.size).toBe(analysis.modelCalls.length);
     expect(indexed.itemById.size).toBe(analysis.contextItems.length);
     for (const profile of analysis.tokenAnalysis.profiles)
@@ -277,8 +316,8 @@ describe('live production Rust -> indexAnalysis contract', () => {
   });
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
-    expect(manifest.schemaVersion).toBe(9);
-    expect(manifest.outputVersion).toBe(19);
+    expect(manifest.schemaVersion).toBe(10);
+    expect(manifest.outputVersion).toBe(20);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

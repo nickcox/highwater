@@ -85,6 +85,8 @@ const estimate = (tokens: number): ContextItemTokenEstimate => ({
 const usage = {
   input: 10,
   output: 2,
+  recordedOutput: 2,
+  outputReasoningRelationship: 'includesReasoning' as const,
   cacheRead: null,
   cacheWrite: null,
   cacheWrite1h: null,
@@ -211,6 +213,8 @@ export function testAnalysis(): SessionAnalysis {
       economics: unsupportedEconomics(),
     },
   ];
+  // Calls and separately created fixtures must not share mutable usage buckets.
+  for (const call of calls) call.usage = { ...call.usage };
   const items: ContextItem[] = [
     {
       id: 'a',
@@ -290,7 +294,7 @@ export function testAnalysis(): SessionAnalysis {
   ];
   const itemEstimateCoverage = coverage(4, 4, 9, 9);
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     tokenAnalysis: {
       policy: 'heuristic',
       chartUnit: 'estimatedTokens',

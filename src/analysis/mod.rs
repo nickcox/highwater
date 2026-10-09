@@ -30,9 +30,9 @@ use tokenization::{
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 9;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 10;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 19;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 20;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -170,6 +170,7 @@ fn validate_reported_usage(usage: &ReportedUsage, call_index: usize) -> Result<(
     for (field, value) in [
         ("input", usage.input),
         ("output", usage.output),
+        ("recordedOutput", usage.recorded_output),
         ("cacheRead", usage.cache_read),
         ("cacheWrite", usage.cache_write),
         ("cacheWrite1h", usage.cache_write_1h),
@@ -1191,6 +1192,8 @@ fn to_api_call(
         usage: Usage {
             input: usage.input,
             output: usage.output,
+            recorded_output: usage.recorded_output,
+            output_reasoning_relationship: usage.output_reasoning_relationship,
             cache_read: usage.cache_read,
             cache_write: usage.cache_write,
             cache_write_1h: usage.cache_write_1h,
@@ -2415,6 +2418,54 @@ mod tests {
             serde_json::to_vec(&without_diagnostics).expect("analysis JSON"),
             serde_json::to_vec(&with_diagnostics).expect("analysis JSON")
         );
+    }
+
+    #[test]
+    fn recorded_output_is_exposed_without_changing_normalized_totals_costs_or_rates() {
+        let original = fake_session();
+        let mut recorded = original.clone();
+        let usage = &mut recorded.model_calls[0].reported_usage;
+        usage.recorded_output = Some(200);
+        usage.reasoning = Some(50);
+        usage.output_reasoning_relationship = OutputReasoningRelationship::Unknown;
+        let config = AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        };
+        let baseline = analyze(original, config).expect("baseline");
+        let analysis = analyze(recorded, config).expect("recorded counters");
+        let call = &analysis.model_calls[0];
+        assert_eq!(call.usage.recorded_output, Some(200));
+        assert_eq!(call.usage.reasoning, Some(50));
+        assert_eq!(call.usage.output, None);
+        assert_eq!(call.reported_completion_tokens, None);
+        assert_eq!(call.cumulative_reported_completion_tokens, None);
+        assert_eq!(analysis.session.reported_completion_tokens, None);
+        assert_eq!(call.timing.effective_output_tokens_per_second, None);
+        assert_eq!(
+            serde_json::to_value(&analysis.economics).expect("economics"),
+            serde_json::to_value(&baseline.economics).expect("baseline economics")
+        );
+        assert_eq!(
+            serde_json::to_value(&call.token_analysis).expect("token analysis"),
+            serde_json::to_value(&baseline.model_calls[0].token_analysis)
+                .expect("baseline token analysis")
+        );
+    }
+
+    #[test]
+    fn unsafe_recorded_output_is_rejected_independently_of_normalized_usage() {
+        let mut session = fake_session();
+        session.model_calls[0].reported_usage.recorded_output = Some(MAX_SAFE_JSON_INTEGER + 1);
+        let error = analyze(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Off,
+                perf_diagnostics: false,
+            },
+        )
+        .expect_err("unsafe counter");
+        assert!(error.to_string().contains("usage.recordedOutput"));
     }
 
     #[test]

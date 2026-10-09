@@ -62,6 +62,7 @@ function assertCallEconomics(call: ModelCall): void {
   for (const [name, value] of [
     ['input', call.usage.input],
     ['output', call.usage.output],
+    ['recordedOutput', call.usage.recordedOutput],
     ['cacheRead', call.usage.cacheRead],
     ['cacheWrite', call.usage.cacheWrite],
     ['cacheWrite1h', call.usage.cacheWrite1h],
@@ -75,6 +76,15 @@ function assertCallEconomics(call: ModelCall): void {
     ['cumulativeReportedReasoningTokens', call.cumulativeReportedReasoningTokens],
   ] as const) {
     assertSafeToken(value, `Call ${call.index} ${name}`);
+  }
+  if (
+    !['includesReasoning', 'excludesReasoning', 'unknown'].includes(
+      call.usage.outputReasoningRelationship,
+    )
+  ) {
+    throw new AnalysisValidationError(
+      `Call ${call.index} has an unsupported output/reasoning relationship`,
+    );
   }
   const costValues = call.cost
     ? [

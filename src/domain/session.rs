@@ -58,10 +58,25 @@ pub(crate) struct ModelTarget {
     pub api: Option<String>,
 }
 
+/// Relationship between the source's recorded output bucket and reasoning.
+/// This describes counters, never inferred from displayed reasoning text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum OutputReasoningRelationship {
+    IncludesReasoning,
+    ExcludesReasoning,
+    #[default]
+    Unknown,
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReportedUsage {
     pub input: Option<u64>,
+    /// Normalized completion total, including reasoning exactly once when known.
     pub output: Option<u64>,
+    /// Uncombined output counter supplied by the source, independent of total availability.
+    pub recorded_output: Option<u64>,
+    pub output_reasoning_relationship: OutputReasoningRelationship,
     pub cache_read: Option<u64>,
     pub cache_write: Option<u64>,
     pub cache_write_1h: Option<u64>,

@@ -8,6 +8,7 @@
   import { describeTokenDiagnostic } from '../diagnostics';
   import { describeEconomicsCode } from '../economics';
   import { describeCostBasis, isPiSource } from '../cost-basis';
+  import { recordedResponseMetrics, outputAccountingLabel } from '../recorded-usage';
   import CopyButton from './CopyButton.svelte';
   import ItemContribution from './ItemContribution.svelte';
   import { itemContributions } from './item-contribution';
@@ -48,6 +49,7 @@
     }
     return [...summary.entries()].map(([name, value]) => ({ name, ...value }));
   })();
+  $: recordedMetrics = call ? recordedResponseMetrics(call.usage) : [];
   $: explanationCodes = call?.tokenAnalysis.explanationCodes ?? [];
   $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
   $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
@@ -197,10 +199,12 @@
         <dt>Input</dt>
         <dd>{formatMetric(call.reportedPromptTokens)}</dd>
       </div>
-      <div>
-        <dt>Output</dt>
-        <dd>{formatMetric(call.reportedCompletionTokens)}</dd>
-      </div>
+      {#each recordedMetrics as metric}
+        <div>
+          <dt>{metric.label}</dt>
+          <dd>{metric.value}</dd>
+        </div>
+      {/each}
       <div>
         <dt>{costCopy.label}</dt>
         <dd>
@@ -346,6 +350,14 @@
           <dd>{formatMetric(call.usage.cacheWrite1h)}</dd>
         </div>
         <div>
+          <dt>Output accounting</dt>
+          <dd>{outputAccountingLabel(call.usage.outputReasoningRelationship)}</dd>
+        </div>
+        <div>
+          <dt>Completion total (including reasoning)</dt>
+          <dd>{formatMetric(call.reportedCompletionTokens)}</dd>
+        </div>
+        <div>
           <dt>Audited usage completeness</dt>
           <dd>{call.economics.usageCompleteness}</dd>
         </div>
@@ -382,7 +394,7 @@
           <dd>{formatMetric(call.cumulativeReportedPromptTokens)}</dd>
         </div>
         <div>
-          <dt>Cumulative output</dt>
+          <dt>Cumulative completion (including reasoning)</dt>
           <dd>{formatMetric(call.cumulativeReportedCompletionTokens)}</dd>
         </div>
         <div>

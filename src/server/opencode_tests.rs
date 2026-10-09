@@ -399,7 +399,7 @@ async fn database_http_etags_revalidate_snapshots_before_304_and_expose_coverage
     let json: Value =
         serde_json::from_slice(&to_bytes(first.into_body(), usize::MAX).await.expect("body"))
             .expect("JSON");
-    assert_eq!(json["schemaVersion"], 9);
+    assert_eq!(json["schemaVersion"], 10);
     assert_eq!(json["session"]["source"], "opencode");
     assert_eq!(json["reconstruction"]["status"], "partial");
     assert_eq!(json["economics"]["costBasis"], "sourceModelRates");

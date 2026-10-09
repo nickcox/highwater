@@ -537,6 +537,40 @@ fn export_live_contract() {
         ));
     }
 
+    // Source-neutral reference counters: the consumer must not choose display
+    // or arithmetic from a harness name, nor sum counters with unknown overlap.
+    for (name, relationship, raw, normalized) in [
+        (
+            "usage-recorded-inclusive",
+            OutputReasoningRelationship::IncludesReasoning,
+            30,
+            Some(30),
+        ),
+        (
+            "usage-recorded-disjoint",
+            OutputReasoningRelationship::ExcludesReasoning,
+            20,
+            Some(30),
+        ),
+        (
+            "usage-recorded-unknown",
+            OutputReasoningRelationship::Unknown,
+            20,
+            None,
+        ),
+    ] {
+        let mut session = fake_session();
+        session.source.kind = "future-harness".into();
+        session.model_calls[0].reported_usage = ReportedUsage {
+            output: normalized,
+            recorded_output: Some(raw),
+            output_reasoning_relationship: relationship,
+            reasoning: Some(10),
+            ..ReportedUsage::default()
+        };
+        push(&mut cases, name, session, TokenizationPolicy::Off);
+    }
+
     let export = std::env::var_os("TOKENPLUME_CONTRACT_DIR").map(PathBuf::from);
     if let Some(directory) = &export {
         assert!(
@@ -568,7 +602,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 97);
+    assert_eq!(manifest.len(), 100);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

@@ -17,11 +17,13 @@ function renderCall(addedItemIds: string[], droppedItemIds: string[]) {
 }
 
 describe('CallDetails change lists', () => {
-  it('labels reported usage Input and Output without changing the underlying counts', () => {
+  it('shows recorded output independently of normalized completion totals', () => {
     const indexed = indexAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
     call.reportedPromptTokens = 12345;
-    call.reportedCompletionTokens = 678;
+    call.reportedCompletionTokens = 999;
+    call.usage.recordedOutput = 678;
+    call.usage.reasoning = 50;
     const { container } = render(CallDetails, { props: { call, indexed, pinned: true } });
     const metrics = container.querySelector('.essential-metrics')!;
     expect([...metrics.querySelectorAll('dt')].map((node) => node.textContent)).toContain('Input');
@@ -29,7 +31,55 @@ describe('CallDetails change lists', () => {
       'Prompt',
     );
     expect(screen.getByText('Input').nextElementSibling).toHaveTextContent('12.3K');
-    expect(screen.getByText('Output').nextElementSibling).toHaveTextContent('678');
+    expect(screen.getByText('Recorded output').nextElementSibling).toHaveTextContent('678');
+    expect(screen.getByText('Recorded reasoning').nextElementSibling).toHaveTextContent('50');
+    expect(metrics).not.toHaveTextContent('999');
+    expect(
+      screen.getByText('Completion total (including reasoning)').nextElementSibling,
+    ).toHaveTextContent('999');
+  });
+
+  it.each(['pi', 'opencode', 'future-harness'])(
+    'renders the same recorded counters for %s without a harness-specific display',
+    (source) => {
+      const indexed = indexAnalysis(testAnalysis());
+      indexed.analysis.session.source = source;
+      const call = indexed.analysis.modelCalls[0];
+      call.reportedCompletionTokens = null;
+      call.usage.output = null;
+      call.usage.recordedOutput = 20;
+      call.usage.reasoning = 10;
+      call.usage.outputReasoningRelationship = 'unknown';
+      const { container } = render(CallDetails, { props: { call, indexed, pinned: true } });
+      expect(screen.getByText('Recorded output').nextElementSibling).toHaveTextContent('20');
+      expect(screen.getByText('Recorded reasoning').nextElementSibling).toHaveTextContent('10');
+      expect(container.querySelector('.essential-metrics')).not.toHaveTextContent('overlap');
+      expect(screen.queryByText('Output', { exact: true })).toBeNull();
+      expect(screen.getByText('Output accounting').nextElementSibling).toHaveTextContent(
+        'Output/reasoning overlap not established',
+      );
+      expect(
+        screen.getByText('Completion total (including reasoning)').nextElementSibling,
+      ).toHaveTextContent('Unknown');
+    },
+  );
+
+  it('distinguishes unrecorded counters from measured zero without inferring reasoning', () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[0];
+    call.usage.recordedOutput = null;
+    call.usage.reasoning = null;
+    const view = render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.getByText('Recorded output').nextElementSibling).toHaveTextContent(
+      'Not recorded',
+    );
+    expect(screen.queryByText('Recorded reasoning')).toBeNull();
+    view.unmount();
+    call.usage.recordedOutput = 0;
+    call.usage.reasoning = 0;
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.getByText('Recorded output').nextElementSibling).toHaveTextContent(/^0$/);
+    expect(screen.getByText('Recorded reasoning').nextElementSibling).toHaveTextContent(/^0$/);
   });
   it('shows approximate response timing with an accessible qualification, not wall-clock dates or decode speed', () => {
     const indexed = indexAnalysis(testAnalysis());

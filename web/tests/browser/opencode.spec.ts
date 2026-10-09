@@ -80,7 +80,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   await picker.selectOption(openCode.id);
   const response = await analysisResponse;
   const analysis = await response.json();
-  expect(analysis.schemaVersion).toBe(9);
+  expect(analysis.schemaVersion).toBe(10);
   expect(analysis.session.source).toBe('opencode');
   expect(analysis.reconstruction.status).toBe('partial');
   await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
@@ -140,7 +140,9 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   expect(pageErrors).toEqual([]);
 });
 
-test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh', async ({ page }) => {
+test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh', async ({
+  page,
+}) => {
   test.skip(!database, 'Synthetic embedded-server fixture only.');
   const errors: Error[] = [];
   page.on('pageerror', (error) => errors.push(error));
@@ -149,7 +151,7 @@ test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh',
     (session: { displayName: string }) => session.displayName === 'Synthetic modern task',
   );
   expect(modern).toBeTruthy();
-  await page.goto('/#session=' + modern.id);
+  await page.goto('/#session=' + modern.id + '&pin=1');
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toContainText(
     'Some compaction records have no request usage',
@@ -157,22 +159,41 @@ test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh',
   const initial = await page.request.get(`/api/sessions/${modern.id}/analysis`);
   const analysis = await initial.json();
   expect(analysis.modelCalls).toHaveLength(3);
+  expect(analysis.modelCalls[0].usage.recordedOutput).toBe(20);
+  expect(analysis.modelCalls[0].usage.reasoning).toBe(5);
+  expect(analysis.modelCalls[0].usage.outputReasoningRelationship).toBe('unknown');
+  expect(analysis.modelCalls[0].reportedCompletionTokens).toBeNull();
+  const pinned = page.getByRole('region', { name: 'Pinned call 1' });
+  await expect(pinned.getByText('Recorded output', { exact: true }).locator('+ dd')).toHaveText(
+    '20',
+  );
+  await expect(pinned.getByText('Recorded reasoning', { exact: true }).locator('+ dd')).toHaveText(
+    '5',
+  );
+  await expect(pinned.locator('.essential-metrics')).not.toContainText('Unknown');
   expect(analysis.modelCalls[1].sourceRecordId).toBe('msg_empty');
   expect(analysis.compactions).toHaveLength(1);
   expect(analysis.compactions[0].retainedItemIds).toEqual([]);
   const river = page.getByRole('application', { name: 'Context River' });
-  await river.getByRole('option', { name: /^Compaction checkpoint,/ })
-    .or(river.getByRole('button', { name: 'Compaction checkpoint', exact: true })).click();
+  await river
+    .getByRole('option', { name: /^Compaction checkpoint,/ })
+    .or(river.getByRole('button', { name: 'Compaction checkpoint', exact: true }))
+    .click();
   await page.locator('.item-details summary').filter({ hasText: 'Content preview' }).click();
   await page.locator('.item-details').getByRole('button', { name: 'Show more' }).click();
-  await expect(page.locator('.item-details').getByText(/Synthetic serialized recent exchange/)).toBeVisible();
+  await expect(
+    page.locator('.item-details').getByText(/Synthetic serialized recent exchange/),
+  ).toBeVisible();
   await page.getByRole('tab', { name: 'Composition' }).click();
   await expect(page.getByRole('heading', { name: /^Cumulative context usage ·/ })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Selected item in Composition' })).toBeVisible();
   const etag = initial.headers()['etag'];
-  const refreshed = page.waitForResponse((response) =>
-    response.url().includes(modern.id) && response.url().endsWith('/analysis') &&
-    response.status() === 200 && response.headers()['etag'] !== etag,
+  const refreshed = page.waitForResponse(
+    (response) =>
+      response.url().includes(modern.id) &&
+      response.url().endsWith('/analysis') &&
+      response.status() === 200 &&
+      response.headers()['etag'] !== etag,
   );
   execFileSync('python3', [
     '-c',
@@ -180,9 +201,11 @@ test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh',
     database!,
   ]);
   const updated = await (await refreshed).json();
-  expect(updated.contextItems.some((item: { preview: { expandedText: string } | null }) =>
-    item.preview?.expandedText.includes('Synthetic revised summary'),
-  )).toBe(true);
+  expect(
+    updated.contextItems.some((item: { preview: { expandedText: string } | null }) =>
+      item.preview?.expandedText.includes('Synthetic revised summary'),
+    ),
+  ).toBe(true);
   expect(errors).toEqual([]);
 });
 

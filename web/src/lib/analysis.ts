@@ -23,7 +23,7 @@ function normalizedKind(kind: string): ContextItemKind {
 }
 
 function validateEnvelope(input: SessionAnalysis): void {
-  if (input.schemaVersion !== 9) {
+  if (input.schemaVersion !== 10) {
     throw new AnalysisValidationError(`Unsupported analysis schema ${String(input.schemaVersion)}`);
   }
   if (input.displayWeightUnit !== input.tokenAnalysis.chartUnit) {

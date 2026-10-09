@@ -1,7 +1,9 @@
 //! Stored OpenCode accounting is not Pi accounting. The caller must supply an
 //! audited writer policy; a session's creation version alone cannot select one.
 
-use crate::domain::{ReportedCost, ReportedUsage, MAX_SAFE_JSON_INTEGER};
+use crate::domain::{
+    OutputReasoningRelationship, ReportedCost, ReportedUsage, MAX_SAFE_JSON_INTEGER,
+};
 use serde_json::Value;
 use thiserror::Error;
 
@@ -75,6 +77,12 @@ pub(crate) fn normalize(
     if !measured {
         return Ok(ReportedUsage::default());
     }
+    let recorded_output = output;
+    let output_reasoning_relationship = match policy {
+        OutputAccounting::IncludesReasoning => OutputReasoningRelationship::IncludesReasoning,
+        OutputAccounting::ExcludesReasoning => OutputReasoningRelationship::ExcludesReasoning,
+        OutputAccounting::Unknown => OutputReasoningRelationship::Unknown,
+    };
     let output = match policy {
         OutputAccounting::IncludesReasoning => {
             if matches!((output, reasoning), (Some(output), Some(reasoning)) if reasoning > output)
@@ -97,6 +105,8 @@ pub(crate) fn normalize(
     Ok(ReportedUsage {
         input,
         output,
+        recorded_output,
+        output_reasoning_relationship,
         reasoning,
         cache_read,
         cache_write,
@@ -125,6 +135,17 @@ mod tests {
         ] {
             let usage = normalize(Some(tokens), Some(&json!(0.25)), true, policy).expect("usage");
             assert_eq!(usage.output, Some(30));
+            assert_eq!(usage.recorded_output, tokens["output"].as_u64());
+            assert_eq!(
+                usage.output_reasoning_relationship,
+                match policy {
+                    OutputAccounting::IncludesReasoning =>
+                        OutputReasoningRelationship::IncludesReasoning,
+                    OutputAccounting::ExcludesReasoning =>
+                        OutputReasoningRelationship::ExcludesReasoning,
+                    OutputAccounting::Unknown => unreachable!("audited vectors"),
+                }
+            );
             assert_eq!(usage.reasoning, Some(10));
             assert_eq!(
                 (
@@ -145,6 +166,11 @@ mod tests {
         let tokens = json!({"input":1,"output":20,"reasoning":10,"cache":{"read":0,"write":0}});
         let usage = normalize(Some(&tokens), None, true, OutputAccounting::Unknown).expect("usage");
         assert_eq!(usage.output, None);
+        assert_eq!(usage.recorded_output, Some(20));
+        assert_eq!(
+            usage.output_reasoning_relationship,
+            OutputReasoningRelationship::Unknown
+        );
         assert_eq!(usage.reasoning, Some(10));
         let zero = json!({"output":20,"reasoning":0});
         assert_eq!(
@@ -166,6 +192,8 @@ mod tests {
         )
         .expect("initialized");
         assert!(missing.input.is_none());
+        assert!(missing.recorded_output.is_none());
+        assert!(missing.reasoning.is_none());
         assert!(missing.cost.total.is_none());
         let measured = normalize(
             Some(&tokens),
@@ -176,6 +204,7 @@ mod tests {
         .expect("measured");
         assert_eq!(measured.input, Some(0));
         assert_eq!(measured.output, Some(0));
+        assert_eq!(measured.recorded_output, Some(0));
         assert_eq!(measured.cost.total, Some(0.0));
     }
 
@@ -187,6 +216,7 @@ mod tests {
         assert_eq!(usage.input, Some(5));
         assert_eq!(usage.total_tokens, Some(999));
         assert!(usage.output.is_none());
+        assert!(usage.recorded_output.is_none());
         assert!(usage.cache_read.is_none());
         assert!(usage.reasoning.is_none());
     }
@@ -232,6 +262,11 @@ mod tests {
         )
         .expect("valid source fields");
         assert!(usage.output.is_none());
+        assert_eq!(usage.recorded_output, Some(MAX_SAFE_JSON_INTEGER));
+        assert_eq!(
+            usage.output_reasoning_relationship,
+            OutputReasoningRelationship::ExcludesReasoning
+        );
         assert_eq!(usage.reasoning, Some(1));
     }
 }
