@@ -3132,11 +3132,21 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
   await page.getByRole('button', { name: 'Pin model call 1', exact: true }).click();
+  await expect(
+    page.locator('.item-details').getByRole('button', { name: /Inspect call/ }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close pinned call', exact: true }).click();
+  // Unpinned inspection uses the item's last included call unless a call is hovered.
+  await page.locator('#selected-item-summary').hover();
   await page
     .locator('.item-details')
-    .getByRole('button', { name: 'Inspect call 1', exact: true })
+    .getByRole('button', { name: 'Inspect call 2', exact: true })
     .click();
+  await expect(
+    page.locator('.item-details').getByRole('button', { name: /Inspect call/ }),
+  ).toHaveCount(0);
   await expect(page.locator('#pinned-call-summary')).toBeFocused();
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
   const output = process.env.TOKENPLUME_CALM_SCREENSHOTS;
   if (output) await captureBaselineState(page, output, 'desktop-selected-pinned');
   await expandEconomics(page);

@@ -9,6 +9,29 @@ import { inspectorSections } from '../state/inspector-sections';
 afterEach(cleanup);
 
 describe('ItemDetails presence feedback', () => {
+  it('hides Inspect call only when its target is already pinned', async () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const onInspectCall = vi.fn();
+    const view = render(ItemDetails, {
+      props: {
+        item: indexed.itemById.get('a')!,
+        indexed,
+        callIndex: 1,
+        pinnedCallIndex: 1,
+        onInspectCall,
+      },
+    });
+    expect(screen.queryByRole('button', { name: /Inspect call/ })).toBeNull();
+    await view.rerender({ pinnedCallIndex: null });
+    await fireEvent.click(screen.getByRole('button', { name: 'Inspect call 1' }));
+    expect(onInspectCall).toHaveBeenLastCalledWith(1);
+    await view.rerender({ pinnedCallIndex: 2 });
+    expect(screen.getByRole('button', { name: 'Inspect call 1' })).toBeInTheDocument();
+    await view.rerender({ callIndex: 2 });
+    expect(screen.queryByRole('button', { name: /Inspect call/ })).toBeNull();
+    await view.rerender({ pinnedCallIndex: null, callIndex: null });
+    expect(screen.getByRole('button', { name: 'Inspect call 2' })).toBeInTheDocument();
+  });
   it('closes the item from its identity header without invoking call inspection', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const onClear = vi.fn();

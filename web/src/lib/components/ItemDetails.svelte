@@ -129,8 +129,9 @@
     {#if item.presence.length > 0}<button type="button" onclick={() => onRevealInRiver(item.id)}
         >Reveal in River</button
       >{/if}
-    {#if selectedCall}<button type="button" onclick={() => onInspectCall(selectedCall.index)}
-        >Inspect call {selectedCall.index}</button
+    {#if selectedCall && selectedCall.index !== pinnedCallIndex}<button
+        type="button"
+        onclick={() => onInspectCall(selectedCall.index)}>Inspect call {selectedCall.index}</button
       >{/if}
     {#if selectedEstimate && (selectedEstimate.coverage !== 'complete' || selectedEstimate.method === 'characterHeuristic')}<p
         class="presence-note"
