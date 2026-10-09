@@ -9,6 +9,27 @@ import { inspectorSections } from '../state/inspector-sections';
 afterEach(cleanup);
 
 describe('ItemDetails presence feedback', () => {
+  it('closes the item from its identity header without invoking call inspection', async () => {
+    const indexed = indexAnalysis(testAnalysis());
+    const onClear = vi.fn();
+    const onInspectCall = vi.fn();
+    const view = render(ItemDetails, {
+      props: {
+        item: indexed.itemById.get('a')!,
+        indexed,
+        pinnedCallIndex: 1,
+        onClear,
+        onInspectCall,
+      },
+    });
+    const close = screen.getByRole('button', { name: 'Close context item' });
+    expect(close.closest('header')).toBe(view.container.querySelector('.item-identity'));
+    expect(close).toHaveTextContent('×');
+    expect(screen.queryByRole('button', { name: 'Clear item' })).toBeNull();
+    await fireEvent.click(close);
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(onInspectCall).not.toHaveBeenCalled();
+  });
   it('omits the bulk-collapse action and preserves manually chosen sections across panel reopening', async () => {
     const indexed = indexAnalysis(testAnalysis());
     const sections = {

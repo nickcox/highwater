@@ -114,6 +114,8 @@
           {displayItemLabel(item)}
         </h3>
       </div>
+      {#if onClear}<button type="button" aria-label="Close context item" onclick={onClear}>×</button
+        >{/if}
     </header>
     {#if item.presence.length === 0}
       <p class="presence-note">
@@ -124,7 +126,6 @@
         This item is not present at pinned call {pinnedCall.index}. Its inspector remains selected.
       </p>
     {/if}
-    {#if onClear}<button type="button" onclick={onClear}>Clear item</button>{/if}
     {#if item.presence.length > 0}<button type="button" onclick={() => onRevealInRiver(item.id)}
         >Reveal in River</button
       >{/if}
@@ -405,6 +406,11 @@
     gap: 8px;
     padding: 4px 0 7px;
     background: var(--surface);
+  }
+  .item-identity > button {
+    flex-shrink: 0;
+    font-size: 18px;
+    padding: 1px 7px;
   }
   .item-identity > div {
     display: grid;

@@ -1201,7 +1201,7 @@ test('compaction sources blend into the actual summary without interactive or re
     path: '.playwright/calm-workspace/compaction-merge-selected.png',
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Clear item', exact: true }).click();
+  await page.getByRole('button', { name: 'Close context item', exact: true }).click();
   await page.screenshot({
     path: '.playwright/calm-workspace/compaction-merge-default.png',
     fullPage: true,
@@ -2963,7 +2963,7 @@ test('empty inspector occupancy preserves fractional pan anchors and explicit ra
   expect((await host.boundingBox())!.width).toBeCloseTo(occupiedWidth, 1);
   await page
     .locator('.item-details')
-    .getByRole('button', { name: 'Clear item', exact: true })
+    .getByRole('button', { name: 'Close context item', exact: true })
     .click();
   await expect.poll(anchor).toBeCloseTo(before, 3);
   await restoreRiverRange(page, 80, 81);
@@ -3003,7 +3003,9 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   const item = page.locator('.item-details');
   await item.getByText('Technical identifiers', { exact: true }).click();
   await expect(item.locator('.technical-identifiers')).toHaveAttribute('open', '');
-  await item.getByRole('button', { name: 'Clear item', exact: true }).click();
+  await item.getByRole('button', { name: 'Close context item', exact: true }).click();
+  await expect(page.locator('#selected-item-summary')).toHaveCount(0);
+  await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
   await page.getByRole('button', { name: 'bash: npm test', exact: true }).press('Enter');
   await expect(item.locator('.technical-identifiers')).toHaveAttribute('open', '');
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
