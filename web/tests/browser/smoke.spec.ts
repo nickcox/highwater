@@ -563,9 +563,15 @@ test('mocked app loads a session, selects an item, and navigates the chart', asy
     await page.setViewportSize({ width: 390, height: 844 });
     await captureBaselineState(page, screenshotDirectory, 'narrow-selected-pinned');
   }
+  // Selection never dims other ribbons; they keep their normal fill opacity.
   const otherRibbon = page.locator('.ribbon-group:not(.selected)').first();
   await expect
     .poll(() => otherRibbon.evaluate((element) => getComputedStyle(element).opacity))
+    .toBe('1');
+  await expect
+    .poll(() =>
+      otherRibbon.locator('.ribbon').evaluate((element) => getComputedStyle(element).fillOpacity),
+    )
     .toBe('0.88');
   await page.getByRole('button', { name: 'Zoom in' }).click();
   await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.5×');
@@ -1255,11 +1261,14 @@ test('compaction sources blend into the actual summary without interactive or re
     .locator('.ribbon')
     .getAttribute('fill');
   await expect(gradient.locator('stop').last()).toHaveAttribute('stop-color', summaryFill!);
-  const rest = Number(await merges.evaluate((node) => getComputedStyle(node).opacity));
+  // Emphasis is drawn over the unchanged base merge in the overlay layer.
+  await expect(page.locator('.compaction-merge-emphasis')).toHaveCount(0);
   await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
-  await expect(merges).toHaveClass(/emphasized/);
-  expect(Number(await merges.evaluate((node) => getComputedStyle(node).opacity))).toBeGreaterThan(
-    rest,
+  const emphasis = page.locator('.river-overlay .compaction-merge-emphasis.emphasized');
+  await expect(emphasis).toHaveCount(1);
+  await expect(emphasis).toHaveAttribute('fill', `url(#${gradientId})`);
+  expect(Number(await emphasis.evaluate((node) => getComputedStyle(node).opacity))).toBeGreaterThan(
+    0,
   );
   await expect(page.locator('.lineage-connector.visible')).toHaveCount(1);
   await page.screenshot({
@@ -1439,10 +1448,10 @@ test('Go to call pins its target and preserves Fit all, zoom and independent ite
   for (let i = 0; i < 4; i++)
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   const zoom = await page.locator('.zoom-level').textContent();
-  const width = await page.locator('.river-scroll > svg').getAttribute('width');
+  const width = await page.locator('.river-scroll .river-plot').getAttribute('width');
   await jump('160', 160);
   expect(await page.locator('.zoom-level').textContent()).toBe(zoom);
-  expect(await page.locator('.river-scroll > svg').getAttribute('width')).toBe(width);
+  expect(await page.locator('.river-scroll .river-plot').getAttribute('width')).toBe(width);
   const host = (await page.getByTestId('river-host').boundingBox())!;
   const marker = (await page
     .getByRole('button', { name: 'Pin model call 160', exact: true })
@@ -2962,7 +2971,7 @@ test('retired Compact preference is ignored without losing scale, grouping or ec
   await mockApi(page, economicsScenario());
   await page.goto('/');
   await assertLoaded(page);
-  await expect(page.locator('.river-scroll > svg')).toHaveAttribute('height', '500');
+  await expect(page.locator('.river-scroll .river-plot')).toHaveAttribute('height', '500');
   await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '222');
   await expect(page.locator('.view-status')).toHaveText('Visible-call scale · Item types');
   expect(await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1'))).toBe(
@@ -3186,7 +3195,7 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
       true,
     );
     if (width === 1440)
-      expect((await page.locator('.river-scroll > svg').boundingBox())!.y).toBeLessThan(400);
+      expect((await page.locator('.river-scroll .river-plot').boundingBox())!.y).toBeLessThan(400);
     if (process.env.TOKENPLUME_CALM_SCREENSHOTS)
       await captureBaselineState(
         page,

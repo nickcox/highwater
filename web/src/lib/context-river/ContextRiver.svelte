@@ -349,6 +349,24 @@
       : `${visibleScaleSample.visibleCallCount} visible call markers in ${verticalAxisUnit}. Viewport edges are interpolated where needed; ribbon heights change as you pan or zoom.`;
   $: verticalAxisAccessibleLabel = `Vertical axis. ${verticalAxisDescription} Tick values: ${verticalAxisTicks.map(formatVerticalTick).join(', ')}.`;
   $: columnByCall = new Map(river.columns.map((column) => [column.callIndex, column]));
+  // Individual-item ribbons only; grouped Item types bands have no item emphasis.
+  $: ribbonByItemId = new Map(
+    river.ribbons
+      .filter((ribbon) => ribbon.groupKind === undefined)
+      .map((ribbon) => [ribbon.itemId, ribbon]),
+  );
+  $: hoveredRibbon = hoveredItemId === null ? null : (ribbonByItemId.get(hoveredItemId) ?? null);
+  $: selectedRibbon = selectedItemId === null ? null : (ribbonByItemId.get(selectedItemId) ?? null);
+  $: focusedItemId = selectedItemId ?? hoveredItemId;
+  $: focusedConnectors =
+    focusedItemId === null
+      ? []
+      : river.lineageConnectors
+          .map((connector, index) => ({ connector, index }))
+          .filter(
+            ({ connector }) =>
+              connector.fromItemId === focusedItemId || connector.toItemId === focusedItemId,
+          );
   $: viewportColumns = river.columns.map((column) => ({
     callIndex: column.callIndex,
     x: column.x,
@@ -373,7 +391,8 @@
     condensedTargetSpacing,
     pinnedCallIndex,
   );
-  $: guidePositions = callLabelPositions;
+  // Guides do not follow the pin, so pinning never repaints the ribbon layer.
+  $: guidePositions = nonOverlappingCallLabelPositions(river.columns, condensedTargetSpacing, null);
   $: zoomFactor = fitCallSpacing > 0 ? Math.max(1, effectiveCallSpacing / fitCallSpacing) : 1;
   $: isFitAll = callSpacing === null || width <= observedWidth + 1;
   $: maximumCallSpacing = fitCallSpacing * Math.min(maxZoomFactor, Math.max(1, callCount - 1));
@@ -1289,277 +1308,314 @@
           ? 'Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths.'
           : ''}</span
       >
-      <svg bind:this={svg} viewBox={`0 0 ${width} ${height}`} {width} {height}>
-        <defs>
-          {#if hasInputGap}
-            <pattern
-              id={`${mergeId}-input-hatch`}
-              width="8"
-              height="8"
-              patternUnits="userSpaceOnUse"
-            >
-              <rect width="8" height="8" fill="#8793aa" opacity=".08" />
-              <path
-                d="M-2 2L2-2M0 8L8 0M6 10L10 6"
-                stroke="#aab4c7"
-                stroke-width="1"
-                opacity=".45"
-              />
-            </pattern>
-            <mask
-              id={`${mergeId}-input-mask`}
-              maskUnits="userSpaceOnUse"
-              x={margin.left}
-              y={margin.top}
-              width={river.innerWidth}
-              height={river.innerHeight}
-              style="mask-type:luminance"
-            >
-              <rect
+      <div class="river-canvas" style:width={`${width}px`}>
+        <svg bind:this={svg} class="river-plot" viewBox={`0 0 ${width} ${height}`} {width} {height}>
+          <defs>
+            {#if hasInputGap}
+              <pattern
+                id={`${mergeId}-input-hatch`}
+                width="8"
+                height="8"
+                patternUnits="userSpaceOnUse"
+              >
+                <rect width="8" height="8" fill="#8793aa" opacity=".08" />
+                <path
+                  d="M-2 2L2-2M0 8L8 0M6 10L10 6"
+                  stroke="#aab4c7"
+                  stroke-width="1"
+                  opacity=".45"
+                />
+              </pattern>
+              <mask
+                id={`${mergeId}-input-mask`}
+                maskUnits="userSpaceOnUse"
                 x={margin.left}
                 y={margin.top}
                 width={river.innerWidth}
                 height={river.innerHeight}
-                fill="white"
-              />
-              <g transform={horizontalProjection.transform}>
-                {#each river.ribbons as ribbon (ribbon.key)}
-                  <path
-                    d={ribbon.path}
-                    fill="black"
-                    stroke={ribbon.isSubpixel ? 'black' : 'none'}
-                    stroke-width={ribbon.isSubpixel ? 1.25 : 0}
-                    vector-effect="non-scaling-stroke"
-                  />
-                {/each}
-                {#each river.lineageConnectors as connector (connector.key)}
-                  <path d={connector.mergePath} fill="black" />
-                {/each}
-              </g>
-            </mask>
-          {/if}
-          {#each river.lineageConnectors as connector, i (connector.key)}
-            <linearGradient
-              id={`${mergeId}-${i}`}
-              gradientUnits="userSpaceOnUse"
-              x1={connector.sourceX}
-              y1={connector.sourceY}
-              x2={connector.targetX}
-              y2={connector.sourceY}
-            >
-              <stop offset="0%" stop-color={itemColor(connector.fromItemId)} />
-              <stop offset="100%" stop-color={itemColor(connector.toItemId)} />
-            </linearGradient>
-          {/each}
-          <pattern
-            id="unknown-geometry"
-            width="8"
-            height="8"
-            patternUnits="userSpaceOnUse"
-            patternTransform={`matrix(${1 / (horizontalProjection.scale || 1)} 0 0 1 ${-horizontalProjection.offset / (horizontalProjection.scale || 1)} 0) rotate(35)`}
-          >
-            <rect width="8" height="8" fill="#46516a" />
-            <path d="M0 0V8" stroke="#8793aa" stroke-width="2" opacity=".65" />
-          </pattern>
-        </defs>
-        <rect
-          class="plot-background"
-          x={margin.left}
-          y={margin.top}
-          width={river.innerWidth}
-          height={river.innerHeight}
-        />
-
-        {#each verticalAxisTickData as tick (tick.value)}
-          <line
-            class="weight-gridline"
-            x1={margin.left}
-            x2={width - margin.right}
-            y1={tick.y}
-            y2={tick.y}
-          />
-        {/each}
-
-        {#each river.columns as column, position (column.callIndex)}
-          {#if guidePositions.has(position)}<line
-              class="column-guide"
-              x1={column.x}
-              x2={column.x}
-              y1={margin.top}
-              y2={height - margin.bottom}
-            />{/if}
-          {#if callLabelPositions.has(position)}
-            <g
-              class="call-target"
-              class:condensed={callTargetStride > 1}
-              class:pinned={pinnedCallIndex === column.callIndex}
-              role="button"
-              tabindex="0"
-              aria-label={`Pin model call ${column.callIndex}`}
-              onkeydown={(event) => pinFromKeyboard(event, column.callIndex)}
-              onclick={(event) => {
-                if (consumeSuppressedClick(event)) return;
-                event.stopPropagation();
-                onPinCall(column.callIndex);
-              }}
-            >
-              <rect x={column.x - 22} y={height - margin.bottom + 5} width="44" height="38" />
-              <text x={column.x} y={height - 17} text-anchor="middle">{column.callIndex}</text>
-            </g>
-          {/if}
-        {/each}
-
-        {#each river.compactions as compaction (compaction.compactionId)}
-          <g
-            class="compaction-marker"
-            aria-label={`Compaction before call ${compaction.beforeModelCall}`}
-          >
-            <title>Compaction before call {compaction.beforeModelCall}</title>
-            <line
-              x1={compaction.x}
-              x2={compaction.x}
-              y1={margin.top - 8}
-              y2={height - margin.bottom}
-            />
-            <text x={compaction.x + 5} y={margin.top - 13}
-              >{minimumColumnSpacing < 64 ? 'C' : 'COMPACT'}</text
-            >
-          </g>
-        {/each}
-
-        <g transform={horizontalProjection.transform} data-testid="river-ribbon-geometry">
-          {#each river.lineageConnectors as connector, i (connector.key)}
-            <path
-              class="compaction-merge"
-              aria-hidden="true"
-              class:emphasized={connectorVisible(connector.fromItemId)}
-              class:summary-focused={(selectedItemId ?? hoveredItemId) === connector.toItemId}
-              d={connector.mergePath}
-              fill={`url(#${mergeId}-${i})`}
-            />
-            <path
-              class="lineage-connector"
-              vector-effect="non-scaling-stroke"
-              class:visible={connectorVisible(connector.fromItemId)}
-              d={connector.path}
-            />
-          {/each}
-
-          {#each river.ribbons as ribbon (ribbon.key)}
-            {@const isGroup = ribbon.groupKind !== undefined}
-            {@const ribbonColor = ribbon.groupKind
-              ? itemTypeColor(ribbon.groupKind)
-              : itemColor(ribbon.itemId)}
-            {@const ribbonLabel = isGroup
-              ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
-              : itemAccessibleLabel(ribbon.itemId)}
-            <g
-              class="ribbon-group"
-              class:group-ribbon={isGroup}
-              class:selected={!isGroup && selectedItemId === ribbon.itemId}
-              class:hovered={!isGroup && hoveredItemId === ribbon.itemId}
-              class:unknown={indexed.analysis.displayWeightUnit === 'unavailable'}
-            >
-              <path
-                class="ribbon"
-                vector-effect="non-scaling-stroke"
-                class:subpixel={ribbon.isSubpixel}
-                d={ribbon.path}
-                fill={indexed.analysis.displayWeightUnit === 'unavailable'
-                  ? 'url(#unknown-geometry)'
-                  : ribbonColor}
-                stroke={ribbon.isSubpixel ? ribbonColor : 'none'}
-                stroke-width={ribbon.isSubpixel ? 1.25 : 0}
-              />
-              <path
-                class="ribbon-hit"
-                vector-effect="non-scaling-stroke"
-                pointer-events="fill"
-                d={ribbon.hitPath}
-                role="button"
-                tabindex="0"
-                aria-label={ribbonLabel}
-                aria-pressed={!isGroup && selectedItemId === ribbon.itemId}
-                onpointerenter={(event) =>
-                  isGroup
-                    ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
-                    : onHoverItem(ribbon.itemId, event)}
-                onpointermove={(event) =>
-                  isGroup
-                    ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
-                    : onHoverItem(ribbon.itemId, event)}
-                onpointerleave={() => {
-                  if (isGroup) hoveredGroup = null;
-                  else onHoverItem(null);
-                }}
-                onmousedown={(event) => {
-                  // The breakdown owns focus after activation. Avoid the browser's
-                  // intermediate SVG/host focus ring without suppressing pointer gestures.
-                  if (isGroup) event.preventDefault();
-                }}
-                onclick={(event) =>
-                  isGroup
-                    ? activateGroup(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
-                    : selectRibbon(event, ribbon.itemId)}
-                onkeydown={(event) =>
-                  isGroup
-                    ? activateGroupFromKeyboard(
-                        event,
-                        ribbon.groupKind!,
-                        ribbon.memberItemIds ?? [],
-                      )
-                    : selectFromKeyboard(event, ribbon.itemId)}
+                style="mask-type:luminance"
               >
-                <title>{ribbonLabel}</title>
-              </path>
-            </g>
-          {/each}
-        </g>
-        {#if inputComparison.size > 0}
-          <g class="reported-input-overlay" aria-hidden="true" data-testid="reported-input-overlay">
-            {#each inputReferences as reference}
-              {#if hasInputGap && reference.fill}
-                <path
-                  class="unreconciled-input"
-                  d={reference.fill}
-                  fill={`url(#${mergeId}-input-hatch)`}
-                  mask={`url(#${mergeId}-input-mask)`}
+                <rect
+                  x={margin.left}
+                  y={margin.top}
+                  width={river.innerWidth}
+                  height={river.innerHeight}
+                  fill="white"
                 />
-              {/if}
-              <path class="reported-input-line" d={reference.line} />
+                <g transform={horizontalProjection.transform}>
+                  {#each river.ribbons as ribbon (ribbon.key)}
+                    <path
+                      d={ribbon.path}
+                      fill="black"
+                      stroke={ribbon.isSubpixel ? 'black' : 'none'}
+                      stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+                      vector-effect="non-scaling-stroke"
+                    />
+                  {/each}
+                  {#each river.lineageConnectors as connector (connector.key)}
+                    <path d={connector.mergePath} fill="black" />
+                  {/each}
+                </g>
+              </mask>
+            {/if}
+            {#each river.lineageConnectors as connector, i (connector.key)}
+              <linearGradient
+                id={`${mergeId}-${i}`}
+                gradientUnits="userSpaceOnUse"
+                x1={connector.sourceX}
+                y1={connector.sourceY}
+                x2={connector.targetX}
+                y2={connector.sourceY}
+              >
+                <stop offset="0%" stop-color={itemColor(connector.fromItemId)} />
+                <stop offset="100%" stop-color={itemColor(connector.toItemId)} />
+              </linearGradient>
             {/each}
-          </g>
-        {/if}
-        {#if selectionRect && selectionRect.width > 0}
+            <pattern
+              id="unknown-geometry"
+              width="8"
+              height="8"
+              patternUnits="userSpaceOnUse"
+              patternTransform={`matrix(${1 / (horizontalProjection.scale || 1)} 0 0 1 ${-horizontalProjection.offset / (horizontalProjection.scale || 1)} 0) rotate(35)`}
+            >
+              <rect width="8" height="8" fill="#46516a" />
+              <path d="M0 0V8" stroke="#8793aa" stroke-width="2" opacity=".65" />
+            </pattern>
+          </defs>
           <rect
-            class="zoom-selection"
-            x={selectionRect.x}
+            class="plot-background"
+            x={margin.left}
             y={margin.top}
-            width={selectionRect.width}
+            width={river.innerWidth}
             height={river.innerHeight}
           />
-        {/if}
-        {#if hoveredCallIndex !== null}
-          {@const column = columnByCall.get(hoveredCallIndex)}
-          {#if column}<line
-              class="crosshair"
-              x1={column.x}
-              x2={column.x}
-              y1={margin.top}
-              y2={height - margin.bottom}
-            />{/if}
-        {/if}
-        {#if pinnedCallIndex !== null}
-          {@const column = columnByCall.get(pinnedCallIndex)}
-          {#if column}<line
-              class="pin-line"
-              x1={column.x}
-              x2={column.x}
-              y1={margin.top}
-              y2={height - margin.bottom}
-            />{/if}
-        {/if}
-      </svg>
+
+          {#each verticalAxisTickData as tick (tick.value)}
+            <line
+              class="weight-gridline"
+              x1={margin.left}
+              x2={width - margin.right}
+              y1={tick.y}
+              y2={tick.y}
+            />
+          {/each}
+
+          {#each river.columns as column, position (column.callIndex)}
+            {#if guidePositions.has(position)}<line
+                class="column-guide"
+                x1={column.x}
+                x2={column.x}
+                y1={margin.top}
+                y2={height - margin.bottom}
+              />{/if}
+          {/each}
+
+          {#each river.compactions as compaction (compaction.compactionId)}
+            <g
+              class="compaction-marker"
+              aria-label={`Compaction before call ${compaction.beforeModelCall}`}
+            >
+              <title>Compaction before call {compaction.beforeModelCall}</title>
+              <line
+                x1={compaction.x}
+                x2={compaction.x}
+                y1={margin.top - 8}
+                y2={height - margin.bottom}
+              />
+              <text x={compaction.x + 5} y={margin.top - 13}
+                >{minimumColumnSpacing < 64 ? 'C' : 'COMPACT'}</text
+              >
+            </g>
+          {/each}
+
+          <g transform={horizontalProjection.transform} data-testid="river-ribbon-geometry">
+            {#each river.lineageConnectors as connector, i (connector.key)}
+              <path
+                class="compaction-merge"
+                aria-hidden="true"
+                d={connector.mergePath}
+                fill={`url(#${mergeId}-${i})`}
+              />
+            {/each}
+
+            {#each river.ribbons as ribbon (ribbon.key)}
+              {@const isGroup = ribbon.groupKind !== undefined}
+              {@const ribbonColor = ribbon.groupKind
+                ? itemTypeColor(ribbon.groupKind)
+                : itemColor(ribbon.itemId)}
+              {@const ribbonLabel = isGroup
+                ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
+                : itemAccessibleLabel(ribbon.itemId)}
+              <g
+                class="ribbon-group"
+                class:group-ribbon={isGroup}
+                class:selected={!isGroup && selectedItemId === ribbon.itemId}
+                class:unknown={indexed.analysis.displayWeightUnit === 'unavailable'}
+              >
+                <path
+                  class="ribbon"
+                  vector-effect="non-scaling-stroke"
+                  class:subpixel={ribbon.isSubpixel}
+                  d={ribbon.path}
+                  fill={indexed.analysis.displayWeightUnit === 'unavailable'
+                    ? 'url(#unknown-geometry)'
+                    : ribbonColor}
+                  stroke={ribbon.isSubpixel ? ribbonColor : 'none'}
+                  stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+                />
+                <path
+                  class="ribbon-hit"
+                  vector-effect="non-scaling-stroke"
+                  pointer-events="fill"
+                  d={ribbon.hitPath}
+                  role="button"
+                  tabindex="0"
+                  aria-label={ribbonLabel}
+                  aria-pressed={!isGroup && selectedItemId === ribbon.itemId}
+                  onpointerenter={(event) =>
+                    isGroup
+                      ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
+                      : onHoverItem(ribbon.itemId, event)}
+                  onpointermove={(event) =>
+                    isGroup
+                      ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
+                      : onHoverItem(ribbon.itemId, event)}
+                  onpointerleave={() => {
+                    if (isGroup) hoveredGroup = null;
+                    else onHoverItem(null);
+                  }}
+                  onmousedown={(event) => {
+                    // The breakdown owns focus after activation. Avoid the browser's
+                    // intermediate SVG/host focus ring without suppressing pointer gestures.
+                    if (isGroup) event.preventDefault();
+                  }}
+                  onclick={(event) =>
+                    isGroup
+                      ? activateGroup(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
+                      : selectRibbon(event, ribbon.itemId)}
+                  onkeydown={(event) =>
+                    isGroup
+                      ? activateGroupFromKeyboard(
+                          event,
+                          ribbon.groupKind!,
+                          ribbon.memberItemIds ?? [],
+                        )
+                      : selectFromKeyboard(event, ribbon.itemId)}
+                >
+                  <title>{ribbonLabel}</title>
+                </path>
+              </g>
+            {/each}
+          </g>
+          {#if inputComparison.size > 0}
+            <g
+              class="reported-input-overlay"
+              aria-hidden="true"
+              data-testid="reported-input-overlay"
+            >
+              {#each inputReferences as reference}
+                {#if hasInputGap && reference.fill}
+                  <path
+                    class="unreconciled-input"
+                    d={reference.fill}
+                    fill={`url(#${mergeId}-input-hatch)`}
+                    mask={`url(#${mergeId}-input-mask)`}
+                  />
+                {/if}
+                <path class="reported-input-line" d={reference.line} />
+              {/each}
+            </g>
+          {/if}
+        </svg>
+        <!-- Marks that change on hover, pin or selection live in a separate layer so
+           the ribbon SVG above is rasterised once instead of on every pointer move. -->
+        <svg class="river-overlay" viewBox={`0 0 ${width} ${height}`} {width} {height}>
+          <!-- Call labels move with the pin, so they are drawn here and stay clickable. -->
+          {#each river.columns as column, position (column.callIndex)}
+            {#if callLabelPositions.has(position)}
+              <g
+                class="call-target"
+                class:condensed={callTargetStride > 1}
+                class:pinned={pinnedCallIndex === column.callIndex}
+                role="button"
+                tabindex="0"
+                aria-label={`Pin model call ${column.callIndex}`}
+                onkeydown={(event) => pinFromKeyboard(event, column.callIndex)}
+                onclick={(event) => {
+                  if (consumeSuppressedClick(event)) return;
+                  event.stopPropagation();
+                  onPinCall(column.callIndex);
+                }}
+              >
+                <rect x={column.x - 22} y={height - margin.bottom + 5} width="44" height="38" />
+                <text x={column.x} y={height - 17} text-anchor="middle">{column.callIndex}</text>
+              </g>
+            {/if}
+          {/each}
+          <g aria-hidden="true" transform={horizontalProjection.transform}>
+            {#each focusedConnectors as { connector, index } (connector.key)}
+              <path
+                class="compaction-merge-emphasis"
+                class:emphasized={connectorVisible(connector.fromItemId)}
+                d={connector.mergePath}
+                fill={`url(#${mergeId}-${index})`}
+              />
+              {#if connectorVisible(connector.fromItemId)}
+                <path
+                  class="lineage-connector visible"
+                  vector-effect="non-scaling-stroke"
+                  d={connector.path}
+                />
+              {/if}
+            {/each}
+            {#if hoveredRibbon && hoveredRibbon !== selectedRibbon}
+              <path
+                class="ribbon-emphasis hovered"
+                vector-effect="non-scaling-stroke"
+                d={hoveredRibbon.path}
+                fill={itemColor(hoveredRibbon.itemId)}
+              />
+            {/if}
+            {#if selectedRibbon}
+              <path
+                class="ribbon-emphasis selected"
+                vector-effect="non-scaling-stroke"
+                d={selectedRibbon.path}
+                fill={itemColor(selectedRibbon.itemId)}
+              />
+            {/if}
+          </g>
+          {#if selectionRect && selectionRect.width > 0}
+            <rect
+              class="zoom-selection"
+              x={selectionRect.x}
+              y={margin.top}
+              width={selectionRect.width}
+              height={river.innerHeight}
+            />
+          {/if}
+          {#if hoveredCallIndex !== null}
+            {@const column = columnByCall.get(hoveredCallIndex)}
+            {#if column}<line
+                class="crosshair"
+                x1={column.x}
+                x2={column.x}
+                y1={margin.top}
+                y2={height - margin.bottom}
+              />{/if}
+          {/if}
+          {#if pinnedCallIndex !== null}
+            {@const column = columnByCall.get(pinnedCallIndex)}
+            {#if column}<line
+                class="pin-line"
+                x1={column.x}
+                x2={column.x}
+                y1={margin.top}
+                y2={height - margin.bottom}
+              />{/if}
+          {/if}
+        </svg>
+      </div>
       {#if riverDisplayMode === 'itemTypes'}
         <div class="group-type-legend" role="group" aria-label="Item type legend">
           <strong>Item types</strong>
@@ -2201,6 +2257,9 @@
     stroke-width: 1;
     pointer-events: none;
   }
+  .river-overlay .call-target {
+    pointer-events: all;
+  }
   .call-target {
     cursor: pointer;
     color: #95a2ba;
@@ -2287,29 +2346,42 @@
     flex-basis: 100%;
   }
 
-  .ribbon-group {
-    opacity: 0.88;
-    transition: opacity 120ms ease;
+  /* Hover and selection never restyle ribbons: that would re-rasterise every
+     ribbon. Emphasis is drawn in .river-overlay instead. */
+  .river-canvas {
+    position: relative;
   }
-  .ribbon-group.unknown {
-    opacity: 0.92;
-  }
-  .ribbon-group.selected,
-  .ribbon-group.hovered {
-    opacity: 1;
-  }
-  .ribbon-group.hovered:not(.selected) {
-    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.45));
+  /* Composite the overlay, not the ribbon SVG: promoting the ribbon SVG changes
+     how Chrome hit-tests sub-pixel ribbons. */
+  .river-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: none;
+    pointer-events: none;
+    will-change: transform;
   }
   .ribbon {
     pointer-events: none;
+    fill-opacity: 0.88;
+    stroke-opacity: 0.88;
+  }
+  .ribbon-group.unknown .ribbon {
+    fill-opacity: 0.92;
+  }
+  .ribbon-emphasis {
+    fill-opacity: 1;
+  }
+  .ribbon-emphasis.hovered {
+    stroke: rgba(255, 255, 255, 0.55);
+    stroke-width: 1.5;
+  }
+  .ribbon-emphasis.selected {
+    stroke: #fff;
+    stroke-width: 2.5;
   }
   .ribbon.subpixel {
     paint-order: stroke;
-  }
-  .ribbon-group.selected .ribbon {
-    stroke: #fff;
-    stroke-width: 2.5;
   }
   .ribbon-hit {
     fill: transparent;
@@ -2327,21 +2399,19 @@
     opacity: 0.4;
     pointer-events: none;
   }
-  .compaction-merge.summary-focused {
-    opacity: 0.55;
+  /* Drawn over the 0.4 base merge: about 0.5 combined when the summary is
+     focused, about 0.8 when the focused item is one of its sources. */
+  .compaction-merge-emphasis {
+    opacity: 0.15;
   }
-  .compaction-merge.emphasized {
-    opacity: 0.8;
+  .compaction-merge-emphasis.emphasized {
+    opacity: 0.65;
   }
   .lineage-connector {
     fill: none;
     stroke: #fff;
     stroke-width: 1.5;
     stroke-dasharray: 4 4;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .lineage-connector.visible {
     opacity: 0.88;
   }
   .crosshair {
@@ -2371,11 +2441,6 @@
     }
     .track-legend {
       gap: 5px 9px;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ribbon-group {
-      transition: none;
     }
   }
 </style>

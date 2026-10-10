@@ -223,7 +223,7 @@ beforeEach(() => {
     configurable: true,
     value(this: Element) {
       if (this instanceof SVGSVGElement) {
-        const host = this.parentElement as HTMLDivElement;
+        const host = (this.closest('.river-scroll') ?? this.parentElement) as HTMLDivElement;
         return rect(-host.scrollLeft, Number(this.getAttribute('width')) || 0, 500);
       }
       if ((this as HTMLElement).classList?.contains('river-scroll')) return rect(0, 300, 500);
@@ -381,7 +381,7 @@ describe('ContextRiver continuous viewport integration', () => {
       expect(view.container.querySelector('.economics-track-svg')).not.toBeNull(),
     );
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
-    const chartSvgs = host.querySelectorAll(':scope > svg, .economics-track-svg');
+    const chartSvgs = host.querySelectorAll('.river-plot, .economics-track-svg');
     expect(chartSvgs).toHaveLength(2);
     expect(chartSvgs[0].getAttribute('width')).toBe(chartSvgs[1].getAttribute('width'));
     expect(view.getByRole('button', { name: 'Cache' })).toHaveAttribute('aria-pressed', 'true');
@@ -594,7 +594,9 @@ describe('ContextRiver continuous viewport integration', () => {
     await fireEvent.click(economicsTrackButton(view.container, 'Cache'));
     await waitFor(() =>
       expect(
-        view.container.querySelectorAll('.river-scroll > svg, .river-scroll .economics-track-svg'),
+        view.container.querySelectorAll(
+          '.river-scroll .river-plot, .river-scroll .economics-track-svg',
+        ),
       ).toHaveLength(2),
     );
     expect(host.scrollLeft).toBe(scrollLeft);
@@ -602,12 +604,16 @@ describe('ContextRiver continuous viewport integration', () => {
     await fireEvent.click(economicsTrackButton(view.container, 'Cost'));
     expect(host.scrollLeft).toBe(scrollLeft);
     expect(
-      view.container.querySelectorAll('.river-scroll > svg, .river-scroll .economics-track-svg'),
+      view.container.querySelectorAll(
+        '.river-scroll .river-plot, .river-scroll .economics-track-svg',
+      ),
     ).toHaveLength(2);
     await fireEvent.click(economicsTrackButton(view.container, 'Off'));
     expect(host.scrollLeft).toBe(scrollLeft);
     expect(
-      view.container.querySelectorAll('.river-scroll > svg, .river-scroll .economics-track-svg'),
+      view.container.querySelectorAll(
+        '.river-scroll .river-plot, .river-scroll .economics-track-svg',
+      ),
     ).toHaveLength(1);
     expect(interaction.pinnedCallIndex).toBe(80);
     expect(interaction.selectedItemId).toBe(indexed.analysis.modelCalls[0].contextItemIds[0]);

@@ -98,7 +98,7 @@ beforeEach(() => {
   Object.defineProperty(SVGSVGElement.prototype, 'getBoundingClientRect', {
     configurable: true,
     value(this: SVGSVGElement) {
-      const host = this.parentElement as HTMLElement;
+      const host = (this.closest('.river-scroll') ?? this.parentElement) as HTMLElement;
       const width = Number(this.getAttribute('width')) || 960;
       return {
         left: -host.scrollLeft,
