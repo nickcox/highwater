@@ -60,7 +60,7 @@ fn recursive_discovery_preserves_canonical_identity_filtering_metadata_and_cance
         .iter()
         .find(|session| session.file_name == "session_123456789.jsonl")
         .expect("nested session metadata");
-    assert_eq!(session.display_name, "project · Jan 02 03:04 · 12345678");
+    assert_eq!(session.display_name, "project · 12345678");
     assert_eq!(session.working_directory.as_deref(), Some("/tmp/project"));
     assert!(session.started_at.is_some());
     let cancelled = AtomicBool::new(true);

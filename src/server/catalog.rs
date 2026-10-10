@@ -133,13 +133,10 @@ fn session_listing_metadata(path: &Path, file_name: &str) -> std::io::Result<Lis
         .and_then(|directory| Path::new(directory).file_name())
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty());
-    let timestamp_label = started_at.map(|timestamp| timestamp.format("%b %d %H:%M").to_string());
-    let display_name = match (project, timestamp_label, suffix) {
-        (Some(project), Some(timestamp), Some(suffix)) => {
-            format!("{project} · {timestamp} · {suffix}")
-        }
-        (Some(project), Some(timestamp), None) => format!("{project} · {timestamp}"),
-        (Some(project), None, Some(suffix)) => format!("{project} · {suffix}"),
+    // The browser adds the start time in the viewer's own time zone.
+    let display_name = match (project, suffix) {
+        (Some(project), Some(suffix)) => format!("{project} · {suffix}"),
+        (Some(project), None) => project.to_owned(),
         _ => stem.chars().take(48).collect(),
     };
     Ok(ListingMetadata {

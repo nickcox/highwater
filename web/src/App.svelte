@@ -40,6 +40,7 @@
   import SessionSummary from './lib/components/SessionSummary.svelte';
   import ContextRiver from './lib/context-river/ContextRiver.svelte';
   import ChartHelp from './lib/components/ChartHelp.svelte';
+  import { sessionDetailLine } from './lib/session-label';
   import {
     escapeInteraction,
     reconcileInteraction,
@@ -187,6 +188,12 @@
     ? (indexed?.itemById.get(interaction.hoveredItemId) ?? null)
     : null;
   $: callIndices = indexed?.analysis.modelCalls.map((call) => call.index) ?? [];
+  $: selectedSessionListing = $sessionController.sessions.find(
+    (session) => session.id === $sessionController.selectedSessionId,
+  );
+  $: selectedSessionDetail = selectedSessionListing
+    ? sessionDetailLine(selectedSessionListing)
+    : '';
   $: explorationTitle = visualizationView === 'river' ? 'Context River' : 'Composition';
   $: if (
     indexed?.analysis.modelCalls.length === 0 &&
@@ -731,8 +738,11 @@
   <header class="titlebar">
     <div>
       <h1>TokenPlume</h1>
-      <p class="live-status" data-testid="live-status">
-        Live updates: {$sessionController.liveStatus}
+      <p class="live-status">
+        <span data-testid="live-status">Live updates: {$sessionController.liveStatus}</span
+        >{#if selectedSessionDetail}<span class="session-detail" title={selectedSessionDetail}
+            >{' · '}{selectedSessionDetail}</span
+          >{/if}
       </p>
       {#if $sessionController.refreshing && !$sessionController.loading}
         <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
@@ -1110,6 +1120,7 @@
   }
   .titlebar > * {
     min-width: 0;
+    max-width: 100%;
   }
   h1 {
     margin: 0;
@@ -1122,7 +1133,11 @@
     margin: 4px 0 0;
   }
   .live-status {
+    max-width: 640px;
+    overflow: hidden;
     font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .panel {
     background: var(--surface);

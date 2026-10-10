@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SessionListItem } from '../api/client';
+  import { sessionOptionLabels } from '../session-label';
   export let sessions: SessionListItem[];
   export let selectedId: string | null;
   export let onSelect: (id: string) => void;
@@ -8,8 +9,6 @@
   let search = '';
   const harnessOf = (session: SessionListItem) =>
     session.harness ?? (session.id.startsWith('opencode-') ? 'opencode' : 'pi');
-  const harnessLabel = (session: SessionListItem) =>
-    harnessOf(session) === 'pi' ? 'Pi' : 'OpenCode';
   $: filtered = sessions.filter(
     (session) =>
       (harness === 'all' || harnessOf(session) === harness) &&
@@ -22,6 +21,7 @@
   $: choices = [...new Map(filtered.map((session) => [session.id, session])).values()];
   $: selected = sessions.find((session) => session.id === selectedId);
   $: selectedVisible = choices.some((session) => session.id === selectedId);
+  $: labels = sessionOptionLabels(choices, harness === 'all');
 </script>
 
 <div class="picker">
@@ -50,9 +50,7 @@
         >{/if}
       {#each choices as session (session.id)}
         <option value={session.id} title={session.fileName || session.displayName}>
-          {harness === 'all'
-            ? `[${harnessLabel(session)}] `
-            : ''}{session.displayName}{session.parentReference ? ' · child session' : ''}
+          {labels.get(session.id)}
         </option>
       {/each}
     </select>
