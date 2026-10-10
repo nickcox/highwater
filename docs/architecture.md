@@ -1,0 +1,13 @@
+# TokenPlume architecture
+
+- Rust owns source-adapter parsing, branch/context reconstruction, offline tokenization, reconciliation, derived metrics, and the Axum API.
+- Pi graph validation and typed interpretation precede stable-index reconstruction and finalization. Normalized references, presence, and raw safe integers are validated before a borrowed preparation stage plans unique item/profile estimates; call/item derivation and DTO assembly reuse that plan.
+- Catalogue scheduling owns debounce/retry/rate/shutdown decisions independently of discovery. One analysis service owns the four-entry/16-MiB response cache and active flights under one short lock, with at most two blocking analysis jobs. Flights register before permit acquisition and survive request cancellation; typed shared failures map centrally, and best-effort category reporting cannot strand a completed flight. These are response-cache/concurrency limits, not total process-memory bounds.
+- Source-neutral normalized domain types keep provider usage/costs, calculated estimates, and missing-value semantics distinct.
+- TypeScript validates and indexes the normalized analysis response; it does not tokenize or infer missing payloads.
+- D3 computes scales, SVG ribbon paths, and the Composition treemap layout.
+- Svelte owns rendering and interaction state.
+
+`GET /api/sessions` returns the current catalogue with generation, revision, availability, and ETag headers. `GET /api/events` provides content-free SSE invalidation hints; browsers refetch the catalogue rather than treating SSE as an event log. Live discovery is local and remains usable through ordinary HTTP when SSE or filesystem watching is unavailable. If filesystem watching cannot be initialized for an existing readable root, the server starts in degraded mode and performs bounded request-driven catalogue refreshes. OpenCode also polls every two seconds, including after watched-directory replacement. Transient source failures recover after a successful scan without disabling healthy watchers; actual watcher loss remains marked degraded until restart, with polling/request-driven updates still available.
+
+The completed implementation and validation evidence are recorded in [backend maintainability notes](../plans/archive/backend-maintainability-notes.md), following the [milestone plan](../plans/archive/backend-maintainability-implementation-plan.md). Persistence and incremental analysis remain deferred rather than being implied by these changes.
