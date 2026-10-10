@@ -149,6 +149,8 @@ export interface CallTokenAnalysis {
   reuse: number | null;
   additionShare: number | null;
   removalShare: number | null;
+  /** Token-based transition and age metrics include partial item estimates. */
+  metricsIncludePartialEstimates: boolean;
   age: CallAgeMetrics;
 }
 

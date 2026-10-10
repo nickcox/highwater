@@ -325,7 +325,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
     expect(manifest.schemaVersion).toBe(ANALYSIS_SCHEMA_VERSION);
-    expect(manifest.outputVersion).toBe(22);
+    expect(manifest.outputVersion).toBe(23);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

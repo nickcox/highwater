@@ -1,5 +1,15 @@
 <script context="module" lang="ts">
   let nextContributionId = 0;
+
+  // Mark token-based metrics that include partial item estimates.
+  function approximate(
+    value: number | null,
+    format: (value: number | null | undefined) => string,
+    includesPartialEstimates: boolean,
+  ): string {
+    const text = format(value);
+    return value !== null && includesPartialEstimates ? `≈ ${text}` : text;
+  }
 </script>
 
 <script lang="ts">
@@ -29,6 +39,7 @@
   } from '../context-river/format';
 
   export let call: ModelCall | null;
+  $: partialMetrics = call?.tokenAnalysis.metricsIncludePartialEstimates ?? false;
   export let indexed: IndexedAnalysis;
   export let pinned = false;
   export let onSelectItem: (id: string) => void = () => {};
@@ -545,31 +556,31 @@
         </div>
         <div>
           <dt>Added tokens</dt>
-          <dd>{formatMetric(call.tokenAnalysis.addedTokens)}</dd>
+          <dd>{approximate(call.tokenAnalysis.addedTokens, formatMetric, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Retained tokens</dt>
-          <dd>{formatMetric(call.tokenAnalysis.retainedTokens)}</dd>
+          <dd>{approximate(call.tokenAnalysis.retainedTokens, formatMetric, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Dropped tokens</dt>
-          <dd>{formatMetric(call.tokenAnalysis.droppedTokens)}</dd>
+          <dd>{approximate(call.tokenAnalysis.droppedTokens, formatMetric, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Calculated churn</dt>
-          <dd>{formatPercent(call.tokenAnalysis.churn)}</dd>
+          <dd>{approximate(call.tokenAnalysis.churn, formatPercent, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Calculated reuse</dt>
-          <dd>{formatPercent(call.tokenAnalysis.reuse)}</dd>
+          <dd>{approximate(call.tokenAnalysis.reuse, formatPercent, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Addition share</dt>
-          <dd>{formatPercent(call.tokenAnalysis.additionShare)}</dd>
+          <dd>{approximate(call.tokenAnalysis.additionShare, formatPercent, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Removal share</dt>
-          <dd>{formatPercent(call.tokenAnalysis.removalShare)}</dd>
+          <dd>{approximate(call.tokenAnalysis.removalShare, formatPercent, partialMetrics)}</dd>
         </div>
         <div>
           <dt>Oldest / median live age</dt>
@@ -580,8 +591,20 @@
         </div>
         <div>
           <dt>Token-weighted mean age</dt>
-          <dd>{formatMetric(call.tokenAnalysis.age.tokenWeightedMeanAgeCalls)} calls</dd>
+          <dd>
+            {approximate(
+              call.tokenAnalysis.age.tokenWeightedMeanAgeCalls,
+              formatMetric,
+              partialMetrics,
+            )} calls
+          </dd>
         </div>
+        {#if call.tokenAnalysis.metricsIncludePartialEstimates}
+          <div>
+            <dt>Estimate basis</dt>
+            <dd>≈ values include items with partial token estimates, such as system prompts</dd>
+          </div>
+        {/if}
         <div>
           <dt>Items aged ≥5 / ≥10 / ≥20 calls</dt>
           <dd>

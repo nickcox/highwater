@@ -83,6 +83,13 @@ function validateEnvelope(input: SessionAnalysis): void {
     throw new AnalysisValidationError(`Unsupported chart unit ${String(input.displayWeightUnit)}`);
   }
   assertReconstruction(input);
+  for (const call of input.modelCalls) {
+    if (typeof call.tokenAnalysis.metricsIncludePartialEstimates !== 'boolean') {
+      throw new AnalysisValidationError(
+        `Model call ${call.index} does not say whether its metrics include partial estimates`,
+      );
+    }
+  }
   assertEconomicsSummary(input.economics, input.modelCalls);
   input.modelCalls.forEach((call) => assertCallTiming(call, input.session.source === 'pi'));
   if (

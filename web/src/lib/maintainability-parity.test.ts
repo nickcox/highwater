@@ -53,8 +53,8 @@ const fixtures = [
 function serialize(value: unknown): string {
   return JSON.stringify(value, (key, entry) => {
     // Keep the original analytical/index/projection goldens: timing, the
-    // schema-10 recorded-counter additions and the session subtotal coverage
-    // have their own live contract tests.
+    // schema-10 recorded-counter additions, the session subtotal coverage and
+    // the partial-estimate metric flag have their own live contract tests.
     if (
       [
         'timing',
@@ -63,6 +63,7 @@ function serialize(value: unknown): string {
         'placeholder',
         'reportedCostCoverage',
         'reportedUsageCoverage',
+        'metricsIncludePartialEstimates',
       ].includes(key)
     )
       return undefined;

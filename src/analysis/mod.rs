@@ -32,7 +32,7 @@ pub(crate) use tokenization::TokenizationPolicy;
 
 pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 12;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 22;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 23;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -594,21 +594,13 @@ fn derive_calls(
             .zip(&work.estimate_indexes)
             .map(|(id, index)| (id.as_str(), registry.estimate_at(*index).tokens))
             .collect::<BTreeMap<_, _>>();
-        let metric_tokens = work
-            .call
-            .context_item_ids
-            .iter()
-            .zip(&work.estimate_indexes)
-            .map(|(id, index)| {
-                let estimate = registry.estimate_at(*index);
-                (
-                    id.as_str(),
-                    (estimate.coverage == TokenCoverage::Complete)
-                        .then_some(estimate.tokens)
-                        .flatten(),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
+        // Transition and age metrics use every numeric estimate. System prompts
+        // and tool definitions are always partial and present at every call, so
+        // requiring complete estimates left these metrics empty after call 1.
+        let metric_tokens = &current_tokens;
+        let mut metrics_include_partial_estimates = estimates.iter().any(|estimate| {
+            estimate.tokens.is_some() && estimate.coverage != TokenCoverage::Complete
+        });
         let coverage = estimate_coverage(estimates.iter().copied());
         let visible_tokens = sum_map_values(&current_tokens);
         peak_calculated_visible = max_option(peak_calculated_visible, visible_tokens);
@@ -741,18 +733,15 @@ fn derive_calls(
         explanation_codes.dedup();
 
         let transition = if position == 0 {
-            let added = sum_ids(&work.call.context_item_ids, &metric_tokens);
-            let current_total = sum_ids(&work.call.context_item_ids, &metric_tokens);
+            let added = sum_ids(&work.call.context_item_ids, metric_tokens);
             TransitionMetrics {
                 added,
                 retained: Some(0),
                 dropped: Some(0),
                 churn: None,
                 reuse: None,
-                addition_share: match (added, current_total) {
-                    (Some(added), Some(total)) if total > 0 => Some(added as f64 / total as f64),
-                    _ => None,
-                },
+                // On the first call every item is added, so the share is 1 whenever defined.
+                addition_share: added.filter(|total| *total > 0).map(|_| 1.0),
                 removal_share: None,
             }
         } else {
@@ -762,12 +751,9 @@ fn derive_calls(
                 if !destination_tokens.contains_key(id.as_str()) {
                     if let Some(estimate_index) = destination_estimates[position].get(id.as_str()) {
                         let estimate = registry.estimate_at(*estimate_index);
-                        destination_tokens.insert(
-                            id.as_str(),
-                            (estimate.coverage == TokenCoverage::Complete)
-                                .then_some(estimate.tokens)
-                                .flatten(),
-                        );
+                        metrics_include_partial_estimates |= estimate.tokens.is_some()
+                            && estimate.coverage != TokenCoverage::Complete;
+                        destination_tokens.insert(id.as_str(), estimate.tokens);
                     }
                 }
             }
@@ -783,7 +769,7 @@ fn derive_calls(
         let age = calculate_age(
             &work.call.context_item_ids,
             item_lookup,
-            &metric_tokens,
+            metric_tokens,
             work.call.index,
         );
         let status = reconciliation_status(
@@ -821,6 +807,7 @@ fn derive_calls(
             reuse: transition.reuse,
             addition_share: transition.addition_share,
             removal_share: transition.removal_share,
+            metrics_include_partial_estimates,
             age,
         };
         model_calls.push(to_api_call(
@@ -2567,6 +2554,37 @@ mod tests {
             Some(3)
         );
         assert_eq!(empty_analysis.session.calculated_token_turns, Some(0));
+    }
+
+    #[test]
+    fn transition_and_age_metrics_include_partial_estimates_and_say_so() {
+        use crate::pi::PiSourceAdapter;
+        let session = PiSourceAdapter
+            .parse_path_with_stats(std::path::Path::new("fixtures/pi/system-context.jsonl"))
+            .expect("fixture")
+            .0;
+        let analysis = analyze(
+            session,
+            AnalysisConfig {
+                tokenization: TokenizationPolicy::Auto,
+                perf_diagnostics: false,
+            },
+        )
+        .expect("analysis");
+        for call in &analysis.model_calls[1..] {
+            let metrics = &call.token_analysis;
+            assert!(metrics.estimate_coverage.partial_items > 0);
+            assert!(metrics.metrics_include_partial_estimates);
+            let (added, retained, dropped) = (
+                metrics.added_tokens.expect("added"),
+                metrics.retained_tokens.expect("retained"),
+                metrics.dropped_tokens.expect("dropped"),
+            );
+            let union = (added + retained + dropped) as f64;
+            assert_eq!(metrics.churn, Some((added + dropped) as f64 / union));
+            assert_eq!(metrics.reuse, Some(retained as f64 / union));
+            assert!(metrics.age.token_weighted_mean_age_calls.is_some());
+        }
     }
 
     #[test]

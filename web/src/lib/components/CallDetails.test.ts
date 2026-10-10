@@ -16,6 +16,33 @@ function renderCall(addedItemIds: string[], droppedItemIds: string[]) {
   return render(CallDetails, { props: { call, indexed, pinned: true } });
 }
 
+describe('CallDetails transition metrics', () => {
+  it('marks token-based metrics that include partial estimates', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[1];
+    call.tokenAnalysis.retainedTokens = 40;
+    call.tokenAnalysis.churn = 0.25;
+    call.tokenAnalysis.metricsIncludePartialEstimates = true;
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.getByText('Retained tokens').nextElementSibling).toHaveTextContent('≈ 40');
+    expect(screen.getByText('Calculated churn').nextElementSibling).toHaveTextContent('≈ 25%');
+    expect(screen.getByText('Estimate basis').nextElementSibling).toHaveTextContent(
+      'partial token estimates',
+    );
+  });
+
+  it('leaves complete-estimate metrics and unknown values unmarked', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[1];
+    call.tokenAnalysis.retainedTokens = 40;
+    call.tokenAnalysis.churn = null;
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.getByText('Retained tokens').nextElementSibling).toHaveTextContent(/^40$/);
+    expect(screen.getByText('Calculated churn').nextElementSibling).toHaveTextContent('Unknown');
+    expect(screen.queryByText('Estimate basis')).toBeNull();
+  });
+});
+
 describe('CallDetails change lists', () => {
   it('shows recorded output independently of normalized completion totals', () => {
     const indexed = indexTestAnalysis(testAnalysis());

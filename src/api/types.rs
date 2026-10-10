@@ -381,6 +381,9 @@ pub(crate) struct CallTokenAnalysis {
     pub reuse: Option<f64>,
     pub addition_share: Option<f64>,
     pub removal_share: Option<f64>,
+    /// True when added/retained/dropped tokens, churn, reuse, shares or
+    /// token-weighted age include partial (approximate) item estimates.
+    pub metrics_include_partial_estimates: bool,
     pub age: CallAgeMetrics,
 }
 

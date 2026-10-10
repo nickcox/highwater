@@ -238,6 +238,9 @@ fn fixture_outputs_preserve_corrected_baseline() {
         digest.finalize().to_hex().as_str(),
         // Schema 8 adds per-call wall-clock/timing metadata. Above, all other
         // fields are identical with and without clocks for every fixture/policy.
-        "205304ac73432888acb9996d4ac89fd91aab0b9b5427da11ec09e718a06ae5c8"
+        // Output 23 computes transition and age metrics from partial estimates
+        // too and adds `metricsIncludePartialEstimates`; with those fields
+        // removed, the output hashed identically before and after that change.
+        "2ffb5ef101e473a2ead66b9b96f6270632e1cc97bcff9146b84d45d9d6623405"
     );
 }

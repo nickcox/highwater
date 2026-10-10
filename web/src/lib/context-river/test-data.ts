@@ -73,6 +73,7 @@ function callAnalysis(
     reuse: churn === null ? null : 1 - churn,
     additionShare: null,
     removalShare: null,
+    metricsIncludePartialEstimates: false,
     age,
   };
 }
