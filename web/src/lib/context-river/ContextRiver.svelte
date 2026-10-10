@@ -358,6 +358,25 @@
   $: hoveredRibbon = hoveredItemId === null ? null : (ribbonByItemId.get(hoveredItemId) ?? null);
   $: selectedRibbon = selectedItemId === null ? null : (ribbonByItemId.get(selectedItemId) ?? null);
   $: focusedItemId = selectedItemId ?? hoveredItemId;
+  // One ribbon and one call label are in the Tab order; arrow keys move within
+  // them. Other ribbons and labels stay focusable by pointer and script.
+  let rovingRibbonKey: string | null = null;
+  $: ribbonByKey = new Map(river.ribbons.map((ribbon) => [ribbon.key, ribbon]));
+  $: segmentsByItemId = river.ribbons.reduce((map, ribbon) => {
+    map.set(ribbon.itemId, [...(map.get(ribbon.itemId) ?? []), ribbon]);
+    return map;
+  }, new Map<string, ContextRiverLayout['ribbons']>());
+  $: tabStopRibbonKey =
+    rovingRibbonKey !== null && ribbonByKey.has(rovingRibbonKey)
+      ? rovingRibbonKey
+      : (selectedRibbon?.key ?? river.ribbons[0]?.key ?? null);
+  $: labelledCallIndexes = [...callLabelPositions].map(
+    (position) => river.columns[position]?.callIndex,
+  );
+  $: tabStopCallIndex =
+    pinnedCallIndex !== null && labelledCallIndexes.includes(pinnedCallIndex)
+      ? pinnedCallIndex
+      : (labelledCallIndexes[0] ?? null);
   $: focusedConnectors =
     focusedItemId === null
       ? []
@@ -1171,6 +1190,46 @@
     }
   }
 
+  /** Up/Down move to the item above or below at the pinned call (or the ribbon's
+   * first call); Home/End move to the bottom and top of that call's stack. */
+  function moveRibbonFocus(
+    event: KeyboardEvent,
+    ribbon: ContextRiverLayout['ribbons'][number],
+  ): boolean {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return false;
+    event.preventDefault();
+    let stack: ContextRiverLayout['ribbons'];
+    if (ribbon.groupKind !== undefined) {
+      stack = river.ribbons;
+    } else {
+      const call =
+        pinnedCallIndex !== null &&
+        pinnedCallIndex >= ribbon.startCall &&
+        pinnedCallIndex <= ribbon.endCall
+          ? pinnedCallIndex
+          : ribbon.startCall;
+      stack = (indexed.orderedItemIdsByCall.get(call) ?? []).flatMap(
+        (itemId) =>
+          segmentsByItemId
+            .get(itemId)
+            ?.filter((segment) => segment.startCall <= call && call <= segment.endCall) ?? [],
+      );
+    }
+    const position = stack.findIndex((candidate) => candidate.key === ribbon.key);
+    const target =
+      event.key === 'Home'
+        ? stack[0]
+        : event.key === 'End'
+          ? stack[stack.length - 1]
+          : stack[position + (event.key === 'ArrowUp' ? 1 : -1)];
+    if (!target) return true;
+    rovingRibbonKey = target.key;
+    host
+      ?.querySelector<SVGElement>(`[data-ribbon-key="${CSS.escape(target.key)}"]`)
+      ?.focus({ preventScroll: true });
+    return true;
+  }
+
   function selectFromKeyboard(event: KeyboardEvent, id: string): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -1298,10 +1357,12 @@
       onclick={backgroundClick}
     >
       <span id="context-river-description" class="sr-only"
-        >Context items flow horizontally through model calls. Dashed vertical markers indicate
-        compaction. In individual-item view, colour-blended connections show lossy summarization,
-        not conserved tokens or source contributions to the summary. {verticalAxisDescription}. {inputComparison.size >
-        0
+        >Context items flow horizontally through model calls. Tab reaches one context item and one
+        call label; Up and Down arrows move between items in the stack, Home and End move to its
+        bottom and top, Left and Right arrows move between calls, and Enter selects. Dashed vertical
+        markers indicate compaction. In individual-item view, colour-blended connections show lossy
+        summarization, not conserved tokens or source contributions to the summary. {verticalAxisDescription}.
+        {inputComparison.size > 0
           ? 'The dashed reported-input reference is recorded after each call. Hatched unreconciled input is its approximate excess over reconstructed content, not recovered items or cost attribution. Scaling includes the reference. Missing comparisons break the line.'
           : ''}
         {indexed.analysis.displayWeightUnit === 'unavailable'
@@ -1469,7 +1530,8 @@
                   pointer-events="fill"
                   d={ribbon.hitPath}
                   role="button"
-                  tabindex="0"
+                  tabindex={ribbon.key === tabStopRibbonKey ? 0 : -1}
+                  data-ribbon-key={ribbon.key}
                   aria-label={ribbonLabel}
                   aria-pressed={!isGroup && selectedItemId === ribbon.itemId}
                   onpointerenter={(event) =>
@@ -1493,14 +1555,17 @@
                     isGroup
                       ? activateGroup(event, ribbon.groupKind!, ribbon.memberItemIds ?? [])
                       : selectRibbon(event, ribbon.itemId)}
-                  onkeydown={(event) =>
-                    isGroup
-                      ? activateGroupFromKeyboard(
-                          event,
-                          ribbon.groupKind!,
-                          ribbon.memberItemIds ?? [],
-                        )
-                      : selectFromKeyboard(event, ribbon.itemId)}
+                  onfocus={() => (rovingRibbonKey = ribbon.key)}
+                  onkeydown={(event) => {
+                    if (moveRibbonFocus(event, ribbon)) return;
+                    if (isGroup)
+                      activateGroupFromKeyboard(
+                        event,
+                        ribbon.groupKind!,
+                        ribbon.memberItemIds ?? [],
+                      );
+                    else selectFromKeyboard(event, ribbon.itemId);
+                  }}
                 >
                   <title>{ribbonLabel}</title>
                 </path>
@@ -1538,7 +1603,7 @@
                 class:condensed={callTargetStride > 1}
                 class:pinned={pinnedCallIndex === column.callIndex}
                 role="button"
-                tabindex="0"
+                tabindex={column.callIndex === tabStopCallIndex ? 0 : -1}
                 aria-label={`Pin model call ${column.callIndex}`}
                 onkeydown={(event) => pinFromKeyboard(event, column.callIndex)}
                 onclick={(event) => {

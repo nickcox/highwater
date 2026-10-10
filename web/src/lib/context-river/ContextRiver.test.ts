@@ -246,6 +246,38 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('ContextRiver keyboard focus', () => {
+  it('keeps one ribbon and one call label in the Tab order and moves through the stack with arrows', async () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const view = render(ContextRiver, { props: { indexed, pinnedCallIndex: 1, ...callbacks() } });
+    const tabStops = () => view.container.querySelectorAll('.ribbon-hit[tabindex="0"]');
+    expect(tabStops()).toHaveLength(1);
+    expect(view.container.querySelectorAll('.call-target[tabindex="0"]')).toHaveLength(1);
+    expect(
+      view.container.querySelector('.call-target[tabindex="0"]')?.getAttribute('aria-label'),
+    ).toBe('Pin model call 1');
+
+    // At call 1 the stack is a (bottom) then gap (top).
+    const order = indexed.orderedItemIdsByCall.get(1)!;
+    const ribbonFor = (itemId: string) =>
+      [...view.container.querySelectorAll<SVGElement>('.ribbon-hit')].find((element) =>
+        element.dataset.ribbonKey?.startsWith(`${itemId}:`),
+      )!;
+    const bottom = ribbonFor(order[0]);
+    bottom.focus();
+    await fireEvent.keyDown(bottom, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(ribbonFor(order[1]));
+    expect(tabStops()).toHaveLength(1);
+    expect(ribbonFor(order[1])).toHaveAttribute('tabindex', '0');
+    await fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(ribbonFor(order[1]));
+    await fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(bottom);
+    await fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement).toBe(ribbonFor(order[order.length - 1]));
+  });
+});
+
 describe('ContextRiver continuous viewport integration', () => {
   it('renders a masked, non-item input reference in both grouping modes without changing source metrics', async () => {
     const data = structuredClone(testAnalysis());

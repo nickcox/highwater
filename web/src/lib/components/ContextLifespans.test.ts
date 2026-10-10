@@ -3,6 +3,7 @@ import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
+import { compositionScenario } from '../testing/composition-scenarios';
 import ContextLifespans from './ContextLifespans.svelte';
 
 const emptyHover = () => {};
@@ -316,5 +317,42 @@ describe('ContextLifespans browsing', () => {
       }),
     );
     expect(onSelectItem).toHaveBeenCalledWith('terminal-summary');
+  });
+});
+
+describe('ContextLifespans long sessions', () => {
+  it('renders matching rows a page at a time', async () => {
+    const indexed = indexTestAnalysis(compositionScenario(220));
+    const total = indexed.analysis.contextItems.length;
+    expect(total).toBeGreaterThan(200);
+    render(ContextLifespans, {
+      props: { indexed, onSelectItem: vi.fn(), onHoverItem: emptyHover },
+    });
+    await expandLifespans();
+    expect(document.querySelectorAll('[data-lifespan-item-id]')).toHaveLength(200);
+    expect(document.querySelector('.more-rows')).toHaveTextContent(`Showing 200 of ${total} items`);
+    await fireEvent.click(screen.getByRole('button', { name: `Show ${total - 200} more` }));
+    expect(document.querySelectorAll('[data-lifespan-item-id]')).toHaveLength(total);
+    expect(document.querySelector('.more-rows')).toBeNull();
+  });
+
+  it('extends the page to reach a requested item beyond it', async () => {
+    stubScrollIntoView();
+    const indexed = indexTestAnalysis(compositionScenario(220));
+    const props = { indexed, onSelectItem: vi.fn(), onHoverItem: emptyHover };
+    const view = render(ContextLifespans, { props });
+    await expandLifespans();
+    const rendered = new Set(
+      [...document.querySelectorAll<HTMLElement>('[data-lifespan-item-id]')].map(
+        (row) => row.dataset.lifespanItemId,
+      ),
+    );
+    const beyond = indexed.analysis.contextItems.find((item) => !rendered.has(item.id))!;
+    await view.rerender({ ...props, findRequest: { requestId: 1, itemId: beyond.id } });
+    await waitFor(() =>
+      expect((document.activeElement as HTMLElement | null)?.dataset.lifespanItemId).toBe(
+        beyond.id,
+      ),
+    );
   });
 });

@@ -699,7 +699,9 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   const collapsedHeight = await page.evaluate(() => document.documentElement.scrollHeight);
   expect(collapsedHeight).toBeLessThan(5000);
   await summary.click();
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(1100);
+  // Long lists render a page of rows at a time.
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(200);
+  await expect(page.locator('.more-rows')).toContainText('Showing 200 of 1,100 items');
   expect(
     await page.locator('[data-lifespan-item-id="composition-item-010"] .item-label').textContent(),
   ).toBe('Read · alpha/src/config.ts');
@@ -710,8 +712,10 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   const expandedHeight = await page.evaluate(() => document.documentElement.scrollHeight);
   expect(expandedHeight).toBeGreaterThan(collapsedHeight);
 
+  await page.getByRole('button', { name: 'Show 200 more' }).click();
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(400);
   await page.getByRole('combobox', { name: 'Sort items' }).selectOption('firstAppearance');
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(1100);
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(200);
   await page.getByRole('combobox', { name: 'Sort items' }).selectOption('tokenTurns');
 
   const search = page.getByRole('searchbox', { name: 'Search items' });
@@ -719,7 +723,7 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   await expect(page.locator('.lifespan-panel .row')).toHaveCount(1);
   await expect(page.locator('.result-count')).toHaveText('1 of 1,100 items');
   await page.getByRole('button', { name: 'Clear filters' }).click();
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(1100);
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(200);
 
   await page.getByRole('tab', { name: 'Composition' }).click();
   await expect(
@@ -741,7 +745,8 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   await expect(resetAndFind).toBeFocused();
   await resetAndFind.click();
   await expect(selectedRow).toBeFocused();
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(1100);
+  // Finding an item extends the rendered page far enough to include it.
+  expect(await page.locator('.lifespan-panel .row').count()).toBeGreaterThanOrEqual(200);
 
   await page.getByRole('tab', { name: 'Composition' }).click();
   await list.focus();

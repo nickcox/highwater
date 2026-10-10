@@ -37,6 +37,9 @@
     userMessage: 'User message',
   };
   const SEARCH_LIMIT = 120;
+  // Rendering every row of a long session adds tens of thousands of elements;
+  // show matching rows a page at a time.
+  const ROW_PAGE_SIZE = 200;
 
   export let indexed: IndexedAnalysis;
   export let selectedItemId: string | null = null;
@@ -50,6 +53,7 @@
   let scope: 'all' | 'presentAtPin' = 'all';
   let scopeStatus = '';
   let sortMode: LifespanSortMode = 'tokenTurns';
+  let rowLimit = ROW_PAGE_SIZE;
   let expanded = false;
   let handledFindRequestId = -1;
   let pendingFindItemId: string | null = null;
@@ -98,6 +102,10 @@
       (item.preview?.text ?? '').toLowerCase().includes(searchNeedle);
     return kindMatches && searchMatches;
   });
+  // A new filter or sort starts again from the first page.
+  $: (searchNeedle, selectedKind, scope, sortMode, (rowLimit = ROW_PAGE_SIZE));
+  $: renderedItems = visibleItems.slice(0, rowLimit);
+  $: hiddenRowCount = visibleItems.length - renderedItems.length;
   $: availableKinds = KIND_ORDER.filter((kind) => allItems.some((item) => item.kind === kind));
   $: filtersActive = searchNeedle.length > 0 || selectedKind !== 'all' || scope !== 'all';
   $: callIndices = indexed.analysis.modelCalls.map((call) => call.index);
@@ -217,8 +225,15 @@
     return `lifespan-item-${encodeURIComponent(itemId)}`;
   }
 
-  function focusRequestedItem(requestId = handledFindRequestId): void {
+  async function focusRequestedItem(requestId = handledFindRequestId): Promise<void> {
     if (!componentActive || requestId !== handledFindRequestId || !pendingFindItemId) return;
+    const requestedId = pendingFindItemId;
+    const index = visibleItems.findIndex((item) => item.id === requestedId);
+    if (index >= rowLimit) {
+      rowLimit = Math.ceil((index + 1) / ROW_PAGE_SIZE) * ROW_PAGE_SIZE;
+      await tick();
+      if (!componentActive || requestId !== handledFindRequestId) return;
+    }
     const row = [...(root?.querySelectorAll<HTMLElement>('[data-lifespan-item-id]') ?? [])].find(
       (candidate) => candidate.dataset.lifespanItemId === pendingFindItemId,
     );
@@ -239,7 +254,11 @@
   async function resetFiltersAndFind(): Promise<void> {
     clearFilters();
     await tick();
-    focusRequestedItem();
+    await focusRequestedItem();
+  }
+
+  function showMoreRows(): void {
+    rowLimit += ROW_PAGE_SIZE;
   }
 </script>
 
@@ -384,7 +403,7 @@
           </p>
         {:else}
           <div class="rows">
-            {#each visibleItems as item (item.id)}
+            {#each renderedItems as item (item.id)}
               {@const label = itemLabel(item)}
               <div
                 id={rowId(item.id)}
@@ -453,6 +472,18 @@
               </div>
             {/each}
           </div>
+          {#if hiddenRowCount > 0}
+            <div class="more-rows">
+              <span
+                >Showing {formatInteger(renderedItems.length)} of {itemCountLabel(
+                  visibleItems.length,
+                )}</span
+              >
+              <button type="button" onclick={showMoreRows}
+                >Show {formatInteger(Math.min(ROW_PAGE_SIZE, hiddenRowCount))} more</button
+              >
+            </div>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -573,6 +604,14 @@
   .scope-status,
   .selection-note,
   .find-status,
+  .more-rows {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    color: var(--secondary);
+    font-size: 12px;
+  }
   .empty-state {
     color: #aebbd0;
     font-size: 12px;
