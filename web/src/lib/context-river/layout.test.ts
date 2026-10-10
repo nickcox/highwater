@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { layoutContextRiver } from './layout';
 import { testAnalysis } from './test-data';
 
@@ -12,7 +12,7 @@ const options = {
 
 describe('layoutContextRiver', () => {
   it('builds deterministic, non-overlapping stacks and separate gap segments', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const first = layoutContextRiver(indexed, options);
     const second = layoutContextRiver(indexed, options);
     expect(first).toEqual(second);
@@ -34,7 +34,7 @@ describe('layoutContextRiver', () => {
   });
 
   it('allows a presentation-only Y domain while preserving session totals and columns', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const sessionScale = layoutContextRiver(indexed, options);
     const localScale = layoutContextRiver(
       indexed,
@@ -56,7 +56,7 @@ describe('layoutContextRiver', () => {
   });
 
   it('gives one-call ranges visible geometry', () => {
-    const layout = layoutContextRiver(indexAnalysis(testAnalysis()), options);
+    const layout = layoutContextRiver(indexTestAnalysis(testAnalysis()), options);
     const segment = layout.ribbons.find(
       (ribbon) => ribbon.itemId === 'gap' && ribbon.startCall === 1,
     )!;
@@ -66,7 +66,7 @@ describe('layoutContextRiver', () => {
   });
 
   it('places honest compaction geometry at the midpoint', () => {
-    const layout = layoutContextRiver(indexAnalysis(testAnalysis()), options);
+    const layout = layoutContextRiver(indexTestAnalysis(testAnalysis()), options);
     const boundary = layout.compactions[0];
     expect(boundary.x).toBe((layout.columns[1].x + layout.columns[2].x) / 2);
     const source = layout.ribbons.find((ribbon) => ribbon.itemId === 'a')!;
@@ -100,7 +100,7 @@ describe('layoutContextRiver', () => {
       summaryItemId: 'summary',
       tokensBefore: 90,
     });
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const layout = layoutContextRiver(indexed, options);
     const firstBoundary = layout.compactions.find((boundary) => boundary.beforeModelCall === 3)!;
     const source = layout.ribbons.find((ribbon) => ribbon.itemId === 'a')!;
@@ -175,7 +175,7 @@ describe('layoutContextRiver', () => {
     ];
     analysis.lineage = [{ from: 'a', to: 'terminal-summary', kind: 'frameworkCompaction' }];
 
-    const layout = layoutContextRiver(indexAnalysis(analysis), options);
+    const layout = layoutContextRiver(indexTestAnalysis(analysis), options);
     expect(layout.compactions[0].x).toBe(options.width - options.margin.right);
     const source = layout.ribbons.find((ribbon) => ribbon.itemId === 'a')!;
     expect(source.points[source.points.length - 1].x).toBe(layout.compactions[0].x);
@@ -186,7 +186,7 @@ describe('layoutContextRiver', () => {
   });
 
   it('groups only visual geometry while preserving per-call totals and member identities', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const individual = layoutContextRiver(indexed, options);
     const grouped = layoutContextRiver(indexed, { ...options, groupByKind: true });
     expect(grouped.ribbons.every((ribbon) => ribbon.groupKind !== undefined)).toBe(true);
@@ -207,7 +207,7 @@ describe('layoutContextRiver', () => {
     analysis.contextItems = [];
     analysis.compactions = [];
     analysis.lineage = [];
-    const layout = layoutContextRiver(indexAnalysis(analysis), options);
+    const layout = layoutContextRiver(indexTestAnalysis(analysis), options);
     expect(layout.columns).toEqual([]);
     expect(layout.ribbons).toEqual([]);
   });

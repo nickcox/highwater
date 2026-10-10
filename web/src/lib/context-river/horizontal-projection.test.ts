@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from './test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import { layoutContextRiver } from './layout';
@@ -24,7 +24,7 @@ describe('canonical horizontal River projection', () => {
         beforeModelCall: 1,
         summaryItemId: 'gap',
       });
-      const indexed = indexAnalysis(analysis);
+      const indexed = indexTestAnalysis(analysis);
       const source = layoutContextRiver(indexed, { ...options, groupByKind });
       for (const width of [70, 100, 200, 390, 750, 960, 1300, 32000]) {
         const projected = projectRiverHorizontally(source, options.width, width, options.margin);
@@ -72,7 +72,7 @@ describe('canonical horizontal River projection', () => {
     }
   });
   it('shares long ordinary paths and point arrays instead of rewriting every appearance', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const source = layoutContextRiver(indexed, options);
     const before = structuredClone(source);
     for (const width of [300, 1400, 2000]) {
@@ -91,9 +91,9 @@ describe('canonical horizontal River projection', () => {
   it('handles single calls, empty calls and collapsed width without fabricating geometry', () => {
     for (const scenario of ['terminalSummaryOnly', 'singleCall'] as const) {
       const analysis = sessionScenario(scenario);
-      const source = layoutContextRiver(indexAnalysis(analysis), options);
+      const source = layoutContextRiver(indexTestAnalysis(analysis), options);
       const projected = projectRiverHorizontally(source, options.width, 390, options.margin);
-      const native = layoutContextRiver(indexAnalysis(analysis), { ...options, width: 390 });
+      const native = layoutContextRiver(indexTestAnalysis(analysis), { ...options, width: 390 });
       expect(projected.layout.columns).toEqual(native.columns);
       expect(projected.layout.compactions).toEqual(native.compactions);
       expect(

@@ -7,7 +7,8 @@ import {
   projectCostTrack,
   hasNumericCacheData,
 } from './economics-track';
-import type { SessionAnalysis } from '../types';
+import type { SessionAnalysis, WireSessionAnalysis } from '../types';
+import { indexAnalysis } from '../analysis';
 
 function cacheCall(
   analysis: SessionAnalysis,
@@ -50,7 +51,7 @@ function cacheCall(
 
 describe('economics track projections', () => {
   it('projects audited Copilot buckets and distinguishes zero, partial and missing calls', () => {
-    const track = projectCacheTrack(copilotExport as SessionAnalysis);
+    const track = projectCacheTrack(indexAnalysis(copilotExport as WireSessionAnalysis).analysis);
     expect(track.points[1].status).toBe('complete');
     expect(track.points[1].segments.map((s) => [s.kind, s.value])).toEqual([
       ['cacheRead', 0],

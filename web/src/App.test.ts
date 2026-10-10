@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { toWireAnalysis } from './lib/testing/wire-analysis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.svelte';
 import { defaultPresentationPreferences } from './lib/state/presentation-preferences';
@@ -155,7 +156,7 @@ beforeEach(() => {
       const analysis = testAnalysis();
       modifyAnalysis?.(analysis);
       analysis.session.id = url.includes('two') ? 'two' : 'one';
-      return new Response(JSON.stringify(analysis), {
+      return new Response(JSON.stringify(toWireAnalysis(analysis)), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -193,7 +194,7 @@ function emptyAnalysisResponse(id: string, etag: string): Response {
   analysis.contextItems = [];
   analysis.compactions = [];
   analysis.lineage = [];
-  return new Response(JSON.stringify(analysis), {
+  return new Response(JSON.stringify(toWireAnalysis(analysis)), {
     status: 200,
     headers: { 'content-type': 'application/json', etag },
   });
@@ -238,7 +239,7 @@ function analysisResponse(id: string, etag: string, model = 'm'): Response {
   const analysis = testAnalysis();
   analysis.session.id = id;
   analysis.modelCalls[0].model = model;
-  return new Response(JSON.stringify(analysis), {
+  return new Response(JSON.stringify(toWireAnalysis(analysis)), {
     status: 200,
     headers: { 'content-type': 'application/json', etag },
   });
@@ -389,7 +390,9 @@ describe('view links', () => {
     const stale = testAnalysis();
     stale.session.id = 'two';
     resolveTwo(
-      new Response(JSON.stringify(stale), { headers: { 'content-type': 'application/json' } }),
+      new Response(JSON.stringify(toWireAnalysis(stale)), {
+        headers: { 'content-type': 'application/json' },
+      }),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByRole('combobox', { name: 'Session' })).toHaveValue('one');
@@ -1115,7 +1118,7 @@ describe('analysis cache freshness', () => {
     replacement.session.id = 'one';
     replacement.modelCalls[1].sourceRecordId = 'replacement-call-record';
     pending.resolve(
-      new Response(JSON.stringify(replacement), {
+      new Response(JSON.stringify(toWireAnalysis(replacement)), {
         status: 200,
         headers: { 'content-type': 'application/json', etag: '"replaced"' },
       }),
@@ -1202,7 +1205,9 @@ describe('analysis cache freshness', () => {
             return Promise.resolve(analysisResponse('one', '"one-v1"', 'cached-model'));
           const malformed = testAnalysis();
           malformed.schemaVersion = 999;
-          return Promise.resolve(new Response(JSON.stringify(malformed), { status: 200 }));
+          return Promise.resolve(
+            new Response(JSON.stringify(toWireAnalysis(malformed)), { status: 200 }),
+          );
         }
         return Promise.resolve(analysisResponse('two', '"two-v1"'));
       }),
@@ -1691,7 +1696,7 @@ describe('selected analysis request lifecycle', () => {
         analysisRequests += 1;
         const analysis = analysisRequests === 1 ? initial : replacement;
         return Promise.resolve(
-          new Response(JSON.stringify(analysis), {
+          new Response(JSON.stringify(toWireAnalysis(analysis)), {
             status: 200,
             headers: {
               'content-type': 'application/json',
@@ -1740,7 +1745,7 @@ describe('selected analysis request lifecycle', () => {
         analysisRequests += 1;
         const analysis = analysisRequests === 1 ? initial : replacement;
         return Promise.resolve(
-          new Response(JSON.stringify(analysis), {
+          new Response(JSON.stringify(toWireAnalysis(analysis)), {
             status: 200,
             headers: {
               'content-type': 'application/json',

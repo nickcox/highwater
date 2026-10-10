@@ -1,4 +1,4 @@
-import type { SessionAnalysis } from '../types';
+import type { WireSessionAnalysis } from '../types';
 
 export interface SessionListItem {
   id: string;
@@ -145,7 +145,7 @@ export async function fetchSessions(
 }
 
 export type AnalysisFetchResult =
-  | { status: 'ok'; analysis: SessionAnalysis; etag: string | null }
+  | { status: 'ok'; analysis: WireSessionAnalysis; etag: string | null }
   | { status: 'notModified'; etag: string | null };
 
 export async function fetchAnalysis(
@@ -165,7 +165,7 @@ export async function fetchAnalysis(
   if (response.status === 304) return { status: 'notModified', etag: responseEtag };
   return {
     status: 'ok',
-    analysis: await responseJson<SessionAnalysis>(response),
+    analysis: await responseJson<WireSessionAnalysis>(response),
     etag: responseEtag,
   };
 }

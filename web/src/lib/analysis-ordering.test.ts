@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { indexTestAnalysis } from './testing/wire-analysis';
 import { indexAnalysis } from './analysis';
 import { testAnalysis } from './context-river/test-data';
 
@@ -79,11 +80,13 @@ describe('production context-item ordering', () => {
     const orderedByCall = (value: ReturnType<typeof indexAnalysis>) => [
       ...value.orderedItemIdsByCall.entries(),
     ];
-    expect(orderedByCall(indexAnalysis(shuffled))).toEqual(orderedByCall(indexAnalysis(original)));
+    expect(orderedByCall(indexTestAnalysis(shuffled))).toEqual(
+      orderedByCall(indexTestAnalysis(original)),
+    );
   });
 
   it('keeps retained relative order and places a summary near its source in production indexes', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     expect(indexed.orderedItemIdsByCall.get(1)).toEqual(['a', 'gap']);
     expect(indexed.orderedItemIdsByCall.get(3)).toEqual(['summary', 'retained']);
     expect(indexed.orderedItemIdsByCall.get(4)).toEqual(['summary', 'gap', 'retained']);
@@ -94,8 +97,8 @@ describe('production context-item ordering', () => {
     const tiedSummariesReversed = withRepeatedCompactions();
     tiedSummariesReversed.contextItems.reverse();
     tiedSummariesReversed.compactions.reverse();
-    const indexed = indexAnalysis(analysis);
-    const reversed = indexAnalysis(tiedSummariesReversed);
+    const indexed = indexTestAnalysis(analysis);
+    const reversed = indexTestAnalysis(tiedSummariesReversed);
 
     expect(indexed.orderedItemIdsByCall.get(3)).toEqual(['summary', 'summary-alt', 'retained']);
     expect(indexed.orderedItemIdsByCall.get(5)).toEqual(['summary2', 'retained']);

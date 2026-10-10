@@ -1,3 +1,4 @@
+import { ANALYSIS_SCHEMA_VERSION } from '../analysis';
 import type {
   CallTokenAnalysis,
   ContextItem,
@@ -295,7 +296,7 @@ export function testAnalysis(): SessionAnalysis {
   ];
   const itemEstimateCoverage = coverage(4, 4, 9, 9);
   return {
-    schemaVersion: 11,
+    schemaVersion: ANALYSIS_SCHEMA_VERSION,
     tokenAnalysis: {
       policy: 'heuristic',
       chartUnit: 'estimatedTokens',

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import ContextLifespans from './ContextLifespans.svelte';
@@ -41,7 +41,7 @@ describe('ContextLifespans browsing', () => {
     const onHoverItem = vi.fn();
     const view = render(ContextLifespans, {
       props: {
-        indexed: indexAnalysis(testAnalysis()),
+        indexed: indexTestAnalysis(testAnalysis()),
         onSelectItem,
         onHoverItem,
         pinnedCallIndex: 4,
@@ -78,7 +78,7 @@ describe('ContextLifespans browsing', () => {
   it('does not repeat instructions already represented by labels and contextual help', () => {
     const { container } = render(ContextLifespans, {
       props: {
-        indexed: indexAnalysis(testAnalysis()),
+        indexed: indexTestAnalysis(testAnalysis()),
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
       },
@@ -101,7 +101,7 @@ describe('ContextLifespans browsing', () => {
     };
     render(ContextLifespans, {
       props: {
-        indexed: indexAnalysis(analysis),
+        indexed: indexTestAnalysis(analysis),
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
       },
@@ -129,7 +129,7 @@ describe('ContextLifespans browsing', () => {
     const onSelectItem = vi.fn<(id: string) => void>();
     render(ContextLifespans, {
       props: {
-        indexed: indexAnalysis(testAnalysis()),
+        indexed: indexTestAnalysis(testAnalysis()),
         selectedItemId: 'a',
         onSelectItem,
         onHoverItem: emptyHover,
@@ -146,7 +146,7 @@ describe('ContextLifespans browsing', () => {
   });
 
   it('sorts by first appearance and size under one shared profile', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const { container } = render(ContextLifespans, {
       props: {
         indexed,
@@ -191,7 +191,7 @@ describe('ContextLifespans browsing', () => {
   });
 
   it('scopes items to a pinned call and restores All items when the pin disappears', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const props = {
       indexed,
       selectedItemId: 'summary',
@@ -239,7 +239,7 @@ describe('ContextLifespans browsing', () => {
   it('keeps search state through same-session analysis replacement', async () => {
     const onSelectItem = vi.fn<(id: string) => void>();
     const props = {
-      indexed: indexAnalysis(testAnalysis()),
+      indexed: indexTestAnalysis(testAnalysis()),
       onSelectItem,
       onHoverItem: emptyHover,
     };
@@ -251,7 +251,7 @@ describe('ContextLifespans browsing', () => {
 
     const replacement = testAnalysis();
     replacement.modelCalls[1].model = 'replacement-model';
-    await rerender({ ...props, indexed: indexAnalysis(replacement) });
+    await rerender({ ...props, indexed: indexTestAnalysis(replacement) });
     expect(screen.getByRole('searchbox', { name: 'Search items' })).toHaveValue('bash');
     expect(screen.getByText('1 of 4 items')).toBeInTheDocument();
     expect((container.querySelector('.lifespan-disclosure') as HTMLDetailsElement).open).toBe(true);
@@ -261,7 +261,7 @@ describe('ContextLifespans browsing', () => {
     const scroll = stubScrollIntoView();
     render(ContextLifespans, {
       props: {
-        indexed: indexAnalysis(testAnalysis()),
+        indexed: indexTestAnalysis(testAnalysis()),
         selectedItemId: 'a',
         onSelectItem: vi.fn(),
         onHoverItem: emptyHover,
@@ -278,7 +278,7 @@ describe('ContextLifespans browsing', () => {
   it('offers an explicit filter reset when Find targets a filtered-out selection', async () => {
     stubScrollIntoView();
     const props = {
-      indexed: indexAnalysis(testAnalysis()),
+      indexed: indexTestAnalysis(testAnalysis()),
       selectedItemId: 'a',
       onSelectItem: vi.fn(),
       onHoverItem: emptyHover,
@@ -301,7 +301,7 @@ describe('ContextLifespans browsing', () => {
     const onSelectItem = vi.fn<(id: string) => void>();
     render(ContextLifespans, {
       props: {
-        indexed: indexAnalysis(sessionScenario('terminalSummaryOnly')),
+        indexed: indexTestAnalysis(sessionScenario('terminalSummaryOnly')),
         onSelectItem,
         onHoverItem: emptyHover,
       },

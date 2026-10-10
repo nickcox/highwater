@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis, AnalysisValidationError } from './analysis';
+import { indexTestAnalysis } from './testing/wire-analysis';
+import { AnalysisValidationError } from './analysis';
 import { testAnalysis } from './context-river/test-data';
 
 function timed() {
@@ -21,13 +22,15 @@ describe('call timing boundary validation', () => {
   it('accepts usable and independently retained unknown-source instants without repairing data', () => {
     const analysis = timed();
     const before = JSON.stringify(analysis);
-    expect(indexAnalysis(analysis).analysis.modelCalls[0].timing.durationMs).toBe(2000);
+    expect(indexTestAnalysis(analysis).analysis.modelCalls[0].timing.durationMs).toBe(2000);
     expect(JSON.stringify(analysis)).toBe(before);
     analysis.modelCalls[0].api = 'custom-api';
     analysis.modelCalls[0].timing.durationMs = null;
     analysis.modelCalls[0].timing.effectiveOutputTokensPerSecond = null;
     analysis.modelCalls[0].timing.basis = null;
-    expect(indexAnalysis(analysis).analysis.modelCalls[0].timing.startedAtMs).toBe(1700000000000);
+    expect(indexTestAnalysis(analysis).analysis.modelCalls[0].timing.startedAtMs).toBe(
+      1700000000000,
+    );
   });
   it.each([
     'unsafe',
@@ -57,18 +60,18 @@ describe('call timing boundary validation', () => {
     if (kind === 'wrong-rate') call.timing.effectiveOutputTokensPerSecond = 100;
     if (kind === 'aborted-rate') call.stopReason = 'aborted';
     if (kind === 'missing-basis') call.timing.basis = null;
-    expect(() => indexAnalysis(analysis)).toThrow(AnalysisValidationError);
+    expect(() => indexTestAnalysis(analysis)).toThrow(AnalysisValidationError);
   });
   it('keeps unknown or unsuccessful rates unavailable and preserves genuine zero output', () => {
     const analysis = timed();
     const call = analysis.modelCalls[0];
     call.stopReason = 'error';
     call.timing.effectiveOutputTokensPerSecond = null;
-    expect(() => indexAnalysis(analysis)).not.toThrow();
+    expect(() => indexTestAnalysis(analysis)).not.toThrow();
     call.stopReason = 'stop';
     call.usage = { ...call.usage, output: 0 };
     call.reportedCompletionTokens = 0;
     call.timing.effectiveOutputTokensPerSecond = 0;
-    expect(() => indexAnalysis(analysis)).not.toThrow();
+    expect(() => indexTestAnalysis(analysis)).not.toThrow();
   });
 });

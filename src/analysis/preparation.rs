@@ -7,6 +7,8 @@ pub(super) struct PreparedAnalysis<'a> {
     pub registry: ProfileRegistry,
     pub works: Vec<CallWork<'a>>,
     pub item_lookup: HashMap<&'a str, &'a NormalizedContextItem>,
+    /// Item ID to its position in `session.context_items` and the API item list.
+    pub item_positions: HashMap<&'a str, usize>,
     pub transitions: Vec<DerivedTransition<'a>>,
     pub destination_estimates: Vec<HashMap<&'a str, EstimateIndex>>,
     pub item_estimates: Vec<BTreeMap<String, EstimateIndex>>,
@@ -101,6 +103,7 @@ pub(super) fn prepare<'a>(
         registry,
         works,
         item_lookup,
+        item_positions: validated.item_indices.clone(),
         transitions,
         destination_estimates,
         item_estimates,

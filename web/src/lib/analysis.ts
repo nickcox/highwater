@@ -1,8 +1,10 @@
 import type {
   ContextItemKind,
   IndexedAnalysis,
+  ModelCall,
   RecordedCallCoverage,
   SessionAnalysis,
+  WireSessionAnalysis,
 } from './types';
 import { AnalysisValidationError } from './analysis-validation';
 import { assertEconomicsSummary } from './economics-validation';
@@ -27,10 +29,53 @@ function normalizedKind(kind: string): ContextItemKind {
   return KNOWN_KINDS.has(kind as ContextItemKind) ? (kind as ContextItemKind) : 'other';
 }
 
+export const ANALYSIS_SCHEMA_VERSION = 12;
+
+/** Replace per-call item positions with the IDs they refer to. The arrays
+ * reference the existing `item.id` strings, so this adds no string copies. */
+function resolveItemPositions(input: WireSessionAnalysis): SessionAnalysis {
+  const ids = input.contextItems.map((item) => item.id);
+  const resolve = (indexes: unknown, callIndex: number, field: string): string[] => {
+    if (!Array.isArray(indexes)) {
+      throw new AnalysisValidationError(`Model call ${callIndex} has no ${field} list`);
+    }
+    return indexes.map((position: unknown) => {
+      if (
+        typeof position !== 'number' ||
+        !Number.isSafeInteger(position) ||
+        position < 0 ||
+        position >= ids.length
+      ) {
+        throw new AnalysisValidationError(
+          `Model call ${callIndex} ${field} references an unknown item position`,
+        );
+      }
+      return ids[position];
+    });
+  };
+  const resolvedFields: Record<string, string> = {
+    contextItemIndexes: 'contextItemIds',
+    addedItemIndexes: 'addedItemIds',
+    droppedItemIndexes: 'droppedItemIds',
+  };
+  return {
+    ...input,
+    // Keep each field in its original position so the resolved call has the
+    // same shape as before positions were introduced.
+    modelCalls: input.modelCalls.map(
+      (call) =>
+        Object.fromEntries(
+          Object.entries(call).map(([key, value]) =>
+            key in resolvedFields
+              ? [resolvedFields[key], resolve(value, call.index, key)]
+              : [key, value],
+          ),
+        ) as unknown as ModelCall,
+    ),
+  };
+}
+
 function validateEnvelope(input: SessionAnalysis): void {
-  if (input.schemaVersion !== 11) {
-    throw new AnalysisValidationError(`Unsupported analysis schema ${String(input.schemaVersion)}`);
-  }
   if (input.displayWeightUnit !== input.tokenAnalysis.chartUnit) {
     throw new AnalysisValidationError('Chart unit disagrees with token-analysis metadata');
   }
@@ -98,11 +143,15 @@ function normalizeAnalysis(input: SessionAnalysis): SessionAnalysis {
  * Preserve the existing scalar and relationship checks; broader boundary validation
  * is a separate semantic change, not a consequence of this extraction.
  */
-export function indexAnalysis(input: SessionAnalysis): IndexedAnalysis {
+export function indexAnalysis(input: WireSessionAnalysis): IndexedAnalysis {
   if (import.meta.env.DEV && typeof performance !== 'undefined')
     performance.mark('tokenplume-index-start');
-  validateEnvelope(input);
-  const analysis = normalizeAnalysis(input);
+  if (input.schemaVersion !== ANALYSIS_SCHEMA_VERSION) {
+    throw new AnalysisValidationError(`Unsupported analysis schema ${String(input.schemaVersion)}`);
+  }
+  const resolved = resolveItemPositions(input);
+  validateEnvelope(resolved);
+  const analysis = normalizeAnalysis(resolved);
   const indexed = validateAndIndexAnalysis(analysis);
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
     performance.mark('tokenplume-index-end');

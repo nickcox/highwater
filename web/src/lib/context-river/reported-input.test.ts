@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from './test-data';
 import { layoutCallColumns, layoutContextRiver } from './layout';
 import { inputComparisons, inputScaleColumns, layoutInputReferences } from './reported-input';
@@ -17,7 +17,7 @@ function fixture() {
     call.reportedUsageCompleteness = 'complete';
     call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 100;
   }
-  const indexed = indexAnalysis(input);
+  const indexed = indexTestAnalysis(input);
   const columns = layoutCallColumns(indexed, options.width, options.margin);
   return { indexed, columns };
 }

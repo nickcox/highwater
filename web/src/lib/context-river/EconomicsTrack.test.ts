@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { testAnalysis } from './test-data';
 import EconomicsTrack from './EconomicsTrack.svelte';
 
@@ -15,7 +15,7 @@ function renderCostTrack(values: Array<number | null>) {
         ? { input: null, output: null, cacheRead: null, cacheWrite: null, total: null }
         : { input: total, output: 0, cacheRead: 0, cacheWrite: 0, total };
   });
-  const indexed = indexAnalysis(analysis);
+  const indexed = indexTestAnalysis(analysis);
   const columns = analysis.modelCalls.map((call, index) => ({
     callIndex: call.index,
     x: 80 + index * 100,
@@ -89,7 +89,7 @@ describe('EconomicsTrack cost scaling', () => {
     };
     const onReadoutChange = vi.fn();
     const props = {
-      indexed: indexAnalysis(analysis),
+      indexed: indexTestAnalysis(analysis),
       columns: analysis.modelCalls.map((modelCall, index) => ({
         callIndex: modelCall.index,
         x: 80 + index * 100,
@@ -165,7 +165,7 @@ describe('EconomicsTrack cost scaling', () => {
     const onEventBreakdownChange = vi.fn();
     const view = render(EconomicsTrack, {
       props: {
-        indexed: indexAnalysis(analysis),
+        indexed: indexTestAnalysis(analysis),
         columns: analysis.modelCalls.map((call, index) => ({
           callIndex: call.index,
           x: 80 + index * 10,
@@ -201,7 +201,7 @@ describe('EconomicsTrack cost scaling', () => {
     replacement.modelCalls[1].economics.cacheRatioDiscontinuity!.magnitude = 'notable';
     replacement.modelCalls[3].model = 'replacement-model';
     await view.rerender({
-      indexed: indexAnalysis(replacement),
+      indexed: indexTestAnalysis(replacement),
       columns: analysis.modelCalls.map((call, index) => ({
         callIndex: call.index,
         x: 80 + index * 10,

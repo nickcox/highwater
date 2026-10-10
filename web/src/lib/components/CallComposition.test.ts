@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { compositionScenario } from '../testing/composition-scenarios';
 import { sessionScenario } from '../testing/session-scenarios';
 import CallComposition from './CallComposition.svelte';
@@ -13,7 +13,7 @@ afterEach(() => {
 
 function props(overrides: Record<string, unknown> = {}) {
   return {
-    indexed: indexAnalysis(compositionScenario(220)),
+    indexed: indexTestAnalysis(compositionScenario(220)),
     pinnedCallIndex: 2,
     selectedItemId: null,
     isVisible: true,
@@ -33,7 +33,7 @@ describe('CallComposition', () => {
     const get = vi.spyOn(cache, 'get');
     vi.spyOn(composition, 'createCompositionProjectionCache').mockReturnValue(cache);
     const layout = vi.spyOn(composition, 'layoutCompositionTreemap');
-    const initial = props({ indexed: indexAnalysis(compositionScenario(20)) });
+    const initial = props({ indexed: indexTestAnalysis(compositionScenario(20)) });
     const view = render(CallComposition, { props: initial });
     const projectionCalls = get.mock.calls.length;
     const layoutCalls = layout.mock.calls.length;
@@ -46,7 +46,7 @@ describe('CallComposition', () => {
     );
   });
   it('labels all-unavailable totals as Unknown in both scopes', async () => {
-    const indexed = indexAnalysis(sessionScenario('unavailableGeometry'));
+    const indexed = indexTestAnalysis(sessionScenario('unavailableGeometry'));
     render(CallComposition, { props: props({ indexed, pinnedCallIndex: 2 }) });
 
     expect(document.querySelector('.composition-totals strong')).toHaveTextContent(
@@ -62,7 +62,7 @@ describe('CallComposition', () => {
     const onPinCall = vi.fn();
     const onUnpinCall = vi.fn();
     const onSelectItem = vi.fn();
-    const indexed = indexAnalysis(compositionScenario(20));
+    const indexed = indexTestAnalysis(compositionScenario(20));
     const calls = indexed.analysis.modelCalls;
     const view = render(CallComposition, {
       props: props({ indexed, pinnedCallIndex: null, onPinCall, onUnpinCall, onSelectItem }),
@@ -182,7 +182,7 @@ describe('CallComposition', () => {
   });
 
   it('aggregates a selected item over the pinned prefix and explains out-of-scope selection', async () => {
-    const indexed = indexAnalysis(compositionScenario(20));
+    const indexed = indexTestAnalysis(compositionScenario(20));
     const onUnpinCall = vi.fn();
     const view = render(CallComposition, {
       props: props({
@@ -207,7 +207,7 @@ describe('CallComposition', () => {
   });
 
   it('shows every zero and unavailable item in List without promoting zero areas', async () => {
-    const zero = indexAnalysis(compositionScenario(220, true));
+    const zero = indexTestAnalysis(compositionScenario(220, true));
     const view = render(CallComposition, { props: props({ indexed: zero }) });
     expect(screen.getByText(/All numeric item estimates are zero/)).toBeInTheDocument();
     expect(
@@ -218,7 +218,7 @@ describe('CallComposition', () => {
     expect(screen.getAllByRole('option')).toHaveLength(220);
 
     await fireEvent.click(screen.getByRole('button', { name: 'List' }));
-    const normal = indexAnalysis(compositionScenario(220));
+    const normal = indexTestAnalysis(compositionScenario(220));
     await view.rerender(props({ indexed: normal }));
     expect(
       screen.getByRole('listbox', { name: /items ranked by estimated contribution/ }),
@@ -229,7 +229,7 @@ describe('CallComposition', () => {
   });
 
   it('keeps presence-less sessions free of reveal and latest-call actions', async () => {
-    const empty = indexAnalysis(sessionScenario('terminalSummaryOnly'));
+    const empty = indexTestAnalysis(sessionScenario('terminalSummaryOnly'));
     render(CallComposition, {
       props: props({ indexed: empty, pinnedCallIndex: null, selectedItemId: null }),
     });

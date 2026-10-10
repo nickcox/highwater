@@ -124,9 +124,11 @@ pub(crate) struct ModelCall {
     pub cost: Option<Cost>,
     pub stop_reason: Option<String>,
     pub timing: CallTiming,
-    pub context_item_ids: Vec<String>,
-    pub added_item_ids: Vec<String>,
-    pub dropped_item_ids: Vec<String>,
+    /// Positions in `Analysis::context_items`, in this call's context order.
+    /// Positions rather than IDs keep the response proportional to the source.
+    pub context_item_indexes: Vec<usize>,
+    pub added_item_indexes: Vec<usize>,
+    pub dropped_item_indexes: Vec<usize>,
     pub transition_item_counts: TransitionItemCounts,
     pub tool_calls_after: Vec<ToolCall>,
     pub compaction_before: Option<String>,

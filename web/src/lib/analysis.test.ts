@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { indexTestAnalysis, toWireAnalysis } from './testing/wire-analysis';
 import { AnalysisValidationError, indexAnalysis } from './analysis';
 import { testAnalysis } from './context-river/test-data';
 
@@ -8,7 +9,7 @@ describe('indexAnalysis', () => {
     (value) => {
       const analysis = testAnalysis();
       analysis.modelCalls[0].usage.recordedOutput = value;
-      expect(() => indexAnalysis(analysis)).toThrow(/recordedOutput/);
+      expect(() => indexTestAnalysis(analysis)).toThrow(/recordedOutput/);
     },
   );
 
@@ -16,18 +17,18 @@ describe('indexAnalysis', () => {
     const missing = testAnalysis();
     delete (missing.modelCalls[0].usage as Partial<(typeof missing.modelCalls)[0]['usage']>)
       .recordedOutput;
-    expect(() => indexAnalysis(missing)).toThrow(/recordedOutput/);
+    expect(() => indexTestAnalysis(missing)).toThrow(/recordedOutput/);
     const invalid = testAnalysis();
     invalid.modelCalls[0].usage.outputReasoningRelationship =
       'guessed' as (typeof invalid.modelCalls)[0]['usage']['outputReasoningRelationship'];
-    expect(() => indexAnalysis(invalid)).toThrow(/output\/reasoning relationship/);
+    expect(() => indexTestAnalysis(invalid)).toThrow(/output\/reasoning relationship/);
   });
 
   it('retains absent recorded counters without repairing them from normalized totals', () => {
     const analysis = testAnalysis();
     analysis.modelCalls[0].usage.recordedOutput = null;
     analysis.modelCalls[0].usage.outputReasoningRelationship = 'unknown';
-    const usage = indexAnalysis(analysis).analysis.modelCalls[0].usage;
+    const usage = indexTestAnalysis(analysis).analysis.modelCalls[0].usage;
     expect(usage.output).toBe(2);
     expect(usage.recordedOutput).toBeNull();
     expect(usage.reasoning).toBeNull();
@@ -36,7 +37,7 @@ describe('indexAnalysis', () => {
   it('rejects the previous schema instead of silently displaying normalized output as recorded output', () => {
     const old = testAnalysis();
     old.schemaVersion = 10;
-    expect(() => indexAnalysis(old)).toThrow(/Unsupported analysis schema 10/);
+    expect(() => indexTestAnalysis(old)).toThrow(/Unsupported analysis schema 10/);
   });
   function analysisWithAuditedAnthropicCall() {
     const analysis = testAnalysis();
@@ -143,20 +144,20 @@ describe('indexAnalysis', () => {
     c.api = 'openai-responses';
     c.economics.policyId = 'github-copilot-responses-cache-v1';
     a.economics.supportedPolicyIds = ['github-copilot-responses-cache-v1'];
-    expect(() => indexAnalysis(a)).not.toThrow();
+    expect(() => indexTestAnalysis(a)).not.toThrow();
     c.api = 'openai-completions';
-    expect(() => indexAnalysis(a)).toThrow(/unsupported economics policy/);
+    expect(() => indexTestAnalysis(a)).toThrow(/unsupported economics policy/);
     c.api = 'openai-responses';
     c.usage.cacheWrite = null;
-    expect(() => indexAnalysis(a)).toThrow(/incomplete normalized prompt buckets/);
+    expect(() => indexTestAnalysis(a)).toThrow(/incomplete normalized prompt buckets/);
   });
 
   it('accepts only eligible adjacent cache-ratio changes and validates their provenance', () => {
     const analysis = analysisWithAdjacentCacheRatioChange();
-    expect(() => indexAnalysis(analysis)).not.toThrow();
+    expect(() => indexTestAnalysis(analysis)).not.toThrow();
 
     analysis.modelCalls[1].economics.cacheRatioDiscontinuity!.previousCallIndex = 0;
-    expect(() => indexAnalysis(analysis)).toThrow(/ineligible cache-ratio change/);
+    expect(() => indexTestAnalysis(analysis)).toThrow(/ineligible cache-ratio change/);
   });
 
   it('preserves a complete zero prompt without a ratio and rejects unsafe totals', () => {
@@ -174,23 +175,25 @@ describe('indexAnalysis', () => {
     zero.economics.cacheReadPromptTokens = 0;
     zero.economics.cacheReadTokens = 0;
     zero.economics.cacheReadRatio = null;
-    expect(() => indexAnalysis(zero)).not.toThrow();
+    expect(() => indexTestAnalysis(zero)).not.toThrow();
 
     const unsafe = analysisWithAuditedAnthropicCall();
     unsafe.modelCalls[0].economics.promptTokens = Number.MAX_SAFE_INTEGER + 1;
-    expect(() => indexAnalysis(unsafe)).toThrow(/safe non-negative integer/);
+    expect(() => indexTestAnalysis(unsafe)).toThrow(/safe non-negative integer/);
   });
 
   it('accepts cache ratios only when supported normalized buckets agree', () => {
-    expect(() => indexAnalysis(analysisWithAuditedAnthropicCall())).not.toThrow();
+    expect(() => indexTestAnalysis(analysisWithAuditedAnthropicCall())).not.toThrow();
 
     const inconsistent = analysisWithAuditedAnthropicCall();
     inconsistent.modelCalls[0].economics.cacheReadRatio = 0.5;
-    expect(() => indexAnalysis(inconsistent)).toThrow(/cacheReadRatio disagrees/);
+    expect(() => indexTestAnalysis(inconsistent)).toThrow(/cacheReadRatio disagrees/);
 
     const malformedSummary = analysisWithAuditedAnthropicCall();
     malformedSummary.economics.cacheReadRatio = 0.5;
-    expect(() => indexAnalysis(malformedSummary)).toThrow(/Analysis cache-read ratio disagrees/);
+    expect(() => indexTestAnalysis(malformedSummary)).toThrow(
+      /Analysis cache-read ratio disagrees/,
+    );
   });
 
   it('builds all lookup indices and normalizes unknown kinds', () => {
@@ -203,7 +206,7 @@ describe('indexAnalysis', () => {
       expandedTruncated: false,
     };
     (analysis.contextItems[0] as { kind: string }).kind = 'futureKind';
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     expect(indexed.itemById.get('a')?.kind).toBe('other');
     expect(indexed.itemById.get('a')?.preview?.expandedText).toBe('first line\nsecond line');
     expect(indexed.compactionBySummaryId.get('summary')?.id).toBe('compact-1');
@@ -214,7 +217,7 @@ describe('indexAnalysis', () => {
     const estimated = testAnalysis();
     estimated.displayWeightUnit = 'estimatedTokens';
     estimated.tokenAnalysis.chartUnit = 'estimatedTokens';
-    expect(indexAnalysis(estimated).analysis.displayWeightUnit).toBe('estimatedTokens');
+    expect(indexTestAnalysis(estimated).analysis.displayWeightUnit).toBe('estimatedTokens');
 
     const unavailable = testAnalysis();
     unavailable.displayWeightUnit = 'unavailable';
@@ -223,13 +226,20 @@ describe('indexAnalysis', () => {
       ...item,
       tokenEstimates: item.tokenEstimates.map((estimate) => ({ ...estimate, tokens: null })),
     }));
-    expect(indexAnalysis(unavailable).analysis.displayWeightUnit).toBe('unavailable');
+    expect(indexTestAnalysis(unavailable).analysis.displayWeightUnit).toBe('unavailable');
   });
 
   it('rejects malformed references and ranges with actionable errors', () => {
-    const unknown = testAnalysis();
-    unknown.modelCalls[0].contextItemIds.push('missing');
-    expect(() => indexAnalysis(unknown)).toThrow(/unknown item missing/);
+    const unknown = toWireAnalysis(testAnalysis());
+    unknown.modelCalls[0].contextItemIndexes.push(unknown.contextItems.length);
+    expect(() => indexAnalysis(unknown)).toThrow(
+      /Model call 1 contextItemIndexes references an unknown item position/,
+    );
+    for (const position of [-1, 0.5, Number.NaN]) {
+      const malformed = toWireAnalysis(testAnalysis());
+      malformed.modelCalls[1].addedItemIndexes = [position];
+      expect(() => indexAnalysis(malformed)).toThrow(/unknown item position/);
+    }
 
     const oversizedPreview = testAnalysis();
     oversizedPreview.contextItems[0].preview = {
@@ -239,11 +249,11 @@ describe('indexAnalysis', () => {
       expandedText: 'x'.repeat(161),
       expandedTruncated: false,
     };
-    expect(() => indexAnalysis(oversizedPreview)).toThrow(/invalid preview/);
+    expect(() => indexTestAnalysis(oversizedPreview)).toThrow(/invalid preview/);
 
     const reversed = testAnalysis();
     reversed.contextItems[0].presence[0] = { startCall: 2, endCall: 1 };
-    expect(() => indexAnalysis(reversed)).toThrow(AnalysisValidationError);
+    expect(() => indexTestAnalysis(reversed)).toThrow(AnalysisValidationError);
   });
 
   it('rejects presence ranges that include an item missing from a model call', () => {
@@ -252,7 +262,7 @@ describe('indexAnalysis', () => {
     analysis.contextItems[0].presenceCallCount = 1;
     analysis.contextItems[0].firstModelCall = 2;
     analysis.contextItems[0].lastModelCall = 2;
-    expect(() => indexAnalysis(analysis)).toThrow(
+    expect(() => indexTestAnalysis(analysis)).toThrow(
       /Model call 1 references item a outside its presence ranges/,
     );
   });
@@ -315,7 +325,7 @@ describe('indexAnalysis', () => {
     });
     analysis.lineage = [{ from: 'a', to: 'terminal-summary', kind: 'frameworkCompaction' }];
 
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     expect(indexed.compactionById.get('compact-1')?.beforeModelCall).toBe(3);
     expect(indexed.itemById.get('terminal-summary')?.presence).toEqual([]);
   });

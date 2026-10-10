@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import ItemDetails from './ItemDetails.svelte';
@@ -10,7 +10,7 @@ afterEach(cleanup);
 
 describe('ItemDetails presence feedback', () => {
   it('inspects first inclusion independently of estimate and pin, hiding only at that pin', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const onInspectCall = vi.fn();
     const view = render(ItemDetails, {
       props: {
@@ -45,7 +45,7 @@ describe('ItemDetails presence feedback', () => {
     expect(screen.queryByRole('button', { name: /Inspect first included call/ })).toBeNull();
   });
   it('omits the bulk-collapse action and preserves manually chosen sections across panel reopening', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const sections = {
       ...inspectorSections(),
       identifiers: true,
@@ -91,7 +91,7 @@ describe('ItemDetails presence feedback', () => {
     expect(screen.queryByRole('button', { name: 'Collapse details' })).toBeNull();
   });
   it('restores read-more choices, switches truncation hints, and omits the control without extra content', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const item = {
       ...indexed.itemById.get('a')!,
       preview: {
@@ -133,7 +133,7 @@ describe('ItemDetails presence feedback', () => {
   });
 
   it('keeps a selected item absent at the pinned call and offers explicit reveal', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const onRevealInRiver = vi.fn();
     render(ItemDetails, {
       props: {
@@ -151,7 +151,7 @@ describe('ItemDetails presence feedback', () => {
   });
 
   it('explains that a presence-less terminal item has no River location', () => {
-    const indexed = indexAnalysis(sessionScenario('terminalSummaryOnly'));
+    const indexed = indexTestAnalysis(sessionScenario('terminalSummaryOnly'));
     render(ItemDetails, {
       props: { item: indexed.analysis.contextItems[0], indexed },
     });

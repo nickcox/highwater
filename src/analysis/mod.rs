@@ -30,7 +30,7 @@ use tokenization::{
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 11;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 12;
 // Bump this when serialized analysis output can change without a schema change.
 pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 22;
 
@@ -75,8 +75,9 @@ struct DerivedTransition<'a> {
 
 struct ApiCallDerived {
     token_analysis: CallTokenAnalysis,
-    added_ids: Vec<String>,
-    dropped_ids: Vec<String>,
+    context_indexes: Vec<usize>,
+    added_indexes: Vec<usize>,
+    dropped_indexes: Vec<usize>,
     transition_item_counts: TransitionItemCounts,
     cumulative: UsageSnapshot,
 }
@@ -829,16 +830,18 @@ fn derive_calls(
             call_economics[position].clone(),
             ApiCallDerived {
                 token_analysis,
-                added_ids: derived_transition
-                    .added_ids
-                    .iter()
-                    .map(|id| (*id).to_owned())
-                    .collect(),
-                dropped_ids: derived_transition
-                    .dropped_ids
-                    .iter()
-                    .map(|id| (*id).to_owned())
-                    .collect(),
+                context_indexes: item_positions(
+                    &prepared.item_positions,
+                    work.call.context_item_ids.iter().map(String::as_str),
+                ),
+                added_indexes: item_positions(
+                    &prepared.item_positions,
+                    derived_transition.added_ids.iter().copied(),
+                ),
+                dropped_indexes: item_positions(
+                    &prepared.item_positions,
+                    derived_transition.dropped_ids.iter().copied(),
+                ),
                 transition_item_counts: derived_transition.item_counts.clone(),
                 cumulative: cumulative_usages[position],
             },
@@ -1267,9 +1270,9 @@ fn to_api_call(
         cost: cost_dto(&usage.cost),
         stop_reason: work.call.stop_reason.clone(),
         timing: timing::call_timing(work.call, pi_source),
-        context_item_ids: work.call.context_item_ids.clone(),
-        added_item_ids: derived.added_ids,
-        dropped_item_ids: derived.dropped_ids,
+        context_item_indexes: derived.context_indexes,
+        added_item_indexes: derived.added_indexes,
+        dropped_item_indexes: derived.dropped_indexes,
         transition_item_counts: derived.transition_item_counts,
         tool_calls_after: work
             .call
@@ -1286,6 +1289,14 @@ fn to_api_call(
         token_analysis: derived.token_analysis,
         economics,
     }
+}
+
+/// Every reference was resolved during validation, so lookups cannot miss.
+fn item_positions<'a>(
+    positions: &HashMap<&str, usize>,
+    ids: impl Iterator<Item = &'a str>,
+) -> Vec<usize> {
+    ids.map(|id| positions[id]).collect()
 }
 
 fn cost_dto(cost: &ReportedCost) -> Option<Cost> {
@@ -1609,6 +1620,13 @@ mod tests {
 
     use super::test_support::{analysis_with_controlled_estimates, fake_session};
 
+    fn item_ids<'a>(analysis: &'a Analysis, indexes: &[usize]) -> Vec<&'a str> {
+        indexes
+            .iter()
+            .map(|index| analysis.context_items[*index].id.as_str())
+            .collect()
+    }
+
     fn assert_exhausted_session_exposure(analysis: &Analysis, items: usize, calls: usize) {
         let json = serde_json::to_value(analysis).expect("analysis JSON");
         assert!(json["session"]["calculatedTokenTurns"].is_null());
@@ -1699,8 +1717,8 @@ mod tests {
             assert!(call.cumulative_reported_completion_tokens.is_none());
         }
         assert_eq!(
-            analysis.model_calls[1].context_item_ids,
-            analysis.model_calls[3].context_item_ids
+            analysis.model_calls[1].context_item_indexes,
+            analysis.model_calls[3].context_item_indexes
         );
         assert_eq!(
             analysis.model_calls[1]
@@ -2001,8 +2019,11 @@ mod tests {
         .expect("analysis");
 
         let first = &analysis.model_calls[0];
-        assert_eq!(first.added_item_ids, ["a", "b", "c"]);
-        assert!(first.dropped_item_ids.is_empty());
+        assert_eq!(
+            item_ids(&analysis, &first.added_item_indexes),
+            ["a", "b", "c"]
+        );
+        assert!(first.dropped_item_indexes.is_empty());
         assert_eq!(first.transition_item_counts.added, 3);
         assert_eq!(first.transition_item_counts.retained, 0);
         assert_eq!(first.token_analysis.retained_tokens, Some(0));
@@ -2010,8 +2031,8 @@ mod tests {
         assert_eq!(first.token_analysis.churn, None);
 
         let changed = &analysis.model_calls[1];
-        assert_eq!(changed.added_item_ids, ["d"]);
-        assert_eq!(changed.dropped_item_ids, ["a"]);
+        assert_eq!(item_ids(&analysis, &changed.added_item_indexes), ["d"]);
+        assert_eq!(item_ids(&analysis, &changed.dropped_item_indexes), ["a"]);
         assert_eq!(changed.transition_item_counts.added, 1);
         assert_eq!(changed.transition_item_counts.retained, 2);
         assert_eq!(changed.transition_item_counts.dropped, 1);
@@ -2020,8 +2041,8 @@ mod tests {
         assert!(changed.token_analysis.dropped_tokens.is_some());
 
         let unchanged = &analysis.model_calls[2];
-        assert!(unchanged.added_item_ids.is_empty());
-        assert!(unchanged.dropped_item_ids.is_empty());
+        assert!(unchanged.added_item_indexes.is_empty());
+        assert!(unchanged.dropped_item_indexes.is_empty());
         assert_eq!(unchanged.transition_item_counts.added, 0);
         assert_eq!(unchanged.transition_item_counts.retained, 3);
         assert_eq!(unchanged.transition_item_counts.dropped, 0);

@@ -1,6 +1,6 @@
 import { createHash, type Hash } from 'node:crypto';
+import { indexTestAnalysis } from './testing/wire-analysis';
 import { expect, it } from 'vitest';
-import { indexAnalysis } from './analysis';
 import { projectCallComposition, projectCumulativeComposition } from './composition';
 import { compositionScenario } from './testing/composition-scenarios';
 import { sessionScenario, type SessionScenario } from './testing/session-scenarios';
@@ -74,7 +74,7 @@ function serialize(value: unknown): string {
 }
 
 function updateParityHash(input: SessionAnalysis, hash: Hash): void {
-  const indexed = indexAnalysis(input);
+  const indexed = indexTestAnalysis(input);
   hash.update(serialize(indexed));
   hash.update(serialize(projectCumulativeComposition(indexed, null)));
   for (const call of indexed.analysis.modelCalls) {

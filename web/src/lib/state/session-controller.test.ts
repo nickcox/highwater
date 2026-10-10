@@ -1,4 +1,5 @@
 import { get } from 'svelte/store';
+import { toWireAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisFetchResult, SessionListResult } from '../api/client';
 import type { EventsClientCallbacks } from '../api/events';
@@ -38,7 +39,7 @@ function analysisResult(id: string, model: string): AnalysisFetchResult {
   const analysis: SessionAnalysis = testAnalysis();
   analysis.session.id = id;
   analysis.modelCalls[0].model = model;
-  return { status: 'ok', analysis, etag: `"${model}"` };
+  return { status: 'ok', analysis: toWireAnalysis(analysis), etag: `"${model}"` };
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

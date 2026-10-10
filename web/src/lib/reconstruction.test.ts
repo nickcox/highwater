@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/svelte';
+import { indexTestAnalysis } from './testing/wire-analysis';
 import { afterEach, describe, expect, it } from 'vitest';
-import { indexAnalysis } from './analysis';
 import { assertReconstruction } from './reconstruction';
 import { testAnalysis } from './context-river/test-data';
 import SessionSummary from './components/SessionSummary.svelte';
@@ -37,7 +37,7 @@ describe('source reconstruction coverage', () => {
       status: 'partial',
       explanationCodes: ['missingHistoricalSystemPrompt', 'unknownOutputAccounting'],
     };
-    render(SessionSummary, { props: { indexed: indexAnalysis(analysis) } });
+    render(SessionSummary, { props: { indexed: indexTestAnalysis(analysis) } });
     const coverage = screen.getByRole('complementary', { name: 'Reconstruction coverage' });
     expect(coverage).toHaveTextContent('Reconstructed conversation only.');
     expect(coverage).toHaveTextContent('This is not a complete historical model request.');

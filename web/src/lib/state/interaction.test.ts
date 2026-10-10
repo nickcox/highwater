@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from '../context-river/test-data';
 import { reconcileInteraction } from './interaction';
 
 describe('interaction reconciliation', () => {
   it('remaps calls by source identity instead of reused numeric indices', () => {
-    const previous = indexAnalysis(testAnalysis());
+    const previous = indexTestAnalysis(testAnalysis());
     const replacementSource = testAnalysis();
     replacementSource.modelCalls[0].sourceRecordId = 'call2';
     replacementSource.modelCalls[1].sourceRecordId = 'call1';
-    const replacement = indexAnalysis(replacementSource);
+    const replacement = indexTestAnalysis(replacementSource);
 
     const next = reconcileInteraction(
       {
@@ -28,11 +28,11 @@ describe('interaction reconciliation', () => {
   });
 
   it('clears ambiguous call identities and removed items individually', () => {
-    const previous = indexAnalysis(testAnalysis());
+    const previous = indexTestAnalysis(testAnalysis());
     const replacementSource = testAnalysis();
     replacementSource.modelCalls[0].sourceRecordId = 'call2';
     replacementSource.modelCalls[1].sourceRecordId = 'call2';
-    const replacement = indexAnalysis(replacementSource);
+    const replacement = indexTestAnalysis(replacementSource);
 
     const next = reconcileInteraction(
       {

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { resetInteraction } from '../state/interaction';
 import { defaultPresentationPreferences } from '../state/presentation-preferences';
 import { testAnalysis } from './test-data';
@@ -96,7 +96,7 @@ function longAnalysis(callCount: number): IndexedAnalysis {
     }));
   analysis.compactions = [];
   analysis.lineage = [];
-  return indexAnalysis(analysis);
+  return indexTestAnalysis(analysis);
 }
 
 function economicsAnalysis(): IndexedAnalysis {
@@ -163,7 +163,7 @@ function economicsAnalysis(): IndexedAnalysis {
     cacheReadRatio: cacheReadTokens / promptTokens,
     explanationCodes: [],
   };
-  return indexAnalysis(analysis);
+  return indexTestAnalysis(analysis);
 }
 
 function appendedAnalysis(): IndexedAnalysis {
@@ -199,7 +199,7 @@ function appendedAnalysis(): IndexedAnalysis {
       lastModelCall: presence[presence.length - 1].endCall,
     };
   });
-  return indexAnalysis(analysis);
+  return indexTestAnalysis(analysis);
 }
 
 beforeEach(() => {
@@ -253,7 +253,7 @@ describe('ContextRiver continuous viewport integration', () => {
       call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 1000;
       call.reportedUsageCompleteness = 'complete';
     }
-    const indexed = indexAnalysis(data);
+    const indexed = indexTestAnalysis(data);
     const before = JSON.stringify(indexed.analysis);
     const actions = callbacks();
     const view = render(ContextRiver, { props: { indexed, pinnedCallIndex: 1, ...actions } });
@@ -282,7 +282,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
   it('keeps references unavailable for structural geometry and missing usage', () => {
     const view = render(ContextRiver, {
-      props: { indexed: indexAnalysis(testAnalysis()), ...callbacks() },
+      props: { indexed: indexTestAnalysis(testAnalysis()), ...callbacks() },
     });
     expect(view.container.querySelector('.reported-input-overlay')).toBeNull();
     expect(view.queryByRole('group', { name: 'Input reference legend' })).toBeNull();
@@ -423,7 +423,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('uses individual visible ribbon spans and reveals the nearest present call at current zoom', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const interaction = { ...resetInteraction(), selectedItemId: 'gap', pinnedCallIndex: 2 };
     const view = render(ContextRiver, {
@@ -619,7 +619,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: {
-        indexed: indexAnalysis(testAnalysis()),
+        indexed: indexTestAnalysis(testAnalysis()),
         ...resetInteraction(),
         ...handlers,
       },
@@ -641,7 +641,7 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(view.container.querySelector('.economics-track-svg')).toBeNull();
   });
   it('starts fitted, zooms continuously, and returns to Fit all without changing selection', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -804,7 +804,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('pointer and keyboard ribbon activation pin the first included call, not the pointer call', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -839,7 +839,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('dragging a call interval zooms to it while a click still selects an item', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -904,7 +904,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('starts range zoom in empty plot space without selecting chart text', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -975,7 +975,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('keeps both endpoints of the selected range visible when the viewport resizes', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1016,7 +1016,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('supports chart-local modifier-wheel and two-pointer pinch zoom', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1126,7 +1126,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('keeps the session-wide Y scale as default and makes visible-call scaling explicit', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1184,7 +1184,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const analysis = testAnalysis();
     analysis.displayWeightUnit = 'unavailable';
     analysis.tokenAnalysis.chartUnit = 'unavailable';
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1209,7 +1209,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('keeps call targets and individual ribbons interactive at Fit all', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1228,7 +1228,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('keeps Space-pan keyboard handling focused on the chart and clears it on keyup', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1311,7 +1311,7 @@ describe('ContextRiver continuous viewport integration', () => {
   it.each(['pointercancel', 'lostpointercapture'])(
     'cancels an in-progress range gesture on %s and accepts a later gesture',
     async (cancelEvent) => {
-      const indexed = indexAnalysis(testAnalysis());
+      const indexed = indexTestAnalysis(testAnalysis());
       const handlers = callbacks();
       const view = render(ContextRiver, {
         props: { indexed, ...resetInteraction(), ...handlers },
@@ -1376,7 +1376,7 @@ describe('ContextRiver continuous viewport integration', () => {
   );
 
   it('finishes a drag released outside the chart and cancels cleanly on window blur', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1454,7 +1454,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it('removes window gesture listeners and releases the gesture state on teardown', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed, ...resetInteraction(), ...handlers },
@@ -1491,7 +1491,7 @@ describe('ContextRiver continuous viewport integration', () => {
   });
 
   it("preserves the user's zoom and visible call anchor across live append reflow", async () => {
-    const initial = indexAnalysis(testAnalysis());
+    const initial = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
     const view = render(ContextRiver, {
       props: { indexed: initial, ...resetInteraction(), ...handlers },

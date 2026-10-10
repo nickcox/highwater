@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from './analysis';
+import { indexTestAnalysis } from './testing/wire-analysis';
 import {
   COMPOSITION_KIND_ORDER,
   createCompositionProjectionCache,
@@ -13,7 +13,7 @@ import { compositionScenario } from './testing/composition-scenarios';
 import { liveAppendReplacementScenario, sessionScenario } from './testing/session-scenarios';
 
 function denseIndexed(allZero = false) {
-  return indexAnalysis(compositionScenario(220, allZero));
+  return indexTestAnalysis(compositionScenario(220, allZero));
 }
 
 function scopedCumulativeAnalysis() {
@@ -97,7 +97,7 @@ function scopedCumulativeAnalysis() {
 
 describe('call-specific Composition projection and treemap', () => {
   it('keeps unavailable call estimates unknown rather than reporting a zero total', () => {
-    const indexed = indexAnalysis(sessionScenario('unavailableGeometry'));
+    const indexed = indexTestAnalysis(sessionScenario('unavailableGeometry'));
     const callIndex = indexed.analysis.modelCalls[0].index;
     const atCall = projectCallComposition(indexed, callIndex)!;
     const cumulative = projectCumulativeComposition(indexed, callIndex)!;
@@ -184,8 +184,8 @@ describe('call-specific Composition projection and treemap', () => {
 
   it('keeps an unchanged inspected-call projection and layout stable after a later append', () => {
     const { initial, replacement } = liveAppendReplacementScenario();
-    const before = projectCallComposition(indexAnalysis(initial), 4)!;
-    const after = projectCallComposition(indexAnalysis(replacement), 4)!;
+    const before = projectCallComposition(indexTestAnalysis(initial), 4)!;
+    const after = projectCallComposition(indexTestAnalysis(replacement), 4)!;
 
     expect(after).toEqual(before);
     expect(layoutCompositionTreemap(after, 800, 360)).toEqual(
@@ -199,7 +199,7 @@ describe('call-specific Composition projection and treemap', () => {
       (candidate) => candidate.profileId === 'profile-1',
     )!;
     estimate.coverage = 'unavailable';
-    const projection = projectCumulativeComposition(indexAnalysis(analysis), 2)!;
+    const projection = projectCumulativeComposition(indexTestAnalysis(analysis), 2)!;
     const persistent = projection.items.find((item) => item.id === 'composition-item-000')!;
 
     expect(persistent.tokens).toBe(8);
@@ -212,7 +212,7 @@ describe('call-specific Composition projection and treemap', () => {
   it('aggregates the inclusive call prefix from presence and each call profile, not lifetime age', () => {
     const analysis = scopedCumulativeAnalysis();
     const original = JSON.stringify(analysis);
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const firstCall = projectCumulativeComposition(indexed, 1)!;
     const prefix = projectCumulativeComposition(indexed, 2)!;
     const whole = projectCumulativeComposition(indexed, null)!;
@@ -261,7 +261,7 @@ describe('call-specific Composition projection and treemap', () => {
     persistent.tokenEstimates.find((estimate) => estimate.profileId === 'profile-1')!.tokens =
       Number.MAX_SAFE_INTEGER;
     persistent.tokenEstimates.find((estimate) => estimate.profileId === 'profile-2')!.tokens = 1;
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const projection = projectCumulativeComposition(indexed, 2)!;
     const item = projection.items.find((candidate) => candidate.id === persistent.id)!;
 
@@ -274,7 +274,7 @@ describe('call-specific Composition projection and treemap', () => {
   });
 
   it('leaves a no-call session without synthetic cumulative areas', () => {
-    const indexed = indexAnalysis(sessionScenario('terminalSummaryOnly'));
+    const indexed = indexTestAnalysis(sessionScenario('terminalSummaryOnly'));
     const projection = projectCumulativeComposition(indexed, null)!;
 
     expect(projection.scopeCallCount).toBe(0);
@@ -288,7 +288,7 @@ describe('call-specific Composition projection and treemap', () => {
   });
 
   it('caches cumulative work by accepted analysis and endpoint, not UI presentation', () => {
-    const indexed = indexAnalysis(scopedCumulativeAnalysis());
+    const indexed = indexTestAnalysis(scopedCumulativeAnalysis());
     const cache = createCompositionProjectionCache();
     const first = cache.get(indexed, 'cumulative', 2);
     const repeated = cache.get(indexed, 'cumulative', 2);
@@ -299,7 +299,7 @@ describe('call-specific Composition projection and treemap', () => {
   });
 
   it('retains only the latest endpoint per scope and releases replaced analysis entries', () => {
-    const indexed = indexAnalysis(scopedCumulativeAnalysis());
+    const indexed = indexTestAnalysis(scopedCumulativeAnalysis());
     const cache = createCompositionProjectionCache();
     const atCall = cache.get(indexed, 'atCall', 2);
     let previous = cache.get(indexed, 'cumulative', 1);
@@ -315,13 +315,13 @@ describe('call-specific Composition projection and treemap', () => {
     const old = cache.get(indexed, 'cumulative', 1);
     cache.get(indexed, 'cumulative', 2);
     expect(cache.get(indexed, 'cumulative', 1)).not.toBe(old);
-    const replacement = indexAnalysis(scopedCumulativeAnalysis());
+    const replacement = indexTestAnalysis(scopedCumulativeAnalysis());
     cache.get(replacement, 'atCall', 2);
     expect(cache.get(indexed, 'atCall', 2)).not.toBe(atCall);
   });
 
   it('bounds retained entries while visiting a long history in both scopes', () => {
-    const indexed = indexAnalysis(sessionScenario('longSession'));
+    const indexed = indexTestAnalysis(sessionScenario('longSession'));
     const calls = indexed.analysis.modelCalls;
     const cache = createCompositionProjectionCache();
     expect(cache.retainedEntryCount).toBe(0);
@@ -333,7 +333,7 @@ describe('call-specific Composition projection and treemap', () => {
       cache.get(indexed, 'atCall', endpoint);
       expect(cache.retainedEntryCount).toBe(2);
     }
-    cache.get(indexAnalysis(compositionScenario(20)), 'cumulative', null);
+    cache.get(indexTestAnalysis(compositionScenario(20)), 'cumulative', null);
     expect(cache.retainedEntryCount).toBe(1);
   });
 
@@ -341,7 +341,7 @@ describe('call-specific Composition projection and treemap', () => {
     const analysis = scopedCumulativeAnalysis();
     const item = analysis.contextItems[3];
     item.tokenEstimates[0].noteCodes = ['unsupportedTokenizer'];
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const atCall = projectCallComposition(indexed, 1)!.items.find((entry) => entry.id === item.id)!;
     const cumulative = projectCumulativeComposition(indexed, 1)!.items.find(
       (entry) => entry.id === item.id,
@@ -393,7 +393,7 @@ describe('call-specific Composition projection and treemap', () => {
     const overflowing = compositionScenario(220);
     overflowing.contextItems[0].tokenEstimates[1].tokens = Number.MAX_SAFE_INTEGER;
     overflowing.contextItems[1].tokenEstimates[1].tokens = Number.MAX_SAFE_INTEGER;
-    const overflowProjection = projectCallComposition(indexAnalysis(overflowing), 2)!;
+    const overflowProjection = projectCallComposition(indexTestAnalysis(overflowing), 2)!;
     expect(overflowProjection.totalOverflow).toBe(true);
     expect(overflowProjection.measuredTokenTotal).toBeNull();
     expect(overflowProjection.items.every((item) => item.share === null)).toBe(true);

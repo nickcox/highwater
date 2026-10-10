@@ -2,7 +2,7 @@ import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import failedExport from '../../../fixtures/analysis/failed-usage.json';
 import { indexAnalysis } from './analysis';
-import type { SessionAnalysis } from './types';
+import type { WireSessionAnalysis } from './types';
 import { recordedResponseMetrics } from './recorded-usage';
 import { layoutCallColumns } from './context-river/layout';
 import {
@@ -12,7 +12,7 @@ import {
 } from './context-river/reported-input';
 import CallDetails from './components/CallDetails.svelte';
 
-const fixture = () => structuredClone(failedExport) as SessionAnalysis;
+const fixture = () => structuredClone(failedExport) as WireSessionAnalysis;
 afterEach(cleanup);
 
 describe('failed-attempt usage evidence', () => {

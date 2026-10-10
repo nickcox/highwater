@@ -322,6 +322,21 @@ export interface SessionAnalysis {
   lineage: LineageEdge[];
 }
 
+type CallItemIdFields = 'contextItemIds' | 'addedItemIds' | 'droppedItemIds';
+
+/** A model call as sent by the server: item references are positions in
+ * `contextItems`, which keeps the response proportional to the source. */
+export interface WireModelCall extends Omit<ModelCall, CallItemIdFields> {
+  contextItemIndexes: number[];
+  addedItemIndexes: number[];
+  droppedItemIndexes: number[];
+}
+
+/** The analysis response as sent by the server; `indexAnalysis` resolves it. */
+export interface WireSessionAnalysis extends Omit<SessionAnalysis, 'modelCalls'> {
+  modelCalls: WireModelCall[];
+}
+
 export interface IndexedAnalysis {
   analysis: SessionAnalysis;
   itemById: Map<string, ContextItem>;

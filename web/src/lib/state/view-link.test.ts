@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from '../context-river/test-data';
 import {
   parseViewLink,
@@ -80,7 +80,7 @@ describe('bounded unversioned v1 view links', () => {
     }
   });
   it('validates references against real calls/items without moving or clearing an absent selected item', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     expect(validateViewLink(state, indexed).state).toEqual(state); // a is absent at call 3, but remains selected
     const result = validateViewLink({ ...state, pin: 99, item: 'gone', range: [1, 99] }, indexed);
     expect(result.state).toMatchObject({ pin: null, item: null, range: null });

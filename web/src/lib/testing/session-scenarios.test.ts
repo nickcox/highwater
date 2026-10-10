@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from './wire-analysis';
 import {
   liveAppendReplacementScenario,
   sessionScenario,
@@ -20,7 +20,7 @@ const scenarioNames: SessionScenario[] = [
 
 describe('sanitized session scenario fixtures', () => {
   it.each(scenarioNames)('%s is a valid normalized analysis', (name) => {
-    expect(() => indexAnalysis(sessionScenario(name))).not.toThrow();
+    expect(() => indexTestAnalysis(sessionScenario(name))).not.toThrow();
   });
 
   it('provides a deterministic long session and honest empty and single-call cases', () => {
@@ -36,8 +36,8 @@ describe('sanitized session scenario fixtures', () => {
 
   it('keeps stable identities and labels through an append plus same-session replacement', () => {
     const { initial, replacement } = liveAppendReplacementScenario();
-    const before = indexAnalysis(initial);
-    const after = indexAnalysis(replacement);
+    const before = indexTestAnalysis(initial);
+    const after = indexTestAnalysis(replacement);
 
     expect(after.analysis.modelCalls).toHaveLength(before.analysis.modelCalls.length + 1);
     expect(after.analysis.modelCalls[1].model).toBe('replaced-model');

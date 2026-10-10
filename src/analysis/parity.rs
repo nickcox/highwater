@@ -167,6 +167,35 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 session.reported_cost_total = None;
             }
             let mut json = serde_json::to_string(&baseline).expect("JSON");
+            // Schema 12 sends per-call item positions instead of item IDs; restore
+            // the ID lists so the pinned digest still covers the same references.
+            for call in &baseline.model_calls {
+                let ids = |indexes: &[usize]| {
+                    serde_json::to_string(
+                        &indexes
+                            .iter()
+                            .map(|index| baseline.context_items[*index].id.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                    .expect("IDs")
+                };
+                let positions =
+                    |indexes: &[usize]| serde_json::to_string(indexes).expect("indexes");
+                let current = format!(
+                    "\"contextItemIndexes\":{},\"addedItemIndexes\":{},\"droppedItemIndexes\":{}",
+                    positions(&call.context_item_indexes),
+                    positions(&call.added_item_indexes),
+                    positions(&call.dropped_item_indexes),
+                );
+                let previous = format!(
+                    "\"contextItemIds\":{},\"addedItemIds\":{},\"droppedItemIds\":{}",
+                    ids(&call.context_item_indexes),
+                    ids(&call.added_item_indexes),
+                    ids(&call.dropped_item_indexes),
+                );
+                let at = json.find(&current).expect("call item positions serialized");
+                json.replace_range(at..at + current.len(), &previous);
+            }
             for (field, coverage) in [
                 (
                     "reportedCostCoverage",

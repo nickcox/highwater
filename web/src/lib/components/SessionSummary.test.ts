@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
 import SessionSummary from './SessionSummary.svelte';
 
 describe('SessionSummary', () => {
   it('keeps four essential metrics visible and moves diagnostics into Session details', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const { container } = render(SessionSummary, { props: { indexed } });
 
     expect(container.querySelectorAll('.primary-metrics > div')).toHaveLength(4);
@@ -43,7 +43,9 @@ describe('SessionSummary', () => {
       failedAttemptCalls: 1,
       missingCalls: 0,
     };
-    const { container } = render(SessionSummary, { props: { indexed: indexAnalysis(analysis) } });
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
     const cost = container.querySelectorAll('.primary-metrics > div')[3];
     expect(cost).toHaveTextContent(/0\.06/);
     expect(cost).toHaveTextContent('3 of 4 calls · 1 failed attempt not recorded');
@@ -54,7 +56,7 @@ describe('SessionSummary', () => {
     const analysis = testAnalysis();
     analysis.session.source = 'other-source';
     analysis.economics.costBasis = 'providerReported';
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const { container } = render(SessionSummary, { props: { indexed } });
 
     expect(container).toHaveTextContent('Provider-reported cost');

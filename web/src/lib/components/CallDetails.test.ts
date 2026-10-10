@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { indexAnalysis } from '../analysis';
 import { testAnalysis } from '../context-river/test-data';
 import CallDetails from './CallDetails.svelte';
 
 afterEach(cleanup);
 
 function renderCall(addedItemIds: string[], droppedItemIds: string[]) {
-  const indexed = indexAnalysis(testAnalysis());
+  const indexed = indexTestAnalysis(testAnalysis());
   const call = indexed.analysis.modelCalls[0];
   call.addedItemIds = addedItemIds;
   call.droppedItemIds = droppedItemIds;
@@ -18,7 +18,7 @@ function renderCall(addedItemIds: string[], droppedItemIds: string[]) {
 
 describe('CallDetails change lists', () => {
   it('shows recorded output independently of normalized completion totals', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
     call.reportedPromptTokens = 12345;
     call.reportedCompletionTokens = 999;
@@ -42,7 +42,7 @@ describe('CallDetails change lists', () => {
   it.each(['pi', 'opencode', 'future-harness'])(
     'renders the same recorded counters for %s without a harness-specific display',
     (source) => {
-      const indexed = indexAnalysis(testAnalysis());
+      const indexed = indexTestAnalysis(testAnalysis());
       indexed.analysis.session.source = source;
       const call = indexed.analysis.modelCalls[0];
       call.reportedCompletionTokens = null;
@@ -65,7 +65,7 @@ describe('CallDetails change lists', () => {
   );
 
   it('distinguishes unrecorded counters from measured zero without inferring reasoning', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
     call.usage.recordedOutput = null;
     call.usage.reasoning = null;
@@ -82,7 +82,7 @@ describe('CallDetails change lists', () => {
     expect(screen.getByText('Recorded reasoning').nextElementSibling).toHaveTextContent(/^0$/);
   });
   it('shows approximate response timing with an accessible qualification, not wall-clock dates or decode speed', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
     call.timing = {
       startedAtMs: 1700000000000,
@@ -109,7 +109,7 @@ describe('CallDetails change lists', () => {
   });
 
   it('renders tool metadata as noninteractive text with an explicit failure label', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];
     call.toolCallsAfter[0].failed = true;
     const { container } = render(CallDetails, { props: { call, indexed, pinned: true } });
@@ -143,7 +143,7 @@ describe('CallDetails change lists', () => {
   });
 
   it('uses the preceding call profile for dropped groups, including nonconsecutive call indices', () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const previous = indexed.analysis.modelCalls[1];
     previous.index = 17;
     previous.tokenizationProfileId = 'previous-profile';
@@ -219,7 +219,7 @@ describe('CallDetails change lists', () => {
     analysis.economics.cacheReadPromptTokens = 10;
     analysis.economics.cacheReadTokens = 5;
     analysis.economics.cacheReadRatio = 0.5;
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     const { container } = render(CallDetails, {
       props: { call: indexed.analysis.modelCalls[0], indexed, pinned: true },
     });
@@ -231,7 +231,7 @@ describe('CallDetails change lists', () => {
   });
 
   it('explains cache-share changes and links to the prior call', async () => {
-    const indexed = indexAnalysis(testAnalysis());
+    const indexed = indexTestAnalysis(testAnalysis());
     const call = {
       ...indexed.analysis.modelCalls[1],
       economics: {

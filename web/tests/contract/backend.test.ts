@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../../src/lib/analysis';
-import type { SessionAnalysis } from '../../src/lib/types';
+import { ANALYSIS_SCHEMA_VERSION, indexAnalysis } from '../../src/lib/analysis';
+import { indexTestAnalysis, toWireAnalysis } from '../../src/lib/testing/wire-analysis';
+import type { SessionAnalysis, WireSessionAnalysis } from '../../src/lib/types';
 
 const directory = process.env.TOKENPLUME_CONTRACT_DIR;
 if (!directory) throw new Error('Run scripts/check-contract.sh: fresh Rust exports are required.');
@@ -14,14 +15,21 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
 };
 if (manifest.cases.length !== 104) throw new Error('Incomplete live Rust contract export.');
 
-function output(name: string): SessionAnalysis {
+function rawOutput(name: string): WireSessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
   if (!entry || !/^[a-z0-9-]+\.json$/.test(entry.file))
     throw new Error(`Missing contract case: ${name}`);
-  const raw: SessionAnalysis = JSON.parse(readFileSync(join(directory!, entry.file), 'utf8'));
+  return JSON.parse(readFileSync(join(directory!, entry.file), 'utf8'));
+}
+
+/** Index a live export and prove indexing only resolved item positions: converting
+ * the result back to the wire format must reproduce the export exactly. */
+function output(name: string): SessionAnalysis {
+  const raw = rawOutput(name);
   const before = JSON.stringify(raw);
   const analysis = indexAnalysis(raw).analysis;
-  expect(JSON.stringify(analysis)).toBe(before);
+  expect(JSON.stringify(raw)).toBe(before);
+  expect(toWireAnalysis(analysis)).toEqual(raw);
   return analysis;
 }
 
@@ -74,7 +82,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
   });
   it('indexes modern checkpoints without losing usage-only calls or duplicating recent context', () => {
     const analysis = output('opencode-modern-auto');
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     expect(analysis.modelCalls).toHaveLength(3);
     expect(analysis.modelCalls[0].usage.recordedOutput).toBe(20);
     expect(analysis.modelCalls[0].usage.reasoning).toBe(5);
@@ -95,7 +103,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
     expect(aggregate.reconstruction?.explanationCodes).toContain('aggregatedCompactionUsage');
     expect(aggregate.modelCalls[2].stopReason).toBe('compaction-aggregate');
     const terminal = output('opencode-modern-terminal-auto');
-    const terminalIndexed = indexAnalysis(terminal);
+    const terminalIndexed = indexTestAnalysis(terminal);
     const summary = terminalIndexed.itemById.get(terminal.compactions[1].summaryItemId)!;
     expect(summary.presence).toEqual([]);
     expect(summary.ageAtFinalModelCall).toBeNull();
@@ -110,7 +118,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
 
   it('indexes OpenCode compaction lineage and retains summary reasoning', () => {
     const analysis = output('opencode-compaction-auto');
-    const indexed = indexAnalysis(analysis);
+    const indexed = indexTestAnalysis(analysis);
     expect(analysis.compactions).toHaveLength(1);
     const compaction = analysis.compactions[0];
     expect(compaction.sourceItemIds).toHaveLength(2);
@@ -136,8 +144,8 @@ describe('live production Rust -> indexAnalysis contract', () => {
       JSON.parse(
         readFileSync(join(process.cwd(), '../fixtures/analysis/copilot-economics.json'), 'utf8'),
       ),
-    ).toEqual(a);
-    const indexed = indexAnalysis(a);
+    ).toEqual(rawOutput('fixture-copilot-economics-auto'));
+    const indexed = indexTestAnalysis(a);
     expect(indexed.analysis.modelCalls[1].economics).toMatchObject({
       policyId: 'github-copilot-responses-cache-v1',
       cacheWriteStatus: 'reported',
@@ -158,12 +166,12 @@ describe('live production Rust -> indexAnalysis contract', () => {
     const captured = JSON.parse(
       readFileSync(join(process.cwd(), '../fixtures/analysis/system-context.json'), 'utf8'),
     );
-    expect(captured).toEqual(output('fixture-system-context-auto'));
+    expect(captured).toEqual(rawOutput('fixture-system-context-auto'));
   });
   it.each(manifest.cases)('accepts and indexes $name without repairs', ({ name }) => {
     const analysis = output(name);
-    const indexed = indexAnalysis(analysis);
-    expect(analysis.schemaVersion).toBe(11);
+    const indexed = indexTestAnalysis(analysis);
+    expect(analysis.schemaVersion).toBe(ANALYSIS_SCHEMA_VERSION);
     expect(indexed.callByIndex.size).toBe(analysis.modelCalls.length);
     expect(indexed.itemById.size).toBe(analysis.contextItems.length);
     for (const profile of analysis.tokenAnalysis.profiles)
@@ -316,7 +324,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
   });
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
-    expect(manifest.schemaVersion).toBe(11);
+    expect(manifest.schemaVersion).toBe(ANALYSIS_SCHEMA_VERSION);
     expect(manifest.outputVersion).toBe(22);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },

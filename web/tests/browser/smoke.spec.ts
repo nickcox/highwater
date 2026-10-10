@@ -2,7 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { testAnalysis } from '../../src/lib/context-river/test-data';
-import type { SessionAnalysis } from '../../src/lib/types';
+import type { SessionAnalysis, WireSessionAnalysis } from '../../src/lib/types';
+import { toWireAnalysis } from '../../src/lib/testing/wire-analysis';
 import { ITEM_TYPE_PALETTE } from '../../src/lib/context-river/colors';
 import { compositionScenario } from '../../src/lib/testing/composition-scenarios';
 import { sessionScenario } from '../../src/lib/testing/session-scenarios';
@@ -11,7 +12,7 @@ const integrated = process.env.TOKENPLUME_BROWSER_INTEGRATED === '1';
 const generation = '0123456789abcdef0123456789abcdef';
 const failedUsageExport = JSON.parse(
   readFileSync(new URL('../../../fixtures/analysis/failed-usage.json', import.meta.url), 'utf8'),
-) as SessionAnalysis;
+) as WireSessionAnalysis;
 
 function economicsScenario(): ReturnType<typeof testAnalysis> {
   const analysis = testAnalysis();
@@ -309,7 +310,10 @@ function denseEconomicsScenario(): ReturnType<typeof testAnalysis> {
   return analysis;
 }
 
-async function mockApi(page: Page, sourceAnalysis = testAnalysis()): Promise<void> {
+async function mockApi(
+  page: Page,
+  sourceAnalysis: SessionAnalysis | WireSessionAnalysis = testAnalysis(),
+): Promise<void> {
   await page.addInitScript((liveGeneration: string) => {
     class StableEventSource extends EventTarget {
       readonly url: string;
@@ -379,7 +383,7 @@ async function mockApi(page: Page, sourceAnalysis = testAnalysis()): Promise<voi
       status: 200,
       contentType: 'application/json',
       headers: { etag: '"analysis-v0"' },
-      body: JSON.stringify(analysis),
+      body: JSON.stringify(toWireAnalysis(analysis)),
     });
   });
 }
@@ -848,7 +852,7 @@ test('Copilot Responses shows read/write/fresh cache bars and qualified model-ra
   test.skip(integrated, 'Uses a sanitized production Rust export.');
   const analysis = JSON.parse(
     readFileSync(resolve('../fixtures/analysis/copilot-economics.json'), 'utf8'),
-  ) as ReturnType<typeof testAnalysis>;
+  ) as WireSessionAnalysis;
   await mockApi(page, analysis);
   await page.goto('/#session=browser-smoke&pin=2');
   await assertLoaded(page);
@@ -880,7 +884,7 @@ test('recorded Pi system and tools are visible at call 1 and survive revision an
   test.skip(integrated, 'Uses a sanitized production Rust export.');
   const analysis = JSON.parse(
     readFileSync(resolve('../fixtures/analysis/system-context.json'), 'utf8'),
-  ) as ReturnType<typeof testAnalysis>;
+  ) as WireSessionAnalysis;
   const systems = analysis.contextItems.filter((item) => item.kind === 'system');
   const initial = systems.find((item) => item.firstModelCall === 1)!;
   const later = systems.find((item) => item.firstModelCall === 2)!;
@@ -951,7 +955,7 @@ test('failed default-zero usage breaks the input reference and keeps raw zeros i
   page,
 }) => {
   test.skip(integrated, 'Uses live Rust synthetic failed-attempt export.');
-  const analysis = structuredClone(failedUsageExport) as SessionAnalysis;
+  const analysis = structuredClone(failedUsageExport);
   await mockApi(page, analysis);
   await page.goto('/#session=browser-smoke&pin=2');
   await assertLoaded(page);
@@ -3268,7 +3272,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
     readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8'),
   );
   const analysis = await (await analysisResponse).json();
-  expect(analysis.schemaVersion).toBe(11);
+  expect(analysis.schemaVersion).toBe(12);
   expect(analysis.economics.cacheReadEligibleCalls).toBe(8);
   expect(analysis.economics.supportedPolicyIds).toEqual(
     expect.arrayContaining(['openai-responses-cache-read-v1', 'anthropic-messages-cache-v1']),

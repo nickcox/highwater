@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { indexAnalysis } from '../analysis';
+import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from '../context-river/test-data';
 import { itemContributions } from './item-contribution';
 
 function fixture() {
-  const indexed = indexAnalysis(testAnalysis());
+  const indexed = indexTestAnalysis(testAnalysis());
   const call = indexed.analysis.modelCalls[0];
   indexed.itemById.get('a')!.tokenEstimates[0].tokens = 25;
   indexed.itemById.get('retained')!.tokenEstimates[0].tokens = 75;
