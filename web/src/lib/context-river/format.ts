@@ -21,6 +21,18 @@ export function formatInteger(value: number): string {
   return integer.format(value);
 }
 
+const costTick = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  currencyDisplay: 'narrowSymbol',
+  maximumSignificantDigits: 2,
+});
+
+/** Short axis labels; exact values stay in readouts and inspectors. */
+export function formatCostTick(value: number): string {
+  return costTick.format(value);
+}
+
 export function formatCost(value: number | null | undefined): string {
   return value === null || value === undefined ? 'Unknown' : currency.format(value);
 }

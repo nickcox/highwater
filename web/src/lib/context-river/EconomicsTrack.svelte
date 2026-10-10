@@ -2,9 +2,9 @@
   import { afterUpdate, onDestroy } from 'svelte';
   import { createOverlayFocus } from './overlay-focus';
   import type { IndexedAnalysis } from '../types';
-  import { formatCost, formatInteger, formatPercent } from './format';
+  import { formatCost, formatCostTick, formatInteger, formatPercent } from './format';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
-  import { formatVerticalTick } from './vertical-scale';
+  import { formatVerticalTick, verticalScaleTicks } from './vertical-scale';
   import type { CallColumn } from './types';
   import EventGlyph from './EventGlyph.svelte';
   import { clusterEconomicsEvents, type EconomicsEventCluster } from './event-clustering';
@@ -125,7 +125,8 @@
           Number.POSITIVE_INFINITY,
         );
   $: barWidth = Math.max(1.5, Math.min(12, minimumSpacing * 0.68));
-  $: ticks = verticalTicks(mode === 'cache' && cacheView === 'share' ? 100 : maximum);
+  // The track is short, so round ticks need a larger gap from the maximum.
+  $: ticks = verticalScaleTicks(mode === 'cache' && cacheView === 'share' ? 100 : maximum, 3, 0.25);
   $: tickData = ticks.map((value) => ({
     value,
     y: margin.top + innerHeight * (1 - value / domainMaximum),
@@ -197,12 +198,6 @@
   $: if (readout !== lastPublishedReadout) {
     lastPublishedReadout = readout;
     onReadoutChange(readout);
-  }
-
-  function verticalTicks(max: number): number[] {
-    if (!Number.isFinite(max) || max <= 0) return [0];
-    const count = 3;
-    return [0, max / count, (2 * max) / count, max];
   }
 
   function layoutCompactionMarkers(
@@ -489,7 +484,7 @@
   }
 
   function costTick(value: number): string {
-    return formatCost(value);
+    return formatCostTick(value);
   }
 
   function ratioPercent(value: number): string {

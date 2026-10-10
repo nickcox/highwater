@@ -37,10 +37,17 @@ export function visibleStackSample(
   };
 }
 
-export function verticalScaleTicks(maxWeight: number, targetCount = 4): number[] {
+/** Round ticks plus the exact maximum. Round ticks closer to the maximum than
+ * `minimumGapFraction` of the axis are dropped so their labels cannot overlap. */
+export function verticalScaleTicks(
+  maxWeight: number,
+  targetCount = 4,
+  minimumGapFraction = 0.06,
+): number[] {
   if (!Number.isFinite(maxWeight) || maxWeight <= 0) return [0];
+  const ceiling = maxWeight * (1 - minimumGapFraction);
   const intermediate = ticks(0, maxWeight, Math.max(1, Math.floor(targetCount))).filter(
-    (value) => value > 0 && value < maxWeight,
+    (value) => value > 0 && value < ceiling,
   );
   return [0, ...intermediate, maxWeight];
 }

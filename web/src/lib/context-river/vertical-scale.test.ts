@@ -53,6 +53,11 @@ describe('visible vertical scale sampling', () => {
     expect(verticalScaleTicks(0)).toEqual([0]);
     expect(verticalScaleTicks(100)).toEqual([0, 20, 40, 60, 80, 100]);
     expect(verticalScaleTicks(95).slice(-1)[0]).toBe(95);
+    // A round tick just below the maximum would overlap its label.
+    expect(verticalScaleTicks(100_800)).toEqual([0, 20_000, 40_000, 60_000, 80_000, 100_800]);
+    expect(verticalScaleTicks(255_300)).toEqual([0, 50_000, 100_000, 150_000, 200_000, 255_300]);
+    // Short tracks use a larger gap.
+    expect(verticalScaleTicks(0.354952, 3, 0.25)).toEqual([0, 0.1, 0.2, 0.354952]);
     expect(formatVerticalTick(0)).toBe('0');
     expect(formatVerticalTick(0.25)).toBe('0.3');
     expect(formatVerticalTick(12_000)).toMatch(/12/);
