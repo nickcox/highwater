@@ -22,7 +22,8 @@ describe('SessionSummary', () => {
     expect(details).toHaveTextContent('Provider prompt');
     expect(details).toHaveTextContent('Compactions');
     expect(details).toHaveTextContent('Working directory');
-    expect(details).toHaveTextContent('Residual median / maximum');
+    expect(details).toHaveTextContent('Reported input not reconstructed (approximate)');
+    expect(details).not.toHaveTextContent('Residual median / maximum');
     expect(details).toHaveTextContent('Some item weights use best-effort local token estimates.');
     expect(details).toHaveTextContent('best-effort-tokenization');
 
@@ -50,6 +51,20 @@ describe('SessionSummary', () => {
     expect(cost).toHaveTextContent(/0\.06/);
     expect(cost).toHaveTextContent('3 of 4 calls · 1 failed attempt not recorded');
     expect(cost).not.toHaveTextContent('Unknown');
+  });
+
+  it('shows framing-based reconciliation only when some call supports it', () => {
+    const analysis = testAnalysis();
+    analysis.session.reconciliationComparableCalls = 2;
+    analysis.session.reconciliationCompleteCalls = 1;
+    analysis.session.medianAbsoluteResidualPercent = 0.02;
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    const details = container.querySelector('details.session-details')!;
+    expect(details).toHaveTextContent('Residual median / maximum');
+    expect(details).toHaveTextContent('1 / 2');
+    expect(details).not.toHaveTextContent('Reported input not reconstructed');
   });
 
   it('uses the declared cost basis for non-Pi session copy', () => {

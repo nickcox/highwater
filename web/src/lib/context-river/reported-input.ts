@@ -1,5 +1,5 @@
 import { area, line, curveLinear } from 'd3-shape';
-import type { IndexedAnalysis } from '../types';
+import type { IndexedAnalysis, ModelCall } from '../types';
 import type { CallColumn, RiverLayoutOptions } from './types';
 
 export interface InputComparison {
@@ -7,6 +7,40 @@ export interface InputComparison {
   reconstructed: number;
   reported: number;
   gap: number;
+}
+
+/** Reported prompt tokens and reconstructed visible tokens for one call, when
+ * both are complete numbers. Approximate: the reported value also includes
+ * request framing, so this is not a reconciliation residual.
+ */
+export function callInputComparison(
+  indexed: IndexedAnalysis,
+  call: ModelCall,
+): InputComparison | null {
+  if (
+    indexed.analysis.displayWeightUnit === 'unavailable' ||
+    call.stopReason === 'compaction-aggregate' ||
+    call.reportedUsageCompleteness !== 'complete'
+  )
+    return null;
+  const reported = call.reportedPromptTokens;
+  const visible = call.tokenAnalysis.calculatedVisibleTokens;
+  if (
+    reported === null ||
+    visible === null ||
+    !call.tokenizationProfileId ||
+    !Number.isSafeInteger(reported) ||
+    reported < 0 ||
+    !Number.isSafeInteger(visible) ||
+    visible < 0
+  )
+    return null;
+  return {
+    callIndex: call.index,
+    reconstructed: visible,
+    reported,
+    gap: Math.max(0, reported - visible),
+  };
 }
 
 /** Compare only numeric token geometry with a complete recorded prompt bucket sum.
@@ -17,38 +51,54 @@ export function inputComparisons(
   columns: readonly CallColumn[],
 ): Map<number, InputComparison> {
   const result = new Map<number, InputComparison>();
-  if (indexed.analysis.displayWeightUnit === 'unavailable') return result;
   for (const column of columns) {
     const call = indexed.callByIndex.get(column.callIndex);
+    const comparison = call ? callInputComparison(indexed, call) : null;
     if (
-      !call ||
-      call.stopReason === 'compaction-aggregate' ||
-      call.reportedUsageCompleteness !== 'complete'
-    )
-      continue;
-    const reported = call.reportedPromptTokens;
-    const visible = call.tokenAnalysis.calculatedVisibleTokens;
-    if (
-      reported === null ||
-      visible === null ||
-      !call.tokenizationProfileId ||
-      !Number.isSafeInteger(reported) ||
-      reported < 0 ||
-      !Number.isSafeInteger(visible) ||
-      visible < 0 ||
+      !comparison ||
       !Number.isSafeInteger(column.totalDisplayWeight) ||
       column.totalDisplayWeight < 0 ||
-      column.totalDisplayWeight !== visible
+      column.totalDisplayWeight !== comparison.reconstructed
     )
       continue;
-    result.set(call.index, {
-      callIndex: call.index,
-      reconstructed: visible,
-      reported,
-      gap: Math.max(0, reported - visible),
-    });
+    result.set(comparison.callIndex, comparison);
   }
   return result;
+}
+
+export interface InputComparisonSummary {
+  comparedCalls: number;
+  /** Median of (reported − reconstructed) / reported, counting excess estimates as 0. */
+  medianGapShare: number | null;
+  maximumGap: number | null;
+  estimateAboveReportedCalls: number;
+}
+
+/** Session-level summary of the same comparison the River draws as Unreconciled input. */
+export function summarizeInputComparisons(indexed: IndexedAnalysis): InputComparisonSummary {
+  const shares: number[] = [];
+  let maximumGap: number | null = null;
+  let estimateAboveReportedCalls = 0;
+  for (const call of indexed.analysis.modelCalls) {
+    const comparison = callInputComparison(indexed, call);
+    if (!comparison) continue;
+    if (comparison.reconstructed > comparison.reported) estimateAboveReportedCalls += 1;
+    maximumGap = Math.max(maximumGap ?? 0, comparison.gap);
+    if (comparison.reported > 0) shares.push(comparison.gap / comparison.reported);
+  }
+  shares.sort((a, b) => a - b);
+  const middle = Math.floor(shares.length / 2);
+  return {
+    comparedCalls: shares.length,
+    medianGapShare:
+      shares.length === 0
+        ? null
+        : shares.length % 2 === 1
+          ? shares[middle]
+          : (shares[middle - 1] + shares[middle]) / 2,
+    maximumGap,
+    estimateAboveReportedCalls,
+  };
 }
 
 /** Separate scale samples: never replace the item stack's recorded weights. */

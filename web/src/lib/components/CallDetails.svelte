@@ -21,6 +21,7 @@
   import { recordedResponseMetrics, outputAccountingLabel } from '../recorded-usage';
   import CopyButton from './CopyButton.svelte';
   import ItemContribution from './ItemContribution.svelte';
+  import { callInputComparison } from '../context-river/reported-input';
   import { itemContributions } from './item-contribution';
   import { responseDuration, effectiveOutputRate, TIMING_EXPLANATION } from './call-timing';
   import {
@@ -40,6 +41,7 @@
 
   export let call: ModelCall | null;
   $: partialMetrics = call?.tokenAnalysis.metricsIncludePartialEstimates ?? false;
+  $: inputComparison = call ? callInputComparison(indexed, call) : null;
   export let indexed: IndexedAnalysis;
   export let pinned = false;
   export let onSelectItem: (id: string) => void = () => {};
@@ -511,22 +513,35 @@
           <dt>Visible context</dt>
           <dd>{formatMetric(call.tokenAnalysis.calculatedVisibleTokens)}</dd>
         </div>
-        <div>
-          <dt>Known framing</dt>
-          <dd>{formatMetric(call.tokenAnalysis.knownFramingOverheadTokens)}</dd>
-        </div>
-        <div>
-          <dt>Calculated request</dt>
-          <dd>{formatMetric(call.tokenAnalysis.calculatedRequestTokens)}</dd>
-        </div>
-        <div>
-          <dt>Residual</dt>
-          <dd>
-            {formatMetric(call.tokenAnalysis.residualTokens)} ({formatPercent(
-              call.tokenAnalysis.residualPercent,
-            )})
-          </dd>
-        </div>
+        {#if call.tokenAnalysis.calculatedRequestTokens !== null}
+          <div>
+            <dt>Known framing</dt>
+            <dd>{formatMetric(call.tokenAnalysis.knownFramingOverheadTokens)}</dd>
+          </div>
+          <div>
+            <dt>Calculated request</dt>
+            <dd>{formatMetric(call.tokenAnalysis.calculatedRequestTokens)}</dd>
+          </div>
+          <div>
+            <dt>Residual</dt>
+            <dd>
+              {formatMetric(call.tokenAnalysis.residualTokens)} ({formatPercent(
+                call.tokenAnalysis.residualPercent,
+              )})
+            </dd>
+          </div>
+        {:else if inputComparison}
+          <div>
+            <dt>Reported − reconstructed (approximate)</dt>
+            <dd>
+              {formatMetric(inputComparison.reported - inputComparison.reconstructed)} tokens
+              {#if inputComparison.reported > 0}({formatPercent(
+                  (inputComparison.reported - inputComparison.reconstructed) /
+                    inputComparison.reported,
+                )} of reported input){/if}
+            </dd>
+          </div>
+        {/if}
         <div>
           <dt>Estimate coverage</dt>
           <dd>
@@ -538,10 +553,12 @@
             · {formatInteger(call.tokenAnalysis.estimateCoverage.unavailableItems)} unavailable
           </dd>
         </div>
-        <div>
-          <dt>Reconciliation status</dt>
-          <dd>{call.tokenAnalysis.status}</dd>
-        </div>
+        {#if call.tokenAnalysis.status !== 'unavailable'}
+          <div>
+            <dt>Reconciliation status</dt>
+            <dd>{call.tokenAnalysis.status}</dd>
+          </div>
+        {/if}
         <div>
           <dt>Model / tokenizer</dt>
           <dd>

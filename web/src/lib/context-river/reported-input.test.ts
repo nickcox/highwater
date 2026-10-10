@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from './test-data';
 import { layoutCallColumns, layoutContextRiver } from './layout';
-import { inputComparisons, inputScaleColumns, layoutInputReferences } from './reported-input';
+import {
+  inputComparisons,
+  inputScaleColumns,
+  layoutInputReferences,
+  summarizeInputComparisons,
+} from './reported-input';
 import { visibleStackSample } from './vertical-scale';
 
 const options = {
@@ -145,5 +150,33 @@ describe('reported input comparison', () => {
       );
     }
     expect(JSON.stringify(indexed.analysis)).toBe(before);
+  });
+});
+
+describe('session input comparison summary', () => {
+  it('summarises the same per-call comparison the River draws', () => {
+    const { indexed } = fixture();
+    const [first, second, third, fourth] = indexed.analysis.modelCalls;
+    // Gaps of 100 tokens on each call, except one estimate above reported input.
+    fourth.reportedPromptTokens = fourth.tokenAnalysis.calculatedVisibleTokens! - 5;
+    const shares = [first, second, third].map((call) => 100 / call.reportedPromptTokens!);
+    shares.push(0);
+    shares.sort((a, b) => a - b);
+    const summary = summarizeInputComparisons(indexed);
+    expect(summary.comparedCalls).toBe(4);
+    expect(summary.maximumGap).toBe(100);
+    expect(summary.estimateAboveReportedCalls).toBe(1);
+    expect(summary.medianGapShare).toBeCloseTo((shares[1] + shares[2]) / 2, 10);
+  });
+
+  it('reports nothing when no call has complete reported input', () => {
+    const { indexed } = fixture();
+    for (const call of indexed.analysis.modelCalls) call.reportedUsageCompleteness = 'partial';
+    expect(summarizeInputComparisons(indexed)).toEqual({
+      comparedCalls: 0,
+      medianGapShare: null,
+      maximumGap: null,
+      estimateAboveReportedCalls: 0,
+    });
   });
 });

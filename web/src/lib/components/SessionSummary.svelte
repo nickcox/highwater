@@ -4,6 +4,7 @@
   import { describeCostBasis, isPiSource } from '../cost-basis';
   import { reconstructionLimitLabels } from '../reconstruction';
   import { recordedCoverageNote } from '../recorded-usage';
+  import { summarizeInputComparisons } from '../context-river/reported-input';
   import {
     chartUnitLabel,
     coverageLabel,
@@ -29,6 +30,10 @@
   $: coverage = tokenAnalysis.itemEstimateCoverage;
   $: quality = estimateQuality(analysis);
   $: costCopy = describeCostBasis(economics.costBasis);
+  // Framing-based reconciliation only applies to text-only routes; otherwise
+  // summarise the approximate comparison the River draws instead.
+  $: hasReconciliation = session.reconciliationComparableCalls > 0;
+  $: inputSummary = hasReconciliation ? null : summarizeInputComparisons(indexed);
   $: costCoverageNote =
     session.reportedCostTotal === null ? null : recordedCoverageNote(session.reportedCostCoverage);
   $: usageCoverageNote =
@@ -242,24 +247,43 @@
                   )}
                 </dd>
               </div>
-              <div>
-                <dt>Reconciliation (complete / comparable calls)</dt>
-                <dd>
-                  {formatInteger(session.reconciliationCompleteCalls)} /
-                  {formatInteger(session.reconciliationComparableCalls)}
-                </dd>
-              </div>
-              <div>
-                <dt>Residual median / maximum</dt>
-                <dd>
-                  {formatPercent(session.medianAbsoluteResidualPercent)} /
-                  {formatPercent(session.maximumAbsoluteResidualPercent)}
-                </dd>
-              </div>
-              <div>
-                <dt>Negative residual calls</dt>
-                <dd>{formatInteger(session.negativeResidualCalls)}</dd>
-              </div>
+              {#if hasReconciliation}
+                <div>
+                  <dt>Reconciliation (complete / comparable calls)</dt>
+                  <dd>
+                    {formatInteger(session.reconciliationCompleteCalls)} /
+                    {formatInteger(session.reconciliationComparableCalls)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Residual median / maximum</dt>
+                  <dd>
+                    {formatPercent(session.medianAbsoluteResidualPercent)} /
+                    {formatPercent(session.maximumAbsoluteResidualPercent)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Negative residual calls</dt>
+                  <dd>{formatInteger(session.negativeResidualCalls)}</dd>
+                </div>
+              {:else if inputSummary}
+                <div>
+                  <dt>Reported input not reconstructed (approximate)</dt>
+                  <dd>
+                    {#if inputSummary.comparedCalls === 0}
+                      Unavailable: no call has both complete reported input and numeric estimates
+                    {:else}
+                      Median {formatPercent(inputSummary.medianGapShare)} of reported input · up to
+                      {formatMetric(inputSummary.maximumGap)} tokens ·
+                      {formatInteger(inputSummary.comparedCalls)} calls compared
+                    {/if}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Calls where the estimate exceeds reported input</dt>
+                  <dd>{formatInteger(inputSummary.estimateAboveReportedCalls)}</dd>
+                </div>
+              {/if}
               <div>
                 <dt>Calls missing provider usage</dt>
                 <dd>{formatInteger(session.missingProviderUsageCalls)}</dd>

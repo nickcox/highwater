@@ -43,6 +43,22 @@ describe('CallDetails transition metrics', () => {
   });
 });
 
+describe('CallDetails input comparison', () => {
+  it('shows an approximate comparison instead of empty reconciliation rows', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[1];
+    call.reportedUsageCompleteness = 'complete';
+    call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 50;
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(
+      screen.getByText('Reported − reconstructed (approximate)').nextElementSibling,
+    ).toHaveTextContent('50 tokens');
+    expect(screen.queryByText('Residual')).toBeNull();
+    expect(screen.queryByText('Calculated request')).toBeNull();
+    expect(screen.queryByText('Reconciliation status')).toBeNull();
+  });
+});
+
 describe('CallDetails change lists', () => {
   it('shows recorded output independently of normalized completion totals', () => {
     const indexed = indexTestAnalysis(testAnalysis());
