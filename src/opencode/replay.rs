@@ -11,7 +11,6 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use thiserror::Error;
 
-#[path = "modern_replay.rs"]
 mod modern;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

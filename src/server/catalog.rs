@@ -14,7 +14,6 @@ use std::{
 };
 
 #[cfg(test)]
-#[path = "catalog_tests.rs"]
 mod tests;
 
 #[derive(Debug, Clone)]

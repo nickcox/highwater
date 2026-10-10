@@ -18,7 +18,6 @@ use std::{
 };
 use thiserror::Error;
 
-#[path = "modern_storage.rs"]
 mod modern;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

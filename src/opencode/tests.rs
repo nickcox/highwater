@@ -9,9 +9,7 @@ use std::{
     },
 };
 
-#[path = "modern_tests.rs"]
 mod modern;
-#[path = "replay_tests.rs"]
 mod replay;
 
 const SCHEMA: &str = include_str!("../../fixtures/opencode/legacy-schema.sql");

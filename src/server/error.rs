@@ -40,7 +40,6 @@ impl From<crate::source::LoadError> for FlightError {
 }
 
 #[cfg(test)]
-#[path = "error_tests.rs"]
 mod tests;
 
 type Details = (StatusCode, &'static str, &'static str);

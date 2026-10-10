@@ -1,7 +1,6 @@
 //! Source-neutral records. Presence is authoritative; lifetime zeros are legacy boundary fields.
 
 #[cfg(test)]
-#[path = "session_tests.rs"]
 mod tests;
 
 use super::source::CostBasis;

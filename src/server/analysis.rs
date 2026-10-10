@@ -15,7 +15,6 @@ use std::{
 use tokio::sync::{watch, Semaphore};
 
 #[cfg(test)]
-#[path = "analysis_tests.rs"]
 mod tests;
 
 pub(super) type AnalysisExecutor = dyn Fn(PathBuf, AnalysisConfig, AnalysisCacheKey) -> Result<Arc<CachedResponse>, FlightError>

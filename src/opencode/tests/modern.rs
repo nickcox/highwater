@@ -20,10 +20,10 @@ impl ModernFixture {
         let path = directory.path().join("modern.db");
         let writer = Connection::open(&path).expect("fixture database");
         writer
-            .execute_batch(include_str!("../../fixtures/opencode/modern-schema.sql"))
+            .execute_batch(include_str!("../../../fixtures/opencode/modern-schema.sql"))
             .expect("modern schema");
         writer
-            .execute_batch(include_str!("../../fixtures/opencode/modern.sql"))
+            .execute_batch(include_str!("../../../fixtures/opencode/modern.sql"))
             .expect("modern records");
         Self {
             _directory: directory,

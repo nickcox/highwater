@@ -35,7 +35,6 @@ async fn sessions(State(state): State<AppState>, headers: HeaderMap) -> Result<R
     list_response(&snapshot, availability, &headers)
 }
 #[cfg(test)]
-#[path = "routes_tests.rs"]
 mod tests;
 
 #[derive(Serialize)]
