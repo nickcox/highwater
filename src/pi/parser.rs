@@ -26,21 +26,38 @@ pub(crate) enum PiParseError {
     },
 }
 
+/// Parse JSONL records. Pi appends one record per line while a session is live,
+/// so an unterminated final line that is not yet valid UTF-8 JSON is a record
+/// still being written: it is skipped, and the next change notification
+/// re-reads the completed file. Every newline-terminated line must be valid.
 pub(crate) fn parse_reader<R: BufRead>(mut reader: R) -> Result<Vec<PiEntry>, PiParseError> {
     let mut entries = Vec::new();
-    let mut raw = String::new();
+    let mut raw = Vec::new();
     let mut line = 0_usize;
     loop {
         raw.clear();
-        let bytes_read = reader.read_line(&mut raw)?;
+        let bytes_read = reader.read_until(b'\n', &mut raw)?;
         if bytes_read == 0 {
             break;
         }
         line += 1;
-        let record = raw.trim_end_matches(['\n', '\r']);
+        let terminated = raw.last() == Some(&b'\n');
+        let parsed = std::str::from_utf8(&raw)
+            .map_err(|error| {
+                PiParseError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+            })
+            .and_then(|text| {
+                let record = text.trim_end_matches(['\n', '\r']);
+                serde_json::from_str::<Value>(record)
+                    .map(|value| (record, value))
+                    .map_err(|source| PiParseError::Json { line, source })
+            });
+        let (record, value) = match parsed {
+            Ok(parsed) => parsed,
+            Err(_) if !terminated => break,
+            Err(error) => return Err(error),
+        };
         let source_bytes = u64::try_from(record.len()).unwrap_or(u64::MAX);
-        let value: Value =
-            serde_json::from_str(record).map_err(|source| PiParseError::Json { line, source })?;
         let fallback_id = format!("line-{line}");
         let id = value
             .get("id")
@@ -158,7 +175,30 @@ mod tests {
 
     #[test]
     fn malformed_reusable_line_reports_one_based_line() {
-        let error = parse_reader(Cursor::new(b"{}\nnot-json")).expect_err("invalid JSON");
+        let error = parse_reader(Cursor::new(b"{}\nnot-json\n{}")).expect_err("invalid JSON");
         assert!(error.to_string().contains("line 2"));
+        let error = parse_reader(Cursor::new(b"{}\n\xff\n")).expect_err("invalid UTF-8");
+        assert!(matches!(error, PiParseError::Io(_)));
+    }
+
+    #[test]
+    fn unterminated_final_record_still_being_written_is_skipped() {
+        let complete =
+            b"{\"type\":\"session\",\"id\":\"s\"}\n{\"type\":\"message\",\"id\":\"m\"}\n";
+        for partial in [
+            &b"{\"type\":\"message\",\"id\":\"n\",\"message\":{\"role\":\"us"[..],
+            // A multi-byte character cut part-way through.
+            &b"{\"type\":\"message\",\"text\":\"caf\xc3"[..],
+        ] {
+            let input = [complete.as_slice(), partial].concat();
+            let entries = parse_reader(Cursor::new(input)).expect("completed records");
+            assert_eq!(
+                entries
+                    .iter()
+                    .map(|entry| entry.id.as_str())
+                    .collect::<Vec<_>>(),
+                ["s", "m"]
+            );
+        }
     }
 }
