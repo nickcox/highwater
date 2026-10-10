@@ -52,9 +52,19 @@ const fixtures = [
 // Capture values and iteration order of every consumer-facing index, not just the envelope.
 function serialize(value: unknown): string {
   return JSON.stringify(value, (key, entry) => {
-    // Keep the original analytical/index/projection goldens: timing and the
-    // schema-10 recorded-counter additions have their own live contract tests.
-    if (['timing', 'recordedOutput', 'outputReasoningRelationship', 'placeholder'].includes(key))
+    // Keep the original analytical/index/projection goldens: timing, the
+    // schema-10 recorded-counter additions and the session subtotal coverage
+    // have their own live contract tests.
+    if (
+      [
+        'timing',
+        'recordedOutput',
+        'outputReasoningRelationship',
+        'placeholder',
+        'reportedCostCoverage',
+        'reportedUsageCoverage',
+      ].includes(key)
+    )
       return undefined;
     if (key === 'schemaVersion') return 7;
     if (entry instanceof Map) return { map: [...entry] };

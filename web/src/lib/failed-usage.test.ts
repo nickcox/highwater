@@ -36,7 +36,19 @@ describe('failed-attempt usage evidence', () => {
     expect(indexed.analysis.modelCalls[4].reportedPromptTokens).toBe(0);
     expect(indexed.analysis.modelCalls[4].usage.recordedOutput).toBe(0);
     expect(indexed.analysis.modelCalls[5].reportedPromptTokens).toBe(200);
-    expect(indexed.analysis.session.reportedCostTotal).toBeNull();
+    // Session subtotals keep recorded calls and count failed attempts separately.
+    expect(indexed.analysis.session.reportedCostTotal).toBeCloseTo(0.0471, 10);
+    expect(indexed.analysis.session.reportedCostCoverage).toEqual({
+      recordedCalls: 4,
+      failedAttemptCalls: 2,
+      missingCalls: 0,
+    });
+    expect(indexed.analysis.session.reportedPromptTokens).toBe(450);
+    expect(indexed.analysis.session.reportedUsageCoverage).toEqual({
+      recordedCalls: 4,
+      failedAttemptCalls: 2,
+      missingCalls: 0,
+    });
     expect(JSON.stringify(input)).toBe(before);
   });
 

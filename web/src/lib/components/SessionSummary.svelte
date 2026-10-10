@@ -3,6 +3,7 @@
   import { estimateQuality } from '../estimate-quality';
   import { describeCostBasis, isPiSource } from '../cost-basis';
   import { reconstructionLimitLabels } from '../reconstruction';
+  import { recordedCoverageNote } from '../recorded-usage';
   import {
     chartUnitLabel,
     coverageLabel,
@@ -28,6 +29,12 @@
   $: coverage = tokenAnalysis.itemEstimateCoverage;
   $: quality = estimateQuality(analysis);
   $: costCopy = describeCostBasis(economics.costBasis);
+  $: costCoverageNote =
+    session.reportedCostTotal === null ? null : recordedCoverageNote(session.reportedCostCoverage);
+  $: usageCoverageNote =
+    session.reportedPromptTokens === null
+      ? null
+      : recordedCoverageNote(session.reportedUsageCoverage);
   $: usageMappingLabel = isPiSource(session.source)
     ? 'audited Pi provider/API mappings'
     : 'audited provider/API mappings';
@@ -61,11 +68,13 @@
     </div>
     <div>
       <span>{costCopy.label}</span>
-      <b title={`${costCopy.note} Full precision is in Session details.`}
+      <b
+        title={`${costCopy.note}${costCoverageNote ? ' Calls without a recorded cost are not included.' : ''} Full precision is in Session details.`}
         >{session.reportedCostTotal !== null && session.reportedCostTotal >= 0.01
           ? '≈ '
           : ''}{formatSessionCost(session.reportedCostTotal)}</b
       >
+      {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
     </div>
   </div>
 
@@ -80,7 +89,10 @@
             <dl>
               <div>
                 <dt>Provider prompt</dt>
-                <dd>{formatMetric(session.reportedPromptTokens)}</dd>
+                <dd>
+                  {formatMetric(session.reportedPromptTokens)}
+                  {#if usageCoverageNote}<small class="metric-note">{usageCoverageNote}</small>{/if}
+                </dd>
               </div>
               <div>
                 <dt>Provider output</dt>
@@ -100,7 +112,10 @@
               </div>
               <div>
                 <dt>{costCopy.totalLabel} (USD)</dt>
-                <dd>{formatCost(session.reportedCostTotal)}</dd>
+                <dd>
+                  {formatCost(session.reportedCostTotal)}
+                  {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
+                </dd>
               </div>
               <div>
                 <dt>Cost basis</dt>
@@ -308,6 +323,12 @@
     margin-top: 2px;
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
+  }
+  .metric-note {
+    display: block;
+    color: var(--secondary);
+    font-size: 12px;
+    font-weight: normal;
   }
   /* Keep status and trigger inline; the full-width body clears both in either state. */
   .session-status {

@@ -271,6 +271,14 @@ export interface LineageEdge {
   kind: 'frameworkCompaction';
 }
 
+/** Calls included in a session subtotal. Failed attempts are counted
+ * separately because their default-zero counters are not measurements. */
+export interface RecordedCallCoverage {
+  recordedCalls: number;
+  failedAttemptCalls: number;
+  missingCalls: number;
+}
+
 export interface SessionSummary {
   id: string;
   source: string;
@@ -279,8 +287,12 @@ export interface SessionSummary {
   reportedPromptTokens: number | null;
   reportedCompletionTokens: number | null;
   reportedReasoningTokens: number | null;
+  /** Subtotal over calls with a recorded cost; see `reportedCostCoverage`. */
   reportedCostTotal: number | null;
+  reportedCostCoverage: RecordedCallCoverage;
   reportedUsageCompleteness: UsageCompleteness;
+  /** Prompt-token coverage of the session usage subtotals. */
+  reportedUsageCoverage: RecordedCallCoverage;
   calculatedTokenTurns: number | null;
   calculatedTokenTurnsCoverage: CoverageSummary;
   peakCalculatedVisibleTokens: number | null;

@@ -34,8 +34,12 @@ pub(crate) struct SessionSummary {
     pub reported_prompt_tokens: Option<u64>,
     pub reported_completion_tokens: Option<u64>,
     pub reported_reasoning_tokens: Option<u64>,
+    /// Subtotal over calls with a recorded cost; `reported_cost_coverage` says how many.
     pub reported_cost_total: Option<f64>,
+    pub reported_cost_coverage: RecordedCallCoverage,
     pub reported_usage_completeness: String,
+    /// Prompt-token coverage of the session usage subtotals.
+    pub reported_usage_coverage: RecordedCallCoverage,
     pub calculated_token_turns: Option<u64>,
     pub calculated_token_turns_coverage: CoverageSummary,
     pub peak_calculated_visible_tokens: Option<u64>,
@@ -45,6 +49,16 @@ pub(crate) struct SessionSummary {
     pub maximum_absolute_residual_percent: Option<f64>,
     pub negative_residual_calls: usize,
     pub missing_provider_usage_calls: usize,
+}
+
+/// How many calls contributed to a session subtotal. Failed attempts are
+/// counted separately: their default-zero counters are not measurements.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecordedCallCoverage {
+    pub recorded_calls: usize,
+    pub failed_attempt_calls: usize,
+    pub missing_calls: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]

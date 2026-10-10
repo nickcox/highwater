@@ -36,6 +36,20 @@ describe('SessionSummary', () => {
     expect(groups[1]).toHaveTextContent('Token estimates and diagnostics');
   });
 
+  it('shows recorded cost as a subtotal with its call coverage', () => {
+    const analysis = testAnalysis();
+    analysis.session.reportedCostCoverage = {
+      recordedCalls: 3,
+      failedAttemptCalls: 1,
+      missingCalls: 0,
+    };
+    const { container } = render(SessionSummary, { props: { indexed: indexAnalysis(analysis) } });
+    const cost = container.querySelectorAll('.primary-metrics > div')[3];
+    expect(cost).toHaveTextContent(/0\.06/);
+    expect(cost).toHaveTextContent('3 of 4 calls · 1 failed attempt not recorded');
+    expect(cost).not.toHaveTextContent('Unknown');
+  });
+
   it('uses the declared cost basis for non-Pi session copy', () => {
     const analysis = testAnalysis();
     analysis.session.source = 'other-source';

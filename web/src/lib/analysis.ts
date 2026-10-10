@@ -1,4 +1,9 @@
-import type { ContextItemKind, IndexedAnalysis, SessionAnalysis } from './types';
+import type {
+  ContextItemKind,
+  IndexedAnalysis,
+  RecordedCallCoverage,
+  SessionAnalysis,
+} from './types';
 import { AnalysisValidationError } from './analysis-validation';
 import { assertEconomicsSummary } from './economics-validation';
 import { assertCallTiming } from './timing-validation';
@@ -40,6 +45,32 @@ function validateEnvelope(input: SessionAnalysis): void {
     (!Number.isFinite(input.session.reportedCostTotal) || input.session.reportedCostTotal < 0)
   ) {
     throw new AnalysisValidationError('Analysis has an invalid calculated session cost total');
+  }
+  assertRecordedCallCoverage(input.session.reportedCostCoverage, 'Session cost');
+  assertRecordedCallCoverage(input.session.reportedUsageCoverage, 'Session usage');
+  if (
+    input.session.reportedCostCoverage.recordedCalls === 0 &&
+    input.session.reportedCostTotal !== null
+  ) {
+    throw new AnalysisValidationError('Session cost subtotal has no recorded calls');
+  }
+  if (
+    input.session.reportedUsageCoverage.recordedCalls === 0 &&
+    input.session.reportedPromptTokens !== null
+  ) {
+    throw new AnalysisValidationError('Session prompt subtotal has no recorded calls');
+  }
+}
+
+function assertRecordedCallCoverage(
+  coverage: RecordedCallCoverage | undefined,
+  description: string,
+): void {
+  const counts = coverage
+    ? [coverage.recordedCalls, coverage.failedAttemptCalls, coverage.missingCalls]
+    : [];
+  if (counts.length !== 3 || !counts.every((count) => Number.isSafeInteger(count) && count >= 0)) {
+    throw new AnalysisValidationError(`${description} coverage is not a set of call counts`);
   }
 }
 

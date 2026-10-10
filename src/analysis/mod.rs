@@ -32,7 +32,7 @@ pub(crate) use tokenization::TokenizationPolicy;
 
 pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 11;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 21;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 22;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -1119,8 +1119,8 @@ fn assemble_analysis(
             rule: profile.rule.clone(),
         })
         .collect::<Vec<_>>();
-    let reported_prompt = usage_totals.prompt;
     let reported_completeness = usage_totals.completeness;
+    let subtotals = session_usage_subtotals(&session.model_calls);
     let analysis_summary = TokenAnalysisSummary {
         policy: config.tokenization.as_str().into(),
         chart_unit: chart_unit.as_str().into(),
@@ -1173,11 +1173,13 @@ fn assemble_analysis(
             source: session.source.kind.clone(),
             title: session.title.clone(),
             working_directory: session.working_directory.clone(),
-            reported_prompt_tokens: reported_prompt,
-            reported_completion_tokens: usage_totals.completion,
-            reported_reasoning_tokens: usage_totals.reasoning,
-            reported_cost_total: usage_cost_total(&session.model_calls),
+            reported_prompt_tokens: subtotals.prompt,
+            reported_completion_tokens: subtotals.completion,
+            reported_reasoning_tokens: subtotals.reasoning,
+            reported_cost_total: subtotals.cost,
+            reported_cost_coverage: subtotals.cost_coverage,
             reported_usage_completeness: reported_completeness.as_str().into(),
+            reported_usage_coverage: subtotals.usage_coverage,
             calculated_token_turns: session_token_turns,
             calculated_token_turns_coverage: total_turn_coverage,
             peak_calculated_visible_tokens: peak_calculated_visible,
@@ -1526,19 +1528,78 @@ fn usage_rollup(calls: &[NormalizedModelCall]) -> (Vec<UsageSnapshot>, UsageSnap
     };
     (snapshots, final_snapshot)
 }
-fn usage_cost_total(calls: &[NormalizedModelCall]) -> Option<f64> {
-    if calls.is_empty() {
-        return None;
-    }
-    calls.iter().try_fold(0.0_f64, |total, call| {
-        let value = call
-            .reported_usage
+/// Session subtotals over calls that recorded a value. Unlike the per-call
+/// cumulative series, one unknown call does not hide what was recorded; the
+/// coverage says how many calls each subtotal includes.
+#[derive(Debug, Clone, Copy, Default)]
+struct SessionUsageSubtotals {
+    prompt: Option<u64>,
+    completion: Option<u64>,
+    reasoning: Option<u64>,
+    usage_coverage: RecordedCallCoverage,
+    cost: Option<f64>,
+    cost_coverage: RecordedCallCoverage,
+}
+
+fn add_recorded(total: &mut Option<u64>, overflowed: &mut bool, value: Option<u64>) {
+    let Some(value) = value.filter(|_| !*overflowed) else {
+        return;
+    };
+    let next = total
+        .unwrap_or(0)
+        .checked_add(value)
+        .filter(|next| *next <= MAX_SAFE_JSON_INTEGER);
+    *overflowed |= next.is_none();
+    *total = next;
+}
+
+fn session_usage_subtotals(calls: &[NormalizedModelCall]) -> SessionUsageSubtotals {
+    let mut subtotals = SessionUsageSubtotals::default();
+    let mut overflowed = [false; 3];
+    for call in calls {
+        let usage = &call.reported_usage;
+        let failed_attempt = usage.placeholder.is_some();
+        let (prompt, completeness) = reported_prompt_tokens(usage);
+        if completeness == UsageCompleteness::Complete {
+            subtotals.usage_coverage.recorded_calls += 1;
+            add_recorded(&mut subtotals.prompt, &mut overflowed[0], prompt);
+        } else if failed_attempt {
+            subtotals.usage_coverage.failed_attempt_calls += 1;
+        } else {
+            subtotals.usage_coverage.missing_calls += 1;
+        }
+        add_recorded(&mut subtotals.completion, &mut overflowed[1], usage.output);
+        add_recorded(
+            &mut subtotals.reasoning,
+            &mut overflowed[2],
+            usage.reasoning,
+        );
+
+        match usage
             .cost
             .total
-            .filter(|value| value.is_finite() && *value >= 0.0)?;
-        let next = total + value;
-        next.is_finite().then_some(next)
-    })
+            .filter(|value| value.is_finite() && *value >= 0.0)
+        {
+            Some(value) => {
+                subtotals.cost_coverage.recorded_calls += 1;
+                let next = subtotals.cost.unwrap_or(0.0) + value;
+                subtotals.cost = Some(next).filter(|next| next.is_finite());
+            }
+            None if failed_attempt => subtotals.cost_coverage.failed_attempt_calls += 1,
+            None => subtotals.cost_coverage.missing_calls += 1,
+        }
+    }
+    // An overflowed subtotal is not a lower bound anyone can use; report it as unknown.
+    for (total, overflowed) in [
+        (&mut subtotals.prompt, overflowed[0]),
+        (&mut subtotals.completion, overflowed[1]),
+        (&mut subtotals.reasoning, overflowed[2]),
+    ] {
+        if overflowed {
+            *total = None;
+        }
+    }
+    subtotals
 }
 
 #[cfg(test)]
@@ -1663,9 +1724,34 @@ mod tests {
         assert!(analysis.model_calls[4].usage.placeholder.is_none());
         assert_eq!(analysis.model_calls[5].reported_prompt_tokens, Some(200));
         assert!(analysis.model_calls[5].usage.placeholder.is_none());
-        assert!(analysis.session.reported_prompt_tokens.is_none());
-        assert!(analysis.session.reported_completion_tokens.is_none());
-        assert!(analysis.session.reported_cost_total.is_none());
+        // Session subtotals keep what was recorded and count failed attempts
+        // separately instead of treating their default zeros as measurements.
+        let recorded_prompt = analysis
+            .model_calls
+            .iter()
+            .filter_map(|call| call.reported_prompt_tokens)
+            .sum::<u64>();
+        assert_eq!(
+            analysis.session.reported_prompt_tokens,
+            Some(recorded_prompt)
+        );
+        assert_eq!(
+            analysis.session.reported_usage_coverage,
+            RecordedCallCoverage {
+                recorded_calls: 4,
+                failed_attempt_calls: 2,
+                missing_calls: 0,
+            }
+        );
+        assert_eq!(
+            analysis.session.reported_cost_coverage.failed_attempt_calls,
+            2
+        );
+        assert_eq!(
+            analysis.session.reported_cost_coverage.recorded_calls
+                + analysis.session.reported_cost_coverage.missing_calls,
+            4
+        );
         assert_eq!(analysis.session.reported_usage_completeness, "partial");
         assert_eq!(analysis.economics.cache_read_eligible_calls, 4);
     }
@@ -2463,13 +2549,65 @@ mod tests {
     }
 
     #[test]
+    fn session_subtotals_keep_recorded_values_and_count_unrecorded_calls() {
+        let mut session = fake_session();
+        let recorded = |input: u64, cost: f64| ReportedUsage {
+            input: Some(input),
+            output: Some(1),
+            cache_read: Some(0),
+            cache_write: Some(0),
+            cost: ReportedCost {
+                total: Some(cost),
+                ..ReportedCost::default()
+            },
+            ..ReportedUsage::default()
+        };
+        let template = session.model_calls[0].clone();
+        session.model_calls = (0..4).map(|_| template.clone()).collect();
+        session.model_calls[0].reported_usage = recorded(10, 0.25);
+        session.model_calls[1].reported_usage = ReportedUsage {
+            placeholder: Some(PlaceholderUsage {
+                cache_write_1h: None,
+                reasoning: None,
+                cost: ReportedCost::default(),
+            }),
+            ..ReportedUsage::default()
+        };
+        session.model_calls[2].reported_usage = ReportedUsage::default();
+        session.model_calls[3].reported_usage = recorded(5, 0.5);
+
+        let subtotals = session_usage_subtotals(&session.model_calls);
+        assert_eq!(subtotals.prompt, Some(15));
+        assert_eq!(subtotals.completion, Some(2));
+        assert_eq!(subtotals.reasoning, None);
+        assert_eq!(subtotals.cost, Some(0.75));
+        let expected = RecordedCallCoverage {
+            recorded_calls: 2,
+            failed_attempt_calls: 1,
+            missing_calls: 1,
+        };
+        assert_eq!(subtotals.usage_coverage, expected);
+        assert_eq!(subtotals.cost_coverage, expected);
+
+        session.model_calls[3].reported_usage = recorded(MAX_SAFE_JSON_INTEGER, 0.5);
+        let overflowed = session_usage_subtotals(&session.model_calls);
+        assert_eq!(
+            overflowed.prompt, None,
+            "overflow is unknown, not a lower bound"
+        );
+        assert_eq!(overflowed.usage_coverage, expected);
+    }
+
+    #[test]
     fn session_pi_cost_total_rejects_negative_or_non_finite_values() {
         let mut session = fake_session();
-        session.model_calls[0].reported_usage.cost.total = Some(-0.01);
-        assert_eq!(usage_cost_total(&session.model_calls), None);
-
-        session.model_calls[0].reported_usage.cost.total = Some(f64::INFINITY);
-        assert_eq!(usage_cost_total(&session.model_calls), None);
+        for invalid in [-0.01, f64::INFINITY] {
+            session.model_calls[0].reported_usage.cost.total = Some(invalid);
+            let subtotals = session_usage_subtotals(&session.model_calls);
+            assert_eq!(subtotals.cost, None);
+            assert_eq!(subtotals.cost_coverage.recorded_calls, 0);
+            assert_eq!(subtotals.cost_coverage.missing_calls, 1);
+        }
     }
 
     #[test]

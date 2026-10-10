@@ -149,7 +149,41 @@ fn fixture_outputs_preserve_corrected_baseline() {
             // recorded-counter fields without changing normalized math.
             let mut baseline = output.clone();
             baseline.schema_version = 8;
+            // Output 22 reports session subtotals with coverage. Map them back to
+            // the earlier all-or-nothing totals so every other field stays pinned.
+            let calls = &baseline.model_calls;
+            let all_calls = |count: usize| !calls.is_empty() && count == calls.len();
+            let session = &mut baseline.session;
+            if !all_calls(session.reported_usage_coverage.recorded_calls) {
+                session.reported_prompt_tokens = None;
+            }
+            if !calls.iter().all(|call| call.usage.output.is_some()) {
+                session.reported_completion_tokens = None;
+            }
+            if !calls.iter().all(|call| call.usage.reasoning.is_some()) {
+                session.reported_reasoning_tokens = None;
+            }
+            if !all_calls(session.reported_cost_coverage.recorded_calls) {
+                session.reported_cost_total = None;
+            }
             let mut json = serde_json::to_string(&baseline).expect("JSON");
+            for (field, coverage) in [
+                (
+                    "reportedCostCoverage",
+                    &baseline.session.reported_cost_coverage,
+                ),
+                (
+                    "reportedUsageCoverage",
+                    &baseline.session.reported_usage_coverage,
+                ),
+            ] {
+                let addition = format!(
+                    "\"{field}\":{},",
+                    serde_json::to_string(coverage).expect("coverage")
+                );
+                assert!(json.contains(&addition), "{field} serialized once");
+                json = json.replacen(&addition, "", 1);
+            }
             assert!(baseline
                 .model_calls
                 .iter()

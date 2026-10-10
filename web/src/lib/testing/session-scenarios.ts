@@ -203,7 +203,17 @@ function terminalSummaryOnlyScenario(): SessionAnalysis {
     reportedCompletionTokens: null,
     reportedReasoningTokens: null,
     reportedCostTotal: null,
+    reportedCostCoverage: {
+      recordedCalls: 0,
+      failedAttemptCalls: 0,
+      missingCalls: analysis.modelCalls.length,
+    },
     reportedUsageCompleteness: 'missing',
+    reportedUsageCoverage: {
+      recordedCalls: 0,
+      failedAttemptCalls: 0,
+      missingCalls: analysis.modelCalls.length,
+    },
     calculatedTokenTurns: null,
     calculatedTokenTurnsCoverage: analysis.tokenAnalysis.itemEstimateCoverage,
     peakCalculatedVisibleTokens: null,
