@@ -3,6 +3,7 @@ mod assets;
 mod catalog;
 mod error;
 mod events;
+mod local_origin;
 #[cfg(test)]
 mod opencode_tests;
 mod routes;
@@ -305,10 +306,12 @@ async fn run_with_watcher(
         },
         analysis: Arc::new(AnalysisService::new(Arc::new(execute_analysis))),
     };
-    let app = router(state);
     let address = SocketAddr::from(([127, 0, 0, 1], args.port));
-    println!("Listening on http://{address}");
     let listener = tokio::net::TcpListener::bind(address).await?;
+    // Use the bound port so `--port 0` still accepts its own Host header.
+    let address = listener.local_addr()?;
+    let app = local_origin::protect(router(state), address.port());
+    println!("Listening on http://{address}");
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(shutdown.clone()))
         .await?;

@@ -176,6 +176,8 @@ pub(crate) enum AppError {
     NotFound,
     #[error("ambiguous session reference")]
     AmbiguousSession,
+    #[error("request host or origin is not this local server")]
+    ForeignOrigin,
 }
 
 impl IntoResponse for AppError {
@@ -186,6 +188,11 @@ impl IntoResponse for AppError {
                 StatusCode::CONFLICT,
                 "AMBIGUOUS_SESSION",
                 "multiple sources share this session reference; remove duplicates or resolve the collision",
+            ),
+            Self::ForeignOrigin => (
+                StatusCode::FORBIDDEN,
+                "FOREIGN_ORIGIN",
+                "requests must address this server as 127.0.0.1 or localhost on its own port",
             ),
             Self::Io(error) => io_details(error),
             Self::Source(error) => source_details(error),
