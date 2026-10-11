@@ -128,6 +128,9 @@ pub(super) fn validate_payload_numbers(
                 }
             }
         }
+        TokenizationPayload::ReportedThinking { tokens, .. } => {
+            require_safe_integer(*tokens, &format!("item {item_id} reported thinking tokens"))?;
+        }
         TokenizationPayload::SystemPrompt { .. }
         | TokenizationPayload::ToolDefinition { .. }
         | TokenizationPayload::CompactionSummary(_)

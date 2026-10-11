@@ -153,6 +153,7 @@ pub(super) fn interpret(
                 source_provider: target.provider,
                 source_model: target.model,
                 source_api: target.api,
+                thinking_reported: false,
             }
         } else {
             TokenizationPayload::Unavailable

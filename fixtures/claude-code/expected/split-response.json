@@ -59,6 +59,7 @@
       },
       "context": [
         "user:s2-u1",
+        "thinking:msg_s2_1",
         "assistant:msg_s2_1",
         "tool:toolu_s2_1"
       ],
@@ -78,6 +79,7 @@
       },
       "context": [
         "user:s2-u1",
+        "thinking:msg_s2_1",
         "assistant:msg_s2_1",
         "tool:toolu_s2_1",
         "assistant:msg_s2_2",
@@ -105,6 +107,7 @@
       },
       "context": [
         "user:s2-u1",
+        "thinking:msg_s2_1",
         "assistant:msg_s2_1",
         "tool:toolu_s2_1",
         "assistant:msg_s2_2",

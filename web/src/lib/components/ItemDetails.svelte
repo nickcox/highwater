@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { claudeEstimateNote } from '../token-estimate';
   import type { ContextItem, IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
   import { presenceCount } from '../context-river/lifespans';
@@ -90,6 +91,8 @@
         return 'Estimated API serialization';
       case 'characterHeuristic':
         return 'Character heuristic';
+      case 'reportedUsage':
+        return 'Reported thinking size';
       default:
         return 'Unavailable estimate method';
     }
@@ -224,6 +227,9 @@
         {selectedProfile
           ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
           : methodLabel(selectedEstimate.method)} · call {selectedCall.index}
+        {#if claudeEstimateNote(selectedProfile)}<small class="metric-note"
+            >{claudeEstimateNote(selectedProfile)}</small
+          >{/if}
       {:else if pinnedCallIndex !== null}
         No applicable estimate at pinned call {pinnedCallIndex}
       {:else}

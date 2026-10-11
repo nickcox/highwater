@@ -110,7 +110,7 @@ fn listings_read_session_identity_titles_and_working_directory() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 17);
+    assert_eq!(checked, 18);
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn fixture_kind(expected: &Value) -> FileKind {
 
 #[test]
 fn active_branches_match_the_expected_results() {
-    assert_eq!(expected_fixtures().len(), 17);
+    assert_eq!(expected_fixtures().len(), 18);
     for (name, expected) in expected_fixtures() {
         let path = fixture_root().join(expected["fixture"].as_str().expect("fixture"));
         let records = super::records::parse(std::io::BufReader::new(
@@ -276,7 +276,7 @@ fn active_branches_match_the_expected_results() {
 
 #[test]
 fn calls_context_and_compactions_match_the_expected_results() {
-    assert_eq!(expected_fixtures().len(), 17);
+    assert_eq!(expected_fixtures().len(), 18);
     for (name, expected) in expected_fixtures() {
         let path = fixture_root().join(expected["fixture"].as_str().expect("fixture"));
         let loaded = super::load(&path, fixture_kind(&expected)).expect("load");
@@ -571,4 +571,55 @@ fn claude_code_calls_are_api_equivalent_unless_the_billing_setting_says_api() {
         .expect("amount");
     let expected = (5.0 * 4.0 + 400.0 * 8.0 + 25.0 * 20.0) / 1_000_000.0;
     assert!((first - expected).abs() < 1e-12, "{first} != {expected}");
+}
+
+#[test]
+fn thinking_is_sized_by_reported_reasoning_for_the_model_that_produced_it() {
+    use crate::domain::{ContextItemKind, TokenizationPayload};
+    let loaded = super::load(
+        &fixture_root().join("-synthetic-project/split-response.jsonl"),
+        FileKind::Main,
+    )
+    .expect("load");
+    let thinking = loaded
+        .session
+        .context_items
+        .iter()
+        .find(|item| item.kind == ContextItemKind::Thinking)
+        .expect("thinking item");
+    assert_eq!(thinking.label, "Thinking · 7 reported tokens");
+    assert!(matches!(
+        thinking.payload,
+        TokenizationPayload::ReportedThinking { tokens: 7, .. }
+    ));
+    let response = loaded
+        .session
+        .context_items
+        .iter()
+        .find(|item| item.id == "claude-code:assistant:msg_s2_1")
+        .expect("response");
+    assert!(matches!(
+        response.payload,
+        TokenizationPayload::AssistantMessage {
+            thinking_reported: true,
+            ..
+        }
+    ));
+    let analysis = crate::analysis::analyze(
+        loaded.session,
+        crate::analysis::AnalysisConfig {
+            tokenization: crate::analysis::TokenizationPolicy::Auto,
+            perf_diagnostics: false,
+            claude_code_billing: Default::default(),
+        },
+    )
+    .expect("analysis");
+    let item = analysis
+        .context_items
+        .iter()
+        .find(|item| item.kind == "thinking")
+        .expect("thinking in the analysis");
+    assert_eq!(item.token_estimates.len(), 1);
+    assert_eq!(item.token_estimates[0].tokens, Some(7));
+    assert_eq!(item.token_estimates[0].method, "reportedUsage");
 }

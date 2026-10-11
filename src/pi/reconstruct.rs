@@ -131,7 +131,21 @@ fn reconstruct_selected(
             &failed_tool_call_ids,
         )? {
             interpret::SelectedEntry::Assistant { item, call } => {
-                state.apply_message(item, Some(call))
+                let has_thinking = matches!(
+                    &item.payload,
+                    TokenizationPayload::AssistantMessage { blocks, .. }
+                        if blocks.iter().any(|block| matches!(block, AssistantContentBlock::Thinking { .. }))
+                );
+                let thinking = call
+                    .usage
+                    .reasoning
+                    .filter(|tokens| has_thinking && *tokens > 0)
+                    .zip(call.target.model.clone());
+                let response_id = item.id.clone();
+                state.apply_message(item, Some(call));
+                if let Some((tokens, model)) = thinking {
+                    state.apply_reported_thinking(&response_id, tokens, model);
+                }
             }
             interpret::SelectedEntry::Message(item) => state.apply_message(item, None),
             interpret::SelectedEntry::System(update) => {
@@ -195,6 +209,7 @@ fn item_label(
         ),
         ContextItemKind::CustomMessage => "Custom context message".into(),
         ContextItemKind::BranchSummary => "Branch summary".into(),
+        ContextItemKind::Thinking => "Thinking".into(),
         ContextItemKind::CompactionSummary => "Compaction summary".into(),
         ContextItemKind::System => "System context".into(),
         ContextItemKind::ToolDefinition => "Tool definition".into(),

@@ -11,14 +11,15 @@ import {
 import type { ContextItemKind } from '../types';
 
 describe('item type colors', () => {
-  it('assigns unique, explicit stable hues to all nine semantic categories', () => {
+  it('assigns unique, explicit stable hues to all ten semantic categories', () => {
     const kinds = Object.keys(ITEM_TYPE_PALETTE) as ContextItemKind[];
-    expect(kinds).toHaveLength(9);
-    expect(new Set(kinds.map(itemTypeColor)).size).toBe(9);
+    expect(kinds).toHaveLength(10);
+    expect(new Set(kinds.map(itemTypeColor)).size).toBe(10);
     expect(itemTypeColor('userMessage')).toBe('#7eafe3');
     expect(itemTypeColor('toolResult')).toBe('#dab66c');
     expect(itemTypeColor('assistantMessage')).toBe('#64c4af');
     expect(itemTypeColor('compactionSummary')).toBe('#bba0e3');
+    expect(itemTypeColor('thinking')).toBe('#9ad3e6');
     kinds.reverse().forEach((kind) => expect(itemTypeColor(kind)).toBe(ITEM_TYPE_PALETTE[kind]));
   });
   it('keeps each semantic hue visible against the chart background', () => {

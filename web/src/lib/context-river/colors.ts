@@ -10,6 +10,7 @@ export const ITEM_TYPE_PALETTE = {
   compactionSummary: '#bba0e3',
   customMessage: '#da8faf',
   branchSummary: '#b8c879',
+  thinking: '#9ad3e6',
   other: '#d9d4c9',
 } as const satisfies Record<ContextItemKind, string>;
 

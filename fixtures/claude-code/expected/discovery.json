@@ -1,6 +1,7 @@
 {
   "root": "projects",
   "sessions": [
+    "-synthetic-old-location/relocated.jsonl",
     "-synthetic-project/api-error.jsonl",
     "-synthetic-project/attachments-unrendered.jsonl",
     "-synthetic-project/attachments.jsonl",
@@ -15,8 +16,8 @@
     "-synthetic-project/simple.jsonl",
     "-synthetic-project/split-response.jsonl",
     "-synthetic-project/subagent-parent.jsonl",
-    "-synthetic-project/unfinished-line.jsonl",
-    "-synthetic-old-location/relocated.jsonl"
+    "-synthetic-project/thinking-retention.jsonl",
+    "-synthetic-project/unfinished-line.jsonl"
   ],
   "subagents": [
     "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl"

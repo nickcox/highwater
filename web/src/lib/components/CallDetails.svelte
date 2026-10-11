@@ -13,6 +13,7 @@
 </script>
 
 <script lang="ts">
+  import { claudeEstimateNote } from '../token-estimate';
   import type { IndexedAnalysis, ModelCall } from '../types';
   import { displayItemLabel } from '../item-label';
   import { describeTokenDiagnostic } from '../diagnostics';
@@ -116,6 +117,8 @@
         return 'Estimated API serialization';
       case 'characterHeuristic':
         return 'Character heuristic';
+      case 'reportedUsage':
+        return 'Reported thinking size';
       default:
         return 'Unavailable estimate method';
     }
@@ -582,6 +585,9 @@
           <dd>
             {#if tokenProfile}
               {tokenProfile.provider} / {tokenProfile.model} · {methodLabel(tokenProfile.method)}
+              {#if claudeEstimateNote(tokenProfile)}<small class="metric-note"
+                  >{claudeEstimateNote(tokenProfile)}</small
+                >{/if}
             {:else if call.tokenizationProfileId}
               Tokenizer profile unavailable · {call.tokenizationProfileId}
             {:else}

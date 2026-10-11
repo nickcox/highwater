@@ -26,7 +26,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   await page.goto('/');
   const sessions = await listed(page);
   const claudeCode = sessions.filter((session) => session.harness === 'claude-code');
-  expect(claudeCode).toHaveLength(17);
+  expect(claudeCode).toHaveLength(18);
   expect(sessions.some((session) => session.harness === 'pi')).toBe(true);
   for (const session of claudeCode) expect(session.id).toMatch(/^claude-code-[0-9a-f]{12}$/);
   const compaction = claudeCode.find((session) => session.displayName === 'project · 00000006')!;
@@ -51,7 +51,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const response = await analysisResponse;
   expect(response.status()).toBe(200);
   const analysis = await response.json();
-  expect(analysis.schemaVersion).toBe(14);
+  expect(analysis.schemaVersion).toBe(15);
   expect(analysis.session.source).toBe('claude-code');
   expect(analysis.modelCalls).toHaveLength(4);
   expect(analysis.compactions).toHaveLength(1);

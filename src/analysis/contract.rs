@@ -535,6 +535,7 @@ fn export_live_contract() {
         "simple",
         "split-response",
         "subagent-parent",
+        "thinking-retention",
         "unfinished-line",
     ] {
         cases.push((
@@ -764,7 +765,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 127);
+    assert_eq!(manifest.len(), 128);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

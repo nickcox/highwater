@@ -53,6 +53,11 @@ const TOKEN_DIAGNOSTICS: Readonly<Record<string, DiagnosticDescription>> = {
     impact:
       'Differences in serialization or provider accounting may explain the negative residual.',
   },
+  thinkingNotReadByModel: {
+    title: 'Thinking from another model',
+    impact:
+      'The provider drops thinking it cannot read for this model, so it adds no tokens to this request.',
+  },
   excludedFromContext: {
     title: 'Content was excluded from model context',
     impact: 'This item does not contribute to the request token estimate.',

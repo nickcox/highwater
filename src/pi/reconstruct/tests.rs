@@ -242,7 +242,8 @@ fn normalized_fixture_parity() {
         assert!(session.harness_session_cost.is_none());
         let mut normalized = format!("{session:?}")
             .replace("placeholder: None, ", "")
-            .replace(", harness_session_cost: None", "");
+            .replace(", harness_session_cost: None", "")
+            .replace(", thinking_reported: false", "");
         // Remove only the additive counter metadata to keep the original
         // replay baseline pinned: no normalized usage or history may change.
         for call in &session.model_calls {
@@ -1077,4 +1078,59 @@ fn selected_source_usage_above_safe_integer_is_rejected() {
             field: "usage.input"
         }
     ));
+}
+
+#[test]
+fn claude_thinking_is_a_reported_item_that_follows_the_models_retention() {
+    let session = |model: &str| {
+        let assistant = |id: &str, parent: &str| {
+            serde_json::json!({"type": "message", "id": id, "parentId": parent, "message": {
+                "role": "assistant", "provider": "github-copilot", "model": model, "api": "anthropic-messages",
+                "stopReason": "stop",
+                "content": [{"type": "thinking", "thinking": "A short summary."}, {"type": "text", "text": "Answer."}],
+                "usage": {"input": 10, "output": 50, "cacheRead": 0, "cacheWrite": 0, "reasoning": 40}}})
+        };
+        let user = |id: &str, parent: Option<&str>| {
+            serde_json::json!({"type": "message", "id": id, "parentId": parent, "message": {
+                "role": "user", "content": [{"type": "text", "text": "Question."}]}})
+        };
+        parse_records(&[
+            serde_json::json!({"type": "session", "version": 3, "id": "thinking", "timestamp": "2026-10-01T00:00:00Z", "cwd": "/tmp"}),
+            user("u1", None),
+            assistant("a1", "u1"),
+            user("u2", Some("a1")),
+            assistant("a2", "u2"),
+        ])
+    };
+    let thinking_in_second_call = |session: &NormalizedSession| {
+        session.model_calls[1]
+            .context_item_ids
+            .iter()
+            .any(|id| id.ends_with(":thinking"))
+    };
+    // Opus 5.5 keeps earlier thinking; Sonnet 4.5 drops it at the next user message.
+    let keeps = session("claude-opus-5.5");
+    assert!(thinking_in_second_call(&keeps));
+    let thinking = keeps
+        .context_items
+        .iter()
+        .find(|item| item.kind == ContextItemKind::Thinking)
+        .expect("thinking item");
+    assert!(matches!(
+        thinking.payload,
+        TokenizationPayload::ReportedThinking { tokens: 40, .. }
+    ));
+    assert!(keeps.context_items.iter().any(|item| matches!(
+        item.payload,
+        TokenizationPayload::AssistantMessage {
+            thinking_reported: true,
+            ..
+        }
+    )));
+    assert!(!thinking_in_second_call(&session("claude-sonnet-4.5")));
+    // Not a Claude model: no thinking item.
+    assert!(!session("gpt-6-sol")
+        .context_items
+        .iter()
+        .any(|item| item.kind == ContextItemKind::Thinking));
 }

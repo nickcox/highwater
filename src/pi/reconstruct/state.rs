@@ -41,6 +41,8 @@ pub(super) struct ReconstructionState {
     system: system_context::SystemReplay,
     global: Vec<ItemIndex>,
     legacy_tools: Vec<ItemIndex>,
+    /// Thinking items that leave the context at the next user message.
+    turn_thinking: Vec<ItemIndex>,
     compactions: Vec<PendingCompaction>,
     last_compaction: Option<String>,
 }
@@ -62,6 +64,7 @@ impl ReconstructionState {
             system: system_context::SystemReplay::default(),
             global: Vec::new(),
             legacy_tools: Vec::new(),
+            turn_thinking: Vec::new(),
             compactions: Vec::new(),
             last_compaction: None,
         }
@@ -85,6 +88,48 @@ impl ReconstructionState {
             .collect();
     }
 
+    /// Add the thinking of a response that has just been applied. Only a response that
+    /// joined the context gets one.
+    pub(super) fn apply_reported_thinking(
+        &mut self,
+        response_id: &str,
+        tokens: u64,
+        model: String,
+    ) {
+        let Some(keeps) = crate::analysis::claude_keeps_prior_thinking(&model) else {
+            return;
+        };
+        let Some(response) = self.item_indices.get(response_id).copied() else {
+            return;
+        };
+        let Some(position) = self.active.iter().position(|index| *index == response) else {
+            return;
+        };
+        if let TokenizationPayload::AssistantMessage {
+            thinking_reported, ..
+        } = &mut self.items[response.0].payload
+        {
+            *thinking_reported = true;
+        }
+        let item = NormalizedContextItem::reported_thinking(
+            format!("{response_id}:thinking"),
+            self.items[response.0].source_record_id.clone(),
+            tokens,
+            model,
+        );
+        let index = insert_item(
+            &mut self.items,
+            &mut self.item_indices,
+            item.id.clone(),
+            item,
+        );
+        // Thinking comes before the response's text and tool calls.
+        self.active.insert(position, index);
+        if !keeps {
+            self.turn_thinking.push(index);
+        }
+    }
+
     pub(super) fn apply_message(
         &mut self,
         item: NormalizedContextItem,
@@ -103,6 +148,10 @@ impl ReconstructionState {
                 self.legacy_tools.push(index);
             }
             return;
+        }
+        if call.is_none() && item.kind == ContextItemKind::UserMessage {
+            let ending: HashSet<ItemIndex> = self.turn_thinking.drain(..).collect();
+            self.active.retain(|index| !ending.contains(index));
         }
         let contextual = if let Some(call) = call {
             let index = self.calls.len() + 1;

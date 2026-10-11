@@ -7,11 +7,16 @@ export type ContextItemKind =
   | 'compactionSummary'
   | 'customMessage'
   | 'branchSummary'
+  | 'thinking'
   | 'other';
 
 export type ChartUnit = 'calculatedTokens' | 'estimatedTokens' | 'unavailable';
 export type TokenizationMethod =
-  'modelTokenizer' | 'apiSerializationEstimate' | 'characterHeuristic' | 'unavailable';
+  | 'modelTokenizer'
+  | 'apiSerializationEstimate'
+  | 'characterHeuristic'
+  | 'reportedUsage'
+  | 'unavailable';
 export type TokenCoverage = 'complete' | 'partial' | 'unavailable';
 export type UsageCompleteness = 'complete' | 'partial' | 'missing';
 export type EconomicsCompleteness = 'complete' | 'partial' | 'missing' | 'unsupported';

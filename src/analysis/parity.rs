@@ -273,6 +273,12 @@ fn fixture_outputs_preserve_corrected_baseline() {
         // Output 23 computes transition and age metrics from partial estimates
         // too and adds `metricsIncludePartialEstimates`; with those fields
         // removed, the output hashed identically before and after that change.
-        "2ffb5ef101e473a2ead66b9b96f6270632e1cc97bcff9146b84d45d9d6623405"
+        // Output 27 replaces the character estimate for Claude models with calibrated
+        // o200k counts. Only economics-policies.jsonl has a Claude target
+        // (`claude-test`); comparing main and this change for every Pi fixture, only
+        // that profile and the estimates and metrics derived from it differ.
+        // Output 29 counts Claude models with the ctok port instead; again only the
+        // `claude-test` profile and what derives from it differ from output 28.
+        "20ceadee3d122835433a3033a70b329ea6698d4262f913c4bb61f2f5a859c57a"
     );
 }

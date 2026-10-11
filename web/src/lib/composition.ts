@@ -18,6 +18,7 @@ export const COMPOSITION_KIND_ORDER: readonly ContextItemKind[] = [
   'compactionSummary',
   'customMessage',
   'branchSummary',
+  'thinking',
   'other',
 ];
 
@@ -30,6 +31,7 @@ const KIND_LABELS: Readonly<Record<ContextItemKind, string>> = {
   compactionSummary: 'Compaction summaries',
   customMessage: 'Custom messages',
   branchSummary: 'Branch summaries',
+  thinking: 'Thinking',
   other: 'Other context',
 };
 

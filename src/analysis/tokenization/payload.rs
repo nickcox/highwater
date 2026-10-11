@@ -31,6 +31,17 @@ impl PreviewKind {
     }
 }
 
+/// How a tool call is written out for counting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolCallRendering {
+    /// The tool's name and the arguments' JSON text.
+    NameAndArguments,
+    /// The form a Claude model reads: an `invoke` element with one `parameter` element per
+    /// argument, string values written as they are rather than JSON-escaped. Measured against
+    /// reported usage; see docs/data-semantics.md.
+    ClaudeInvoke,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PayloadPreview {
     pub text: String,
@@ -161,6 +172,12 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
         | TokenizationPayload::BranchSummary(summary) => {
             bounded_preview(summary, PreviewKind::Summary)
         }
+        // Thinking has no readable text here: its content is the provider's encrypted
+        // copy, and a recorded summary stays with the response item.
+        TokenizationPayload::ReportedThinking { tokens, .. } => bounded_preview(
+            &format!("{tokens} reasoning tokens reported for this response"),
+            PreviewKind::Summary,
+        ),
         TokenizationPayload::CommandExecution {
             command, output, ..
         } => {
@@ -389,6 +406,7 @@ fn take_scalars(value: &str, limit: usize) -> String {
 pub(crate) fn project_payload(
     payload: &TokenizationPayload,
     target: &ModelTarget,
+    tool_calls: ToolCallRendering,
 ) -> ProjectedPayload {
     let mut notes = Vec::new();
     let (text, partial, unavailable) = match payload {
@@ -401,6 +419,7 @@ pub(crate) fn project_payload(
             source_provider,
             source_model,
             source_api,
+            thinking_reported,
         } => {
             let source_matches = source_provider.as_deref() == target.provider.as_deref()
                 && source_model.as_deref() == target.model.as_deref()
@@ -415,6 +434,9 @@ pub(crate) fn project_payload(
                         has_supported = true;
                         append_part(&mut out, value);
                     }
+                    AssistantContentBlock::Thinking { .. } if *thinking_reported => {
+                        has_supported = true;
+                    }
                     AssistantContentBlock::Thinking { text, .. } => {
                         has_supported = true;
                         if source_matches || source_model.is_none() {
@@ -428,8 +450,20 @@ pub(crate) fn project_payload(
                         name, arguments, ..
                     } => {
                         has_supported = true;
-                        append_part(&mut out, name);
-                        append_part(&mut out, arguments);
+                        match tool_calls {
+                            ToolCallRendering::ClaudeInvoke => {
+                                if let Some(invoke) = claude_invoke(name, arguments) {
+                                    append_part(&mut out, &invoke);
+                                } else {
+                                    append_part(&mut out, name);
+                                    append_part(&mut out, arguments);
+                                }
+                            }
+                            ToolCallRendering::NameAndArguments => {
+                                append_part(&mut out, name);
+                                append_part(&mut out, arguments);
+                            }
+                        }
                     }
                     AssistantContentBlock::Image(image) => {
                         has_supported = true;
@@ -477,6 +511,8 @@ pub(crate) fn project_payload(
         }
         TokenizationPayload::CompactionSummary(summary) => (summary.clone(), false, false),
         TokenizationPayload::BranchSummary(summary) => (summary.clone(), false, false),
+        // Counted from the reported size by the registry, never from text.
+        TokenizationPayload::ReportedThinking { .. } => (String::new(), false, false),
         TokenizationPayload::CommandExecution {
             command,
             output,
@@ -535,6 +571,26 @@ fn project_content(
     (output, partial, has_unsupported && !has_supported)
 }
 
+/// A tool call as Claude reads it, or `None` when the arguments are not a JSON object.
+fn claude_invoke(name: &str, arguments: &str) -> Option<String> {
+    let serde_json::Value::Object(arguments) = serde_json::from_str(arguments).ok()? else {
+        return None;
+    };
+    let mut out = format!("<invoke name=\"{name}\">\n");
+    for (key, value) in &arguments {
+        out.push_str("<parameter name=\"");
+        out.push_str(key);
+        out.push_str("\">");
+        match value {
+            serde_json::Value::String(text) => out.push_str(text),
+            other => out.push_str(&other.to_string()),
+        }
+        out.push_str("</parameter>\n");
+    }
+    out.push_str("</invoke>");
+    Some(out)
+}
+
 fn append_part(output: &mut String, value: &str) {
     if !output.is_empty() {
         output.push('\n');
@@ -553,6 +609,7 @@ fn hash_payload(hasher: &mut Hasher, payload: &TokenizationPayload) {
             source_provider,
             source_model,
             source_api,
+            thinking_reported,
         } => {
             hash_tag(hasher, b"assistant");
             hash_optional_string(hasher, b"source-provider", source_provider.as_deref());
@@ -561,6 +618,10 @@ fn hash_payload(hasher: &mut Hasher, payload: &TokenizationPayload) {
             hash_u64(hasher, blocks.len() as u64);
             for block in blocks {
                 hash_assistant_block(hasher, block);
+            }
+            // Hashed only when set, so existing payloads keep their fingerprints.
+            if *thinking_reported {
+                hash_tag(hasher, b"thinking-reported");
             }
         }
         TokenizationPayload::ToolResult {
@@ -596,6 +657,14 @@ fn hash_payload(hasher: &mut Hasher, payload: &TokenizationPayload) {
         TokenizationPayload::BranchSummary(summary) => {
             hash_tag(hasher, b"branch");
             hash_string(hasher, b"summary", summary);
+        }
+        TokenizationPayload::ReportedThinking {
+            tokens,
+            source_model,
+        } => {
+            hash_tag(hasher, b"reported-thinking");
+            hash_u64(hasher, *tokens);
+            hash_optional_string(hasher, b"source-model", source_model.as_deref());
         }
         TokenizationPayload::CommandExecution {
             command,
@@ -764,6 +833,7 @@ mod tests {
             source_provider: Some("provider".into()),
             source_model: Some("model-a".into()),
             source_api: None,
+            thinking_reported: false,
         };
         let mut second = first.clone();
         if let TokenizationPayload::AssistantMessage { source_model, .. } = &mut second {
@@ -780,7 +850,11 @@ mod tests {
                 encoded_data_length: Some(10),
             })],
         });
-        let projected = project_payload(&payload, &ModelTarget::default());
+        let projected = project_payload(
+            &payload,
+            &ModelTarget::default(),
+            ToolCallRendering::NameAndArguments,
+        );
         assert!(projected.partial);
         assert!(projected
             .note_codes
@@ -800,6 +874,7 @@ mod tests {
                 model: Some("gpt-4o-mini".into()),
                 api: Some("openai-chat-completions".into()),
             },
+            ToolCallRendering::NameAndArguments,
         );
         assert!(projected.partial);
         assert!(!projected.unavailable);
@@ -817,7 +892,11 @@ mod tests {
         let payload = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Unsupported],
         });
-        let projected = project_payload(&payload, &ModelTarget::default());
+        let projected = project_payload(
+            &payload,
+            &ModelTarget::default(),
+            ToolCallRendering::NameAndArguments,
+        );
         assert!(projected.unavailable);
         assert_eq!(projected.text, "");
         assert_eq!(preview_payload(&payload).kind, PreviewKind::Unavailable);
@@ -826,10 +905,63 @@ mod tests {
     #[test]
     fn empty_supported_content_remains_a_valid_empty_payload() {
         let payload = TokenizationPayload::UserMessage(MessageContent::empty());
-        let projected = project_payload(&payload, &ModelTarget::default());
+        let projected = project_payload(
+            &payload,
+            &ModelTarget::default(),
+            ToolCallRendering::NameAndArguments,
+        );
         assert!(!projected.partial);
         assert!(!projected.unavailable);
         assert_eq!(preview_payload(&payload).kind, PreviewKind::Text);
+    }
+
+    #[test]
+    fn claude_tool_calls_are_written_as_invoke_elements_with_unescaped_values() {
+        let call = |arguments: &str| TokenizationPayload::AssistantMessage {
+            blocks: vec![
+                AssistantContentBlock::Text("Checking.".into()),
+                AssistantContentBlock::ToolCall {
+                    id: "call-1".into(),
+                    name: "bash".into(),
+                    arguments: arguments.into(),
+                },
+            ],
+            source_provider: None,
+            source_model: None,
+            source_api: None,
+            thinking_reported: false,
+        };
+        let object = call(r#"{"command":"echo \"hi\"\nls","timeout":5}"#);
+        assert_eq!(
+            project_payload(
+                &object,
+                &ModelTarget::default(),
+                ToolCallRendering::ClaudeInvoke
+            )
+            .text,
+            "Checking.\n<invoke name=\"bash\">\n<parameter name=\"command\">echo \"hi\"\nls</parameter>\n<parameter name=\"timeout\">5</parameter>\n</invoke>"
+        );
+        assert_eq!(
+            project_payload(
+                &object,
+                &ModelTarget::default(),
+                ToolCallRendering::NameAndArguments
+            )
+            .text,
+            "Checking.\nbash\n{\"command\":\"echo \\\"hi\\\"\\nls\",\"timeout\":5}"
+        );
+        // Arguments that are not a JSON object are counted as they were recorded.
+        for arguments in ["[1, 2]", "not json"] {
+            assert_eq!(
+                project_payload(
+                    &call(arguments),
+                    &ModelTarget::default(),
+                    ToolCallRendering::ClaudeInvoke
+                )
+                .text,
+                format!("Checking.\nbash\n{arguments}")
+            );
+        }
     }
 
     #[test]
@@ -854,6 +986,7 @@ mod tests {
             source_provider: None,
             source_model: None,
             source_api: None,
+            thinking_reported: false,
         };
         let preview = preview_payload(&payload);
         assert_eq!(preview.kind, PreviewKind::ToolCall);

@@ -393,6 +393,7 @@ fn assistant(
                 source_provider: target.provider,
                 source_model: target.model,
                 source_api: None,
+                thinking_reported: false,
             },
             None,
         );

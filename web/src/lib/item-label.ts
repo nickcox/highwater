@@ -11,6 +11,7 @@ const KIND_FALLBACKS: Record<string, string> = {
   compactionSummary: 'Compaction summary',
   customMessage: 'Custom context message',
   branchSummary: 'Branch summary',
+  thinking: 'Thinking',
   other: 'Context item',
 };
 

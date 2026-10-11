@@ -139,6 +139,7 @@ impl State {
             TokenizationPayload::ToolDefinition { .. } => ContextItemKind::ToolDefinition,
             TokenizationPayload::CustomMessage(_) => ContextItemKind::CustomMessage,
             TokenizationPayload::BranchSummary(_) => ContextItemKind::BranchSummary,
+            TokenizationPayload::ReportedThinking { .. } => ContextItemKind::Thinking,
             TokenizationPayload::CommandExecution { .. } | TokenizationPayload::Unavailable => {
                 ContextItemKind::Other
             }
@@ -647,6 +648,7 @@ fn assistant(
                     source_provider: Some(provider.into()),
                     source_model: Some(model.into()),
                     source_api: None,
+                    thinking_reported: false,
                 },
             },
             None,

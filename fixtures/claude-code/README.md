@@ -30,6 +30,7 @@ Records keep the fields Claude Code writes (`parentUuid`, `isSidechain`, `cwd`, 
 | `relocated` | A `relocated` record; the working directory comes from `cwd`, not the directory name. |
 | `cost-state` | Claude Code's own total written as a running total, with repeated records. |
 | `cost-state-restarted` | Two `cost-state` records with different start times. |
+| `thinking-retention` | A model that keeps thinking only for the current turn (Sonnet 4.5): the thinking item is in context during the tool loop and leaves at the next user message. `split-response` covers a model that keeps it (Opus 5.5). |
 | `subagent-parent`, `subagent` | A parent session whose `Agent` tool call started a subagent, and the subagent's own transcript. |
 
 ## Expected results
@@ -57,5 +58,6 @@ Items are named by kind and the identifier they come from:
 | `tool:<tool_use_id>` | One tool result. |
 | `attachment:<uuid>` | An attachment with rendered text. |
 | `summary:<uuid>` | A compaction summary. |
+| `thinking:<message.id>` | A response's thinking, sized by its reported reasoning tokens. |
 
 `expected/discovery.json` lists which files discovery must return as main sessions and as subagents, and which it must ignore, when `projects/` is the root.

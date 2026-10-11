@@ -27,6 +27,9 @@ rust-embed = "8"
 mime_guess = "2"
 blake3 = "1"
 tiktoken = { version = "=4.1.2", default-features = false, features = ["vocab-openai"] }
+regex = "1"
+unicode-normalization = "0.1"
+unicode-general-category = "1.1.0"
 
 [dev-dependencies]
 tempfile = "3"

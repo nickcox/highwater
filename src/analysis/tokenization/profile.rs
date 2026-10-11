@@ -1,6 +1,10 @@
 use crate::domain::ModelTarget;
 
 const TIKTOKEN_VERSION: &str = "tiktoken-4.1.2";
+// Anthropic publishes no tokenizer for Claude 3 or later. Claude estimates come from the port
+// of ctok in `claude/`, a reconstruction of each tokenizer generation from count_tokens
+// measurements, at the ctok commit named here.
+const CTOK_VERSION: &str = "ctok-8c43ffd+tokenplume-port-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum TokenizationPolicy {
@@ -25,15 +29,33 @@ impl TokenizationPolicy {
 pub(crate) enum TokenizerFamily {
     O200k,
     Cl100k,
+    /// The reconstructed Claude tokenizer generations (ctok).
+    ClaudeV3,
+    ClaudeV4_7,
+    ClaudeV4_8,
     CharacterHeuristic,
     Unavailable,
 }
 
 impl TokenizerFamily {
+    /// The Claude tokenizer generation, for the Claude families.
+    pub(crate) fn claude_generation(self) -> Option<super::claude::Generation> {
+        use super::claude::Generation;
+        match self {
+            Self::ClaudeV3 => Some(Generation::V3),
+            Self::ClaudeV4_7 => Some(Generation::V4_7),
+            Self::ClaudeV4_8 => Some(Generation::V4_8),
+            _ => None,
+        }
+    }
+
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::O200k => "o200k",
             Self::Cl100k => "cl100k",
+            Self::ClaudeV3 => "ctok-claude-v3",
+            Self::ClaudeV4_7 => "ctok-claude-v4.7",
+            Self::ClaudeV4_8 => "ctok-claude-v4.8",
             Self::CharacterHeuristic => "unicode-scalar-div-4",
             Self::Unavailable => "unavailable",
         }
@@ -60,6 +82,8 @@ pub(crate) enum TokenizationMethod {
     ModelTokenizer,
     ApiSerializationEstimate,
     CharacterHeuristic,
+    /// A size the provider reported, such as a response's reasoning tokens.
+    ReportedUsage,
     Unavailable,
 }
 
@@ -69,6 +93,7 @@ impl TokenizationMethod {
             Self::ModelTokenizer => "modelTokenizer",
             Self::ApiSerializationEstimate => "apiSerializationEstimate",
             Self::CharacterHeuristic => "characterHeuristic",
+            Self::ReportedUsage => "reportedUsage",
             Self::Unavailable => "unavailable",
         }
     }
@@ -161,6 +186,14 @@ impl TokenizationProfile {
     pub(crate) fn projection_target(&self) -> &ModelTarget {
         &self.projection_target
     }
+
+    pub(crate) fn tool_call_rendering(&self) -> super::ToolCallRendering {
+        if self.family.claude_generation().is_some() {
+            super::ToolCallRendering::ClaudeInvoke
+        } else {
+            super::ToolCallRendering::NameAndArguments
+        }
+    }
 }
 
 pub(crate) fn resolve_profile(
@@ -186,6 +219,18 @@ pub(crate) fn resolve_profile(
             TokenizerFamily::CharacterHeuristic,
             TokenizationMethod::CharacterHeuristic,
             "forced-character-heuristic",
+        );
+    }
+
+    // A model's tokenizer is part of the model, so a Claude model is matched by its ID
+    // whichever provider served it (Anthropic, GitHub Copilot, Bedrock, Vertex...).
+    if let Some((family, rule)) = target.model.as_deref().and_then(claude_generation) {
+        return build_profile(
+            target,
+            policy,
+            family,
+            TokenizationMethod::ApiSerializationEstimate,
+            rule,
         );
     }
 
@@ -260,6 +305,9 @@ fn build_profile(
     let api = target.api.clone();
     let implementation = match family {
         TokenizerFamily::O200k | TokenizerFamily::Cl100k => TIKTOKEN_VERSION,
+        TokenizerFamily::ClaudeV3 | TokenizerFamily::ClaudeV4_7 | TokenizerFamily::ClaudeV4_8 => {
+            CTOK_VERSION
+        }
         TokenizerFamily::CharacterHeuristic => "tokenplume-character-heuristic-v1",
         TokenizerFamily::Unavailable => "tokenplume-unavailable-v1",
     };
@@ -297,6 +345,125 @@ fn build_profile(
         key,
         projection_target: target.clone(),
     }
+}
+
+/// Routes spell Claude model IDs differently: `claude-opus-4.6` (GitHub Copilot),
+/// `us.anthropic.claude-opus-4-6-20260101-v1:0` (Bedrock), `claude-opus-4-6@20260101`
+/// (Vertex), `anthropic/claude-opus-4-6`. All of these become `claude-opus-4-6`.
+pub(crate) fn normalised_claude_model(model: &str) -> Option<String> {
+    let mut id = model.trim().to_ascii_lowercase();
+    if let Some(rest) = id.strip_prefix("anthropic/") {
+        id = rest.to_owned();
+    }
+    if let Some(position) = id.find("anthropic.") {
+        let region = &id[..position];
+        if region.is_empty()
+            || (region.ends_with('.')
+                && region[..region.len() - 1]
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '-'))
+        {
+            id = id[position + "anthropic.".len()..].to_owned();
+        }
+    }
+    if let Some((head, _)) = id.split_once('@') {
+        id = head.to_owned();
+    }
+    if let Some(position) = id.rfind("-v") {
+        let suffix = &id[position + 2..];
+        if suffix.split_once(':').is_some_and(|(major, minor)| {
+            !major.is_empty()
+                && !minor.is_empty()
+                && major.chars().all(|c| c.is_ascii_digit())
+                && minor.chars().all(|c| c.is_ascii_digit())
+        }) {
+            id.truncate(position);
+        }
+    }
+    id = id.replace('.', "-");
+    if id.len() > 9 {
+        let (head, tail) = id.split_at(id.len() - 9);
+        if tail.starts_with('-') && tail[1..].chars().all(|c| c.is_ascii_digit()) {
+            id = head.to_owned();
+        }
+    }
+    id.starts_with("claude-").then_some(id)
+}
+
+/// The tokenizer family and rule for a Claude model ID, or `None` when the ID is not
+/// a Claude model or comes before Claude 3, whose tokenizer was different.
+fn claude_generation(model: &str) -> Option<(TokenizerFamily, &'static str)> {
+    const V3: (TokenizerFamily, &str) = (TokenizerFamily::ClaudeV3, "claude-v3-ctok");
+    const V4_7: (TokenizerFamily, &str) = (TokenizerFamily::ClaudeV4_7, "claude-v4.7-ctok");
+    const V4_8: (TokenizerFamily, &str) = (TokenizerFamily::ClaudeV4_8, "claude-v4.8-ctok");
+    // An unmeasured model uses the newest measured generation, and its rule says so.
+    const ASSUMED: (TokenizerFamily, &str) =
+        (TokenizerFamily::ClaudeV4_8, "assumed-latest-claude-ctok");
+    let id = normalised_claude_model(model)?;
+    let parts: Vec<&str> = id.split('-').skip(1).collect();
+    let number = |part: Option<&&str>| part.and_then(|part| part.parse::<u32>().ok());
+    // Claude 3 named the version first (`claude-3-5-sonnet`); later models name it last.
+    if let Some(major) = number(parts.first()) {
+        return match major {
+            0..=2 => None,
+            3 => Some(V3),
+            _ => Some(ASSUMED),
+        };
+    }
+    let name = *parts.first()?;
+    // `claude-instant-1`, `claude-v1` and `claude-v2` predate Claude 3.
+    if name == "instant"
+        || name
+            .strip_prefix('v')
+            .is_some_and(|version| version.parse::<u32>().is_ok())
+    {
+        return None;
+    }
+    let Some(major) = number(parts.get(1)) else {
+        return Some(ASSUMED);
+    };
+    let minor = number(parts.get(2))
+        .filter(|minor| *minor < 100)
+        .unwrap_or(0);
+    let version = (major, minor);
+    Some(match (name, version) {
+        (_, version) if version < (4, 7) && major >= 3 => V3,
+        ("opus", (4, 7)) => V4_7,
+        ("opus", version) if version >= (4, 8) && major <= 5 => V4_8,
+        ("sonnet" | "fable", (5, _)) => V4_8,
+        _ => ASSUMED,
+    })
+}
+
+/// Whether a Claude model keeps thinking from earlier turns in context, or `None` for a
+/// model that is not a Claude 3 or later model. From Anthropic's "Thinking block
+/// preservation by model": Opus 4.5 and later, Sonnet 4.6 and later, Haiku 5.5 and later,
+/// and the Fable and Mythos models keep all earlier turns; earlier models keep thinking
+/// only until the next user message. A model this does not recognise is assumed to
+/// behave like the newest ones.
+pub(crate) fn claude_keeps_prior_thinking(model: &str) -> Option<bool> {
+    claude_generation(model)?;
+    let id = normalised_claude_model(model)?;
+    let parts: Vec<&str> = id.split('-').skip(1).collect();
+    let number = |part: Option<&&str>| part.and_then(|part| part.parse::<u32>().ok());
+    if number(parts.first()).is_some() {
+        // `claude-3-…`: Claude 3, 3.5 and 3.7 keep only the last turn.
+        return Some(false);
+    }
+    let name = *parts.first()?;
+    let Some(major) = number(parts.get(1)) else {
+        return Some(true);
+    };
+    let minor = number(parts.get(2))
+        .filter(|minor| *minor < 100)
+        .unwrap_or(0);
+    let version = (major, minor);
+    Some(match name {
+        "opus" => version >= (4, 5),
+        "sonnet" => version >= (4, 6),
+        "haiku" => version >= (5, 5),
+        _ => true,
+    })
 }
 
 fn is_openai_provider(provider: &str) -> bool {
@@ -357,6 +524,186 @@ mod tests {
                 resolve_profile(&target, TokenizationPolicy::Strict).method,
                 TokenizationMethod::Unavailable
             );
+        }
+    }
+
+    #[test]
+    fn claude_model_ids_from_every_route_normalise_to_the_same_id() {
+        for (route, expected) in [
+            ("claude-opus-4-6", "claude-opus-4-6"),
+            ("claude-opus-4.6", "claude-opus-4-6"),
+            ("Claude-Opus-4.6", "claude-opus-4-6"),
+            ("anthropic/claude-opus-4-6", "claude-opus-4-6"),
+            ("anthropic.claude-opus-4-6-20260101-v1:0", "claude-opus-4-6"),
+            (
+                "us.anthropic.claude-opus-4-6-20260101-v1:0",
+                "claude-opus-4-6",
+            ),
+            (
+                "eu-central.anthropic.claude-opus-4-6-v2:0",
+                "claude-opus-4-6",
+            ),
+            ("claude-opus-4-6@20260101", "claude-opus-4-6"),
+            ("claude-haiku-4-5-20251001", "claude-haiku-4-5"),
+            ("claude-3-5-sonnet-20241022", "claude-3-5-sonnet"),
+            ("claude-opus-4.6-1m", "claude-opus-4-6-1m"),
+        ] {
+            assert_eq!(
+                normalised_claude_model(route).as_deref(),
+                Some(expected),
+                "{route}"
+            );
+        }
+        for not_claude in [
+            "<synthetic>",
+            "gpt-6-sol",
+            "my-claude-wrapper",
+            "",
+            "anthropic.gpt",
+        ] {
+            assert_eq!(normalised_claude_model(not_claude), None, "{not_claude}");
+        }
+    }
+
+    #[test]
+    fn claude_models_get_their_generation_whichever_provider_served_them() {
+        use TokenizerFamily::*;
+        let measured = |family| match family {
+            ClaudeV3 => "claude-v3-ctok",
+            ClaudeV4_7 => "claude-v4.7-ctok",
+            _ => "claude-v4.8-ctok",
+        };
+        for (model, family) in [
+            ("claude-3-opus-20240229", ClaudeV3),
+            ("claude-3-5-sonnet-20241022", ClaudeV3),
+            ("claude-3-7-sonnet", ClaudeV3),
+            ("claude-haiku-4-5-20251001", ClaudeV3),
+            ("claude-sonnet-4", ClaudeV3),
+            ("claude-sonnet-4.6", ClaudeV3),
+            ("claude-opus-4", ClaudeV3),
+            ("claude-opus-4-1-20250805", ClaudeV3),
+            ("claude-opus-4.6", ClaudeV3),
+            ("claude-opus-4-7", ClaudeV4_7),
+            ("claude-opus-4-8", ClaudeV4_8),
+            ("claude-opus-5", ClaudeV4_8),
+            ("claude-opus-5-5", ClaudeV4_8),
+            ("claude-opus-5.5", ClaudeV4_8),
+            ("claude-sonnet-5-5", ClaudeV4_8),
+            ("claude-fable-5-1", ClaudeV4_8),
+        ] {
+            for (provider, api) in [
+                (Some("anthropic"), Some("anthropic-messages")),
+                (Some("github-copilot"), Some("anthropic-messages")),
+                (Some("github-copilot"), None),
+                (None, None),
+            ] {
+                let target = ModelTarget {
+                    provider: provider.map(str::to_owned),
+                    model: Some(model.into()),
+                    api: api.map(str::to_owned),
+                };
+                for policy in [TokenizationPolicy::Auto, TokenizationPolicy::Strict] {
+                    let profile = resolve_profile(&target, policy);
+                    assert_eq!(profile.family, family, "{model} {provider:?}");
+                    assert_eq!(profile.rule, measured(family), "{model}");
+                    assert_eq!(profile.method, TokenizationMethod::ApiSerializationEstimate);
+                    assert_eq!(profile.framing_overhead(1), None);
+                    assert!(profile.id.starts_with("profile-v4-"));
+                }
+                assert_eq!(
+                    resolve_profile(&target, TokenizationPolicy::Heuristic).family,
+                    CharacterHeuristic
+                );
+                assert_eq!(
+                    resolve_profile(&target, TokenizationPolicy::Off).family,
+                    Unavailable
+                );
+            }
+        }
+        for model in [
+            "claude-haiku-5-5",
+            "claude-opus-6",
+            "claude-sonnet-4-7",
+            "claude-sonnet",
+        ] {
+            let profile = resolve_profile(
+                &ModelTarget {
+                    provider: Some("anthropic".into()),
+                    model: Some(model.into()),
+                    api: None,
+                },
+                TokenizationPolicy::Auto,
+            );
+            assert_eq!(profile.family, ClaudeV4_8, "{model}");
+            assert_eq!(profile.rule, "assumed-latest-claude-ctok", "{model}");
+        }
+        for model in [
+            "claude-2.1",
+            "claude-instant-1.2",
+            "claude-v1",
+            "<synthetic>",
+        ] {
+            let profile = resolve_profile(
+                &ModelTarget {
+                    provider: Some("anthropic".into()),
+                    model: Some(model.into()),
+                    api: None,
+                },
+                TokenizationPolicy::Auto,
+            );
+            assert_eq!(profile.family, CharacterHeuristic, "{model}");
+            assert_eq!(
+                profile.rule, "provider-api-serialization-estimate",
+                "{model}"
+            );
+        }
+        let reconstructed = resolve_profile(
+            &ModelTarget {
+                provider: Some("anthropic".into()),
+                model: Some("claude-opus-5".into()),
+                api: None,
+            },
+            TokenizationPolicy::Auto,
+        );
+        let heuristic = resolve_profile(
+            &ModelTarget {
+                provider: Some("anthropic".into()),
+                model: Some("claude-opus-5".into()),
+                api: None,
+            },
+            TokenizationPolicy::Heuristic,
+        );
+        assert_ne!(reconstructed.id, heuristic.id);
+        assert_eq!(reconstructed.key.implementation, CTOK_VERSION);
+        assert_eq!(
+            reconstructed.tool_call_rendering(),
+            super::super::ToolCallRendering::ClaudeInvoke
+        );
+        assert_eq!(
+            heuristic.tool_call_rendering(),
+            super::super::ToolCallRendering::NameAndArguments
+        );
+    }
+
+    #[test]
+    fn prior_thinking_retention_follows_anthropics_model_table() {
+        for (model, keeps) in [
+            ("claude-opus-4-5", Some(true)),
+            ("claude-opus-4-1", Some(false)),
+            ("claude-opus-4", Some(false)),
+            ("claude-sonnet-4-6", Some(true)),
+            ("claude-sonnet-4.5", Some(false)),
+            ("claude-haiku-4-5-20251001", Some(false)),
+            ("claude-haiku-5-5", Some(true)),
+            ("claude-3-7-sonnet", Some(false)),
+            ("claude-opus-5-5", Some(true)),
+            ("claude-fable-5-1", Some(true)),
+            ("claude-mythos-5-1", Some(true)),
+            ("claude-opus-6", Some(true)),
+            ("claude-2.1", None),
+            ("gpt-6-sol", None),
+        ] {
+            assert_eq!(claude_keeps_prior_thinking(model), keeps, "{model}");
         }
     }
 

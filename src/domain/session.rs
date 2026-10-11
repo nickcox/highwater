@@ -140,6 +140,33 @@ pub(crate) struct NormalizedContextItem {
 }
 
 impl NormalizedContextItem {
+    /// A response's thinking, sized by the reasoning tokens reported for it. Anthropic
+    /// sends thinking back with later requests and bills it as input, rebuilding it from
+    /// the block's signature whatever text the transcript shows.
+    pub(crate) fn reported_thinking(
+        id: String,
+        source_record_id: Option<String>,
+        tokens: u64,
+        model: String,
+    ) -> Self {
+        Self {
+            id,
+            kind: ContextItemKind::Thinking,
+            label: format!("Thinking · {} reported tokens", grouped(tokens)),
+            source_record_id,
+            source_tool_call_id: None,
+            metadata: BTreeMap::from([("reasoningTokens".into(), tokens.to_string())]),
+            serialized_size_bytes: 0,
+            payload: TokenizationPayload::ReportedThinking {
+                tokens,
+                source_model: Some(model),
+            },
+            presence: Vec::new(),
+            first_model_call: 0,
+            last_model_call: 0,
+        }
+    }
+
     /// Derived from authoritative presence, not the legacy zero lifetime sentinel.
     /// Analysis callers validate all ranges and call membership before deriving metrics.
     pub(crate) fn lifetime(&self) -> Option<ItemLifetime> {
@@ -161,6 +188,19 @@ impl NormalizedContextItem {
             count.checked_add(range.checked_call_count()?)
         })
     }
+}
+
+/// `1234567` as `1,234,567`.
+fn grouped(value: u64) -> String {
+    let digits = value.to_string();
+    let mut out = String::new();
+    for (position, digit) in digits.chars().enumerate() {
+        if position > 0 && (digits.len() - position).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,6 +225,8 @@ pub(crate) enum ContextItemKind {
     CompactionSummary,
     CustomMessage,
     BranchSummary,
+    /// A response's thinking, sized by the reasoning tokens the provider reported.
+    Thinking,
     Other,
 }
 
@@ -199,6 +241,7 @@ impl ContextItemKind {
             Self::CompactionSummary => "compactionSummary",
             Self::CustomMessage => "customMessage",
             Self::BranchSummary => "branchSummary",
+            Self::Thinking => "thinking",
             Self::Other => "other",
         }
     }
@@ -247,6 +290,9 @@ pub(crate) enum TokenizationPayload {
         source_provider: Option<String>,
         source_model: Option<String>,
         source_api: Option<String>,
+        /// The response's thinking is a separate `ReportedThinking` item, so the
+        /// recorded thinking text (empty or a summary) is not counted here.
+        thinking_reported: bool,
     },
     ToolResult {
         tool_call_id: String,
@@ -267,6 +313,13 @@ pub(crate) enum TokenizationPayload {
     },
     CompactionSummary(String),
     BranchSummary(String),
+    /// Thinking the provider sends back with later requests. Its size is the
+    /// producing response's reported reasoning tokens; only the model that
+    /// produced it reads it.
+    ReportedThinking {
+        tokens: u64,
+        source_model: Option<String>,
+    },
     // Source-neutral capability exercised by analysis tests; Pi command-shaped
     // records are ignored and do not construct this payload.
     #[cfg_attr(not(test), allow(dead_code))]

@@ -49,6 +49,8 @@ struct PendingCompaction {
 struct Response {
     item: Option<usize>,
     call: usize,
+    model: Option<String>,
+    has_thinking: bool,
 }
 
 struct State<'a> {
@@ -64,6 +66,11 @@ struct State<'a> {
     limitations: BTreeSet<Limitation>,
     tool_names: HashMap<String, (String, Value)>,
     failed_tools: HashSet<String>,
+    /// The latest response, whose thinking item is added once its usage is final.
+    open_response: Option<String>,
+    /// Thinking items that leave the context at the next user message, for models
+    /// that keep thinking only for the current turn.
+    turn_thinking: Vec<usize>,
 }
 
 pub(super) fn reconstruct(
@@ -122,6 +129,8 @@ pub(super) fn reconstruct(
         .into(),
         tool_names,
         failed_tools,
+        open_response: None,
+        turn_thinking: Vec::new(),
     };
     for index in branch {
         state.apply(&records[*index])?;
@@ -189,7 +198,12 @@ impl State<'_> {
             .message()
             .ok_or(SourceError::RequiredField { field: "message" })?;
         let usage = message.get("usage");
-        if let Some(response) = self.responses.get(&message_id) {
+        let has_thinking = record
+            .blocks()
+            .iter()
+            .any(|block| block.get("type").and_then(Value::as_str) == Some("thinking"));
+        if let Some(response) = self.responses.get_mut(&message_id) {
+            response.has_thinking |= has_thinking;
             let (call, item) = (response.call, response.item);
             let Some(item) = item else {
                 // Later records of a failed attempt add nothing.
@@ -203,6 +217,7 @@ impl State<'_> {
             }
             return Ok(());
         }
+        self.finish_response();
         let index = self.calls.len() + 1;
         let context_item_ids = self
             .active
@@ -247,8 +262,15 @@ impl State<'_> {
         if failed {
             // The error text is shown in the terminal by Claude Code; it is not
             // model output and is not sent with later requests.
-            self.responses
-                .insert(message_id, Response { item: None, call });
+            self.responses.insert(
+                message_id,
+                Response {
+                    item: None,
+                    call,
+                    model,
+                    has_thinking: false,
+                },
+            );
             return Ok(());
         }
         let blocks: Vec<AssistantContentBlock> = record
@@ -272,19 +294,72 @@ impl State<'_> {
                 source_provider: Some("anthropic".into()),
                 source_model: model,
                 source_api: Some("anthropic-messages".into()),
+                thinking_reported: false,
             },
             presence: Vec::new(),
             first_model_call: 0,
             last_model_call: 0,
         });
         self.responses.insert(
-            message_id,
+            message_id.clone(),
             Response {
                 item: Some(item),
                 call,
+                model: self.calls[call].target.model.clone(),
+                has_thinking,
             },
         );
+        self.open_response = Some(message_id);
         Ok(())
+    }
+
+    /// Anthropic sends a response's thinking back with later requests and bills it as
+    /// input, rebuilding it from the signature whatever the transcript shows. Its size is
+    /// the response's reported reasoning tokens, so it becomes its own item.
+    fn finish_response(&mut self) {
+        let Some(message_id) = self.open_response.take() else {
+            return;
+        };
+        let Some(response) = self.responses.get(&message_id) else {
+            return;
+        };
+        let (Some(item), true, Some(model)) =
+            (response.item, response.has_thinking, response.model.clone())
+        else {
+            return;
+        };
+        let Some(keeps) = crate::analysis::claude_keeps_prior_thinking(&model) else {
+            return;
+        };
+        let Some(tokens) = self.calls[response.call]
+            .reported_usage
+            .reasoning
+            .filter(|tokens| *tokens > 0)
+        else {
+            return;
+        };
+        if let TokenizationPayload::AssistantMessage {
+            thinking_reported, ..
+        } = &mut self.items[item].payload
+        {
+            *thinking_reported = true;
+        }
+        let thinking = NormalizedContextItem::reported_thinking(
+            format!("claude-code:thinking:{message_id}"),
+            self.items[item].source_record_id.clone(),
+            tokens,
+            model,
+        );
+        let index = self.items.len();
+        self.item_indexes.insert(thinking.id.clone(), index);
+        self.items.push(thinking);
+        // Thinking comes before the response's text and tool calls.
+        if let Some(position) = self.active.iter().position(|active| *active == item) {
+            self.active.insert(position, index);
+            if !keeps {
+                self.turn_thinking.push(index);
+            }
+        }
     }
 
     fn push_assistant_block(&mut self, item: usize, block: AssistantContentBlock, bytes: u64) {
@@ -394,6 +469,11 @@ impl State<'_> {
                 TokenizationPayload::UserMessage(content),
             )
         };
+        if kind == ContextItemKind::UserMessage {
+            self.finish_response();
+            let ending: HashSet<usize> = self.turn_thinking.drain(..).collect();
+            self.active.retain(|item| !ending.contains(item));
+        }
         let id = format!("claude-code:{key}:{uuid}");
         let item = NormalizedContextItem {
             id: id.clone(),
@@ -548,6 +628,7 @@ impl State<'_> {
     /// Items in `preservedSegment` stay; the rest end at the last call before
     /// the boundary.
     fn apply_boundary(&mut self, record: &Record) {
+        self.finish_response();
         self.limitations.insert(Limitation::MissingCompactionUsage);
         let metadata = record.value.get("compactMetadata");
         let preserved = metadata

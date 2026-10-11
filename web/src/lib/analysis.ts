@@ -27,6 +27,7 @@ const KNOWN_KINDS = new Set<ContextItemKind>([
   'compactionSummary',
   'customMessage',
   'branchSummary',
+  'thinking',
   'other',
 ]);
 
@@ -34,7 +35,7 @@ function normalizedKind(kind: string): ContextItemKind {
   return KNOWN_KINDS.has(kind as ContextItemKind) ? (kind as ContextItemKind) : 'other';
 }
 
-export const ANALYSIS_SCHEMA_VERSION = 14;
+export const ANALYSIS_SCHEMA_VERSION = 15;
 
 /** Replace per-call item positions with the IDs they refer to. The arrays
  * reference the existing `item.id` strings, so this adds no string copies. */

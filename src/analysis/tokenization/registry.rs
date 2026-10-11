@@ -188,6 +188,39 @@ impl ProfileRegistry {
     }
 }
 
+/// A reported size is used as it is, for a call to the model that produced it. Another
+/// model does not read the thinking, so it counts nothing there; the item keeps its
+/// place so its lifetime stays continuous.
+fn reported_thinking(
+    tokens: u64,
+    source_model: Option<&str>,
+    profile: &TokenizationProfile,
+) -> TokenEstimate {
+    let normalised = |model: &str| {
+        super::profile::normalised_claude_model(model).unwrap_or_else(|| model.to_owned())
+    };
+    let readable =
+        source_model.is_some_and(|source| normalised(source) == normalised(&profile.model));
+    let (tokens, note_codes) = if !readable {
+        (Some(0), vec![DiagnosticCode::ThinkingNotReadByModel])
+    } else if tokens <= MAX_SAFE_JSON_INTEGER {
+        (Some(tokens), Vec::new())
+    } else {
+        (None, vec![DiagnosticCode::TokenEstimateOutOfRange])
+    };
+    TokenEstimate {
+        profile_id: profile.id.clone(),
+        coverage: if tokens.is_some() {
+            TokenCoverage::Complete
+        } else {
+            TokenCoverage::Unavailable
+        },
+        tokens,
+        method: TokenizationMethod::ReportedUsage,
+        note_codes,
+    }
+}
+
 fn calculate(
     payload: &crate::domain::TokenizationPayload,
     profile: &TokenizationProfile,
@@ -202,7 +235,18 @@ fn calculate(
             note_codes: vec![DiagnosticCode::UnsupportedTokenizer],
         };
     }
-    let projected = project_payload(payload, profile.projection_target());
+    if let crate::domain::TokenizationPayload::ReportedThinking {
+        tokens,
+        source_model,
+    } = payload
+    {
+        return reported_thinking(*tokens, source_model.as_deref(), profile);
+    }
+    let projected = project_payload(
+        payload,
+        profile.projection_target(),
+        profile.tool_call_rendering(),
+    );
     if projected.unavailable {
         return TokenEstimate {
             profile_id: profile.id.clone(),
@@ -224,6 +268,13 @@ fn calculate(
         TokenizerFamily::Cl100k => (
             get_encoding("cl100k_base")
                 .and_then(|encoding| u64::try_from(encoding.count(&projected.text)).ok()),
+            None,
+        ),
+        TokenizerFamily::ClaudeV3 | TokenizerFamily::ClaudeV4_7 | TokenizerFamily::ClaudeV4_8 => (
+            profile
+                .family
+                .claude_generation()
+                .map(|generation| super::claude::count(&projected.text, generation)),
             None,
         ),
         TokenizerFamily::CharacterHeuristic => (
@@ -284,6 +335,89 @@ mod tests {
             first_model_call: 0,
             last_model_call: 0,
         }
+    }
+
+    /// Recorded `count_tokens` results for 22 MultiPL-E programs (see
+    /// fixtures/tokenization/README.md). Each estimate must equal the recorded count less the
+    /// message's fixed overhead.
+    #[test]
+    fn claude_estimates_match_recorded_counts() {
+        let sample: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/tokenization/claude-multipl-e.json"
+        ))
+        .expect("sample");
+        let texts = sample["texts"].as_array().expect("texts");
+        assert_eq!(texts.len(), 22);
+        for (generation, model) in [
+            ("v3", "claude-opus-4-5"),
+            ("v4.7", "claude-opus-4-7"),
+            ("v4.8", "claude-opus-5"),
+        ] {
+            let target = ModelTarget {
+                provider: Some("anthropic".into()),
+                model: Some(model.into()),
+                api: Some("anthropic-messages".into()),
+            };
+            let mut registry = ProfileRegistry::default();
+            let profile = registry.profile(&target, super::super::TokenizationPolicy::Auto);
+            assert!(profile.family.claude_generation().is_some(), "{model}");
+            let overhead = sample["overheads"][generation].as_u64().expect("overhead");
+            for text in texts {
+                let estimate = registry.estimate(
+                    &item(text["text"].as_str().expect("text")),
+                    &profile,
+                    &target,
+                );
+                let recorded = text["counts"][generation].as_u64().expect("count") - overhead;
+                assert_eq!(estimate.tokens, Some(recorded), "{generation}");
+                assert!(estimate.note_codes.is_empty(), "{generation}");
+            }
+        }
+    }
+
+    #[test]
+    fn reported_thinking_counts_only_for_the_model_that_produced_it() {
+        let thinking = NormalizedContextItem {
+            payload: TokenizationPayload::ReportedThinking {
+                tokens: 250,
+                source_model: Some("claude-opus-5-5".into()),
+            },
+            ..item("")
+        };
+        let target = |model: &str| ModelTarget {
+            provider: Some("github-copilot".into()),
+            model: Some(model.into()),
+            api: None,
+        };
+        let mut registry = ProfileRegistry::default();
+        for (model, tokens, note) in [
+            ("claude-opus-5-5", 250, false),
+            ("claude-opus-5.5", 250, false),
+            ("claude-sonnet-5-5", 0, true),
+        ] {
+            let profile = registry.profile(&target(model), super::super::TokenizationPolicy::Auto);
+            let estimate = registry.estimate(&thinking, &profile, &target(model));
+            assert_eq!(estimate.tokens, Some(tokens), "{model}");
+            assert_eq!(estimate.method, TokenizationMethod::ReportedUsage);
+            assert_eq!(estimate.coverage, TokenCoverage::Complete);
+            assert_eq!(
+                estimate
+                    .note_codes
+                    .contains(&DiagnosticCode::ThinkingNotReadByModel),
+                note,
+                "{model}"
+            );
+        }
+        let off = registry.profile(
+            &target("claude-opus-5-5"),
+            super::super::TokenizationPolicy::Off,
+        );
+        assert_eq!(
+            registry
+                .estimate(&thinking, &off, &target("claude-opus-5-5"))
+                .tokens,
+            None
+        );
     }
 
     #[test]
@@ -365,6 +499,7 @@ mod tests {
                 source_provider: Some("provider".into()),
                 source_model: Some("unknown".into()),
                 source_api: None,
+                thinking_reported: false,
             },
             presence: Vec::new(),
             first_model_call: 0,

@@ -1,0 +1,92 @@
+{
+  "fixture": "-synthetic-project/thinking-retention.jsonl",
+  "sessionId": "00000017-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000017",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s17-u1",
+    "s17-a1",
+    "s17-a2",
+    "s17-r1",
+    "s17-a3",
+    "s17-u2",
+    "s17-a4"
+  ],
+  "calls": [
+    {
+      "message": "msg_s17_1",
+      "model": "claude-sonnet-4-5-20250929",
+      "failed": false,
+      "usage": {
+        "input": 3,
+        "cacheRead": 0,
+        "cacheWrite": 100,
+        "cacheWrite1h": 0,
+        "output": 90,
+        "reasoning": 50
+      },
+      "context": [
+        "user:s17-u1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s17_1",
+          "name": "Read",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s17_2",
+      "model": "claude-sonnet-4-5-20250929",
+      "failed": false,
+      "usage": {
+        "input": 3,
+        "cacheRead": 100,
+        "cacheWrite": 40,
+        "cacheWrite1h": 0,
+        "output": 8,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s17-u1",
+        "thinking:msg_s17_1",
+        "assistant:msg_s17_1",
+        "tool:toolu_s17_1"
+      ],
+      "toolCallsAfter": []
+    },
+    {
+      "message": "msg_s17_3",
+      "model": "claude-sonnet-4-5-20250929",
+      "failed": false,
+      "usage": {
+        "input": 3,
+        "cacheRead": 140,
+        "cacheWrite": 10,
+        "cacheWrite1h": 0,
+        "output": 3,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s17-u1",
+        "assistant:msg_s17_1",
+        "tool:toolu_s17_1",
+        "assistant:msg_s17_2",
+        "user:s17-u2"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

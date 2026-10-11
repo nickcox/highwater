@@ -15,7 +15,10 @@ mod test_support;
 mod tests;
 mod timing;
 mod tokenization;
+pub(crate) use tokenization::claude_keeps_prior_thinking;
 mod usage;
+#[cfg(test)]
+mod usage_export;
 mod validate;
 
 use crate::{api::*, domain::*, pricing};
@@ -36,9 +39,9 @@ use validate::{validate_normalized_session, ValidatedSession};
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 14;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 15;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 26;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 30;
 
 /// How Claude Code calls are billed. The transcript does not record whether a
 /// session used a Claude subscription or an API key, so this is a setting.

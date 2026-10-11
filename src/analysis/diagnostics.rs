@@ -19,6 +19,8 @@ pub(crate) enum DiagnosticCode {
     MissingSystemPrompt,
     MissingToolDefinitions,
     NegativeResidual,
+    /// Thinking produced by another model, which the target model does not read.
+    ThinkingNotReadByModel,
 }
 
 impl DiagnosticCode {
@@ -38,6 +40,7 @@ impl DiagnosticCode {
             Self::MissingSystemPrompt => "missingSystemPrompt",
             Self::MissingToolDefinitions => "missingToolDefinitions",
             Self::NegativeResidual => "negativeResidual",
+            Self::ThinkingNotReadByModel => "thinkingNotReadByModel",
         }
     }
 }

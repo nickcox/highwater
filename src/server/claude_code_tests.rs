@@ -58,7 +58,7 @@ fn expected_results() -> Vec<Value> {
 #[test]
 fn catalogue_entries_match_the_expected_listings() {
     let entries = scan(&claude_only(vec![fixture_root()]));
-    assert_eq!(entries.len(), 17);
+    assert_eq!(entries.len(), 18);
     for expected in expected_results() {
         let fixture = expected["fixture"].as_str().expect("fixture");
         let listing = &expected["listing"];
@@ -130,7 +130,7 @@ fn catalogue_json_has_no_local_paths() {
 fn a_repeated_root_does_not_list_a_transcript_twice() {
     let root = fixture_root();
     let entries = scan(&claude_only(vec![root.clone(), root]));
-    assert_eq!(entries.len(), 17);
+    assert_eq!(entries.len(), 18);
 }
 
 #[test]

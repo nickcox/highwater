@@ -104,6 +104,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
           'modelTokenizer',
           'apiSerializationEstimate',
           'characterHeuristic',
+          'reportedUsage',
           'unavailable',
         ].includes(estimate.method)
       ) {
