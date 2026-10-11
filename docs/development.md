@@ -22,6 +22,8 @@ The browser smoke suite uses Playwright/Chromium and deterministic mocked API re
 
 Build the frontend before Rust so `rust-embed` packages the current `web/dist/` assets into the executable. The generated `web/dist/` assets are tracked so a clean checkout can build the embedded binary without requiring Node at runtime; refresh and commit them whenever the frontend changes.
 
+Price data for cost estimates is generated, not edited: see [data/prices/README.md](../data/prices/README.md) for how to update it. `scripts/check.sh` runs the generator's tests with `python3 -m unittest discover -s scripts/tests`.
+
 For OpenCode HTTP/WAL/RSS validation, run `python3 scripts/benchmark-opencode.py --full` after a release build. It creates only synthetic SQLite data, checks conditional freshness, oversized uncached responses, checkpoints, concurrent reads and 200 WAL commits, and removes its temporary database. Optional real-source browser acceptance is `node scripts/accept-opencode-readonly.mjs /path/to/opencode.db`: it opens the database through the read-only server and checks a representative qualified session without screenshots, traces, transcript dumps, or database writes.
 
 For generated performance validation, run `scripts/benchmark-context-river.sh large`. It uses only deterministic generated text, reports median cold/warm requests, response bytes, and observed peak RSS, then removes its temporary session root.

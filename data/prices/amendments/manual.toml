@@ -1,0 +1,3 @@
+# Corrections to models.dev prices, maintained by hand. These take precedence over
+# imported-model-prices.toml. See data/prices/README.md for the format; every amendment
+# needs a `source`.

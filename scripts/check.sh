@@ -12,6 +12,7 @@ npm --prefix web ci
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --all-targets --locked
+python3 -m unittest discover -s scripts/tests
 npm --prefix web run format:check
 npm --prefix web run check
 npm --prefix web run test
