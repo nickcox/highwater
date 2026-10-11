@@ -13,7 +13,7 @@ This script produces that file offline, from checkouts that are already download
     # Fail if prices.json does not match what build would write.
     python3 scripts/update-prices.py build --models-dev ../models.dev --check
 
-See data/prices/README.md for the formats and plans/cost-estimates-implementation-plan.md
+See data/prices/README.md for the formats and plans/archive/cost-estimates-implementation-plan.md
 for why the data is shaped this way.
 """
 

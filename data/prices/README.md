@@ -1,6 +1,6 @@
 # Price data
 
-TokenPlume uses this data to estimate the cost of model calls whose harness did not record one, and to give an API-equivalent cost for calls covered by a subscription. The design is in [plans/cost-estimates-implementation-plan.md](../../plans/cost-estimates-implementation-plan.md).
+TokenPlume uses this data to estimate the cost of model calls whose harness did not record one, and to give an API-equivalent cost for calls covered by a subscription. The design is in [plans/cost-estimates-implementation-plan.md](../../plans/archive/cost-estimates-implementation-plan.md).
 
 TokenPlume embeds only `prices.json` and never downloads prices while running.
 

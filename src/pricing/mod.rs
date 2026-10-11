@@ -1,7 +1,7 @@
 //! Assesses each model call's cost: the harness's recorded cost when the call was billed
 //! per token and one was recorded, otherwise an estimate from the embedded price table.
 //! Calls covered by a subscription get an API-equivalent cost at the lab's API rate,
-//! which is never added to billed cost. See plans/cost-estimates-implementation-plan.md.
+//! which is never added to billed cost. See plans/archive/cost-estimates-implementation-plan.md.
 
 mod calculate;
 mod report;
