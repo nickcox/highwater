@@ -15,8 +15,6 @@ cargo run --release -- --session-root ~/.pi/agent/sessions
 cargo run --release -- --opencode-db /path/to/opencode.db --opencode-db /path/to/opencode-stable.db
 # Explicit Claude Code projects directories (repeatable; may be combined with the others):
 cargo run --release -- --claude-root ~/.claude/projects
-# Claude Code sessions billed through an API key rather than a subscription:
-cargo run --release -- --claude-billing api
 # Optional: --port 43123 --tokenization auto
 ```
 

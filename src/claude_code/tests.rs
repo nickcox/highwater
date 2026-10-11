@@ -267,6 +267,7 @@ fn active_branches_match_the_expected_results() {
         .expect("records");
         let branch: Vec<&str> = super::branch::select(&records)
             .expect("branch")
+            .indexes
             .into_iter()
             .map(|index| records[index].uuid().expect("uuid"))
             .collect();
@@ -421,7 +422,6 @@ fn calls_context_and_compactions_match_the_expected_results() {
             crate::analysis::AnalysisConfig {
                 tokenization: crate::analysis::TokenizationPolicy::Heuristic,
                 perf_diagnostics: false,
-                claude_code_billing: Default::default(),
             },
         )
         .unwrap_or_else(|error| panic!("{name}: {error}"));
@@ -442,6 +442,78 @@ fn user(uuid: &str, parent: Option<&str>) -> String {
     format!(
         r#"{{"type":"user","uuid":"{uuid}","parentUuid":{parent},{HEADER},"message":{{"role":"user","content":"hi"}}}}"#
     )
+}
+
+#[test]
+fn tool_references_become_their_own_content_part() {
+    use crate::domain::{ContentPart, TokenizationPayload};
+    let loaded = super::load(
+        &fixture_root().join("-synthetic-project/content-kinds.jsonl"),
+        FileKind::Main,
+    )
+    .expect("content kinds");
+    let references: Vec<&str> = loaded
+        .session
+        .context_items
+        .iter()
+        .filter_map(|item| match &item.payload {
+            TokenizationPayload::ToolResult { content, .. } => Some(&content.parts),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|part| match part {
+            ContentPart::ToolReference(name) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(references.len(), 1);
+}
+
+/// Claude Code 2.1.287 can write a boundary whose `logicalParentUuid` and preserved
+/// segment tail name a record written after it. The compaction fixture rewritten that way
+/// must give the same branch and retained items as the original.
+#[test]
+fn a_boundary_naming_a_later_record_continues_from_the_record_before_it() {
+    let original = fs::read_to_string(fixture_root().join("-synthetic-project/compaction.jsonl"))
+        .expect("fixture");
+    let rewritten = original
+        .replace(
+            r#""logicalParentUuid":"s6-s1""#,
+            r#""logicalParentUuid":"s6-f1""#,
+        )
+        .replace(r#""tailUuid":"s6-s1""#, r#""tailUuid":"s6-f1""#)
+        .replace(
+            r#""uuids":["s6-u2","s6-a3","s6-t2","s6-s1"]"#,
+            r#""uuids":["s6-u2","s6-a3","s6-t2","s6-s1","s6-f1"]"#,
+        );
+    assert_eq!(
+        rewritten.matches("s6-f1").count(),
+        original.matches("s6-f1").count() + 3
+    );
+    let before = load_text(&original).expect("original");
+    let after = load_text(&rewritten).expect("rewritten");
+    assert_eq!(after.selected_records, before.selected_records);
+    assert!(after
+        .limitations
+        .contains(&super::Limitation::RepairedCompactionLink));
+    assert!(!before
+        .limitations
+        .contains(&super::Limitation::RepairedCompactionLink));
+    assert!(!after
+        .limitations
+        .contains(&super::Limitation::UnverifiedCompactionRetention));
+    let summary = |loaded: &super::Loaded| {
+        let compaction = &loaded.session.compactions[0];
+        (
+            compaction.retained_item_ids.clone(),
+            compaction.source_item_ids.clone(),
+            loaded.session.model_calls.len(),
+        )
+    };
+    assert_eq!(summary(&after), summary(&before));
+    // A loop that does not go through a boundary is still rejected.
+    let looped = format!("{}\n{}\n", user("a", Some("b")), user("b", Some("a")));
+    assert!(load_text(&looped).is_err());
 }
 
 #[test]
@@ -529,38 +601,28 @@ fn labels_name_tools_commands_and_attachments() {
 }
 
 #[test]
-fn claude_code_calls_are_api_equivalent_unless_the_billing_setting_says_api() {
-    use crate::analysis::{analyze, AnalysisConfig, ClaudeCodeBilling, TokenizationPolicy};
-    let analysed = |billing| {
-        let loaded = super::load(
-            &fixture_root().join("-synthetic-project/compaction.jsonl"),
-            FileKind::Main,
-        )
-        .expect("load");
-        analyze(
-            loaded.session,
-            AnalysisConfig {
-                tokenization: TokenizationPolicy::Heuristic,
-                perf_diagnostics: false,
-                claude_code_billing: billing,
-            },
-        )
-        .expect("analysis")
-    };
-    let subscription = analysed(ClaudeCodeBilling::Subscription);
-    let api = analysed(ClaudeCodeBilling::Api);
-    for (subscription, api) in subscription.model_calls.iter().zip(&api.model_calls) {
-        let (subscription, api) = (&subscription.cost_assessment, &api.cost_assessment);
-        assert_eq!(subscription.kind, "apiEquivalent");
-        assert_eq!(subscription.billing_mode, Some("subscription"));
-        assert_eq!(subscription.classification_rule, "billingModeTable");
-        assert_eq!(api.kind, "estimated");
-        assert_eq!(api.billing_mode, Some("perToken"));
-        assert_eq!(api.classification_rule, "claudeCodeBillingSetting");
-        // Anthropic's API rate is the price an API key pays, so only the label differs.
-        assert_eq!(subscription.amount, api.amount);
-        assert!(subscription.amount.is_some_and(|amount| amount > 0.0));
-        assert_eq!(subscription.recorded_by_harness, None);
+fn claude_code_calls_are_priced_at_the_api_rate() {
+    use crate::analysis::{analyze, AnalysisConfig, TokenizationPolicy};
+    let loaded = super::load(
+        &fixture_root().join("-synthetic-project/compaction.jsonl"),
+        FileKind::Main,
+    )
+    .expect("load");
+    let subscription = analyze(
+        loaded.session,
+        AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        },
+    )
+    .expect("analysis");
+    for call in &subscription.model_calls {
+        let cost = &call.cost_assessment;
+        assert_eq!(cost.kind, "apiEquivalent");
+        assert_eq!(cost.billing_mode, Some("subscription"));
+        assert_eq!(cost.classification_rule, "billingModeTable");
+        assert!(cost.amount.is_some_and(|amount| amount > 0.0));
+        assert_eq!(cost.recorded_by_harness, None);
     }
     // msg_s6_1 wrote 400 tokens with a one-hour lifetime, which cost twice the
     // input rate rather than the five-minute write rate (claude-opus-5-5: $4 input,
@@ -610,7 +672,6 @@ fn thinking_is_sized_by_reported_reasoning_for_the_model_that_produced_it() {
         crate::analysis::AnalysisConfig {
             tokenization: crate::analysis::TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");

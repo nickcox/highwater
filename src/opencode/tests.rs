@@ -628,7 +628,6 @@ fn local_database_read_only_inventory() {
                     AnalysisConfig {
                         tokenization: TokenizationPolicy::Off,
                         perf_diagnostics: false,
-                        claude_code_billing: Default::default(),
                     },
                 )
                 .expect("domain/API invariants");

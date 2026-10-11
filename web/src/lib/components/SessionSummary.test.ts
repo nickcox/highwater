@@ -13,7 +13,7 @@ describe('SessionSummary', () => {
     expect(screen.getByText('Model calls')).toBeInTheDocument();
     expect(screen.getByText('Context items')).toBeInTheDocument();
     expect(screen.getByText('Peak calculated context')).toBeInTheDocument();
-    expect(screen.getByText('Billed')).toBeInTheDocument();
+    expect(container.querySelectorAll('.primary-metrics > div')[3]).toHaveTextContent(/^Cost/);
     expect(screen.queryByTestId('estimate-caveat')).not.toBeInTheDocument();
 
     const details = container.querySelector('details.session-details') as HTMLDetailsElement;
@@ -42,12 +42,12 @@ describe('SessionSummary', () => {
       props: { indexed: indexTestAnalysis(testAnalysis()) },
     });
     const cost = container.querySelectorAll('.primary-metrics > div')[3];
-    expect(cost).toHaveTextContent(/Billed\s*≈ \D*0\.06\s*3 calls/);
+    expect(cost).toHaveTextContent(/Cost\s*≈ \D*0\.06\s*3 calls/);
     expect(cost).toHaveTextContent('1 call without a price');
     expect(cost).not.toHaveTextContent('API-equivalent');
   });
 
-  it('keeps API-equivalent cost on its own line and counts failed attempts', () => {
+  it('adds subscription calls to the cost and splits a mixed session underneath', () => {
     const analysis = testAnalysis();
     analysis.modelCalls[0].costAssessment = {
       ...costAssessmentOf('apiEquivalent', 1.5),
@@ -62,9 +62,9 @@ describe('SessionSummary', () => {
       props: { indexed: indexTestAnalysis(analysis) },
     });
     const cost = container.querySelectorAll('.primary-metrics > div')[3];
-    expect(cost).toHaveTextContent(/Billed\s*≈ \D*0\.05\s*2 calls/);
+    expect(cost).toHaveTextContent(/Cost\s*≈ \D*1\.55–\D*1\.80\s*3 calls/);
     expect(cost).toHaveTextContent(
-      /Subscription \(API-equivalent\)\s*≈ \D*1\.50–\D*1\.75\s*1 call at lab API rates/,
+      /≈ \D*0\.05 billed per token · ≈ \D*1\.50–\D*1\.75 covered by a subscription/,
     );
     expect(cost).toHaveTextContent('1 failed attempt not counted');
     const details = container.querySelector('details.session-details')!;

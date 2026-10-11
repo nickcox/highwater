@@ -51,7 +51,6 @@ fn inconsistent_placeholder_evidence_is_rejected_before_projection() {
             AnalysisConfig {
                 tokenization: TokenizationPolicy::Auto,
                 perf_diagnostics: false,
-                claude_code_billing: Default::default(),
             },
         )
         .expect_err("invalid evidence");
@@ -71,7 +70,6 @@ fn failed_usage_placeholders_do_not_become_measurements_or_complete_rollups() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -285,7 +283,6 @@ fn analysis_accepts_a_source_neutral_fake_adapter() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -307,7 +304,6 @@ fn source_neutral_command_payload_remains_supported_without_pi_command_support()
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("command-capable source analysis");
@@ -327,7 +323,6 @@ fn analysis_accepts_source_neutral_opaque_ids() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -397,7 +392,6 @@ fn transition_membership_preserves_context_order_and_metrics() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -439,7 +433,6 @@ fn unavailable_token_geometry_is_explicit() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -491,7 +484,6 @@ fn complete_provider_usage_is_reconciled_without_using_total_tokens() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -516,7 +508,6 @@ fn normalized_unknown_references_are_invariant_errors() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect_err("unknown normalized references must fail");
@@ -539,7 +530,6 @@ fn normalized_presence_must_match_membership_and_ranges() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect_err("inverted ranges must fail");
@@ -558,7 +548,6 @@ fn serialized_byte_diagnostics_keep_the_legacy_field_without_affecting_token_geo
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
-                    claude_code_billing: Default::default(),
                 },
             )
             .expect("safe diagnostic");
@@ -629,7 +618,6 @@ fn valid_zero_call_terminal_summary_is_accepted() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("terminal zero-call summary is valid");
@@ -676,7 +664,6 @@ fn terminal_summary_cannot_be_referenced_by_an_earlier_call() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect_err("terminal summary must not have earlier membership");
@@ -714,7 +701,6 @@ fn terminal_summary_does_not_degrade_applicable_exposure() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("terminal summary analysis");
@@ -741,7 +727,6 @@ fn normalized_values_above_safe_integer_are_rejected_before_analysis() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect_err("unsafe normalized integer must fail");
@@ -760,7 +745,6 @@ fn empty_sessions_have_missing_usage_totals() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -789,7 +773,6 @@ fn analysis_preserves_unsupported_content_coverage() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -842,7 +825,6 @@ fn mixed_complete_and_unavailable_item_calls_are_partial_with_numeric_value() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("valid mixed coverage");
@@ -875,7 +857,6 @@ fn tokenizer_support_does_not_imply_known_request_framing() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -900,7 +881,6 @@ fn known_framing_requires_text_only_chat_composition() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("text-only chat analysis");
@@ -931,7 +911,6 @@ fn known_framing_requires_text_only_chat_composition() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("tool analysis");
@@ -955,7 +934,6 @@ fn known_framing_requires_text_only_chat_composition() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("zero-message chat analysis");
@@ -980,7 +958,6 @@ fn transition_and_age_metrics_include_partial_estimates_and_say_so() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -1069,7 +1046,6 @@ fn api_omits_full_normalized_payload_records() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -1133,7 +1109,6 @@ fn long_payload_preview_omits_unbounded_suffix_from_api_json() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");
@@ -1151,7 +1126,6 @@ fn performance_diagnostics_do_not_change_serialized_analysis() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis without diagnostics");
@@ -1160,7 +1134,6 @@ fn performance_diagnostics_do_not_change_serialized_analysis() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: true,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis with diagnostics");
@@ -1182,7 +1155,6 @@ fn recorded_output_is_exposed_without_changing_normalized_totals_costs_or_rates(
     let config = AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     };
     let baseline = analyze(original, config).expect("baseline");
     let analysis = analyze(recorded, config).expect("recorded counters");
@@ -1214,7 +1186,6 @@ fn unsafe_recorded_output_is_rejected_independently_of_normalized_usage() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Off,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect_err("unsafe counter");
@@ -1235,7 +1206,6 @@ fn zero_reported_prompt_is_not_divided() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");

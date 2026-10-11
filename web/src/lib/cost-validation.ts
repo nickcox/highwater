@@ -13,7 +13,6 @@ const RULES = new Set([
   'billingModeTable',
   'opencodeZeroWithListedPrice',
   'perTokenDefault',
-  'claudeCodeBillingSetting',
   'failedAttempt',
   'missingTime',
   'noPrice',

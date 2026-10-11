@@ -14,7 +14,7 @@ mod sources;
 use routes::router;
 mod watcher;
 
-use crate::analysis::{AnalysisConfig, ClaudeCodeBilling, TokenizationPolicy};
+use crate::analysis::{AnalysisConfig, TokenizationPolicy};
 #[cfg(test)]
 use analysis::{
     analysis_cache_key, classify_parse_failure, etag_for_key, AnalysisCache, AnalysisCacheKey,
@@ -68,24 +68,6 @@ impl From<TokenizationArg> for TokenizationPolicy {
     }
 }
 
-/// How Claude Code sessions were billed; the transcripts do not record it.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub(crate) enum ClaudeBillingArg {
-    /// A Claude subscription: calls are shown at API-equivalent cost.
-    Subscription,
-    /// An API key: calls are shown as estimated billed cost.
-    Api,
-}
-
-impl From<ClaudeBillingArg> for ClaudeCodeBilling {
-    fn from(value: ClaudeBillingArg) -> Self {
-        match value {
-            ClaudeBillingArg::Subscription => Self::Subscription,
-            ClaudeBillingArg::Api => Self::Api,
-        }
-    }
-}
-
 #[derive(Parser, Debug)]
 pub(crate) struct Args {
     #[arg(long)]
@@ -97,8 +79,6 @@ pub(crate) struct Args {
     /// `$CLAUDE_CONFIG_DIR/projects` or `~/.claude/projects`.
     #[arg(long)]
     pub claude_root: Vec<PathBuf>,
-    #[arg(long, value_enum, default_value_t = ClaudeBillingArg::Subscription)]
-    pub claude_billing: ClaudeBillingArg,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
@@ -348,7 +328,6 @@ async fn run_with_watcher(
         config: AnalysisConfig {
             tokenization: args.tokenization.into(),
             perf_diagnostics,
-            claude_code_billing: args.claude_billing.into(),
         },
         analysis: Arc::new(AnalysisService::new(Arc::new(execute_analysis))),
     };

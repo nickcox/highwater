@@ -12,7 +12,6 @@ fn config(policy: TokenizationPolicy) -> AnalysisConfig {
     AnalysisConfig {
         tokenization: policy,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     }
 }
 fn push(
@@ -359,6 +358,7 @@ fn export_live_contract() {
         parts: vec![ContentPart::Image(ImageDescriptor {
             media_type: Some("image/png".into()),
             encoded_data_length: Some(8),
+            dimensions: None,
         })],
     });
     push(
@@ -497,7 +497,7 @@ fn export_live_contract() {
     cases.push(("opencode-compaction-auto".into(), compacted));
 
     // Claude Code transcripts, through the same loader and coverage notice as HTTP.
-    let claude_code = |fixture: &str, kind, billing| {
+    let claude_code = |fixture: &str, kind| {
         let loaded = crate::source::load(
             &crate::source::SessionLocator::ClaudeCodeFile {
                 path: PathBuf::from(format!("fixtures/claude-code/projects/{fixture}")),
@@ -506,14 +506,8 @@ fn export_live_contract() {
             None,
         )
         .expect("Claude Code fixture");
-        let mut analysis = analyze(
-            loaded.normalized,
-            AnalysisConfig {
-                claude_code_billing: billing,
-                ..config(TokenizationPolicy::Auto)
-            },
-        )
-        .expect("Claude Code analysis");
+        let mut analysis = analyze(loaded.normalized, config(TokenizationPolicy::Auto))
+            .expect("Claude Code analysis");
         analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
             status: "partial",
             explanation_codes: codes,
@@ -543,7 +537,6 @@ fn export_live_contract() {
             claude_code(
                 &format!("-synthetic-project/{name}.jsonl"),
                 crate::claude_code::FileKind::Main,
-                ClaudeCodeBilling::Subscription,
             ),
         ));
     }
@@ -552,15 +545,6 @@ fn export_live_contract() {
         claude_code(
             "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl",
             crate::claude_code::FileKind::Subagent,
-            ClaudeCodeBilling::Subscription,
-        ),
-    ));
-    cases.push((
-        "claude-code-compaction-api-billing-auto".into(),
-        claude_code(
-            "-synthetic-project/compaction.jsonl",
-            crate::claude_code::FileKind::Main,
-            ClaudeCodeBilling::Api,
         ),
     ));
 
@@ -765,7 +749,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 128);
+    assert_eq!(manifest.len(), 127);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

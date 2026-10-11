@@ -80,7 +80,6 @@ fn recorded_declarations_are_estimated_nonzero_and_provider_accounting_stays_ind
             AnalysisConfig {
                 tokenization: policy,
                 perf_diagnostics: false,
-                claude_code_billing: Default::default(),
             },
         )
         .unwrap();
@@ -286,7 +285,6 @@ fn explicit_empty_loadout_suppresses_missing_diagnostic_without_a_fake_tool_item
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .unwrap();
@@ -347,7 +345,6 @@ fn loadout_completeness_tracks_active_tools_across_noops_and_recovery() {
             AnalysisConfig {
                 tokenization: TokenizationPolicy::Auto,
                 perf_diagnostics: false,
-                claude_code_billing: Default::default(),
             },
         )
         .unwrap();

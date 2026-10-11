@@ -21,6 +21,12 @@ pub(crate) enum DiagnosticCode {
     NegativeResidual,
     /// Thinking produced by another model, which the target model does not read.
     ThinkingNotReadByModel,
+    /// A tool reference loads a tool definition into the request that is not recorded.
+    UnrecordedToolDefinition,
+    /// An image counted from its size by the provider's documented rule.
+    EstimatedImageSize,
+    /// A size derived from a call's reported input rather than counted.
+    InferredFromReportedUsage,
 }
 
 impl DiagnosticCode {
@@ -41,6 +47,9 @@ impl DiagnosticCode {
             Self::MissingToolDefinitions => "missingToolDefinitions",
             Self::NegativeResidual => "negativeResidual",
             Self::ThinkingNotReadByModel => "thinkingNotReadByModel",
+            Self::UnrecordedToolDefinition => "unrecordedToolDefinition",
+            Self::EstimatedImageSize => "estimatedImageSize",
+            Self::InferredFromReportedUsage => "inferredFromReportedUsage",
         }
     }
 }

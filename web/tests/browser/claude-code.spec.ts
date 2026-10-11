@@ -51,14 +51,15 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const response = await analysisResponse;
   expect(response.status()).toBe(200);
   const analysis = await response.json();
-  expect(analysis.schemaVersion).toBe(15);
+  expect(analysis.schemaVersion).toBe(16);
   expect(analysis.session.source).toBe('claude-code');
   expect(analysis.modelCalls).toHaveLength(4);
   expect(analysis.compactions).toHaveLength(1);
   const coverage = page.getByRole('complementary', { name: 'Reconstruction coverage' });
   await expect(coverage).toContainText("The harness's own model calls");
   await expect(coverage).toContainText('Some compaction records have no request usage');
-  await expect(page.locator('.cost-metric')).toContainText('API-equivalent');
+  await expect(page.locator('.cost-metric')).toContainText('Cost');
+  await expect(page.locator('.cost-metric')).not.toContainText('covered by a subscription');
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   const river = page.getByRole('application', { name: 'Context River' });
   await river

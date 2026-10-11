@@ -428,7 +428,6 @@ async fn injected_watcher_failure_keeps_degraded_http_usable() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
     );
@@ -467,7 +466,6 @@ async fn sse_stream_emits_payloads_updates_converges_for_lagged_subscribers_and_
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
     );
@@ -585,7 +583,6 @@ async fn api_route_reuses_cache_and_returns_deterministic_output() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::clone(&cache),
     ));
@@ -607,7 +604,6 @@ async fn api_route_reuses_cache_and_returns_deterministic_output() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
     ))
@@ -627,7 +623,6 @@ async fn list_response_has_generation_scoped_headers_and_etag() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
     ));
@@ -673,7 +668,6 @@ async fn canonical_path_ids_are_resolved_without_filename_fallback() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
     ));
@@ -691,7 +685,6 @@ async fn matching_etag_returns_not_modified_without_a_body() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
     ));
@@ -753,7 +746,6 @@ async fn concurrent_same_key_requests_execute_once() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::clone(&cache),
         executor,
@@ -800,7 +792,6 @@ async fn failed_flight_wakes_waiters_and_can_be_retried() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::clone(&cache),
         executor,
@@ -855,7 +846,6 @@ async fn cancelling_initiator_does_not_cancel_shared_analysis() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
         executor,
@@ -908,7 +898,6 @@ async fn analysis_execution_is_bounded_across_distinct_keys() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
         executor,
@@ -961,7 +950,6 @@ async fn different_keys_execute_independently() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::new(Mutex::new(AnalysisCache::default())),
         executor,
@@ -1017,7 +1005,6 @@ async fn request_cache_invalidates_after_same_size_file_rewrite() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         Arc::clone(&cache),
     ));
@@ -1046,7 +1033,6 @@ fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
     let auto = AnalysisConfig {
         tokenization: TokenizationPolicy::Auto,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     };
     let first = analysis_cache_key(&path, auto).expect("first fingerprint");
     rewrite_with_changed_mtime(&path, b"xyz");
@@ -1062,7 +1048,6 @@ fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("strict fingerprint");
@@ -1071,7 +1056,6 @@ fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: true,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("diagnostic fingerprint");
@@ -1088,7 +1072,6 @@ fn analysis_rejects_a_source_changed_after_the_initial_fingerprint() {
     let config = AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     };
     let key = analysis_cache_key(&path, config).expect("initial fingerprint");
     let original = std_fs::read_to_string(&path).expect("read fixture copy");
@@ -1108,7 +1091,6 @@ fn vanished_source_during_parse_failure_is_not_reported_as_bad_format() {
         byte_size: 1,
         modified_nanos: 1,
         claude_code: None,
-        claude_code_billing: Default::default(),
         tokenization: TokenizationPolicy::Auto,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -1130,7 +1112,6 @@ fn analysis_publishes_a_stable_response() {
     let config = AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     };
     let key = analysis_cache_key(&path, config).expect("fingerprint");
     let response = execute_analysis(path, config, key).expect("stable analysis");
@@ -1146,7 +1127,6 @@ fn analysis_cache_enforces_entry_and_byte_limits() {
         byte_size,
         modified_nanos: 0,
         claude_code: None,
-        claude_code_billing: Default::default(),
         tokenization: TokenizationPolicy::Heuristic,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -1166,7 +1146,6 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
     let config = AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     };
     let analysis = analyze(
         PiSourceAdapter
@@ -1183,7 +1162,6 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
         byte_size,
         modified_nanos: 0,
         claude_code: None,
-        claude_code_billing: Default::default(),
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,

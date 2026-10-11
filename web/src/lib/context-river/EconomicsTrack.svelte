@@ -411,14 +411,14 @@
       const costLabel =
         call.costAssessment.amount === null
           ? ''
-          : ` · ${costKindLabel(call.costAssessment)} cost ${formatAssessedCost(call.costAssessment)} USD`;
+          : ` · ${costKindLabel(call.costAssessment, indexed.analysis.session.source)} cost ${formatAssessedCost(call.costAssessment)} USD`;
       const pinnedLabel =
         pinnedCallIndex === callIndex && hoveredCallIndex !== callIndex ? ' · pinned' : '';
       return `Call ${callIndex}${pinnedLabel} · ${buckets} · ${mode === 'cache' && cacheViewMode === 'share' ? `${share} · ` : ''}${ratioLabel}${costLabel}`;
     }
     return call.costAssessment.amount === null
       ? `Call ${callIndex} · cost unavailable`
-      : `Call ${callIndex} · ${costKindLabel(call.costAssessment)} cost ${formatAssessedCost(call.costAssessment)} USD`;
+      : `Call ${callIndex} · ${costKindLabel(call.costAssessment, indexed.analysis.session.source)} cost ${formatAssessedCost(call.costAssessment)} USD`;
   }
 
   function layoutCacheBar(point: CacheTrackPoint, x: number): CacheBar {
@@ -482,7 +482,7 @@
       point.kind === 'recorded' ? ` · cost components ${point.componentStatus}` : '';
     const ariaLabel =
       (point.status === 'known' || point.status === 'zero') && assessed
-        ? `Call ${point.callIndex} · ${costKindLabel(assessed)} cost ${formatAssessedCost(assessed)} USD${components}${targetLabel}`
+        ? `Call ${point.callIndex} · ${costKindLabel(assessed, indexed.analysis.session.source)} cost ${formatAssessedCost(assessed)} USD${components}${targetLabel}`
         : point.status === 'partial'
           ? `Call ${point.callIndex} · cost unavailable · some recorded cost components are present`
           : `Call ${point.callIndex} · cost unavailable`;

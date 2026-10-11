@@ -259,7 +259,6 @@ async fn sessions_are_listed_and_analysed_with_a_coverage_notice() {
         config: AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
         analysis: Arc::new(AnalysisService::new(Arc::new(execute_analysis))),
     });
@@ -308,7 +307,6 @@ fn claude_code_cache_keys_and_etags_differ_from_pi_keys_for_the_same_file() {
     let config = AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
-        claude_code_billing: Default::default(),
     };
     let pi = analysis_cache_key(&path, config).expect("Pi key");
     assert_eq!(pi.claude_code, None);

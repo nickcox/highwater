@@ -24,6 +24,7 @@
     'thinking',
     'toolDefinition',
     'toolResult',
+    'unrecordedContext',
     'userMessage',
   ];
   const KIND_LABELS: Record<ContextItemKind, string> = {
@@ -36,6 +37,7 @@
     thinking: 'Thinking',
     toolDefinition: 'Tool definition',
     toolResult: 'Tool result',
+    unrecordedContext: 'Unrecorded request context',
     userMessage: 'User message',
   };
   const SEARCH_LIMIT = 120;

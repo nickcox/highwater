@@ -1,5 +1,18 @@
-export const TIMING_EXPLANATION =
-  'Approximate client-observed elapsed time from Pi response initialization to session recording. Includes waiting, retries and possible extension processing; excludes subsequent tool execution. Effective output rate uses reported output tokens, including reasoning, over the whole interval—not generation-only speed.';
+const RATE = 'The rate is reported output, including reasoning, over that time.';
+
+/** What a call's response time measures, for the source that recorded it. */
+export function timingExplanation(source: string): string {
+  switch (source) {
+    case 'claude-code':
+      return 'Claude Code does not record when a request started, so the response time and output rate are unavailable.';
+    case 'pi':
+      return `From Pi starting the response to recording it, including waiting and retries. ${RATE}`;
+    case 'opencode':
+      return `From OpenCode creating the response to completing it, including waiting and retries. ${RATE}`;
+    default:
+      return `From the recorded start of the response to its end, including waiting and retries. ${RATE}`;
+  }
+}
 
 export function responseDuration(ms: number | null): string {
   if (ms === null) return 'Unavailable';

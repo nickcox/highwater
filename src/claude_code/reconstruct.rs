@@ -555,12 +555,18 @@ impl State<'_> {
                         .and_then(|source| source.get(key))
                         .and_then(Value::as_str)
                 };
-                ContentPart::Image(ImageDescriptor {
-                    media_type: field("media_type").map(str::to_owned),
-                    encoded_data_length: field("data")
-                        .map(|data| u64::try_from(data.len()).unwrap_or(u64::MAX)),
-                })
+                ContentPart::Image(ImageDescriptor::from_encoded(
+                    field("media_type"),
+                    field("data"),
+                ))
             }
+            Some("tool_reference") => ContentPart::ToolReference(
+                block
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_owned(),
+            ),
             _ => {
                 self.limitations.insert(Limitation::UnsupportedContent);
                 ContentPart::Unsupported
@@ -631,9 +637,12 @@ impl State<'_> {
         self.finish_response();
         self.limitations.insert(Limitation::MissingCompactionUsage);
         let metadata = record.value.get("compactMetadata");
-        let preserved = metadata
-            .and_then(|metadata| metadata.get("preservedSegment"))
-            .and_then(|segment| self.preserved_records(segment));
+        let preserved = metadata.and_then(|metadata| {
+            metadata
+                .get("preservedSegment")
+                .and_then(|segment| self.preserved_records(segment))
+                .or_else(|| preserved_messages(metadata))
+        });
         if preserved.is_none() {
             self.limitations
                 .insert(Limitation::UnverifiedCompactionRetention);
@@ -1033,4 +1042,21 @@ fn attachment_label(attachment_type: &str, record: &Record) -> String {
         }
     };
     name.into()
+}
+
+/// The records Claude Code lists in `preservedMessages`, for a segment whose parent links
+/// do not lead from its tail to its head (a tail written after the boundary).
+fn preserved_messages(metadata: &Value) -> Option<HashSet<String>> {
+    let uuids = metadata
+        .get("preservedMessages")?
+        .get("uuids")?
+        .as_array()?;
+    uuids
+        .iter()
+        .map(|uuid| {
+            uuid.as_str()
+                .filter(|uuid| !uuid.is_empty())
+                .map(str::to_owned)
+        })
+        .collect()
 }

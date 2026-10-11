@@ -140,6 +140,7 @@ impl State {
             TokenizationPayload::CustomMessage(_) => ContextItemKind::CustomMessage,
             TokenizationPayload::BranchSummary(_) => ContextItemKind::BranchSummary,
             TokenizationPayload::ReportedThinking { .. } => ContextItemKind::Thinking,
+            TokenizationPayload::UnrecordedContext { .. } => ContextItemKind::UnrecordedContext,
             TokenizationPayload::CommandExecution { .. } | TokenizationPayload::Unavailable => {
                 ContextItemKind::Other
             }
@@ -341,13 +342,16 @@ fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {
             }
             "file" => match text(&part.data, "mime")? {
                 "text/plain" | "application/x-directory" => {}
-                _ => {
-                    // Do not resolve live files/URLs as historical attachments.
-                    parts.push(ContentPart::Unsupported);
-                    state
-                        .limitations
-                        .insert(ReplayLimitation::UnsupportedContent);
-                }
+                mime => match embedded_image(mime, &part.data) {
+                    Some(image) => parts.push(image),
+                    None => {
+                        // Do not resolve live files/URLs as historical attachments.
+                        parts.push(ContentPart::Unsupported);
+                        state
+                            .limitations
+                            .insert(ReplayLimitation::UnsupportedContent);
+                    }
+                },
             },
             "compaction" => {
                 if part.data.get("tail_start_id").is_some() {
@@ -727,12 +731,21 @@ fn assistant(
                 "error" => text(tool_state, "error")?,
                 _ => "[Tool execution was interrupted]",
             };
-            let has_attachments = tool_state
+            let attachments = tool_state
                 .get("attachments")
                 .and_then(Value::as_array)
-                .is_some_and(|value| !value.is_empty());
+                .map(Vec::as_slice)
+                .unwrap_or_default();
             let mut content = MessageContent::text(output);
-            if has_attachments {
+            let mut has_unsupported_attachment = false;
+            for attachment in attachments {
+                let mime = attachment.get("mime").and_then(Value::as_str).unwrap_or("");
+                match embedded_image(mime, attachment) {
+                    Some(image) => content.parts.push(image),
+                    None => has_unsupported_attachment = true,
+                }
+            }
+            if has_unsupported_attachment {
                 content.parts.push(ContentPart::Unsupported);
                 state
                     .limitations
@@ -780,4 +793,47 @@ fn assistant(
         }
     }
     Ok(())
+}
+
+/// An image whose `url` is a base64 `data:` URL holds the image itself, so its size can be
+/// read from it. Any other URL would need a file or network read, which replay never does.
+fn embedded_image(mime: &str, value: &Value) -> Option<ContentPart> {
+    if !mime.starts_with("image/") {
+        return None;
+    }
+    let url = value.get("url").and_then(Value::as_str)?;
+    let data = url.strip_prefix("data:")?.split_once(";base64,")?.1;
+    Some(ContentPart::Image(
+        crate::domain::ImageDescriptor::from_encoded(Some(mime), Some(data)),
+    ))
+}
+
+#[cfg(test)]
+mod embedded_image_tests {
+    use super::*;
+
+    #[test]
+    fn only_base64_data_urls_of_images_become_images() {
+        // A 1 × 1 PNG header: signature, IHDR length and type, width 1, height 1.
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
+        let attachment = |mime: &str, url: &str| serde_json::json!({ "mime": mime, "url": url });
+        let Some(ContentPart::Image(image)) = embedded_image(
+            "image/png",
+            &attachment("image/png", &format!("data:image/png;base64,{png}")),
+        ) else {
+            panic!("embedded image");
+        };
+        assert_eq!(image.dimensions, Some((1, 1)));
+        assert_eq!(image.media_type.as_deref(), Some("image/png"));
+        for (mime, url) in [
+            ("image/png", "file:///tmp/shot.png"),
+            ("image/png", "data:image/png,raw"),
+            ("application/pdf", "data:application/pdf;base64,JVBERi0="),
+        ] {
+            assert!(
+                embedded_image(mime, &attachment(mime, url)).is_none(),
+                "{url}"
+            );
+        }
+    }
 }

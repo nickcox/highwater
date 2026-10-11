@@ -52,8 +52,6 @@ pub(crate) enum CostRule {
     OpencodeZeroWithListedPrice,
     /// No billing-mode entry applies, so the call is treated as billed per token.
     PerTokenDefault,
-    /// `--claude-billing api` says Claude Code calls are billed per token.
-    ClaudeCodeBillingSetting,
     /// The attempt failed; its default-zero usage is not a measurement.
     FailedAttempt,
     /// The call has no usable time to choose a price by.
@@ -112,8 +110,6 @@ pub(crate) struct CallToPrice<'a> {
     /// The call's completion time, or its start when that is all there is.
     pub at_ms: Option<i64>,
     pub usage: &'a ReportedUsage,
-    /// A billing mode chosen by a setting, which replaces the billing-mode table.
-    pub billing_setting: Option<Billing>,
 }
 
 /// A range is shown only when its ends differ by at least this fraction of the low end.
@@ -185,10 +181,6 @@ pub(crate) fn assess(table: &PriceTable, call: CallToPrice<'_>) -> CostAssessmen
     let listed_rates = listed_price(listed);
 
     let (billing, rule) = match mode {
-        _ if call.billing_setting.is_some() => (
-            call.billing_setting.unwrap_or(Billing::PerToken),
-            CostRule::ClaudeCodeBillingSetting,
-        ),
         Some(mode) => (mode.billing, CostRule::BillingModeTable),
         None if call.harness == "opencode"
             && provider == "openai"

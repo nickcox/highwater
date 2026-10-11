@@ -3,8 +3,9 @@
 //! `scripts/measure-claude-usage.py`; the export holds sizes and item kinds, never content.
 
 use super::*;
+use crate::domain::{ModelTarget, TokenizationPayload};
 use crate::source::{load, SessionLocator};
-use std::{io::Write, path::Path, path::PathBuf};
+use std::{collections::HashMap, io::Write, path::Path, path::PathBuf};
 
 fn local_sessions() -> Vec<(&'static str, SessionLocator)> {
     let home = PathBuf::from(std::env::var_os("HOME").expect("HOME is set"));
@@ -61,10 +62,16 @@ fn export_claude_usage_steps() {
         {
             continue;
         }
+        let payloads: HashMap<String, TokenizationPayload> = loaded
+            .normalized
+            .context_items
+            .iter()
+            .map(|item| (item.id.clone(), item.payload.clone()))
+            .collect();
+        let mut registry = tokenization::ProfileRegistry::default();
         let config = AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         };
         let Ok(analysis) = analyze(loaded.normalized, config) else {
             continue;
@@ -85,6 +92,14 @@ fn export_claude_usage_steps() {
             ) else {
                 continue;
             };
+            // The part of each estimate that comes from image sizes, fitted separately.
+            let target = ModelTarget {
+                model: current.model.clone(),
+                ..ModelTarget::default()
+            };
+            let rules = registry
+                .profile(&target, TokenizationPolicy::Auto)
+                .projection_rules();
             let items: Vec<_> = current
                 .added_item_indexes
                 .iter()
@@ -97,7 +112,14 @@ fn export_claude_usage_steps() {
                             Some(&estimate.profile_id) == current.tokenization_profile_id.as_ref()
                         })
                         .and_then(|estimate| estimate.tokens);
-                    serde_json::json!({ "kind": item.kind, "tokens": tokens })
+                    let image_tokens = payloads.get(&item.id).map_or(0, |payload| {
+                        tokenization::project_payload(payload, &target, rules).image_tokens
+                    });
+                    serde_json::json!({
+                        "kind": item.kind,
+                        "tokens": tokens,
+                        "imageTokens": image_tokens,
+                    })
                 })
                 .collect();
             let step = serde_json::json!({

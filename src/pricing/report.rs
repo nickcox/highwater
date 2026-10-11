@@ -22,7 +22,6 @@ impl CostRule {
             Self::BillingModeTable => "billingModeTable",
             Self::OpencodeZeroWithListedPrice => "opencodeZeroWithListedPrice",
             Self::PerTokenDefault => "perTokenDefault",
-            Self::ClaudeCodeBillingSetting => "claudeCodeBillingSetting",
             Self::FailedAttempt => "failedAttempt",
             Self::MissingTime => "missingTime",
             Self::NoPrice => "noPrice",

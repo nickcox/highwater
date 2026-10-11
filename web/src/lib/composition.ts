@@ -19,6 +19,7 @@ export const COMPOSITION_KIND_ORDER: readonly ContextItemKind[] = [
   'customMessage',
   'branchSummary',
   'thinking',
+  'unrecordedContext',
   'other',
 ];
 
@@ -32,6 +33,7 @@ const KIND_LABELS: Readonly<Record<ContextItemKind, string>> = {
   customMessage: 'Custom messages',
   branchSummary: 'Branch summaries',
   thinking: 'Thinking',
+  unrecordedContext: 'Unrecorded request context',
   other: 'Other context',
 };
 

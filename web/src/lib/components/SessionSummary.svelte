@@ -9,7 +9,7 @@
     harnessName,
     harnessSessionCostNote,
     sessionCostCoverage,
-    sessionCostLines,
+    sessionCost,
   } from '../cost-assessment';
   import { summarizeInputComparisons } from '../context-river/reported-input';
   import {
@@ -42,7 +42,7 @@
   $: hasReconciliation = session.reconciliationComparableCalls > 0;
   $: inputSummary = hasReconciliation ? null : summarizeInputComparisons(indexed);
   $: costSummary = session.costSummary;
-  $: costLines = sessionCostLines(costSummary);
+  $: cost = sessionCost(costSummary);
   $: costCoverage = sessionCostCoverage(costSummary);
   $: priceData = costSummary.priceData;
   $: costCoverageNote =
@@ -83,19 +83,16 @@
       >
     </div>
     <div class="cost-metric">
-      {#each costLines as line, position (line.label)}
-        <span class:secondary-cost={position > 0}>{line.label}</span>
-        <b class:secondary-cost={position > 0} title={line.title}>{line.value}</b>
-        <small class="metric-note"
-          >{line.note}{position === costLines.length - 1 && costCoverage
-            ? ` · ${costCoverage}`
-            : ''}</small
-        >
+      {#if cost}
+        <span>{cost.label}</span>
+        <b title={cost.title}>{cost.value}</b>
+        <small class="metric-note">{cost.note}{costCoverage ? ` · ${costCoverage}` : ''}</small>
+        {#if cost.split}<small class="metric-note">{cost.split}</small>{/if}
       {:else}
         <span>Cost</span>
         <b title="No call in this session has a known or estimated cost.">Unknown</b>
         {#if costCoverage}<small class="metric-note">{costCoverage}</small>{/if}
-      {/each}
+      {/if}
     </div>
   </div>
 
@@ -402,12 +399,6 @@
     margin-top: 2px;
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
-  }
-  .primary-metrics .secondary-cost {
-    margin-top: 6px;
-  }
-  .primary-metrics b.secondary-cost {
-    margin-top: 2px;
   }
   .metric-note {
     display: block;

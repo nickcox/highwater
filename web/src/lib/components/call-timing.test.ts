@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { responseDuration, effectiveOutputRate } from './call-timing';
+import { responseDuration, effectiveOutputRate, timingExplanation } from './call-timing';
 
 describe('call timing presentation', () => {
   it('formats elapsed intervals without rounding subsecond calls to zero', () => {
@@ -13,5 +13,13 @@ describe('call timing presentation', () => {
     expect(effectiveOutputRate(0)).toBe('0 tok/s');
     expect(effectiveOutputRate(0.0001)).toBe('<0.01 tok/s');
     expect(effectiveOutputRate(50)).toBe('50 tok/s');
+  });
+  it('explains timing in terms of what each source records', () => {
+    expect(timingExplanation('claude-code')).toMatch(/does not record when a request started/);
+    expect(timingExplanation('pi')).toMatch(/^From Pi starting the response/);
+    expect(timingExplanation('opencode')).toMatch(/^From OpenCode creating the response/);
+    expect(timingExplanation('future-harness')).toMatch(/^From the recorded start/);
+    for (const source of ['claude-code', 'pi', 'opencode', 'future-harness'])
+      expect(timingExplanation(source).length).toBeLessThan(160);
   });
 });

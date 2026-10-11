@@ -10,8 +10,16 @@ fn invalid(message: impl Into<String>) -> SourceError {
     SourceError::InvalidStructure(message.into())
 }
 
-/// Record indexes on the active branch, in conversation order.
-pub(super) fn select(records: &[Record]) -> Result<Vec<usize>, SourceError> {
+pub(super) struct Branch {
+    /// Record indexes on the active branch, in conversation order.
+    pub indexes: Vec<usize>,
+    /// A compaction boundary's `logicalParentUuid` named the boundary or a record after it,
+    /// so the branch continued from the last record before the boundary instead.
+    pub repaired_compaction_link: bool,
+}
+
+/// The active branch.
+pub(super) fn select(records: &[Record]) -> Result<Branch, SourceError> {
     let mut by_uuid = HashMap::new();
     for (index, record) in records.iter().enumerate() {
         if let Some(uuid) = record.uuid() {
@@ -72,6 +80,7 @@ pub(super) fn select(records: &[Record]) -> Result<Vec<usize>, SourceError> {
 
     let mut chain = Vec::new();
     let mut visited = HashSet::new();
+    let mut repaired_compaction_link = false;
     let mut current = Some(leaf);
     while let Some(index) = current {
         if !visited.insert(index) {
@@ -79,15 +88,54 @@ pub(super) fn select(records: &[Record]) -> Result<Vec<usize>, SourceError> {
         }
         chain.push(index);
         let record = &records[index];
-        let next = match record.parent() {
-            Some(parent) => Some(parent),
-            None if record.is_compact_boundary() => record.logical_parent(),
+        current = match record.parent() {
+            Some(parent) => Some(lookup(parent)?),
+            None if record.is_compact_boundary() => match record.logical_parent() {
+                Some(logical) => {
+                    let logical = lookup(logical)?;
+                    if descends_from(records, &lookup, logical, index)? {
+                        // Claude Code 2.1.287 can name a record written after the boundary.
+                        repaired_compaction_link = true;
+                        last_record_before(records, index)
+                    } else {
+                        Some(logical)
+                    }
+                }
+                None => None,
+            },
             None => None,
         };
-        current = next.map(lookup).transpose()?;
     }
     chain.reverse();
-    Ok(attach_parallel_tool_results(records, chain))
+    Ok(Branch {
+        indexes: attach_parallel_tool_results(records, chain),
+        repaired_compaction_link,
+    })
+}
+
+/// Whether `ancestor` is `index` or one of its parents. The parent graph is acyclic here.
+fn descends_from(
+    records: &[Record],
+    lookup: &impl Fn(&str) -> Result<usize, SourceError>,
+    index: usize,
+    ancestor: usize,
+) -> Result<bool, SourceError> {
+    let mut current = Some(index);
+    while let Some(index) = current {
+        if index == ancestor {
+            return Ok(true);
+        }
+        current = records[index].parent().map(lookup).transpose()?;
+    }
+    Ok(false)
+}
+
+/// The last record with a UUID written before `index`: where the conversation stood when
+/// the boundary was written.
+fn last_record_before(records: &[Record], index: usize) -> Option<usize> {
+    records[..index]
+        .iter()
+        .rposition(|record| record.uuid().is_some())
 }
 
 /// A tool result whose parent's response continued in a later record. Parallel

@@ -31,6 +31,7 @@ describe('source reconstruction coverage', () => {
         'unrecordedHarnessCalls',
         'unverifiedCompactionRetention',
         'unrenderedAttachments',
+        'repairedCompactionLink',
       ],
     };
     expect(() => assertReconstruction(analysis)).not.toThrow();

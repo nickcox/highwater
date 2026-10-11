@@ -1347,7 +1347,7 @@
         markers indicate compaction. In individual-item view, colour-blended connections show lossy
         summarization, not conserved tokens or source contributions to the summary. {verticalAxisDescription}.
         {inputComparison.size > 0
-          ? 'The dashed reported-input reference is recorded after each call. Hatched unreconciled input is its approximate excess over reconstructed content, not recovered items or cost attribution. Scaling includes the reference. Missing comparisons break the line.'
+          ? 'The dashed reported-input reference is recorded after each call. Hatched unreconciled input is its approximate excess over reconstructed content, not recovered items or cost attribution. Where a session does not record its system prompt or tools, an Unrecorded request context item is measured from the reported input at the first call and after each compaction or model change, so the hatching shows change since then. Scaling includes the reference. Missing comparisons break the line.'
           : ''}
         {indexed.analysis.displayWeightUnit === 'unavailable'
           ? 'Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths.'

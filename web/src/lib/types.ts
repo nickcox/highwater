@@ -8,6 +8,7 @@ export type ContextItemKind =
   | 'customMessage'
   | 'branchSummary'
   | 'thinking'
+  | 'unrecordedContext'
   | 'other';
 
 export type ChartUnit = 'calculatedTokens' | 'estimatedTokens' | 'unavailable';
@@ -210,7 +211,6 @@ export type CostClassificationRule =
   | 'billingModeTable'
   | 'opencodeZeroWithListedPrice'
   | 'perTokenDefault'
-  | 'claudeCodeBillingSetting'
   | 'failedAttempt'
   | 'missingTime'
   | 'noPrice'

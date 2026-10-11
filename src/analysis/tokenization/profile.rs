@@ -187,11 +187,26 @@ impl TokenizationProfile {
         &self.projection_target
     }
 
-    pub(crate) fn tool_call_rendering(&self) -> super::ToolCallRendering {
-        if self.family.claude_generation().is_some() {
-            super::ToolCallRendering::ClaudeInvoke
-        } else {
-            super::ToolCallRendering::NameAndArguments
+    /// How payloads are written out for this profile's tokenizer. Claude models read tool
+    /// calls as `invoke` elements, and their image limits are from Anthropic's documentation:
+    /// 1,568 px and about 1,600 tokens up to Opus 4.6 and Sonnet 4.6, 2,576 px and 4,784
+    /// tokens from Opus 4.7 and Sonnet 5.
+    pub(crate) fn projection_rules(&self) -> super::ProjectionRules {
+        use super::{ImageSizing, ProjectionRules, ToolCallRendering};
+        let images = match self.family {
+            TokenizerFamily::ClaudeV3 => ImageSizing::Claude {
+                long_edge: 1568,
+                max_tokens: 1600,
+            },
+            TokenizerFamily::ClaudeV4_7 | TokenizerFamily::ClaudeV4_8 => ImageSizing::Claude {
+                long_edge: 2576,
+                max_tokens: 4784,
+            },
+            _ => return ProjectionRules::GENERIC,
+        };
+        ProjectionRules {
+            tool_calls: ToolCallRendering::ClaudeInvoke,
+            images,
         }
     }
 }
@@ -676,12 +691,18 @@ mod tests {
         assert_ne!(reconstructed.id, heuristic.id);
         assert_eq!(reconstructed.key.implementation, CTOK_VERSION);
         assert_eq!(
-            reconstructed.tool_call_rendering(),
-            super::super::ToolCallRendering::ClaudeInvoke
+            reconstructed.projection_rules(),
+            super::super::ProjectionRules {
+                tool_calls: super::super::ToolCallRendering::ClaudeInvoke,
+                images: super::super::ImageSizing::Claude {
+                    long_edge: 2576,
+                    max_tokens: 4784
+                },
+            }
         );
         assert_eq!(
-            heuristic.tool_call_rendering(),
-            super::super::ToolCallRendering::NameAndArguments
+            heuristic.projection_rules(),
+            super::super::ProjectionRules::GENERIC
         );
     }
 

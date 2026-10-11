@@ -15,7 +15,6 @@ fn transitions_borrow_source_ids_in_context_order() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     );
     for (position, transition) in prepared.transitions.iter().enumerate() {
@@ -95,7 +94,6 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
-                    claude_code_billing: Default::default(),
                 },
             );
             let stats = prepared.registry.stats();
@@ -123,7 +121,6 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
-                    claude_code_billing: Default::default(),
                 },
             )
             .expect("analysis");
@@ -132,7 +129,6 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
-                    claude_code_billing: Default::default(),
                 },
             )
             .expect("timed analysis");

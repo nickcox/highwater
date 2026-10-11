@@ -53,6 +53,21 @@ const TOKEN_DIAGNOSTICS: Readonly<Record<string, DiagnosticDescription>> = {
     impact:
       'Differences in serialization or provider accounting may explain the negative residual.',
   },
+  inferredFromReportedUsage: {
+    title: 'Size inferred from reported usage',
+    impact:
+      "This is the call's reported input less its recorded items, so it covers request content the session does not record. It is not counted from any text.",
+  },
+  estimatedImageSize: {
+    title: 'Image tokens are estimated from the image size',
+    impact:
+      "The provider's documented sizing rule is applied to the image's width and height; it is not an exact count.",
+  },
+  unrecordedToolDefinition: {
+    title: 'A tool definition is not recorded',
+    impact:
+      'The tool reference loads a definition into the request whose size is unknown; only the reference is counted.',
+  },
   thinkingNotReadByModel: {
     title: 'Thinking from another model',
     impact:

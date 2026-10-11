@@ -152,13 +152,10 @@ fn array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], ReplayError> {
 }
 
 fn image(value: &Value) -> ImageDescriptor {
-    ImageDescriptor {
-        media_type: value.get("mime").and_then(Value::as_str).map(str::to_owned),
-        encoded_data_length: value
-            .get("data")
-            .and_then(Value::as_str)
-            .and_then(|data| u64::try_from(data.len()).ok()),
-    }
+    ImageDescriptor::from_encoded(
+        value.get("mime").and_then(Value::as_str),
+        value.get("data").and_then(Value::as_str),
+    )
 }
 
 fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {

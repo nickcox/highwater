@@ -10,7 +10,13 @@ export function harnessName(source: string): string {
   return 'the harness';
 }
 
-export function costKindLabel(cost: CostAssessment): string {
+/** Claude Code does not record whether a call was covered by a subscription. */
+function unknownBilling(cost: CostAssessment, source: string): boolean {
+  return source === 'claude-code' && cost.classificationRule === 'billingModeTable';
+}
+
+export function costKindLabel(cost: CostAssessment, source: string): string {
+  if (cost.kind === 'apiEquivalent' && unknownBilling(cost, source)) return 'API rate';
   switch (cost.kind) {
     case 'recorded':
       return 'Recorded';
@@ -85,9 +91,7 @@ export function costRuleText(cost: CostAssessment, source: string): string {
     case 'recordedCost':
       return `Billed per token; this is the cost ${harness} recorded.`;
     case 'billingModeTable':
-      if (source === 'claude-code' && cost.billingMode === 'subscription') {
-        return 'Claude Code does not record whether the session used a subscription or an API key, so this is the cost at the API rate, which applies either way. It is counted as API-equivalent; start TokenPlume with --claude-billing api to count it as billed.';
-      }
+      if (unknownBilling(cost, source)) return "At Anthropic's API rate.";
       return cost.billingMode === 'subscription'
         ? 'This provider is covered by a subscription, so this is what the call would have cost at the API rate. It is not a charge.'
         : cost.kind === 'free'
@@ -99,8 +103,6 @@ export function costRuleText(cost: CostAssessment, source: string): string {
       return cost.kind === 'free'
         ? 'The provider listed this model as free at the time.'
         : `${harness} recorded no cost, so it is estimated at the provider's rate.`;
-    case 'claudeCodeBillingSetting':
-      return "Billed per token: TokenPlume was started with --claude-billing api, because Claude Code does not record how the session was billed. Estimated at Anthropic's rate.";
     case 'failedAttempt':
       return 'The attempt failed; its recorded zeros are not a measurement, so no cost is shown.';
     case 'missingTime':
@@ -121,31 +123,36 @@ export interface SessionCostLine {
   value: string;
   note: string;
   title: string;
+  split: string | null;
 }
 
-/** Billed and API-equivalent costs, each only when some calls have one. */
-export function sessionCostLines(summary: CostSummary): SessionCostLine[] {
-  const lines: SessionCostLine[] = [];
+/** The session's cost at API rates: what each call recorded or would cost per token,
+ * including calls covered by a subscription. `split` is set only when the session has
+ * both kinds of call, because only then does the total mix money spent with notional cost. */
+export function sessionCost(summary: CostSummary): SessionCostLine | null {
+  const parts = [summary.billed, summary.apiEquivalent].filter((part) => part.calls > 0);
+  if (parts.length === 0) return null;
+  const sum = (key: 'low' | 'high') =>
+    parts.some((part) => part[key] === null)
+      ? null
+      : parts.reduce((total, part) => total + (part[key] ?? 0), 0);
+  const total: CostSubtotal = {
+    low: sum('low'),
+    high: sum('high'),
+    calls: parts.reduce((count, part) => count + part.calls, 0),
+  };
   const calls = (count: number) => `${count.toLocaleString('en-AU')} call${count === 1 ? '' : 's'}`;
-  if (summary.billed.calls > 0) {
-    lines.push({
-      label: 'Billed',
-      value: formatCostSubtotal(summary.billed, true),
-      note: calls(summary.billed.calls),
-      title:
-        'Calls billed per token: the cost the harness recorded, or an estimate at the provider’s rate when it recorded none. Not an invoice.',
-    });
-  }
-  if (summary.apiEquivalent.calls > 0) {
-    lines.push({
-      label: 'Subscription (API-equivalent)',
-      value: formatCostSubtotal(summary.apiEquivalent, true),
-      note: `${calls(summary.apiEquivalent.calls)} at lab API rates`,
-      title:
-        'Calls covered by a subscription, priced at what they would have cost at the lab’s API rate. Not a charge, and not added to the billed cost.',
-    });
-  }
-  return lines;
+  return {
+    label: 'Cost',
+    value: formatCostSubtotal(total, true),
+    note: calls(total.calls),
+    title:
+      'At API rates: the cost the harness recorded, or an estimate at the provider’s rate. Calls covered by a subscription are priced at what they would have cost. Not an invoice.',
+    split:
+      parts.length === 2
+        ? `${formatCostSubtotal(summary.billed, true)} billed per token · ${formatCostSubtotal(summary.apiEquivalent, true)} covered by a subscription`
+        : null,
+  };
 }
 
 /** Calls without a cost, when there are any. */

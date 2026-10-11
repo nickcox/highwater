@@ -1,6 +1,6 @@
 use super::error::FlightError;
 use crate::{
-    analysis::{analyze, AnalysisConfig, ClaudeCodeBilling, TokenizationPolicy},
+    analysis::{analyze, AnalysisConfig, TokenizationPolicy},
     claude_code::FileKind,
     source::{self, SessionLocator},
 };
@@ -38,8 +38,6 @@ pub(super) struct AnalysisCacheKey {
     /// Set when the file is a Claude Code transcript; Pi files and OpenCode
     /// databases leave it empty, so their keys and ETags are unchanged.
     pub claude_code: Option<FileKind>,
-    /// Only Claude Code keys depend on it.
-    pub claude_code_billing: ClaudeCodeBilling,
     pub tokenization: TokenizationPolicy,
     pub schema_version: u32,
     pub output_version: u32,
@@ -296,7 +294,6 @@ impl AnalysisService {
             byte_size: 0,
             modified_nanos: 0,
             claude_code: None,
-            claude_code_billing: ClaudeCodeBilling::default(),
             tokenization: config.tokenization,
             schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
             output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -483,11 +480,6 @@ fn file_cache_key(
         byte_size: metadata.len(),
         modified_nanos,
         claude_code,
-        claude_code_billing: if claude_code.is_some() {
-            config.claude_code_billing
-        } else {
-            ClaudeCodeBilling::default()
-        },
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -580,10 +572,6 @@ pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
         hasher.update(match kind {
             FileKind::Main => b"main",
             FileKind::Subagent => b"agent",
-        });
-        hasher.update(match key.claude_code_billing {
-            ClaudeCodeBilling::Subscription => b"\0subscription".as_slice(),
-            ClaudeCodeBilling::Api => b"\0api".as_slice(),
         });
     }
     hasher.update(&key.byte_size.to_le_bytes());

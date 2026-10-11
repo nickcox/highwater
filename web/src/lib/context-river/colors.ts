@@ -11,6 +11,7 @@ export const ITEM_TYPE_PALETTE = {
   customMessage: '#da8faf',
   branchSummary: '#b8c879',
   thinking: '#9ad3e6',
+  unrecordedContext: '#b5a58f',
   other: '#d9d4c9',
 } as const satisfies Record<ContextItemKind, string>;
 

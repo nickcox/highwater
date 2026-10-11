@@ -132,7 +132,7 @@
       case 'characterHeuristic':
         return 'Character heuristic';
       case 'reportedUsage':
-        return 'Reported thinking size';
+        return 'From reported usage';
       default:
         return 'Mixed or unavailable estimate method';
     }

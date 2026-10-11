@@ -32,7 +32,8 @@
   import ItemContribution from './ItemContribution.svelte';
   import { callInputComparison } from '../context-river/reported-input';
   import { itemContributions } from './item-contribution';
-  import { responseDuration, effectiveOutputRate, TIMING_EXPLANATION } from './call-timing';
+  import { responseDuration, effectiveOutputRate, timingExplanation } from './call-timing';
+  import InfoPopover from './InfoPopover.svelte';
   import {
     inspectorSections,
     rememberSection,
@@ -79,6 +80,7 @@
   );
   $: costAssessment = call?.costAssessment ?? null;
   $: costRate = costAssessment ? costRateLine(costAssessment) : null;
+  $: timingText = timingExplanation(indexed.analysis.session.source);
   $: costRecorded = costAssessment
     ? recordedByHarnessLine(costAssessment, indexed.analysis.session.source)
     : null;
@@ -118,7 +120,7 @@
       case 'characterHeuristic':
         return 'Character heuristic';
       case 'reportedUsage':
-        return 'Reported thinking size';
+        return 'From reported usage';
       default:
         return 'Unavailable estimate method';
     }
@@ -237,9 +239,18 @@
       <div>
         <dt>Cost</dt>
         <dd aria-describedby={`${contributionId}-cost`}>
-          {call.usage.placeholder ? 'Unavailable' : formatAssessedCost(call.costAssessment)}<small
-            >{costKindLabel(call.costAssessment)}</small
-          >
+          {call.usage.placeholder
+            ? 'Unavailable'
+            : formatAssessedCost(call.costAssessment)}<InfoPopover
+            id={`${contributionId}-cost`}
+            label="How this cost is worked out"
+            ><div class="cost-explanation">
+              <p>{costRuleText(call.costAssessment, indexed.analysis.session.source)}</p>
+              {#if call.costAssessment.amountHigh !== null}<p>{RANGE_EXPLANATION}</p>{/if}
+              {#if costRate}<p>Rate: {costRate}.</p>{/if}
+              {#if costRecorded}<p>{costRecorded}</p>{/if}
+            </div></InfoPopover
+          ><small>{costKindLabel(call.costAssessment, indexed.analysis.session.source)}</small>
         </dd>
       </div>
       <div>
@@ -254,26 +265,18 @@
       </div>
       <div>
         <dt>Response time (approx.)</dt>
-        <dd title={TIMING_EXPLANATION} aria-describedby={`${contributionId}-timing`}>
+        <dd title={timingText} aria-describedby={`${contributionId}-timing`}>
           {responseDuration(call.timing.durationMs)}
         </dd>
       </div>
       <div>
         <dt>Effective output rate</dt>
-        <dd title={TIMING_EXPLANATION} aria-describedby={`${contributionId}-timing`}>
+        <dd title={timingText} aria-describedby={`${contributionId}-timing`}>
           {effectiveOutputRate(call.timing.effectiveOutputTokensPerSecond)}
         </dd>
       </div>
     </dl>
-    <span class="timing-explanation" id={`${contributionId}-timing`}
-      >{TIMING_EXPLANATION} Missing or unusable timestamps and unsuccessful-response rates are unavailable.</span
-    >
-    <div class="cost-explanation" id={`${contributionId}-cost`}>
-      <p>{costRuleText(call.costAssessment, indexed.analysis.session.source)}</p>
-      {#if call.costAssessment.amountHigh !== null}<p>{RANGE_EXPLANATION}</p>{/if}
-      {#if costRate}<p>Rate: {costRate}.</p>{/if}
-      {#if costRecorded}<p>{costRecorded}</p>{/if}
-    </div>
+    <span class="timing-explanation" id={`${contributionId}-timing`}>{timingText}</span>
 
     {#if call.addedItemIds.length > 0 || call.droppedItemIds.length > 0}
       <details use:rememberSection={{ state: sections, key: 'changes' }}>
@@ -795,14 +798,12 @@
     gap: 7px 14px;
     margin: 0;
   }
-  .cost-explanation {
-    margin: 2px 0 10px;
-    color: var(--secondary);
-    font-size: 12px;
-  }
   .cost-explanation p {
-    margin: 2px 0;
+    margin: 0;
     overflow-wrap: anywhere;
+  }
+  .cost-explanation p + p {
+    margin-top: 6px;
   }
   .timing-explanation {
     position: absolute;

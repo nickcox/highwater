@@ -12,6 +12,7 @@ const KIND_FALLBACKS: Record<string, string> = {
   customMessage: 'Custom context message',
   branchSummary: 'Branch summary',
   thinking: 'Thinking',
+  unrecordedContext: 'Unrecorded request context',
   other: 'Context item',
 };
 

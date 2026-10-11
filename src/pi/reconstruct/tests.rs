@@ -160,7 +160,6 @@ fn source_base64_length_is_encoded_size_not_decoded_image_size() {
         crate::analysis::AnalysisConfig {
             tokenization: crate::analysis::TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
-            claude_code_billing: Default::default(),
         },
     )
     .expect("image analysis");

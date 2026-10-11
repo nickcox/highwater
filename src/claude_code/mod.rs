@@ -33,6 +33,9 @@ pub(crate) enum Limitation {
     /// Attachments of a type that is sent, recorded without their text.
     UnrenderedAttachments,
     UnsupportedContent,
+    /// A compaction boundary named a later record as its predecessor; the branch continued
+    /// from the last record before the boundary.
+    RepairedCompactionLink,
 }
 
 impl Limitation {
@@ -45,6 +48,7 @@ impl Limitation {
             Self::UnverifiedCompactionRetention => "unverifiedCompactionRetention",
             Self::UnrenderedAttachments => "unrenderedAttachments",
             Self::UnsupportedContent => "unsupportedContent",
+            Self::RepairedCompactionLink => "repairedCompactionLink",
         }
     }
 }
@@ -74,13 +78,18 @@ pub(crate) fn load(path: &Path, kind: FileKind) -> Result<Loaded, SourceError> {
         (FileKind::Subagent, Some(agent_id)) => format!("{session_id}:{agent_id}"),
         _ => session_id.to_owned(),
     };
-    let mut reconstruction = reconstruct::reconstruct(&records, &branch, id)?;
+    let mut reconstruction = reconstruct::reconstruct(&records, &branch.indexes, id)?;
+    if branch.repaired_compaction_link {
+        reconstruction
+            .limitations
+            .insert(Limitation::RepairedCompactionLink);
+    }
     reconstruction.session.harness_session_cost = harness_session_cost(&records);
     Ok(Loaded {
         session: reconstruction.session,
         limitations: reconstruction.limitations,
         records: records.len(),
-        selected_records: branch.len(),
+        selected_records: branch.indexes.len(),
     })
 }
 

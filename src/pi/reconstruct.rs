@@ -210,6 +210,7 @@ fn item_label(
         ContextItemKind::CustomMessage => "Custom context message".into(),
         ContextItemKind::BranchSummary => "Branch summary".into(),
         ContextItemKind::Thinking => "Thinking".into(),
+        ContextItemKind::UnrecordedContext => "Unrecorded request context".into(),
         ContextItemKind::CompactionSummary => "Compaction summary".into(),
         ContextItemKind::System => "System context".into(),
         ContextItemKind::ToolDefinition => "Tool definition".into(),
@@ -667,17 +668,13 @@ fn assistant_tool_calls(message: &Value, failed: &HashSet<String>) -> Vec<Normal
 }
 
 fn image_descriptor(value: &Value) -> ImageDescriptor {
-    ImageDescriptor {
-        media_type: value
+    ImageDescriptor::from_encoded(
+        value
             .get("mimeType")
             .or_else(|| value.get("media_type"))
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-        encoded_data_length: value
-            .get("data")
-            .and_then(Value::as_str)
-            .map(|data| data.len() as u64),
-    }
+            .and_then(Value::as_str),
+        value.get("data").and_then(Value::as_str),
+    )
 }
 
 fn parse_safe_u64(value: Option<&Value>, field: &'static str) -> Result<Option<u64>, SourceError> {

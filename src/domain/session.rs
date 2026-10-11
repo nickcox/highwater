@@ -191,7 +191,7 @@ impl NormalizedContextItem {
 }
 
 /// `1234567` as `1,234,567`.
-fn grouped(value: u64) -> String {
+pub(crate) fn grouped(value: u64) -> String {
     let digits = value.to_string();
     let mut out = String::new();
     for (position, digit) in digits.chars().enumerate() {
@@ -227,6 +227,8 @@ pub(crate) enum ContextItemKind {
     BranchSummary,
     /// A response's thinking, sized by the reasoning tokens the provider reported.
     Thinking,
+    /// Request content the source does not record, measured from reported usage.
+    UnrecordedContext,
     Other,
 }
 
@@ -242,6 +244,7 @@ impl ContextItemKind {
             Self::CustomMessage => "customMessage",
             Self::BranchSummary => "branchSummary",
             Self::Thinking => "thinking",
+            Self::UnrecordedContext => "unrecordedContext",
             Self::Other => "other",
         }
     }
@@ -320,6 +323,13 @@ pub(crate) enum TokenizationPayload {
         tokens: u64,
         source_model: Option<String>,
     },
+    /// Request content the source does not record (the system prompt and tool definitions,
+    /// for example), sized as a call's reported input less the estimates of its recorded
+    /// items. `approximate` when one of those estimates was partial.
+    UnrecordedContext {
+        tokens: u64,
+        approximate: bool,
+    },
     // Source-neutral capability exercised by analysis tests; Pi command-shaped
     // records are ignored and do not construct this payload.
     #[cfg_attr(not(test), allow(dead_code))]
@@ -369,6 +379,9 @@ pub(crate) enum AssistantContentBlock {
 pub(crate) enum ContentPart {
     Text(String),
     Image(ImageDescriptor),
+    /// A reference that loads a tool's definition into the request (Claude Code's
+    /// `tool_reference`); the definition itself is not recorded.
+    ToolReference(String),
     /// A source content part whose shape is not understood by the adapter.
     Unsupported,
 }
@@ -377,6 +390,19 @@ pub(crate) enum ContentPart {
 pub(crate) struct ImageDescriptor {
     pub media_type: Option<String>,
     /// Source `data` string length in encoded UTF-8 bytes (usually base64).
-    /// No decoding or image retention is performed.
+    /// The image is not decoded or kept.
     pub encoded_data_length: Option<u64>,
+    /// `(width, height)` in pixels, read from the image's header.
+    pub dimensions: Option<(u32, u32)>,
+}
+
+impl ImageDescriptor {
+    /// From a media type and the base64 `data` the source recorded, if any.
+    pub(crate) fn from_encoded(media_type: Option<&str>, data: Option<&str>) -> Self {
+        Self {
+            media_type: media_type.map(str::to_owned),
+            encoded_data_length: data.map(|data| u64::try_from(data.len()).unwrap_or(u64::MAX)),
+            dimensions: data.and_then(super::image::dimensions),
+        }
+    }
 }

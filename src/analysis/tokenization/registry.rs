@@ -242,10 +242,27 @@ fn calculate(
     {
         return reported_thinking(*tokens, source_model.as_deref(), profile);
     }
+    if let crate::domain::TokenizationPayload::UnrecordedContext {
+        tokens,
+        approximate,
+    } = payload
+    {
+        return TokenEstimate {
+            profile_id: profile.id.clone(),
+            tokens: Some(*tokens),
+            method: TokenizationMethod::ReportedUsage,
+            coverage: if *approximate {
+                TokenCoverage::Partial
+            } else {
+                TokenCoverage::Complete
+            },
+            note_codes: vec![DiagnosticCode::InferredFromReportedUsage],
+        };
+    }
     let projected = project_payload(
         payload,
         profile.projection_target(),
-        profile.tool_call_rendering(),
+        profile.projection_rules(),
     );
     if projected.unavailable {
         return TokenEstimate {
@@ -283,6 +300,8 @@ fn calculate(
         ),
         TokenizerFamily::Unavailable => (None, Some(DiagnosticCode::UnsupportedTokenizer)),
     };
+    // Image tokens are counted from image sizes, never from text.
+    let tokens = tokens.and_then(|tokens| tokens.checked_add(projected.image_tokens));
     let (tokens, range_note) = match tokens {
         Some(tokens) if tokens <= MAX_SAFE_JSON_INTEGER => (Some(tokens), None),
         Some(_) => (None, Some(DiagnosticCode::TokenEstimateOutOfRange)),

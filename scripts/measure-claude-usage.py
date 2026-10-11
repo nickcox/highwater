@@ -8,10 +8,11 @@ added items plus any per-request content the transcript does not record. For eac
 fits
 
     growth = a * tool results + b * assistant messages + c * thinking + d * other items
-             + e * (number of tool results)
+             + e * images + f * (number of tool results)
 
 by least squares and prints each coefficient with a 90% bootstrap range, and the median error
-per step. Coefficients of 1 and a small e mean the estimates match the reported usage. The
+per step. Image tokens are taken out of their item's kind and fitted as their own term.
+Coefficients of 1 and a small f mean the estimates match the reported usage. The
 export holds item kinds and sizes only, and this prints aggregates only, never session content.
 Needs only Python 3; it is not part of scripts/check.sh.
 
@@ -28,7 +29,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TERMS = ['tool results', 'assistant messages', 'thinking', 'other items', 'per tool round trip']
+TERMS = ['tool results', 'assistant messages', 'thinking', 'other items', 'images', 'per tool round trip']
 KINDS = {'toolResult': 0, 'assistantMessage': 1, 'thinking': 2}
 MINIMUM_STEPS_WITH_TERM = 8
 BOOTSTRAP_ROUNDS = 300
@@ -42,8 +43,10 @@ def steps(path):
             continue
         row = [0.0] * len(TERMS)
         for item in step['items']:
-            row[KINDS.get(item['kind'], 3)] += item['tokens']
-            row[4] += item['kind'] == 'toolResult'
+            images = item.get('imageTokens', 0)
+            row[KINDS.get(item['kind'], 3)] += item['tokens'] - images
+            row[4] += images
+            row[5] += item['kind'] == 'toolResult'
         by_harness[step['harness']].append((float(step['growth']), row))
     return by_harness
 

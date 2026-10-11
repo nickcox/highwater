@@ -16,6 +16,7 @@ mod tests;
 mod timing;
 mod tokenization;
 pub(crate) use tokenization::claude_keeps_prior_thinking;
+mod unrecorded;
 mod usage;
 #[cfg(test)]
 mod usage_export;
@@ -39,26 +40,14 @@ use validate::{validate_normalized_session, ValidatedSession};
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 15;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 16;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 30;
-
-/// How Claude Code calls are billed. The transcript does not record whether a
-/// session used a Claude subscription or an API key, so this is a setting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub(crate) enum ClaudeCodeBilling {
-    /// Priced as API-equivalent, which is true whichever way the session was billed.
-    #[default]
-    Subscription,
-    /// Priced as billed per token.
-    Api,
-}
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 35;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
     pub tokenization: TokenizationPolicy,
     pub perf_diagnostics: bool,
-    pub claude_code_billing: ClaudeCodeBilling,
 }
 
 #[derive(Debug, Error)]
@@ -163,14 +152,16 @@ fn derive_transition<'a>(
 }
 
 pub(crate) fn analyze(
-    session: NormalizedSession,
+    mut session: NormalizedSession,
     config: AnalysisConfig,
 ) -> Result<Analysis, AnalysisError> {
+    validate_normalized_session(&session)?;
+    unrecorded::add_unrecorded_context(&mut session, config.tokenization);
     let validated = validate_normalized_session(&session)?;
     let analysis_started = Instant::now();
     let prepared = preparation::prepare(&session, &validated, config);
     let metrics_started = Instant::now();
-    let calls = derive_calls(&session, &prepared, config.claude_code_billing);
+    let calls = derive_calls(&session, &prepared);
     let items = derive_items(&session, &prepared);
     let metrics_ms = metrics_started.elapsed().as_secs_f64() * 1000.0;
     debug_assert_eq!(
@@ -204,7 +195,6 @@ struct DerivedCalls {
 fn derive_calls(
     session: &NormalizedSession,
     prepared: &preparation::PreparedAnalysis<'_>,
-    claude_code_billing: ClaudeCodeBilling,
 ) -> DerivedCalls {
     let registry = &prepared.registry;
     let works = &prepared.works;
@@ -457,7 +447,7 @@ fn derive_calls(
             metrics_include_partial_estimates,
             age,
         };
-        let cost_assessment = assess_cost(work.call, &session.source.kind, claude_code_billing);
+        let cost_assessment = assess_cost(work.call, &session.source.kind);
         let cost_assessment_api = cost_assessment.to_api();
         cost_assessments.push(cost_assessment);
         model_calls.push(to_api_call(
@@ -501,15 +491,8 @@ fn derive_calls(
 }
 
 /// Prices a call by the time it completed, or started when that is all there is.
-fn assess_cost(
-    call: &NormalizedModelCall,
-    harness: &str,
-    claude_code_billing: ClaudeCodeBilling,
-) -> pricing::CostAssessment {
+fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
     let timing = timing::call_timing(call, harness == "pi");
-    let billing_setting = (harness == "claude-code"
-        && claude_code_billing == ClaudeCodeBilling::Api)
-        .then_some(pricing::Billing::PerToken);
     pricing::assess(
         pricing::embedded(),
         pricing::CallToPrice {
@@ -518,7 +501,6 @@ fn assess_cost(
             model: call.target.model.as_deref(),
             at_ms: timing.recorded_at_ms.or(timing.started_at_ms),
             usage: &call.reported_usage,
-            billing_setting,
         },
     )
 }

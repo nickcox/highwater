@@ -31,6 +31,31 @@ impl PreviewKind {
     }
 }
 
+/// How a profile writes a payload out for counting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ProjectionRules {
+    pub tool_calls: ToolCallRendering,
+    pub images: ImageSizing,
+}
+
+impl ProjectionRules {
+    pub(crate) const GENERIC: Self = Self {
+        tool_calls: ToolCallRendering::NameAndArguments,
+        images: ImageSizing::Placeholder,
+    };
+}
+
+/// How an image is counted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImageSizing {
+    /// An `[image]` placeholder.
+    Placeholder,
+    /// Anthropic's rule: the image is scaled down to fit `long_edge` pixels on its longer
+    /// side, then costs `width × height ÷ 750` tokens, at most `max_tokens`. An image whose
+    /// size is unknown falls back to the placeholder.
+    Claude { long_edge: u32, max_tokens: u64 },
+}
+
 /// How a tool call is written out for counting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ToolCallRendering {
@@ -54,6 +79,8 @@ pub(crate) struct PayloadPreview {
 #[derive(Debug, Clone)]
 pub(crate) struct ProjectedPayload {
     pub text: String,
+    /// Tokens for images, counted from their size rather than from `text`.
+    pub image_tokens: u64,
     pub partial: bool,
     pub unavailable: bool,
     pub note_codes: Vec<DiagnosticCode>,
@@ -178,6 +205,12 @@ pub(crate) fn preview_payload(payload: &TokenizationPayload) -> PayloadPreview {
             &format!("{tokens} reasoning tokens reported for this response"),
             PreviewKind::Summary,
         ),
+        TokenizationPayload::UnrecordedContext { tokens, .. } => bounded_preview(
+            &format!(
+                "{tokens} tokens of request content that the session does not record, measured as this call's reported input less its recorded items"
+            ),
+            PreviewKind::Summary,
+        ),
         TokenizationPayload::CommandExecution {
             command, output, ..
         } => {
@@ -205,7 +238,7 @@ fn preview_content(content: &MessageContent) -> PayloadPreview {
     let has_non_image_content = content
         .parts
         .iter()
-        .any(|part| matches!(part, ContentPart::Text(_)));
+        .any(|part| matches!(part, ContentPart::Text(_) | ContentPart::ToolReference(_)));
     let has_unsupported = content
         .parts
         .iter()
@@ -234,6 +267,7 @@ fn feed_content(builder: &mut PreviewBuilder, content: &MessageContent, inline_f
         match part {
             ContentPart::Text(text) => builder.feed_inline(text),
             ContentPart::Image(image) => builder.feed_inline(&image_preview(image)),
+            ContentPart::ToolReference(name) => builder.feed_inline(&tool_reference(name)),
             ContentPart::Unsupported => builder.feed_inline("[unsupported content]"),
         }
         builder.finish_line();
@@ -406,12 +440,15 @@ fn take_scalars(value: &str, limit: usize) -> String {
 pub(crate) fn project_payload(
     payload: &TokenizationPayload,
     target: &ModelTarget,
-    tool_calls: ToolCallRendering,
+    rules: ProjectionRules,
 ) -> ProjectedPayload {
+    let ProjectionRules { tool_calls, images } = rules;
     let mut notes = Vec::new();
+    let mut image_tokens = 0_u64;
     let (text, partial, unavailable) = match payload {
         TokenizationPayload::UserMessage(content) => {
-            let (text, partial, unavailable) = project_content(content, &mut notes);
+            let (text, partial, unavailable) =
+                project_content(content, images, &mut image_tokens, &mut notes);
             (text, partial, unavailable)
         }
         TokenizationPayload::AssistantMessage {
@@ -467,9 +504,7 @@ pub(crate) fn project_payload(
                     }
                     AssistantContentBlock::Image(image) => {
                         has_supported = true;
-                        append_part(&mut out, "[image]");
-                        notes.push(DiagnosticCode::UnsupportedImage);
-                        let _ = image;
+                        project_image(image, images, &mut out, &mut image_tokens, &mut notes);
                         partial = true;
                     }
                     AssistantContentBlock::Unsupported => {
@@ -493,12 +528,14 @@ pub(crate) fn project_payload(
             if *is_error {
                 append_part(&mut out, "[error]");
             }
-            let (content_text, partial, unavailable) = project_content(content, &mut notes);
+            let (content_text, partial, unavailable) =
+                project_content(content, images, &mut image_tokens, &mut notes);
             append_part(&mut out, &content_text);
             (out, partial, unavailable)
         }
         TokenizationPayload::CustomMessage(content) => {
-            let (text, partial, unavailable) = project_content(content, &mut notes);
+            let (text, partial, unavailable) =
+                project_content(content, images, &mut image_tokens, &mut notes);
             (text, partial, unavailable)
         }
         TokenizationPayload::SystemPrompt { text, complete }
@@ -512,7 +549,8 @@ pub(crate) fn project_payload(
         TokenizationPayload::CompactionSummary(summary) => (summary.clone(), false, false),
         TokenizationPayload::BranchSummary(summary) => (summary.clone(), false, false),
         // Counted from the reported size by the registry, never from text.
-        TokenizationPayload::ReportedThinking { .. } => (String::new(), false, false),
+        TokenizationPayload::ReportedThinking { .. }
+        | TokenizationPayload::UnrecordedContext { .. } => (String::new(), false, false),
         TokenizationPayload::CommandExecution {
             command,
             output,
@@ -534,14 +572,52 @@ pub(crate) fn project_payload(
     notes.dedup();
     ProjectedPayload {
         text,
+        image_tokens,
         partial,
         unavailable,
         note_codes: notes,
     }
 }
 
+/// An image's tokens under Anthropic's sizing rule, or the `[image]` placeholder. Either way
+/// the estimate is partial: the rule is documented, not measured per image.
+fn project_image(
+    image: &crate::domain::ImageDescriptor,
+    sizing: ImageSizing,
+    out: &mut String,
+    image_tokens: &mut u64,
+    notes: &mut Vec<DiagnosticCode>,
+) {
+    match (sizing, image.dimensions) {
+        (
+            ImageSizing::Claude {
+                long_edge,
+                max_tokens,
+            },
+            Some((width, height)),
+        ) => {
+            *image_tokens = image_tokens
+                .saturating_add(claude_image_tokens(width, height, long_edge, max_tokens));
+            notes.push(DiagnosticCode::EstimatedImageSize);
+        }
+        _ => {
+            append_part(out, "[image]");
+            notes.push(DiagnosticCode::UnsupportedImage);
+        }
+    }
+}
+
+fn claude_image_tokens(width: u32, height: u32, long_edge: u32, max_tokens: u64) -> u64 {
+    let (width, height) = (f64::from(width), f64::from(height));
+    let scale = (f64::from(long_edge) / width.max(height)).min(1.0);
+    let tokens = (width * scale) * (height * scale) / 750.0;
+    (tokens.ceil() as u64).min(max_tokens)
+}
+
 fn project_content(
     content: &MessageContent,
+    images: ImageSizing,
+    image_tokens: &mut u64,
     notes: &mut Vec<DiagnosticCode>,
 ) -> (String, bool, bool) {
     let mut output = String::new();
@@ -556,9 +632,13 @@ fn project_content(
             }
             ContentPart::Image(image) => {
                 has_supported = true;
-                append_part(&mut output, "[image]");
-                let _ = image;
-                notes.push(DiagnosticCode::UnsupportedImage);
+                project_image(image, images, &mut output, image_tokens, notes);
+                partial = true;
+            }
+            ContentPart::ToolReference(name) => {
+                has_supported = true;
+                append_part(&mut output, &tool_reference(name));
+                notes.push(DiagnosticCode::UnrecordedToolDefinition);
                 partial = true;
             }
             ContentPart::Unsupported => {
@@ -569,6 +649,10 @@ fn project_content(
         }
     }
     (output, partial, has_unsupported && !has_supported)
+}
+
+fn tool_reference(name: &str) -> String {
+    format!("[tool reference: {name}]")
 }
 
 /// A tool call as Claude reads it, or `None` when the arguments are not a JSON object.
@@ -666,6 +750,14 @@ fn hash_payload(hasher: &mut Hasher, payload: &TokenizationPayload) {
             hash_u64(hasher, *tokens);
             hash_optional_string(hasher, b"source-model", source_model.as_deref());
         }
+        TokenizationPayload::UnrecordedContext {
+            tokens,
+            approximate,
+        } => {
+            hash_tag(hasher, b"unrecorded-context");
+            hash_u64(hasher, *tokens);
+            hash_u64(hasher, u64::from(*approximate));
+        }
         TokenizationPayload::CommandExecution {
             command,
             output,
@@ -692,6 +784,10 @@ fn hash_content(hasher: &mut Hasher, content: &MessageContent) {
             ContentPart::Image(image) => {
                 hash_tag(hasher, b"image");
                 hash_image(hasher, image);
+            }
+            ContentPart::ToolReference(name) => {
+                hash_tag(hasher, b"tool-reference");
+                hash_string(hasher, b"name", name);
             }
             ContentPart::Unsupported => hash_tag(hasher, b"unsupported"),
         }
@@ -732,6 +828,12 @@ fn hash_assistant_block(hasher: &mut Hasher, block: &AssistantContentBlock) {
 
 fn hash_image(hasher: &mut Hasher, image: &crate::domain::ImageDescriptor) {
     hash_optional_string(hasher, b"media-type", image.media_type.as_deref());
+    // Hashed only when known, so images without a readable size keep their fingerprints.
+    if let Some((width, height)) = image.dimensions {
+        hash_tag(hasher, b"dimensions");
+        hash_u64(hasher, u64::from(width));
+        hash_u64(hasher, u64::from(height));
+    }
     // Keep the historical tag: only the Rust field name changed; encoding is v3.
     match image.encoded_data_length {
         Some(value) => {
@@ -848,13 +950,11 @@ mod tests {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
                 encoded_data_length: Some(10),
+                dimensions: None,
             })],
         });
-        let projected = project_payload(
-            &payload,
-            &ModelTarget::default(),
-            ToolCallRendering::NameAndArguments,
-        );
+        let projected =
+            project_payload(&payload, &ModelTarget::default(), ProjectionRules::GENERIC);
         assert!(projected.partial);
         assert!(projected
             .note_codes
@@ -874,7 +974,7 @@ mod tests {
                 model: Some("gpt-4o-mini".into()),
                 api: Some("openai-chat-completions".into()),
             },
-            ToolCallRendering::NameAndArguments,
+            ProjectionRules::GENERIC,
         );
         assert!(projected.partial);
         assert!(!projected.unavailable);
@@ -892,11 +992,8 @@ mod tests {
         let payload = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Unsupported],
         });
-        let projected = project_payload(
-            &payload,
-            &ModelTarget::default(),
-            ToolCallRendering::NameAndArguments,
-        );
+        let projected =
+            project_payload(&payload, &ModelTarget::default(), ProjectionRules::GENERIC);
         assert!(projected.unavailable);
         assert_eq!(projected.text, "");
         assert_eq!(preview_payload(&payload).kind, PreviewKind::Unavailable);
@@ -905,14 +1002,88 @@ mod tests {
     #[test]
     fn empty_supported_content_remains_a_valid_empty_payload() {
         let payload = TokenizationPayload::UserMessage(MessageContent::empty());
-        let projected = project_payload(
-            &payload,
-            &ModelTarget::default(),
-            ToolCallRendering::NameAndArguments,
-        );
+        let projected =
+            project_payload(&payload, &ModelTarget::default(), ProjectionRules::GENERIC);
         assert!(!projected.partial);
         assert!(!projected.unavailable);
         assert_eq!(preview_payload(&payload).kind, PreviewKind::Text);
+    }
+
+    #[test]
+    fn claude_images_are_counted_from_their_size_after_scaling() {
+        // Within the limits: width × height ÷ 750, rounded up.
+        assert_eq!(claude_image_tokens(1000, 1000, 1568, 1600), 1334);
+        assert_eq!(claude_image_tokens(200, 200, 1568, 1600), 54);
+        // A long side over the limit is scaled down to it first.
+        assert_eq!(claude_image_tokens(3136, 784, 1568, 1600), 820);
+        // The token limit applies after that.
+        assert_eq!(claude_image_tokens(1568, 1568, 1568, 1600), 1600);
+        assert_eq!(claude_image_tokens(2576, 1449, 2576, 4784), 4784);
+        assert_eq!(claude_image_tokens(1920, 1080, 2576, 4784), 2765);
+    }
+
+    #[test]
+    fn claude_profiles_count_an_image_of_known_size_and_others_keep_the_placeholder() {
+        let payload = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![
+                ContentPart::Text("Look.".into()),
+                ContentPart::Image(ImageDescriptor {
+                    media_type: Some("image/png".into()),
+                    encoded_data_length: Some(1000),
+                    dimensions: Some((1000, 1000)),
+                }),
+            ],
+        });
+        let claude = ProjectionRules {
+            tool_calls: ToolCallRendering::ClaudeInvoke,
+            images: ImageSizing::Claude {
+                long_edge: 1568,
+                max_tokens: 1600,
+            },
+        };
+        let projected = project_payload(&payload, &ModelTarget::default(), claude);
+        assert_eq!(projected.text, "Look.");
+        assert_eq!(projected.image_tokens, 1334);
+        assert!(projected.partial);
+        assert_eq!(projected.note_codes, [DiagnosticCode::EstimatedImageSize]);
+        let generic = project_payload(&payload, &ModelTarget::default(), ProjectionRules::GENERIC);
+        assert_eq!(generic.text, "Look.\n[image]");
+        assert_eq!(generic.image_tokens, 0);
+        assert_eq!(generic.note_codes, [DiagnosticCode::UnsupportedImage]);
+        let unknown_size = TokenizationPayload::UserMessage(MessageContent {
+            parts: vec![ContentPart::Image(ImageDescriptor {
+                media_type: None,
+                encoded_data_length: None,
+                dimensions: None,
+            })],
+        });
+        let projected = project_payload(&unknown_size, &ModelTarget::default(), claude);
+        assert_eq!(
+            (projected.text.as_str(), projected.image_tokens),
+            ("[image]", 0)
+        );
+    }
+
+    #[test]
+    fn tool_references_are_counted_as_a_partial_placeholder() {
+        let payload = TokenizationPayload::ToolResult {
+            tool_call_id: "call-1".into(),
+            tool_name: "ToolSearch".into(),
+            content: MessageContent {
+                parts: vec![ContentPart::ToolReference("Read".into())],
+            },
+            is_error: false,
+        };
+        let projected =
+            project_payload(&payload, &ModelTarget::default(), ProjectionRules::GENERIC);
+        assert_eq!(projected.text, "call-1\nToolSearch\n[tool reference: Read]");
+        assert!(projected.partial);
+        assert!(!projected.unavailable);
+        assert_eq!(
+            projected.note_codes,
+            [DiagnosticCode::UnrecordedToolDefinition]
+        );
+        assert_eq!(preview_payload(&payload).kind, PreviewKind::ToolResult);
     }
 
     #[test]
@@ -936,18 +1107,16 @@ mod tests {
             project_payload(
                 &object,
                 &ModelTarget::default(),
-                ToolCallRendering::ClaudeInvoke
+                ProjectionRules {
+                    tool_calls: ToolCallRendering::ClaudeInvoke,
+                    images: ImageSizing::Placeholder,
+                }
             )
             .text,
             "Checking.\n<invoke name=\"bash\">\n<parameter name=\"command\">echo \"hi\"\nls</parameter>\n<parameter name=\"timeout\">5</parameter>\n</invoke>"
         );
         assert_eq!(
-            project_payload(
-                &object,
-                &ModelTarget::default(),
-                ToolCallRendering::NameAndArguments
-            )
-            .text,
+            project_payload(&object, &ModelTarget::default(), ProjectionRules::GENERIC).text,
             "Checking.\nbash\n{\"command\":\"echo \\\"hi\\\"\\nls\",\"timeout\":5}"
         );
         // Arguments that are not a JSON object are counted as they were recorded.
@@ -956,7 +1125,10 @@ mod tests {
                 project_payload(
                     &call(arguments),
                     &ModelTarget::default(),
-                    ToolCallRendering::ClaudeInvoke
+                    ProjectionRules {
+                        tool_calls: ToolCallRendering::ClaudeInvoke,
+                        images: ImageSizing::Placeholder,
+                    }
                 )
                 .text,
                 format!("Checking.\nbash\n{arguments}")
@@ -1055,6 +1227,7 @@ mod tests {
                 parts: vec![ContentPart::Image(ImageDescriptor {
                     media_type: media_type.map(str::to_owned),
                     encoded_data_length: length,
+                    dimensions: None,
                 })],
             });
             let preview = preview_payload(&payload);
@@ -1065,6 +1238,7 @@ mod tests {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("画".repeat(EXPANDED_PREVIEW_LIMIT + 20)),
                 encoded_data_length: Some(8),
+                dimensions: None,
             })],
         });
         let preview = preview_payload(&payload);
@@ -1079,6 +1253,7 @@ mod tests {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
                 encoded_data_length: Some(8),
+                dimensions: None,
             })],
         });
         assert_eq!(PAYLOAD_SCHEMA_VERSION, 4);
@@ -1091,12 +1266,14 @@ mod tests {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
                 encoded_data_length: None,
+                dimensions: None,
             })],
         });
         let zero = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
                 encoded_data_length: Some(0),
+                dimensions: None,
             })],
         });
         assert_ne!(payload_fingerprint(&absent), payload_fingerprint(&zero));
@@ -1108,6 +1285,7 @@ mod tests {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
                 encoded_data_length: Some(24_900),
+                dimensions: None,
             })],
         });
         let preview = preview_payload(&payload);

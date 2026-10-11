@@ -64,20 +64,6 @@ describe('cost assessment validation', () => {
     delete (missing.session as Partial<SessionAnalysis['session']>).costSummary;
     expect(() => indexTestAnalysis(missing)).toThrow(/no cost summary/);
   });
-  it('accepts the Claude Code billing setting as a classification rule', () => {
-    expect(() =>
-      indexTestAnalysis(
-        withCost({
-          kind: 'estimated',
-          amountHigh: null,
-          recordedByHarness: null,
-          billingMode: 'perToken',
-          classificationRule: 'claudeCodeBillingSetting',
-          rate: { ...rate!, provider: 'anthropic', model: 'claude-opus-5-5', labEquivalent: false },
-        }),
-      ),
-    ).not.toThrow();
-  });
   it("accepts the harness's own session total and rejects invalid ones", () => {
     const valid = withCost({});
     valid.session.harnessSessionCost = { totalUsd: 2.28, sinceMs: 1790812800000 };

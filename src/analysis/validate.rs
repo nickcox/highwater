@@ -131,6 +131,12 @@ pub(super) fn validate_payload_numbers(
         TokenizationPayload::ReportedThinking { tokens, .. } => {
             require_safe_integer(*tokens, &format!("item {item_id} reported thinking tokens"))?;
         }
+        TokenizationPayload::UnrecordedContext { tokens, .. } => {
+            require_safe_integer(
+                *tokens,
+                &format!("item {item_id} unrecorded context tokens"),
+            )?;
+        }
         TokenizationPayload::SystemPrompt { .. }
         | TokenizationPayload::ToolDefinition { .. }
         | TokenizationPayload::CompactionSummary(_)

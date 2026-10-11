@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { tick } from 'svelte';
 import { costAssessmentOf, testAnalysis } from '../context-river/test-data';
 import type { ModelCall } from '../types';
 import CallDetails from './CallDetails.svelte';
@@ -137,8 +138,10 @@ describe('CallDetails change lists', () => {
     };
     render(CallDetails, { props: { call, indexed, pinned: true } });
     expect(screen.getByText('Response time (approx.)')).toBeInTheDocument();
-    expect(screen.getByText('2 s')).toHaveAccessibleDescription(/Includes waiting, retries/);
-    expect(screen.getByText('50 tok\/s')).toHaveAccessibleDescription(/not generation-only speed/);
+    expect(screen.getByText('2 s')).toHaveAccessibleDescription(/including waiting and retries/);
+    expect(screen.getByText('50 tok\/s')).toHaveAccessibleDescription(
+      /reported output, including reasoning, over that time/,
+    );
     expect(screen.queryByText('1700000000000')).toBeNull();
   });
 
@@ -329,8 +332,28 @@ describe('CallDetails cost', () => {
     const call = indexed.analysis.modelCalls[1];
     call.costAssessment = cost;
     render(CallDetails, { props: { call, indexed, pinned: true } });
-    return screen.getByText('Cost').nextElementSibling!;
+    // The value and its label, without the explanation behind the "i" button.
+    const value = screen.getByText('Cost').nextElementSibling!.cloneNode(true) as HTMLElement;
+    value.querySelector('.info')?.remove();
+    return value;
   }
+
+  it('opens the cost explanation beside the cost and closes it with Escape', async () => {
+    renderCost(costAssessmentOf('recorded', 0.25), 'pi');
+    const trigger = screen.getByRole('button', { name: 'How this cost is worked out' });
+    const explanation = document.querySelector('.cost-explanation')!.parentElement!;
+    expect(screen.getByText('Cost').nextElementSibling).toContainElement(trigger);
+    expect(explanation).not.toBeVisible();
+    await fireEvent.click(trigger);
+    await tick();
+    // Placed on the first open, not only on later ones.
+    expect(explanation.getAttribute('style')).toMatch(/left:\s*\d+px;\s*top:\s*\d+px/);
+    expect(explanation).toBeVisible();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(explanation).not.toBeVisible();
+    expect(trigger).toHaveFocus();
+  });
 
   it('labels an API-equivalent range and explains the rate, the inference and the recorded zero', () => {
     const value = renderCost({
