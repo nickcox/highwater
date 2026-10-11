@@ -1,5 +1,6 @@
-//! Stored OpenCode accounting is not Pi accounting. The caller must supply an
-//! audited writer policy; a session's creation version alone cannot select one.
+//! Stored OpenCode accounting is not Pi accounting. A session's creation version
+//! cannot select an output policy, because later versions can append to a session;
+//! each record's own stored total can (see `evident_accounting`).
 
 use crate::domain::{
     OutputReasoningRelationship, ReportedCost, ReportedUsage, MAX_SAFE_JSON_INTEGER,
@@ -9,15 +10,12 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutputAccounting {
-    /// Audited v1.2.24 getUsage: output already includes reasoning.
-    /// Reference vectors only until per-message writer provenance is established.
-    #[cfg_attr(not(test), expect(dead_code))]
+    /// Audited v1.2.24/v1.3.10 getUsage: output already includes reasoning.
     IncludesReasoning,
     /// Audited v1.4.0 getUsage: output and reasoning are disjoint.
-    /// Reference vectors only until per-message writer provenance is established.
-    #[cfg_attr(not(test), expect(dead_code))]
     ExcludesReasoning,
-    /// A missing/mixed writer version cannot grant either interpretation.
+    /// Decide per record from its stored total (see `evident_accounting`); a
+    /// record without that evidence is not given either interpretation.
     Unknown,
 }
 
@@ -45,6 +43,60 @@ fn cost(value: Option<&Value>) -> Result<Option<f64>, InvalidUsage> {
                 .ok_or(InvalidUsage)
         })
         .transpose()
+}
+
+/// The overlap that a record's own `total` shows. OpenCode stores the provider's
+/// total, which counts reasoning once: up to v1.3.x `output` already included
+/// reasoning (total = input + output + cache), and from v1.4.0 `output` excludes it
+/// (total = input + output + reasoning + cache). `evidence` is the record carrying
+/// `total`; it must describe exactly the same counters as `tokens`, so a modern
+/// record can use the legacy step it was copied from. Anything else, or a record
+/// without reasoning (where overlap cannot matter), stays Unknown.
+pub(crate) fn evident_accounting(
+    tokens: Option<&Value>,
+    evidence: Option<&Value>,
+) -> OutputAccounting {
+    const COUNTERS: [&str; 5] = [
+        "/input",
+        "/output",
+        "/reasoning",
+        "/cache/read",
+        "/cache/write",
+    ];
+    let (Some(tokens), Some(evidence)) = (tokens, evidence) else {
+        return OutputAccounting::Unknown;
+    };
+    if COUNTERS
+        .iter()
+        .any(|pointer| tokens.pointer(pointer) != evidence.pointer(pointer))
+    {
+        return OutputAccounting::Unknown;
+    }
+    let value = |pointer: &str| evidence.pointer(pointer).and_then(Value::as_u64);
+    let (Some(total), Some(input), Some(output), Some(reasoning), Some(read), Some(write)) = (
+        value("/total"),
+        value("/input"),
+        value("/output"),
+        value("/reasoning"),
+        value("/cache/read"),
+        value("/cache/write"),
+    ) else {
+        return OutputAccounting::Unknown;
+    };
+    if reasoning == 0 {
+        return OutputAccounting::Unknown;
+    }
+    let without_reasoning = input
+        .checked_add(output)
+        .and_then(|sum| sum.checked_add(read))
+        .and_then(|sum| sum.checked_add(write));
+    match without_reasoning {
+        Some(sum) if total == sum => OutputAccounting::IncludesReasoning,
+        Some(sum) if Some(total) == sum.checked_add(reasoning) => {
+            OutputAccounting::ExcludesReasoning
+        }
+        _ => OutputAccounting::Unknown,
+    }
 }
 
 /// `measured` means a completed step supplied this usage, not simply that the
@@ -159,6 +211,42 @@ mod tests {
             assert_eq!(usage.cost.total, Some(0.25));
             assert!(usage.cost.input.is_none());
         }
+    }
+
+    #[test]
+    fn stored_total_decides_overlap_only_when_it_fits_exactly_one_layout() {
+        let record = |total: Value| json!({"input":80,"output":20,"reasoning":10,"cache":{"read":20,"write":5},"total":total});
+        let evident = |tokens: &Value| evident_accounting(Some(tokens), Some(tokens));
+        // 80 + 20 + 20 + 5 = 125, plus 10 reasoning = 135.
+        assert!(matches!(
+            evident(&record(json!(125))),
+            OutputAccounting::IncludesReasoning
+        ));
+        assert!(matches!(
+            evident(&record(json!(135))),
+            OutputAccounting::ExcludesReasoning
+        ));
+        for unexplained in [json!(130), json!(null), json!("135")] {
+            assert!(matches!(
+                evident(&record(unexplained)),
+                OutputAccounting::Unknown
+            ));
+        }
+        let no_reasoning =
+            json!({"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0},"total":3});
+        assert!(matches!(evident(&no_reasoning), OutputAccounting::Unknown));
+        let no_cache = json!({"input":80,"output":20,"reasoning":10,"total":110});
+        assert!(matches!(evident(&no_cache), OutputAccounting::Unknown));
+        // Evidence must describe the same counters as the record it qualifies.
+        let other = json!({"input":81,"output":20,"reasoning":10,"cache":{"read":20,"write":5},"total":136});
+        assert!(matches!(
+            evident_accounting(Some(&record(json!(135))), Some(&other)),
+            OutputAccounting::Unknown
+        ));
+        assert!(matches!(
+            evident_accounting(Some(&record(json!(135))), None),
+            OutputAccounting::Unknown
+        ));
     }
 
     #[test]

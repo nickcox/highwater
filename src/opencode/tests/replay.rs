@@ -1,7 +1,9 @@
 use super::Fixture;
 use crate::{
     analysis::{analyze, AnalysisConfig, TokenizationPolicy},
-    domain::{ContextItemKind, NormalizedSession, TokenizationPayload},
+    domain::{
+        ContextItemKind, NormalizedSession, OutputReasoningRelationship, TokenizationPayload,
+    },
     opencode::{
         replay::{reconstruct, ReplayError, ReplayLimitation, ReplayResult},
         storage::load_session,
@@ -795,10 +797,60 @@ fn unknown_assistant_content_remains_explicitly_unsupported() {
 }
 
 #[test]
-fn unaudited_writer_and_unverified_transport_stay_explicit() {
+fn stored_total_shows_whether_output_includes_reasoning() {
+    // 80 + 20 + 10 + 20 = 130: the v1.4.0 layout, with reasoning outside output.
     let fixture = Fixture::new(false);
     fixture.user("user_1", 10, json!({"type":"text","text":"Task"}));
     fixture.assistant("assistant_1", "user_1", 20, false);
+    let replay = |fixture: &Fixture| {
+        reconstruct(
+            load_session(&fixture.path, "ses_example", None).expect("snapshot"),
+            OutputAccounting::Unknown,
+        )
+        .expect("replay")
+    };
+    let separate = replay(&fixture);
+    let usage = &separate.session.model_calls[0].reported_usage;
+    assert_eq!((usage.output, usage.recorded_output), (Some(30), Some(20)));
+    assert_eq!(
+        usage.output_reasoning_relationship,
+        OutputReasoningRelationship::ExcludesReasoning
+    );
+    assert!(!separate
+        .limitations
+        .contains(&ReplayLimitation::UnknownOutputAccounting));
+    validate(&separate);
+
+    // 80 + 20 + 20 = 120: the v1.3 layout, with reasoning inside output.
+    fixture
+        .writer
+        .execute(
+            "UPDATE part SET data = json_set(data, '$.tokens.total', 120) WHERE id = 'assistant_1_9_finish'",
+            [],
+        )
+        .expect("inclusive total");
+    let inclusive = replay(&fixture);
+    let usage = &inclusive.session.model_calls[0].reported_usage;
+    assert_eq!(usage.output, Some(20));
+    assert_eq!(
+        usage.output_reasoning_relationship,
+        OutputReasoningRelationship::IncludesReasoning
+    );
+}
+
+#[test]
+fn unaudited_writer_and_unverified_transport_stay_explicit() {
+    // Without a total that fits either layout, the overlap stays unknown.
+    let fixture = Fixture::new(false);
+    fixture.user("user_1", 10, json!({"type":"text","text":"Task"}));
+    fixture.assistant("assistant_1", "user_1", 20, false);
+    fixture
+        .writer
+        .execute(
+            "UPDATE part SET data = json_set(data, '$.tokens.total', 999) WHERE id = 'assistant_1_9_finish'",
+            [],
+        )
+        .expect("unexplained total");
     let result = reconstruct(
         load_session(&fixture.path, "ses_example", None).expect("snapshot"),
         OutputAccounting::Unknown,
@@ -858,13 +910,14 @@ fn source_neutral_loader_preserves_database_revision_and_replay_qualifications()
                 .revision
         )
     );
-    assert!(loaded
+    // The fixture's stored total shows output excludes reasoning.
+    assert!(!loaded
         .replay_limitations
         .contains(&ReplayLimitation::UnknownOutputAccounting));
-    assert!(loaded.normalized.model_calls[0]
-        .reported_usage
-        .output
-        .is_none());
+    assert_eq!(
+        loaded.normalized.model_calls[0].reported_usage.output,
+        Some(30)
+    );
 }
 
 #[test]

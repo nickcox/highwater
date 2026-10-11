@@ -103,6 +103,10 @@ pub(crate) struct MessageRecord {
     pub updated_at_ms: i64,
     /// Row IDs/relationships are authoritative; they need not be repeated here.
     pub data: Value,
+    /// A modern record's token counters as its legacy copy's single step-finish
+    /// part recorded them, including `total`, in a database holding both layouts.
+    /// Evidence for output/reasoning accounting only; never a second usage ledger.
+    pub legacy_step_tokens: Option<Value>,
     /// Parts are in source serializer order (ID), not modification time order.
     pub parts: Vec<PartRecord>,
 }
@@ -584,7 +588,7 @@ fn load_with_limits(
         (session, generation)
     };
     if generation == Generation::Modern {
-        let messages = modern::load_messages(
+        let mut messages = modern::load_messages(
             &tx,
             native_id,
             signal.as_deref(),
@@ -592,6 +596,17 @@ fn load_with_limits(
             &mut hasher,
             &mut bytes,
         )?;
+        if matches!(layout, Layout::Mixed) {
+            modern::attach_legacy_step_tokens(
+                &tx,
+                native_id,
+                &mut messages,
+                signal.as_deref(),
+                (max_rows, max_bytes),
+                &mut hasher,
+                &mut bytes,
+            )?;
+        }
         return Ok(SessionSnapshot {
             metadata: session,
             generation,
@@ -637,6 +652,7 @@ fn load_with_limits(
             created_at_ms,
             updated_at_ms,
             data: object(&raw)?,
+            legacy_step_tokens: None,
             parts: Vec::new(),
         });
     }

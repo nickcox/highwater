@@ -289,6 +289,11 @@ fn assistant(
             .ok_or(ReplayError::InvalidRecords)?,
     ))?;
     let measured = instant(message.data.pointer("/time/completed")).is_some();
+    let accounting = record_accounting(
+        accounting,
+        message.data.get("tokens"),
+        message.legacy_step_tokens.as_ref(),
+    );
     let reported = usage::normalize(
         message.data.get("tokens"),
         message.data.get("cost"),
@@ -459,6 +464,11 @@ fn compaction(
         return Err(ReplayError::UnsupportedHistory);
     }
     let usage_present = message.data.get("tokens").is_some() || message.data.get("cost").is_some();
+    let accounting = record_accounting(
+        accounting,
+        message.data.get("tokens"),
+        message.legacy_step_tokens.as_ref(),
+    );
     let reported = usage::normalize(
         message.data.get("tokens"),
         message.data.get("cost"),

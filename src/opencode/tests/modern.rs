@@ -1,7 +1,9 @@
 use super::*;
 use crate::{
     analysis::{analyze, AnalysisConfig, TokenizationPolicy},
-    domain::{AssistantContentBlock, ContextItemKind, TokenizationPayload},
+    domain::{
+        AssistantContentBlock, ContextItemKind, OutputReasoningRelationship, TokenizationPayload,
+    },
     opencode::{
         replay::{reconstruct, ReplayError, ReplayLimitation, ReplayResult},
         storage::Generation,
@@ -181,6 +183,87 @@ fn native_layout_does_not_infer_migrated_output_accounting_from_creation_version
     )
     .expect("explicit audited policy");
     assert_eq!(r.session.model_calls[0].reported_usage.output, Some(25));
+}
+
+#[test]
+fn modern_record_takes_its_accounting_from_the_matching_legacy_step_total() {
+    let f = ModernFixture::new();
+    f.writer
+        .execute_batch(SCHEMA)
+        .expect("legacy schema alongside modern");
+    f.writer.execute("INSERT INTO session VALUES ('ses_modern', NULL, '/synthetic/legacy', 'Legacy copy', '1.4.0', 1, 100, NULL, NULL)", []).expect("legacy metadata");
+    f.writer
+        .execute(
+            "INSERT INTO message VALUES ('msg_tool', 'ses_modern', 20, 25, '{\"role\":\"assistant\"}')",
+            [],
+        )
+        .expect("legacy copy");
+    let step = |id: &str, total: u64, output: u64| {
+        f.writer
+            .execute(
+                "INSERT OR REPLACE INTO part VALUES (?1, 'msg_tool', 'ses_modern', 25, 25, ?2)",
+                params![
+                    id,
+                    json!({"type":"step-finish","tokens":{"total":total,"input":80,"output":output,"reasoning":5,"cache":{"read":10,"write":0}}})
+                        .to_string()
+                ],
+            )
+            .expect("legacy step");
+    };
+    let call = |f: &ModernFixture| {
+        let result = f.replay().expect("replay");
+        assert_eq!(
+            load_session(&f.path, "ses_modern", None)
+                .expect("snapshot")
+                .generation,
+            Generation::Modern
+        );
+        (
+            result.session.model_calls[0].reported_usage.output,
+            result.session.model_calls[0]
+                .reported_usage
+                .output_reasoning_relationship,
+            result
+                .limitations
+                .contains(&ReplayLimitation::UnknownOutputAccounting),
+        )
+    };
+    // 80 + 20 + 5 + 10 = 115: reasoning outside output.
+    step("prt_step", 115, 20);
+    let before = load_session(&f.path, "ses_modern", None)
+        .expect("snapshot")
+        .revision;
+    assert_eq!(
+        call(&f),
+        (
+            Some(25),
+            OutputReasoningRelationship::ExcludesReasoning,
+            false
+        )
+    );
+    // 80 + 20 + 10 = 110: reasoning inside output. The evidence is part of the revision.
+    step("prt_step", 110, 20);
+    assert_ne!(
+        load_session(&f.path, "ses_modern", None)
+            .expect("snapshot")
+            .revision,
+        before
+    );
+    assert_eq!(
+        call(&f),
+        (
+            Some(20),
+            OutputReasoningRelationship::IncludesReasoning,
+            false
+        )
+    );
+    // Counters that differ from the modern record are not evidence for it.
+    step("prt_step", 116, 21);
+    assert_eq!(call(&f), (None, OutputReasoningRelationship::Unknown, true));
+    // Two steps for one message have no single counterpart.
+    step("prt_step", 115, 20);
+    step("prt_step_2", 115, 20);
+    assert_eq!(call(&f), (None, OutputReasoningRelationship::Unknown, true));
 }
 
 #[test]

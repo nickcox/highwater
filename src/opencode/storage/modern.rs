@@ -2,7 +2,11 @@
 //! read transaction. Inline content remains JSON until logical replay.
 use super::{cancelled, charge, field, object, safe_instant, MessageRecord, StorageError};
 use rusqlite::Transaction;
-use std::{collections::HashSet, sync::atomic::AtomicBool};
+use serde_json::Value;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::atomic::AtomicBool,
+};
 
 pub(super) fn load_messages(
     tx: &Transaction<'_>,
@@ -63,8 +67,62 @@ pub(super) fn load_messages(
             created_at_ms,
             updated_at_ms,
             data: object(&raw)?,
+            legacy_step_tokens: None,
             parts: Vec::new(),
         });
     }
     Ok(messages)
+}
+
+/// Adds each modern record's legacy step-finish token counters, when the record
+/// has exactly one such step. OpenCode writes both layouts for the same message
+/// ID; the legacy step keeps the provider total the modern record lacks. Only the
+/// `tokens` object is read, so large tool parts are never loaded.
+pub(super) fn attach_legacy_step_tokens(
+    tx: &Transaction<'_>,
+    native_id: &str,
+    messages: &mut [MessageRecord],
+    signal: Option<&AtomicBool>,
+    limits: (usize, usize),
+    hasher: &mut blake3::Hasher,
+    bytes: &mut usize,
+) -> Result<(), StorageError> {
+    let (max_rows, max_bytes) = limits;
+    let mut statement = tx.prepare(
+        "SELECT p.id, p.message_id, json_extract(p.data, '$.tokens') FROM part p \
+         WHERE p.session_id = ?1 AND json_extract(p.data, '$.type') = 'step-finish' \
+         ORDER BY p.id",
+    )?;
+    let mut rows = statement.query([native_id])?;
+    let mut steps: HashMap<String, Option<String>> = HashMap::new();
+    let mut row_count = messages.len();
+    while let Some(row) = rows.next()? {
+        cancelled(signal)?;
+        charge(&mut row_count, 1, max_rows)?;
+        let id: String = row.get(0)?;
+        let message_id: String = row.get(1)?;
+        let tokens: Option<String> = row.get(2)?;
+        for value in [&id, &message_id] {
+            charge(bytes, value.len(), max_bytes)?;
+        }
+        charge(bytes, tokens.as_ref().map_or(0, String::len), max_bytes)?;
+        hasher.update(b"legacy_step_tokens\0");
+        for value in [id.as_bytes(), message_id.as_bytes()] {
+            field(hasher, value);
+        }
+        field(hasher, tokens.as_deref().unwrap_or("").as_bytes());
+        // A message with more than one step has no single counterpart.
+        steps
+            .entry(message_id)
+            .and_modify(|existing| *existing = None)
+            .or_insert(tokens);
+    }
+    for message in messages {
+        message.legacy_step_tokens = steps
+            .remove(&message.id)
+            .flatten()
+            .and_then(|tokens| serde_json::from_str::<Value>(&tokens).ok())
+            .filter(Value::is_object);
+    }
+    Ok(())
 }

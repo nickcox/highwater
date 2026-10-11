@@ -91,6 +91,19 @@ fn nonempty<'a>(value: &'a Value, key: &str) -> Result<&'a str, ReplayError> {
     Ok(value)
 }
 
+/// An explicit policy (used by reference tests) wins; otherwise each record's
+/// stored total decides, and a record without that evidence stays Unknown.
+pub(super) fn record_accounting(
+    policy: OutputAccounting,
+    tokens: Option<&Value>,
+    evidence: Option<&Value>,
+) -> OutputAccounting {
+    match policy {
+        OutputAccounting::Unknown => usage::evident_accounting(tokens, evidence),
+        explicit => explicit,
+    }
+}
+
 fn instant(value: Option<&Value>) -> Option<i64> {
     value
         .and_then(Value::as_i64)
@@ -235,11 +248,6 @@ pub(crate) fn reconstruct(
         ]),
         pending_compaction: None,
     };
-    if matches!(accounting, OutputAccounting::Unknown) {
-        state
-            .limitations
-            .insert(ReplayLimitation::UnknownOutputAccounting);
-    }
     if snapshot.mixed_layout {
         state
             .limitations
@@ -261,6 +269,18 @@ pub(crate) fn reconstruct(
                 _ => return Err(ReplayError::UnsupportedHistory),
             }
         }
+    }
+    // Qualify only when some call's output/reasoning overlap stayed unverified.
+    if state.session.model_calls.iter().any(|call| {
+        call.reported_usage
+            .reasoning
+            .is_some_and(|reasoning| reasoning > 0)
+            && call.reported_usage.output_reasoning_relationship
+                == OutputReasoningRelationship::Unknown
+    }) {
+        state
+            .limitations
+            .insert(ReplayLimitation::UnknownOutputAccounting);
     }
     // The current normalized contract describes input-context items, not all
     // output transcript records. Like Pi, discard output/revisions never reused
@@ -401,6 +421,11 @@ fn assistant(
         .map(|part| &part.data)
         .unwrap_or(&message.data);
     let measured = !finishes.is_empty();
+    let accounting = record_accounting(
+        accounting,
+        usage_source.get("tokens"),
+        usage_source.get("tokens"),
+    );
     let reported_usage = usage::normalize(
         usage_source.get("tokens"),
         usage_source.get("cost"),
