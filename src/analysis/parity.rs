@@ -135,8 +135,15 @@ fn fixture_outputs_preserve_corrected_baseline() {
             let strip = |analysis: &Analysis| {
                 let mut value = serde_json::to_value(analysis).expect("JSON");
                 for call in value["modelCalls"].as_array_mut().expect("calls") {
-                    call.as_object_mut().expect("call").remove("timing");
+                    let call = call.as_object_mut().expect("call");
+                    call.remove("timing");
+                    // A cost is priced by the call's time, so it depends on the clock too.
+                    call.remove("costAssessment");
                 }
+                value["session"]
+                    .as_object_mut()
+                    .expect("session")
+                    .remove("costSummary");
                 value
             };
             assert_eq!(
@@ -230,6 +237,22 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 );
                 json = json.replace(&addition, "");
             }
+            // Output 24 adds per-call cost assessments and the session cost summary,
+            // each serialized last in its object.
+            for call in &baseline.model_calls {
+                let addition = format!(
+                    ",\"costAssessment\":{}",
+                    serde_json::to_string(&call.cost_assessment).expect("assessment")
+                );
+                assert!(json.contains(&addition), "cost assessment serialized");
+                json = json.replacen(&addition, "", 1);
+            }
+            let addition = format!(
+                ",\"costSummary\":{}",
+                serde_json::to_string(&baseline.session.cost_summary).expect("summary")
+            );
+            assert!(json.contains(&addition), "cost summary serialized");
+            json = json.replacen(&addition, "", 1);
             digest.update(&(json.len() as u64).to_le_bytes());
             digest.update(json.as_bytes());
         }

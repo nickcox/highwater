@@ -572,6 +572,99 @@ fn export_live_contract() {
         push(&mut cases, name, session, TokenizationPolicy::Off);
     }
 
+    // One case per kind of cost assessment, priced from the embedded table.
+    for (name, harness, provider, model, recorded_cost, output, timed) in [
+        (
+            "cost-recorded",
+            "opencode",
+            "anthropic",
+            "claude-sonnet-4-6",
+            Some(0.25),
+            Some(100),
+            true,
+        ),
+        (
+            "cost-estimated",
+            "opencode",
+            "anthropic",
+            "claude-sonnet-4-6",
+            None,
+            Some(100),
+            true,
+        ),
+        (
+            "cost-api-equivalent",
+            "pi",
+            "openai-codex",
+            "gpt-6.1-sol",
+            Some(0.02),
+            Some(100),
+            true,
+        ),
+        (
+            "cost-api-equivalent-range",
+            "opencode",
+            "openai",
+            "gpt-5.6-sol",
+            Some(0.0),
+            None,
+            true,
+        ),
+        (
+            "cost-free",
+            "opencode",
+            "opencode",
+            "big-pickle",
+            Some(0.0),
+            Some(100),
+            true,
+        ),
+        (
+            "cost-unknown",
+            "opencode",
+            "anthropic",
+            "claude-sonnet-4-6",
+            None,
+            Some(100),
+            false,
+        ),
+    ] {
+        let mut session = fake_session();
+        session.source.kind = harness.into();
+        let call = &mut session.model_calls[0];
+        call.target = ModelTarget {
+            provider: Some(provider.into()),
+            model: Some(model.into()),
+            api: None,
+        };
+        if timed {
+            // 15 September 2026.
+            call.timestamps.recorded_at_ms = Some(1_789_430_400_000);
+        }
+        call.reported_usage = ReportedUsage {
+            input: Some(20_000),
+            cache_read: Some(80_000),
+            cache_write: Some(0),
+            output,
+            recorded_output: Some(100),
+            reasoning: Some(400_000),
+            cost: ReportedCost {
+                total: recorded_cost,
+                ..ReportedCost::default()
+            },
+            ..ReportedUsage::default()
+        };
+        let mut analysis = analyze(session, config(TokenizationPolicy::Off)).expect("cost case");
+        if harness == "opencode" {
+            // Every OpenCode response carries its reconstruction limits.
+            analysis.reconstruction = Some(crate::api::ReconstructionCoverage {
+                status: "partial",
+                explanation_codes: vec!["missingHistoricalSystemPrompt".into()],
+            });
+        }
+        cases.push((name.into(), analysis));
+    }
+
     let export = std::env::var_os("TOKENPLUME_CONTRACT_DIR").map(PathBuf::from);
     if let Some(directory) = &export {
         assert!(
@@ -603,7 +696,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 104);
+    assert_eq!(manifest.len(), 110);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

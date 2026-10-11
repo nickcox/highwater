@@ -18,7 +18,7 @@ mod tokenization;
 mod usage;
 mod validate;
 
-use crate::{api::*, domain::*};
+use crate::{api::*, domain::*, pricing};
 use diagnostics::{diagnostic_strings, ChartFallbackReason, ChartUnit, DiagnosticCode};
 use metrics::{calculate_age, calculate_transition, TransitionMetrics};
 use reconciliation::{reconciliation_status, reported_prompt_tokens, UsageCompleteness};
@@ -36,9 +36,9 @@ use validate::{validate_normalized_session, ValidatedSession};
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 12;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 13;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 23;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 24;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
@@ -86,6 +86,7 @@ struct ApiCallDerived {
     dropped_indexes: Vec<usize>,
     transition_item_counts: TransitionItemCounts,
     cumulative: UsageSnapshot,
+    cost_assessment: CostAssessment,
 }
 
 fn derive_transition<'a>(
@@ -182,6 +183,7 @@ struct DerivedCalls {
     peak_calculated_visible: Option<u64>,
     usage_totals: UsageSnapshot,
     economics_summary: EconomicsSummary,
+    cost_summary: CostSummary,
 }
 
 fn derive_calls(
@@ -197,6 +199,7 @@ fn derive_calls(
     let (call_economics, economics_summary) =
         economics::derive_with_cost_basis(&session.model_calls, session.source.cost_basis);
     let mut model_calls = Vec::with_capacity(works.len());
+    let mut cost_assessments = Vec::with_capacity(works.len());
     let mut residual_percents = Vec::new();
     let mut complete_reconciliation = 0;
     let mut comparable_reconciliation = 0;
@@ -435,9 +438,12 @@ fn derive_calls(
             metrics_include_partial_estimates,
             age,
         };
+        let cost_assessment = assess_cost(work.call, &session.source.kind);
+        let cost_assessment_api = cost_assessment.to_api();
+        cost_assessments.push(cost_assessment);
         model_calls.push(to_api_call(
             work,
-            session.source.kind == "pi",
+            &session.source.kind,
             profile,
             call_economics[position].clone(),
             ApiCallDerived {
@@ -456,6 +462,7 @@ fn derive_calls(
                 ),
                 transition_item_counts: derived_transition.item_counts.clone(),
                 cumulative: cumulative_usages[position],
+                cost_assessment: cost_assessment_api,
             },
         ));
     }
@@ -470,7 +477,23 @@ fn derive_calls(
         peak_calculated_visible,
         usage_totals,
         economics_summary,
+        cost_summary: pricing::summarize(&cost_assessments, pricing::embedded()),
     }
+}
+
+/// Prices a call by the time it completed, or started when that is all there is.
+fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
+    let timing = timing::call_timing(call, harness == "pi");
+    pricing::assess(
+        pricing::embedded(),
+        pricing::CallToPrice {
+            harness,
+            provider: call.target.provider.as_deref(),
+            model: call.target.model.as_deref(),
+            at_ms: timing.recorded_at_ms.or(timing.started_at_ms),
+            usage: &call.reported_usage,
+        },
+    )
 }
 
 struct DerivedItems {
@@ -663,6 +686,7 @@ fn assemble_analysis(
         peak_calculated_visible,
         usage_totals,
         economics_summary,
+        cost_summary,
     } = calls;
     let DerivedItems {
         context_items,
@@ -804,6 +828,7 @@ fn assemble_analysis(
             maximum_absolute_residual_percent: maximum,
             negative_residual_calls: negative_residuals,
             missing_provider_usage_calls: missing_provider_usage,
+            cost_summary,
         },
         display_weight_unit: chart_unit.as_str().into(),
         model_calls,
@@ -834,12 +859,13 @@ fn assemble_analysis(
 
 fn to_api_call(
     work: &CallWork<'_>,
-    pi_source: bool,
+    harness: &str,
     profile: &TokenizationProfile,
     economics: CallEconomics,
     derived: ApiCallDerived,
 ) -> ModelCall {
     let usage = &work.call.reported_usage;
+    let timing = timing::call_timing(work.call, harness == "pi");
     ModelCall {
         index: work.call.index,
         source_record_id: work.call.source_record_id.clone(),
@@ -881,7 +907,7 @@ fn to_api_call(
         cumulative_reported_usage_completeness: derived.cumulative.completeness.as_str().into(),
         cost: cost_dto(&usage.cost),
         stop_reason: work.call.stop_reason.clone(),
-        timing: timing::call_timing(work.call, pi_source),
+        timing,
         context_item_indexes: derived.context_indexes,
         added_item_indexes: derived.added_indexes,
         dropped_item_indexes: derived.dropped_indexes,
@@ -900,6 +926,7 @@ fn to_api_call(
         tokenization_profile_id: Some(profile.id.clone()),
         token_analysis: derived.token_analysis,
         economics,
+        cost_assessment: derived.cost_assessment,
     }
 }
 

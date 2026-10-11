@@ -193,6 +193,63 @@ export interface ModelCall {
   tokenizationProfileId: string | null;
   tokenAnalysis: CallTokenAnalysis;
   economics: CallEconomics;
+  costAssessment: CostAssessment;
+}
+
+/** How a call's cost was found. `apiEquivalent` is what a subscription call would
+ * have cost at the lab's API rate: it is not a charge and is never added to billed cost. */
+export type CostKind = 'recorded' | 'estimated' | 'apiEquivalent' | 'free' | 'unknown';
+
+export type CostClassificationRule =
+  | 'recordedCost'
+  | 'billingModeTable'
+  | 'opencodeZeroWithListedPrice'
+  | 'perTokenDefault'
+  | 'failedAttempt'
+  | 'missingTime'
+  | 'noPrice'
+  | 'missingUsage';
+
+export interface CostRate {
+  provider: string;
+  model: string;
+  /** A lab's API rate used for a call on another provider (subscriptions only). */
+  labEquivalent: boolean;
+  /** When this rate started; null for a model's first listed rate. */
+  validFrom: string | null;
+  startBasis: 'documented' | 'firstObserved' | 'modelsDevCommit';
+  source: string;
+}
+
+export interface CostAssessment {
+  kind: CostKind;
+  /** The low end when the amount is a range. */
+  amount: number | null;
+  /** Set only when the amount is a range. */
+  amountHigh: number | null;
+  recordedByHarness: number | null;
+  billingMode: 'perToken' | 'subscription' | null;
+  classificationRule: CostClassificationRule;
+  rate: CostRate | null;
+}
+
+export interface CostSubtotal {
+  low: number | null;
+  high: number | null;
+  calls: number;
+}
+
+export interface CostSummary {
+  /** Recorded, estimated and free calls. */
+  billed: CostSubtotal;
+  apiEquivalent: CostSubtotal;
+  unknownCalls: number;
+  failedAttemptCalls: number;
+  priceData: {
+    modelsDevCommit: string;
+    modelsDevCommittedAt: string;
+    amendmentsImportedFrom: string | null;
+  };
 }
 
 export interface ContextItemPreview {
@@ -304,6 +361,7 @@ export interface SessionSummary {
   maximumAbsoluteResidualPercent: number | null;
   negativeResidualCalls: number;
   missingProviderUsageCalls: number;
+  costSummary: CostSummary;
 }
 
 export interface ReconstructionCoverage {

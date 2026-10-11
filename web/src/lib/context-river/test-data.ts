@@ -3,6 +3,8 @@ import type {
   CallTokenAnalysis,
   ContextItem,
   ContextItemTokenEstimate,
+  CostAssessment,
+  CostSummary,
   CoverageSummary,
   ModelCall,
   SessionAnalysis,
@@ -103,6 +105,49 @@ const cumulativeFields = {
   cumulativeReportedUsageCompleteness: 'partial' as const,
 };
 
+/** A recorded cost when the call recorded one above zero, otherwise unknown. */
+export function recordedCostAssessment(total: number | null | undefined): CostAssessment {
+  const recorded = total !== null && total !== undefined && total > 0;
+  return {
+    kind: recorded ? 'recorded' : 'unknown',
+    amount: recorded ? total : null,
+    amountHigh: null,
+    recordedByHarness: total ?? null,
+    billingMode: recorded ? 'perToken' : null,
+    classificationRule: recorded ? 'recordedCost' : 'noPrice',
+    rate: null,
+  };
+}
+
+/** The session cost summary that matches these calls' assessments. */
+export function costSummaryFor(calls: ModelCall[]): CostSummary {
+  const subtotal = (kinds: string[]) => {
+    const amounts = calls
+      .map((call) => call.costAssessment)
+      .filter((cost) => kinds.includes(cost.kind) && cost.amount !== null);
+    const low = amounts.reduce((total, cost) => total + cost.amount!, 0);
+    const high = amounts.reduce((total, cost) => total + (cost.amountHigh ?? cost.amount!), 0);
+    return amounts.length
+      ? { low, high, calls: amounts.length }
+      : { low: null, high: null, calls: 0 };
+  };
+  const unknown = calls.filter((call) => call.costAssessment.kind === 'unknown');
+  const failed = unknown.filter(
+    (call) => call.costAssessment.classificationRule === 'failedAttempt',
+  );
+  return {
+    billed: subtotal(['recorded', 'estimated', 'free']),
+    apiEquivalent: subtotal(['apiEquivalent']),
+    unknownCalls: unknown.length - failed.length,
+    failedAttemptCalls: failed.length,
+    priceData: {
+      modelsDevCommit: 'test',
+      modelsDevCommittedAt: '2026-10-10T00:00:00Z',
+      amendmentsImportedFrom: null,
+    },
+  };
+}
+
 function emptyTiming() {
   return {
     startedAtMs: null,
@@ -139,6 +184,7 @@ export function testAnalysis(): SessionAnalysis {
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(85, 85, 0, 0, null),
       economics: unsupportedEconomics(),
+      costAssessment: recordedCostAssessment(null),
     },
     {
       index: 2,
@@ -164,6 +210,7 @@ export function testAnalysis(): SessionAnalysis {
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(95, 15, 80, 5, 5 / 100),
       economics: unsupportedEconomics(),
+      costAssessment: recordedCostAssessment(0.01),
     },
     {
       index: 3,
@@ -189,6 +236,7 @@ export function testAnalysis(): SessionAnalysis {
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(40, 25, 15, 80, 80 / 120),
       economics: unsupportedEconomics(),
+      costAssessment: recordedCostAssessment(0.02),
     },
     {
       index: 4,
@@ -214,6 +262,7 @@ export function testAnalysis(): SessionAnalysis {
       tokenizationProfileId: 'profile-1',
       tokenAnalysis: callAnalysis(45, 5, 40, 0, 5 / 45),
       economics: unsupportedEconomics(),
+      costAssessment: recordedCostAssessment(0.03),
     },
   ];
   // Calls and separately created fixtures must not share mutable usage buckets.
@@ -357,6 +406,7 @@ export function testAnalysis(): SessionAnalysis {
       maximumAbsoluteResidualPercent: null,
       negativeResidualCalls: 0,
       missingProviderUsageCalls: 4,
+      costSummary: costSummaryFor(calls),
     },
     displayWeightUnit: 'estimatedTokens',
     modelCalls: calls,

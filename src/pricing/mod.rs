@@ -2,18 +2,16 @@
 //! per token and one was recorded, otherwise an estimate from the embedded price table.
 //! Calls covered by a subscription get an API-equivalent cost at the lab's API rate,
 //! which is never added to billed cost. See plans/cost-estimates-implementation-plan.md.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "connected to analysis in the next commit")
-)]
 
 mod calculate;
+mod report;
 mod table;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use calculate::TokenCounts;
 use calculate::{cost, Amount};
+pub(crate) use report::summarize;
 use std::sync::OnceLock;
 pub(crate) use table::{Billing, PriceTable, StartBasis};
 use table::{PricePeriod, Rates};

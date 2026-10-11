@@ -9,6 +9,7 @@ import type {
 import { AnalysisValidationError } from './analysis-validation';
 import { assertEconomicsSummary } from './economics-validation';
 import { assertCallTiming } from './timing-validation';
+import { assertCostAssessment, assertCostSummary } from './cost-validation';
 import { assertReconstruction } from './reconstruction';
 import { validateAndIndexAnalysis } from './analysis-structure';
 export { AnalysisValidationError } from './analysis-validation';
@@ -29,7 +30,7 @@ function normalizedKind(kind: string): ContextItemKind {
   return KNOWN_KINDS.has(kind as ContextItemKind) ? (kind as ContextItemKind) : 'other';
 }
 
-export const ANALYSIS_SCHEMA_VERSION = 12;
+export const ANALYSIS_SCHEMA_VERSION = 13;
 
 /** Replace per-call item positions with the IDs they refer to. The arrays
  * reference the existing `item.id` strings, so this adds no string copies. */
@@ -92,6 +93,8 @@ function validateEnvelope(input: SessionAnalysis): void {
   }
   assertEconomicsSummary(input.economics, input.modelCalls);
   input.modelCalls.forEach((call) => assertCallTiming(call, input.session.source === 'pi'));
+  input.modelCalls.forEach(assertCostAssessment);
+  assertCostSummary(input.session.costSummary);
   if (
     input.session.reportedCostTotal !== null &&
     (!Number.isFinite(input.session.reportedCostTotal) || input.session.reportedCostTotal < 0)

@@ -49,6 +49,68 @@ pub(crate) struct SessionSummary {
     pub maximum_absolute_residual_percent: Option<f64>,
     pub negative_residual_calls: usize,
     pub missing_provider_usage_calls: usize,
+    pub cost_summary: CostSummary,
+}
+
+/// Billed and API-equivalent costs are kept apart: an API-equivalent cost is what a
+/// subscription call would have cost at the lab's API rate, not a charge.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CostSummary {
+    /// Recorded, estimated and free calls.
+    pub billed: CostSubtotal,
+    pub api_equivalent: CostSubtotal,
+    pub unknown_calls: usize,
+    pub failed_attempt_calls: usize,
+    pub price_data: PriceDataSummary,
+}
+
+/// `low` and `high` differ when some calls' estimates are ranges. Both are null when
+/// no call contributed.
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CostSubtotal {
+    pub low: Option<f64>,
+    pub high: Option<f64>,
+    pub calls: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PriceDataSummary {
+    pub models_dev_commit: String,
+    pub models_dev_committed_at: String,
+    pub amendments_imported_from: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CostAssessment {
+    /// "recorded", "estimated", "apiEquivalent", "free" or "unknown".
+    pub kind: &'static str,
+    /// The low end when the amount is a range.
+    pub amount: Option<f64>,
+    /// Set only when the amount is a range.
+    pub amount_high: Option<f64>,
+    pub recorded_by_harness: Option<f64>,
+    /// "perToken" or "subscription"; null when the call could not be classified.
+    pub billing_mode: Option<&'static str>,
+    pub classification_rule: &'static str,
+    pub rate: Option<CostRate>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CostRate {
+    pub provider: String,
+    pub model: String,
+    /// A lab's API rate used for a call on another provider (subscriptions only).
+    pub lab_equivalent: bool,
+    /// When this rate started; null for a model's first listed rate.
+    pub valid_from: Option<String>,
+    /// "documented", "firstObserved" or "modelsDevCommit".
+    pub start_basis: &'static str,
+    pub source: String,
 }
 
 /// How many calls contributed to a session subtotal. Failed attempts are
@@ -135,6 +197,7 @@ pub(crate) struct ModelCall {
     pub tokenization_profile_id: Option<String>,
     pub token_analysis: CallTokenAnalysis,
     pub economics: CallEconomics,
+    pub cost_assessment: CostAssessment,
 }
 
 /// Approximate client-observed timing, never provider decode speed or TTFT.

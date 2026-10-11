@@ -1,5 +1,5 @@
 import type { ContextItem, SessionAnalysis } from '../types';
-import { testAnalysis } from '../context-river/test-data';
+import { costSummaryFor, testAnalysis } from '../context-river/test-data';
 
 export type SessionScenario =
   | 'empty'
@@ -276,6 +276,14 @@ function multipleToolsMissingMetadataScenario(): SessionAnalysis {
 }
 
 export function sessionScenario(name: SessionScenario): SessionAnalysis {
+  const analysis = buildScenario(name);
+  // Scenarios add and remove calls, so the cost summary is recounted afterwards.
+  // An unnamed scenario has no analysis; browser mocks then use their default.
+  if (analysis) analysis.session.costSummary = costSummaryFor(analysis.modelCalls);
+  return analysis;
+}
+
+function buildScenario(name: SessionScenario): SessionAnalysis {
   switch (name) {
     case 'empty':
       return emptyScenario();

@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 104) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 110) throw new Error('Incomplete live Rust contract export.');
 
 function rawOutput(name: string): WireSessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -161,6 +161,36 @@ describe('live production Rust -> indexAnalysis contract', () => {
     expect(a.modelCalls[5].economics.usageCompleteness).toBe('missing');
     expect(a.modelCalls[6].economics.usageCompleteness).toBe('unsupported');
     expect(a.economics.cacheReadPromptTokens).toBe(113378);
+  });
+  it.each([
+    ['cost-recorded', 'recorded', 'recordedCost', 'perToken', false],
+    ['cost-estimated', 'estimated', 'perTokenDefault', 'perToken', false],
+    ['cost-api-equivalent', 'apiEquivalent', 'billingModeTable', 'subscription', true],
+    [
+      'cost-api-equivalent-range',
+      'apiEquivalent',
+      'opencodeZeroWithListedPrice',
+      'subscription',
+      false,
+    ],
+    ['cost-free', 'free', 'perTokenDefault', 'perToken', false],
+    ['cost-unknown', 'unknown', 'missingTime', null, false],
+  ])('assesses %s as %s by %s', (name, kind, rule, billingMode, labEquivalent) => {
+    const analysis = output(name);
+    const cost = analysis.modelCalls[0].costAssessment;
+    expect(cost).toMatchObject({ kind, classificationRule: rule, billingMode });
+    expect(cost.rate?.labEquivalent ?? false).toBe(labEquivalent);
+    const summary = analysis.session.costSummary;
+    const counted =
+      kind === 'apiEquivalent' ? summary.apiEquivalent : kind === 'unknown' ? null : summary.billed;
+    if (counted) expect(counted).toMatchObject({ low: cost.amount, calls: 1 });
+    else expect(summary.unknownCalls).toBe(1);
+    if (name === 'cost-api-equivalent') expect(cost.recordedByHarness).toBe(0.02);
+    if (name === 'cost-api-equivalent-range') {
+      // OpenCode did not record whether its 100 output tokens include 400,000 reasoning tokens.
+      expect(cost.amountHigh).toBeGreaterThan(cost.amount!);
+      expect(summary.apiEquivalent.high).toBe(cost.amountHigh);
+    }
   });
   it('keeps the browser system-context fixture equal to the production Rust response', () => {
     const captured = JSON.parse(
@@ -325,7 +355,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
     expect(manifest.schemaVersion).toBe(ANALYSIS_SCHEMA_VERSION);
-    expect(manifest.outputVersion).toBe(23);
+    expect(manifest.outputVersion).toBe(24);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },
