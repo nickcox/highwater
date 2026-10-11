@@ -3,6 +3,7 @@ mod api;
 mod domain;
 mod opencode;
 mod pi;
+mod pricing;
 mod server;
 mod source;
 
