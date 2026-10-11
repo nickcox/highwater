@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import copilotExport from '../../../../fixtures/analysis/copilot-economics.json';
-import { testAnalysis } from './test-data';
+import { costAssessmentOf, testAnalysis } from './test-data';
 import {
   projectCachePresentation,
   projectCacheTrack,
@@ -174,6 +174,12 @@ describe('economics track projections', () => {
       total: null,
     };
     analysis.modelCalls[3].cost = null;
+    // The track plots each call's assessed cost; recorded components only matter when
+    // no cost could be assessed.
+    analysis.modelCalls[0].costAssessment = costAssessmentOf('free', 0);
+    analysis.modelCalls[1].costAssessment = costAssessmentOf('recorded', 0.0000000123);
+    analysis.modelCalls[2].costAssessment = costAssessmentOf('unknown', null);
+    analysis.modelCalls[3].costAssessment = costAssessmentOf('unknown', null);
 
     const projection = projectCostTrack(analysis);
     expect(projection.maximum).toBe(0.0000000123);

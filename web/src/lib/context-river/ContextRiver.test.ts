@@ -3,7 +3,7 @@ import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetInteraction } from '../state/interaction';
 import { defaultPresentationPreferences } from '../state/presentation-preferences';
-import { testAnalysis } from './test-data';
+import { costAssessmentOf, testAnalysis } from './test-data';
 import ContextRiver from './ContextRiver.svelte';
 import type { IndexedAnalysis } from '../types';
 import type { RiverNavigationCommand, RiverViewportStatus } from './viewport';
@@ -116,6 +116,7 @@ function economicsAnalysis(): IndexedAnalysis {
       cacheWrite: 0,
       total: 0.0000000123 * call.index,
     };
+    call.costAssessment = costAssessmentOf('recorded', 0.0000000123 * call.index);
     call.economics = {
       ...call.economics,
       policyId: 'anthropic-messages-cache-v1',
@@ -583,7 +584,7 @@ describe('ContextRiver continuous viewport integration', () => {
 
     await fireEvent.click(view.getByRole('button', { name: 'Cost' }));
     const track = view.container.querySelector('.economics-track-svg') as SVGSVGElement;
-    expect(track.getAttribute('aria-label')).toContain('Harness-recorded cost');
+    expect(track.getAttribute('aria-label')).toContain('Cost track');
     expect(view.container.querySelector('#economics-call-1')?.getAttribute('aria-label')).toContain(
       '0.0000000123',
     );

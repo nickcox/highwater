@@ -84,7 +84,15 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   expect(analysis.session.source).toBe('opencode');
   expect(analysis.reconstruction.status).toBe('partial');
   await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
-  await expect(page.getByText('Harness-recorded cost', { exact: true })).toBeVisible();
+  // The summary's cost cell names whichever kinds of cost the response contains.
+  const costSummary = analysis.session.costSummary;
+  await expect(page.locator('.cost-metric')).toContainText(
+    costSummary.billed.calls > 0
+      ? 'Billed'
+      : costSummary.apiEquivalent.calls > 0
+        ? 'API-equivalent'
+        : 'Unknown',
+  );
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   await expect(page).toHaveURL(/#session=opencode-/);
   const etag = response.headers()['etag'];

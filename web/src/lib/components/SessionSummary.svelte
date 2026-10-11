@@ -4,12 +4,17 @@
   import { describeCostBasis, isPiSource } from '../cost-basis';
   import { reconstructionLimitLabels } from '../reconstruction';
   import { recordedCoverageNote } from '../recorded-usage';
+  import {
+    formatCostSubtotal,
+    harnessName,
+    sessionCostCoverage,
+    sessionCostLines,
+  } from '../cost-assessment';
   import { summarizeInputComparisons } from '../context-river/reported-input';
   import {
     chartUnitLabel,
     coverageLabel,
     formatCost,
-    formatSessionCost,
     formatInteger,
     formatMetric,
     formatPercent,
@@ -34,6 +39,10 @@
   // summarise the approximate comparison the River draws instead.
   $: hasReconciliation = session.reconciliationComparableCalls > 0;
   $: inputSummary = hasReconciliation ? null : summarizeInputComparisons(indexed);
+  $: costSummary = session.costSummary;
+  $: costLines = sessionCostLines(costSummary);
+  $: costCoverage = sessionCostCoverage(costSummary);
+  $: priceData = costSummary.priceData;
   $: costCoverageNote =
     session.reportedCostTotal === null ? null : recordedCoverageNote(session.reportedCostCoverage);
   $: usageCoverageNote =
@@ -71,15 +80,20 @@
           : formatWeight(session.peakCalculatedVisibleTokens, 'calculatedTokens')}</b
       >
     </div>
-    <div>
-      <span>{costCopy.label}</span>
-      <b
-        title={`${costCopy.note}${costCoverageNote ? ' Calls without a recorded cost are not included.' : ''} Full precision is in Session details.`}
-        >{session.reportedCostTotal !== null && session.reportedCostTotal >= 0.01
-          ? '≈ '
-          : ''}{formatSessionCost(session.reportedCostTotal)}</b
-      >
-      {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
+    <div class="cost-metric">
+      {#each costLines as line, position (line.label)}
+        <span class:secondary-cost={position > 0}>{line.label}</span>
+        <b class:secondary-cost={position > 0} title={line.title}>{line.value}</b>
+        <small class="metric-note"
+          >{line.note}{position === costLines.length - 1 && costCoverage
+            ? ` · ${costCoverage}`
+            : ''}</small
+        >
+      {:else}
+        <span>Cost</span>
+        <b title="No call in this session has a known or estimated cost.">Unknown</b>
+        {#if costCoverage}<small class="metric-note">{costCoverage}</small>{/if}
+      {/each}
     </div>
   </div>
 
@@ -116,14 +130,42 @@
                 <dd>{formatInteger(analysis.compactions.length)}</dd>
               </div>
               <div>
-                <dt>{costCopy.totalLabel} (USD)</dt>
+                <dt>Billed cost (USD)</dt>
+                <dd>
+                  {costSummary.billed.calls > 0
+                    ? formatCostSubtotal(costSummary.billed, true)
+                    : 'None'}
+                </dd>
+              </div>
+              <div>
+                <dt>API-equivalent cost of subscription calls (USD)</dt>
+                <dd>
+                  {costSummary.apiEquivalent.calls > 0
+                    ? formatCostSubtotal(costSummary.apiEquivalent, true)
+                    : 'None'}
+                </dd>
+              </div>
+              <div>
+                <dt>Recorded by {harnessName(session.source)} (USD)</dt>
                 <dd>
                   {formatCost(session.reportedCostTotal)}
                   {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
                 </dd>
               </div>
               <div>
-                <dt>Cost basis</dt>
+                <dt>Price data</dt>
+                <dd>
+                  models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
+                    0,
+                    10,
+                  )}){#if priceData.amendmentsImportedFrom}, corrections from model-prices {priceData.amendmentsImportedFrom.slice(
+                      0,
+                      7,
+                    )}{/if}
+                </dd>
+              </div>
+              <div>
+                <dt>Recorded cost basis</dt>
                 <dd>{costCopy.basisLabel}</dd>
               </div>
             </dl>
@@ -347,6 +389,12 @@
     margin-top: 2px;
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
+  }
+  .primary-metrics .secondary-cost {
+    margin-top: 6px;
+  }
+  .primary-metrics b.secondary-cost {
+    margin-top: 2px;
   }
   .metric-note {
     display: block;

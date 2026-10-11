@@ -119,6 +119,34 @@ export function recordedCostAssessment(total: number | null | undefined): CostAs
   };
 }
 
+/** An assessment of a given kind and amount, for tests that need one directly. */
+export function costAssessmentOf(
+  kind: CostAssessment['kind'],
+  amount: number | null,
+): CostAssessment {
+  const subscription = kind === 'apiEquivalent';
+  return {
+    kind,
+    amount: kind === 'unknown' ? null : amount,
+    amountHigh: null,
+    recordedByHarness: kind === 'recorded' ? amount : null,
+    billingMode: kind === 'unknown' ? null : subscription ? 'subscription' : 'perToken',
+    classificationRule:
+      kind === 'recorded' ? 'recordedCost' : kind === 'unknown' ? 'noPrice' : 'perTokenDefault',
+    rate:
+      kind === 'estimated' || kind === 'apiEquivalent' || kind === 'free'
+        ? {
+            provider: 'test',
+            model: 'm',
+            labEquivalent: subscription,
+            validFrom: null,
+            startBasis: 'modelsDevCommit',
+            source: 'https://github.com/sst/models.dev/commit/test',
+          }
+        : null,
+  };
+}
+
 /** The session cost summary that matches these calls' assessments. */
 export function costSummaryFor(calls: ModelCall[]): CostSummary {
   const subtotal = (kinds: string[]) => {

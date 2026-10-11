@@ -4,6 +4,7 @@
   import type { IndexedAnalysis } from '../types';
   import { formatCost, formatCostTick, formatInteger, formatPercent } from './format';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
+  import { costKindLabel, formatAssessedCost } from '../cost-assessment';
   import { formatVerticalTick, verticalScaleTicks } from './vertical-scale';
   import type { CallColumn } from './types';
   import EventGlyph from './EventGlyph.svelte';
@@ -56,6 +57,8 @@
     point: CostTrackPoint;
     x: number;
     y: number;
+    /** The top of a range, when the cost is one. */
+    yHigh: number | null;
     ariaLabel: string;
   }
 
@@ -403,17 +406,16 @@
             ? `cache-read share unavailable of ${formatInteger(promptTokens)} prompt tokens`
             : `cache-read share ${ratioPercent(ratio)} of ${formatInteger(promptTokens)} prompt tokens`;
       const costLabel =
-        call.cost?.total === null || call.cost?.total === undefined
+        call.costAssessment.amount === null
           ? ''
-          : ` · ${costCopy.label} ${formatCost(call.cost.total)} USD`;
+          : ` · ${costKindLabel(call.costAssessment)} cost ${formatAssessedCost(call.costAssessment)} USD`;
       const pinnedLabel =
         pinnedCallIndex === callIndex && hoveredCallIndex !== callIndex ? ' · pinned' : '';
       return `Call ${callIndex}${pinnedLabel} · ${buckets} · ${mode === 'cache' && cacheViewMode === 'share' ? `${share} · ` : ''}${ratioLabel}${costLabel}`;
     }
-    const point = costPointsByCall.get(callIndex);
-    return point?.total === null || point?.total === undefined
-      ? `Call ${callIndex} · ${costCopy.label} unavailable`
-      : `Call ${callIndex} · ${costCopy.label} ${formatCost(point.total)} USD`;
+    return call.costAssessment.amount === null
+      ? `Call ${callIndex} · cost unavailable`
+      : `Call ${callIndex} · ${costKindLabel(call.costAssessment)} cost ${formatAssessedCost(call.costAssessment)} USD`;
   }
 
   function layoutCacheBar(point: CacheTrackPoint, x: number): CacheBar {
@@ -466,17 +468,22 @@
   }
 
   function layoutCostMark(point: CostTrackPoint, x: number): CostMark {
-    const y =
-      point.total === null ? baseline : baseline - (point.total / domainMaximum) * innerHeight;
+    const yOf = (value: number | null) =>
+      value === null ? baseline : baseline - (value / domainMaximum) * innerHeight;
+    const y = yOf(point.total);
+    const yHigh = point.high === null ? null : yOf(point.high);
     const targetChange = targetChangesByCall.get(point.callIndex)?.label;
     const targetLabel = targetChange ? ` · ${targetChange}.` : '';
+    const assessed = indexed.callByIndex.get(point.callIndex)?.costAssessment;
+    const components =
+      point.kind === 'recorded' ? ` · cost components ${point.componentStatus}` : '';
     const ariaLabel =
-      point.status === 'known' || point.status === 'zero'
-        ? `Call ${point.callIndex} · ${costCopy.totalLabel} ${formatCost(point.total)} · cost components ${point.componentStatus}${targetLabel}`
+      (point.status === 'known' || point.status === 'zero') && assessed
+        ? `Call ${point.callIndex} · ${costKindLabel(assessed)} cost ${formatAssessedCost(assessed)} USD${components}${targetLabel}`
         : point.status === 'partial'
-          ? `Call ${point.callIndex} · ${costCopy.totalLabel} unavailable · some cost components are present`
-          : `Call ${point.callIndex} · ${costCopy.label} total unavailable`;
-    return { point, x, y, ariaLabel };
+          ? `Call ${point.callIndex} · cost unavailable · some recorded cost components are present`
+          : `Call ${point.callIndex} · cost unavailable`;
+    return { point, x, y, yHigh, ariaLabel };
   }
 
   function cacheTick(value: number): string {
@@ -536,7 +543,7 @@
     role="group"
     aria-label={mode === 'cache'
       ? 'Cache usage track. One keyboard stop; use left and right arrows to inspect calls.'
-      : `${costCopy.label} track. One keyboard stop; use left and right arrows to inspect calls.`}
+      : 'Cost track. One keyboard stop; use left and right arrows to inspect calls.'}
   >
     <defs>
       <pattern
@@ -728,6 +735,7 @@
             mark.point.componentStatus === 'partial'}
           class:missing={mark.point.status === 'missing'}
           class:zero={mark.point.status === 'zero'}
+          class:api-equivalent={mark.point.kind === 'apiEquivalent'}
           class:pinned={pinnedCallIndex === mark.point.callIndex}
           class:hovered={hoveredCallIndex === mark.point.callIndex}
           role="button"
@@ -740,6 +748,13 @@
           onclick={(event) => onMarkClick(event, mark.point.callIndex)}
         >
           <title>{mark.ariaLabel}</title>
+          {#if mark.point.status === 'known' && mark.yHigh !== null}<line
+              class="cost-range"
+              x1={mark.x}
+              x2={mark.x}
+              y1={mark.y}
+              y2={mark.yHigh}
+            />{/if}
           {#if mark.point.status === 'known'}<line
               class="cost-stem"
               class:partial={mark.point.componentStatus === 'partial'}
@@ -943,6 +958,28 @@
   .cost-zero.partial {
     stroke: #ffcb74;
     stroke-dasharray: 2 1;
+  }
+  /* API-equivalent costs are not charges: hollow marks in a separate colour. */
+  .api-equivalent .cost-stem {
+    stroke: #b9a8ff;
+    stroke-dasharray: 3 2;
+  }
+  .api-equivalent .cost-dot {
+    fill: var(--plot);
+    stroke: #b9a8ff;
+    stroke-width: 1.5;
+  }
+  .api-equivalent .cost-zero {
+    stroke: #b9a8ff;
+  }
+  .cost-range {
+    stroke: #7ddbb7;
+    stroke-width: 4;
+    stroke-linecap: round;
+    opacity: 0.45;
+  }
+  .api-equivalent .cost-range {
+    stroke: #b9a8ff;
   }
   .track-pin {
     stroke: #fff;

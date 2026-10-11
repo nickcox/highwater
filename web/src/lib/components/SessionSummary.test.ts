@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { describe, expect, it } from 'vitest';
-import { testAnalysis } from '../context-river/test-data';
+import { costAssessmentOf, costSummaryFor, testAnalysis } from '../context-river/test-data';
 import SessionSummary from './SessionSummary.svelte';
 
 describe('SessionSummary', () => {
@@ -13,7 +13,7 @@ describe('SessionSummary', () => {
     expect(screen.getByText('Model calls')).toBeInTheDocument();
     expect(screen.getByText('Context items')).toBeInTheDocument();
     expect(screen.getByText('Peak calculated context')).toBeInTheDocument();
-    expect(screen.getByText('Harness-recorded cost')).toBeInTheDocument();
+    expect(screen.getByText('Billed')).toBeInTheDocument();
     expect(screen.queryByTestId('estimate-caveat')).not.toBeInTheDocument();
 
     const details = container.querySelector('details.session-details') as HTMLDetailsElement;
@@ -37,20 +37,50 @@ describe('SessionSummary', () => {
     expect(groups[1]).toHaveTextContent('Token estimates and diagnostics');
   });
 
-  it('shows recorded cost as a subtotal with its call coverage', () => {
+  it('shows billed cost with its call count and the calls without a price', () => {
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(testAnalysis()) },
+    });
+    const cost = container.querySelectorAll('.primary-metrics > div')[3];
+    expect(cost).toHaveTextContent(/Billed\s*≈ \D*0\.06\s*3 calls/);
+    expect(cost).toHaveTextContent('1 call without a price');
+    expect(cost).not.toHaveTextContent('API-equivalent');
+  });
+
+  it('keeps API-equivalent cost on its own line and counts failed attempts', () => {
     const analysis = testAnalysis();
-    analysis.session.reportedCostCoverage = {
-      recordedCalls: 3,
-      failedAttemptCalls: 1,
-      missingCalls: 0,
+    analysis.modelCalls[0].costAssessment = {
+      ...costAssessmentOf('apiEquivalent', 1.5),
+      amountHigh: 1.75,
     };
+    analysis.modelCalls[1].costAssessment = {
+      ...costAssessmentOf('unknown', null),
+      classificationRule: 'failedAttempt',
+    };
+    analysis.session.costSummary = costSummaryFor(analysis.modelCalls);
     const { container } = render(SessionSummary, {
       props: { indexed: indexTestAnalysis(analysis) },
     });
     const cost = container.querySelectorAll('.primary-metrics > div')[3];
-    expect(cost).toHaveTextContent(/0\.06/);
-    expect(cost).toHaveTextContent('3 of 4 calls · 1 failed attempt not recorded');
-    expect(cost).not.toHaveTextContent('Unknown');
+    expect(cost).toHaveTextContent(/Billed\s*≈ \D*0\.05\s*2 calls/);
+    expect(cost).toHaveTextContent(
+      /Subscription \(API-equivalent\)\s*≈ \D*1\.50–\D*1\.75\s*1 call at lab API rates/,
+    );
+    expect(cost).toHaveTextContent('1 failed attempt not counted');
+    const details = container.querySelector('details.session-details')!;
+    expect(details).toHaveTextContent('API-equivalent cost of subscription calls (USD)');
+    expect(details).toHaveTextContent('Price data');
+  });
+
+  it('shows an unknown cost when no call has one', () => {
+    const analysis = testAnalysis();
+    for (const call of analysis.modelCalls) call.costAssessment = costAssessmentOf('unknown', null);
+    analysis.session.costSummary = costSummaryFor(analysis.modelCalls);
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    const cost = container.querySelectorAll('.primary-metrics > div')[3];
+    expect(cost).toHaveTextContent(/Cost\s*Unknown\s*4 calls without a price/);
   });
 
   it('shows framing-based reconciliation only when some call supports it', () => {

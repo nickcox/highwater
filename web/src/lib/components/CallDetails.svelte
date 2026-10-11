@@ -18,6 +18,14 @@
   import { describeTokenDiagnostic } from '../diagnostics';
   import { describeEconomicsCode } from '../economics';
   import { describeCostBasis, isPiSource } from '../cost-basis';
+  import {
+    costKindLabel,
+    costRateLine,
+    costRuleText,
+    formatAssessedCost,
+    RANGE_EXPLANATION,
+    recordedByHarnessLine,
+  } from '../cost-assessment';
   import { recordedResponseMetrics, outputAccountingLabel } from '../recorded-usage';
   import CopyButton from './CopyButton.svelte';
   import ItemContribution from './ItemContribution.svelte';
@@ -65,6 +73,11 @@
   $: explanationCodes = call?.tokenAnalysis.explanationCodes ?? [];
   $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
   $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
+  $: costAssessment = call?.costAssessment ?? null;
+  $: costRate = costAssessment ? costRateLine(costAssessment) : null;
+  $: costRecorded = costAssessment
+    ? recordedByHarnessLine(costAssessment, indexed.analysis.session.source)
+    : null;
   $: usageMappingLabel = isPiSource(indexed.analysis.session.source)
     ? 'audited Pi provider/API policy'
     : 'audited provider/API policy';
@@ -216,15 +229,11 @@
         </div>
       {/each}
       <div>
-        <dt>{costCopy.label}</dt>
-        <dd>
-          {call.usage.placeholder
-            ? 'Unavailable'
-            : formatCost(
-                call.cost?.total,
-              )}{#if call.economics.costCompleteness !== 'complete'}<small
-              >Components: {call.economics.costCompleteness}</small
-            >{/if}
+        <dt>Cost</dt>
+        <dd aria-describedby={`${contributionId}-cost`}>
+          {call.usage.placeholder ? 'Unavailable' : formatAssessedCost(call.costAssessment)}<small
+            >{costKindLabel(call.costAssessment)}</small
+          >
         </dd>
       </div>
       <div>
@@ -253,6 +262,12 @@
     <span class="timing-explanation" id={`${contributionId}-timing`}
       >{TIMING_EXPLANATION} Missing or unusable timestamps and unsuccessful-response rates are unavailable.</span
     >
+    <div class="cost-explanation" id={`${contributionId}-cost`}>
+      <p>{costRuleText(call.costAssessment, indexed.analysis.session.source)}</p>
+      {#if call.costAssessment.amountHigh !== null}<p>{RANGE_EXPLANATION}</p>{/if}
+      {#if costRate}<p>Rate: {costRate}.</p>{/if}
+      {#if costRecorded}<p>{costRecorded}</p>{/if}
+    </div>
 
     {#if call.addedItemIds.length > 0 || call.droppedItemIds.length > 0}
       <details use:rememberSection={{ state: sections, key: 'changes' }}>
@@ -770,6 +785,15 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 7px 14px;
     margin: 0;
+  }
+  .cost-explanation {
+    margin: 2px 0 10px;
+    color: var(--secondary);
+    font-size: 12px;
+  }
+  .cost-explanation p {
+    margin: 2px 0;
+    overflow-wrap: anywhere;
   }
   .timing-explanation {
     position: absolute;

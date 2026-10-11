@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { testAnalysis } from '../context-river/test-data';
+import { costAssessmentOf, testAnalysis } from '../context-river/test-data';
+import type { ModelCall } from '../types';
 import CallDetails from './CallDetails.svelte';
 
 afterEach(cleanup);
@@ -311,5 +312,70 @@ describe('CallDetails change lists', () => {
     expect(screen.queryByText('Added items (0)')).not.toBeInTheDocument();
     expect(screen.queryByText('Dropped items (0)')).not.toBeInTheDocument();
     expect(container.querySelector('.change-lists')).not.toBeInTheDocument();
+  });
+});
+
+describe('CallDetails cost', () => {
+  function renderCost(cost: ModelCall['costAssessment'], source = 'opencode') {
+    const analysis = testAnalysis();
+    analysis.session.source = source;
+    if (source === 'opencode') {
+      analysis.reconstruction = {
+        status: 'partial',
+        explanationCodes: ['missingHistoricalSystemPrompt'],
+      };
+    }
+    const indexed = indexTestAnalysis(analysis);
+    const call = indexed.analysis.modelCalls[1];
+    call.costAssessment = cost;
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    return screen.getByText('Cost').nextElementSibling!;
+  }
+
+  it('labels an API-equivalent range and explains the rate, the inference and the recorded zero', () => {
+    const value = renderCost({
+      kind: 'apiEquivalent',
+      amount: 0.084,
+      amountHigh: 0.09,
+      recordedByHarness: 0,
+      billingMode: 'subscription',
+      classificationRule: 'opencodeZeroWithListedPrice',
+      rate: {
+        provider: 'openai',
+        model: 'gpt-5.6-sol',
+        labEquivalent: true,
+        validFrom: '2026-08-21T00:00:00Z',
+        startBasis: 'documented',
+        source: 'https://openai.com/index/gpt-5-6/',
+      },
+    });
+    expect(value).toHaveTextContent(/≈ \D*0\.084–\D*0\.090?\s*API-equivalent/);
+    const explanation = document.querySelector('.cost-explanation')!;
+    expect(explanation).toHaveTextContent('Treated as a subscription');
+    expect(explanation).toHaveTextContent('not a charge');
+    expect(explanation).toHaveTextContent('reasoning tokens');
+    expect(explanation).toHaveTextContent(
+      'openai API rate for gpt-5.6-sol, from 21 Aug 2026 (date from the provider)',
+    );
+    expect(explanation).toHaveTextContent(/Recorded by OpenCode: \D*0\.00?$/);
+  });
+
+  it('shows a recorded cost without an estimate rate', () => {
+    const value = renderCost(costAssessmentOf('recorded', 0.25), 'pi');
+    expect(value).toHaveTextContent(/^\D*0\.25\s*Recorded$/);
+    const explanation = document.querySelector('.cost-explanation')!;
+    expect(explanation).toHaveTextContent('this is the cost Pi recorded');
+    expect(explanation).not.toHaveTextContent('Rate:');
+  });
+
+  it('says why a cost is unknown', () => {
+    const value = renderCost({
+      ...costAssessmentOf('unknown', null),
+      classificationRule: 'missingTime',
+    });
+    expect(value).toHaveTextContent(/^Unknown\s*Unknown$/);
+    expect(document.querySelector('.cost-explanation')).toHaveTextContent(
+      'no time to choose a price by',
+    );
   });
 });

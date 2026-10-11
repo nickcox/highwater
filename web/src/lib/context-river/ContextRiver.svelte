@@ -1712,6 +1712,7 @@
         {cachePresentation}
         {costCopy}
         {usageMappingLabel}
+        hasApiEquivalentCost={indexed.analysis.session.costSummary.apiEquivalent.calls > 0}
         onModeChange={setEconomicsTrackMode}
         onCacheViewChange={setCacheView}
       />

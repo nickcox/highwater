@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { testAnalysis } from './test-data';
+import { costAssessmentOf, testAnalysis } from './test-data';
 import EconomicsTrack from './EconomicsTrack.svelte';
 
 afterEach(cleanup);
@@ -14,6 +14,10 @@ function renderCostTrack(values: Array<number | null>) {
       total === null
         ? { input: null, output: null, cacheRead: null, cacheWrite: null, total: null }
         : { input: total, output: 0, cacheRead: 0, cacheWrite: 0, total };
+    call.costAssessment =
+      total === null
+        ? costAssessmentOf('unknown', null)
+        : costAssessmentOf(total === 0 ? 'free' : 'recorded', total);
   });
   const indexed = indexTestAnalysis(analysis);
   const columns = analysis.modelCalls.map((call, index) => ({

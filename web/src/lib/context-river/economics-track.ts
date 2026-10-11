@@ -1,4 +1,4 @@
-import type { CacheRatioDiscontinuity, ModelCall, SessionAnalysis } from '../types';
+import type { CacheRatioDiscontinuity, CostKind, ModelCall, SessionAnalysis } from '../types';
 import { isPiSource } from '../cost-basis';
 import { ECONOMICS_POLICIES, type EconomicsCacheCategory } from '../economics-policy';
 
@@ -80,8 +80,14 @@ export interface CachePresentationMetadata {
 
 export interface CostTrackPoint {
   callIndex: number;
+  /** How the cost was found; `apiEquivalent` points are drawn apart from billed ones. */
+  kind: CostKind;
   status: CostMarkStatus;
+  /** The assessed amount, or the low end of a range. */
   total: number | null;
+  /** The high end of a range. */
+  high: number | null;
+  /** Component completeness of a cost the harness recorded. */
   componentStatus: string;
 }
 
@@ -375,7 +381,7 @@ export function projectCostTrack(
   const maximum = points.reduce(
     (current, point) =>
       point.status === 'known' || point.status === 'zero'
-        ? Math.max(current, point.total ?? 0)
+        ? Math.max(current, point.high ?? point.total ?? 0)
         : current,
     0,
   );
@@ -383,23 +389,24 @@ export function projectCostTrack(
 }
 
 function projectCostCall(call: ModelCall): CostTrackPoint {
+  const assessed = call.costAssessment;
+  const point = {
+    callIndex: call.index,
+    kind: assessed.kind,
+    componentStatus: assessed.kind === 'recorded' ? call.economics.costCompleteness : 'complete',
+  };
+  if (assessed.amount !== null) {
+    return {
+      ...point,
+      status: assessed.amount === 0 ? 'zero' : 'known',
+      total: assessed.amount,
+      high: assessed.amountHigh,
+    };
+  }
+  // No cost could be assessed; recorded components without a total are still partial data.
   const costs = call.cost;
   const hasComponents = costs
     ? [costs.input, costs.output, costs.cacheRead, costs.cacheWrite].some((value) => value !== null)
     : false;
-  const total = costs?.total ?? null;
-  if (total !== null && Number.isFinite(total) && total >= 0) {
-    return {
-      callIndex: call.index,
-      status: total === 0 ? 'zero' : 'known',
-      total,
-      componentStatus: call.economics.costCompleteness,
-    };
-  }
-  return {
-    callIndex: call.index,
-    status: hasComponents ? 'partial' : 'missing',
-    total: null,
-    componentStatus: call.economics.costCompleteness,
-  };
+  return { ...point, status: hasComponents ? 'partial' : 'missing', total: null, high: null };
 }

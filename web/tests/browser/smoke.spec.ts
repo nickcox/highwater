@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { testAnalysis } from '../../src/lib/context-river/test-data';
+import { costAssessmentOf, testAnalysis } from '../../src/lib/context-river/test-data';
 import type { SessionAnalysis, WireSessionAnalysis } from '../../src/lib/types';
 import { toWireAnalysis } from '../../src/lib/testing/wire-analysis';
 import { ITEM_TYPE_PALETTE } from '../../src/lib/context-river/colors';
@@ -32,6 +32,7 @@ function economicsScenario(): ReturnType<typeof testAnalysis> {
       cacheWrite: 0,
       total: piPromptCost,
     };
+    call.costAssessment = costAssessmentOf('recorded', piPromptCost);
     call.economics = {
       ...call.economics,
       policyId: 'anthropic-messages-cache-v1',
@@ -1822,7 +1823,7 @@ test('cache and cost tracks share the river axis and expose a ratio change', asy
     .toBe(await river.locator('svg').first().getAttribute('width'));
   const scrollLeft = await host.evaluate((element) => element.scrollLeft);
   await page.getByRole('button', { name: 'Cost', exact: true }).click();
-  await expect(page.getByText(/Harness-recorded cost per call/)).toBeVisible();
+  await expect(page.getByText(/Cost per call · USD/)).toBeVisible();
   expect(await host.evaluate((element) => element.scrollLeft)).toBe(scrollLeft);
   expect(await track.getAttribute('width')).toBe(
     await river.locator('svg').first().getAttribute('width'),
@@ -2950,10 +2951,7 @@ test('blocked storage leaves quiet controls usable without private persistence',
   await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
   await expandEconomics(page);
   await page.getByRole('button', { name: 'Cost', exact: true }).click();
-  await expect(page.locator('.economics-track-svg')).toHaveAttribute(
-    'aria-label',
-    /Harness-recorded cost/,
-  );
+  await expect(page.locator('.economics-track-svg')).toHaveAttribute('aria-label', /Cost track/);
   await page.reload();
   await assertLoaded(page);
   await expect(page.locator('.view-status')).toHaveCount(0);

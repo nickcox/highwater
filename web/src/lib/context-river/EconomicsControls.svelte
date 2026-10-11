@@ -13,6 +13,8 @@
   export let cachePresentation: ReturnType<typeof projectCachePresentation>;
   export let costCopy: ReturnType<typeof describeCostBasis>;
   export let usageMappingLabel: string;
+  /** Some calls are covered by a subscription and drawn as API-equivalent costs. */
+  export let hasApiEquivalentCost = false;
   export let onModeChange: (mode: EconomicsTrackMode) => void;
   export let onCacheViewChange: (view: CacheViewMode) => void;
   /** Bound by the River, which returns focus here and checks focus containment. */
@@ -104,7 +106,7 @@
               ? `Cache share per call · ${usageMappingLabel} prompt-token denominator · fixed 0–100% axis`
               : `Prompt tokens per call · ${usageMappingLabel} · session-wide scale`
             : mode === 'cost'
-              ? `${costCopy.label} per call · USD · session-wide scale · ${costCopy.trackCaveat}`
+              ? 'Cost per call · USD · session-wide scale · recorded or estimated, not invoices'
               : 'Economics off · details remain available in the inspector'}
         </span>
       </div>
@@ -133,7 +135,10 @@
           <div class="track-legend-group" aria-label="Cost values">
             <span class="legend-group-title">Cost values</span>
             <div class="track-legend">
-              <span><i class="swatch cost"></i>{costCopy.totalLabel} · USD</span>
+              <span><i class="swatch cost"></i>Billed · USD</span>
+              {#if hasApiEquivalentCost}<span
+                  ><i class="swatch api-equivalent"></i>API-equivalent (subscription) · USD</span
+                >{/if}
             </div>
           </div>
         {/if}
@@ -189,7 +194,10 @@
           <summary>Legend and data quality</summary>
           <p class="availability-summary">
             <b>Data availability.</b>
-            {costCopy.note} Unavailable values are not zero.
+            Billed calls show the cost the harness recorded, or an estimate at the provider's rate when
+            it recorded none. Subscription calls show what they would have cost at the lab's API rate;
+            that is not a charge. A shaded bar marks a range. {costCopy.note}
+            Unavailable values are not zero.
           </p>
         </details>
       {/if}
@@ -426,6 +434,11 @@
   .swatch.cost {
     border-radius: 50%;
     background: #7ddbb7;
+  }
+  .swatch.api-equivalent {
+    border-radius: 50%;
+    background: transparent;
+    border-color: #b9a8ff;
   }
   @media (max-width: 620px) {
     .economics-track-controls {
