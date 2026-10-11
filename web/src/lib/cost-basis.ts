@@ -49,7 +49,17 @@ const COST_BASIS_COPY: Record<EconomicsCostBasis, CostBasisCopy> = {
   },
 };
 
-export function describeCostBasis(basis: EconomicsCostBasis): CostBasisCopy {
+/** Claude Code records token usage but no cost, so there is no recorded cost to
+ * describe; the session's costs come from the price table. */
+const CLAUDE_CODE_COPY: CostBasisCopy = {
+  ...COST_BASIS_COPY.unknown,
+  basisLabel: 'None: Claude Code records no cost',
+  note: 'Claude Code records token usage but no cost for each call. The billed and API-equivalent costs are calculated from the price table.',
+  trackCaveat: 'no recorded cost',
+};
+
+export function describeCostBasis(basis: EconomicsCostBasis, source?: string): CostBasisCopy {
+  if (source === 'claude-code') return CLAUDE_CODE_COPY;
   return COST_BASIS_COPY[basis] ?? COST_BASIS_COPY.unknown;
 }
 

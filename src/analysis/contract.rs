@@ -12,6 +12,7 @@ fn config(policy: TokenizationPolicy) -> AnalysisConfig {
     AnalysisConfig {
         tokenization: policy,
         perf_diagnostics: false,
+        claude_code_billing: Default::default(),
     }
 }
 fn push(
@@ -495,6 +496,73 @@ fn export_live_contract() {
         .expect("qualified compaction analysis");
     cases.push(("opencode-compaction-auto".into(), compacted));
 
+    // Claude Code transcripts, through the same loader and coverage notice as HTTP.
+    let claude_code = |fixture: &str, kind, billing| {
+        let loaded = crate::source::load(
+            &crate::source::SessionLocator::ClaudeCodeFile {
+                path: PathBuf::from(format!("fixtures/claude-code/projects/{fixture}")),
+                kind,
+            },
+            None,
+        )
+        .expect("Claude Code fixture");
+        let mut analysis = analyze(
+            loaded.normalized,
+            AnalysisConfig {
+                claude_code_billing: billing,
+                ..config(TokenizationPolicy::Auto)
+            },
+        )
+        .expect("Claude Code analysis");
+        analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
+            status: "partial",
+            explanation_codes: codes,
+        });
+        analysis
+    };
+    for name in [
+        "api-error",
+        "attachments",
+        "attachments-unrendered",
+        "compaction",
+        "compaction-legacy",
+        "content-kinds",
+        "cost-state",
+        "cost-state-restarted",
+        "parallel-last",
+        "parallel-tools",
+        "rewind",
+        "simple",
+        "split-response",
+        "subagent-parent",
+        "unfinished-line",
+    ] {
+        cases.push((
+            format!("claude-code-{name}-auto"),
+            claude_code(
+                &format!("-synthetic-project/{name}.jsonl"),
+                crate::claude_code::FileKind::Main,
+                ClaudeCodeBilling::Subscription,
+            ),
+        ));
+    }
+    cases.push((
+        "claude-code-subagent-auto".into(),
+        claude_code(
+            "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl",
+            crate::claude_code::FileKind::Subagent,
+            ClaudeCodeBilling::Subscription,
+        ),
+    ));
+    cases.push((
+        "claude-code-compaction-api-billing-auto".into(),
+        claude_code(
+            "-synthetic-project/compaction.jsonl",
+            crate::claude_code::FileKind::Main,
+            ClaudeCodeBilling::Api,
+        ),
+    ));
+
     let modern_database = temporary.path().join("modern.db");
     let modern_writer = rusqlite::Connection::open(&modern_database).expect("modern database");
     modern_writer
@@ -696,7 +764,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 110);
+    assert_eq!(manifest.len(), 127);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

@@ -4,6 +4,7 @@
 - Pi graph validation and typed interpretation precede stable-index reconstruction and finalization. Normalized references, presence, and raw safe integers are validated before a borrowed preparation stage plans unique item/profile estimates; call/item derivation and DTO assembly reuse that plan.
 - Catalogue scheduling owns debounce/retry/rate/shutdown decisions independently of discovery. One analysis service owns the four-entry/16-MiB response cache and active flights under one short lock, with at most two blocking analysis jobs. Flights register before permit acquisition and survive request cancellation; typed shared failures map centrally, and best-effort category reporting cannot strand a completed flight. These are response-cache/concurrency limits, not total process-memory bounds.
 - Source-neutral normalized domain types keep provider usage/costs, calculated estimates, and missing-value semantics distinct.
+- Each source has its own reader: `src/pi/` (JSONL), `src/opencode/` (SQLite) and `src/claude_code/` (JSONL records, active-branch selection and reconstruction, kept in separate modules). `src/source.rs` loads a session from the typed locator the catalogue holds; HTTP never supplies a path. Claude Code files share the Pi file fingerprint and analysis path.
 - TypeScript validates and indexes the normalized analysis response; it does not tokenize or infer missing payloads.
 - D3 computes scales, SVG ribbon paths, and the Composition treemap layout.
 - Svelte owns rendering and interaction state.

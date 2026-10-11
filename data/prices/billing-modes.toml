@@ -4,7 +4,7 @@
 # period covers the call's time. Calls that match no entry are billed per token.
 #
 #   provider        provider ID as the harness records it
-#   harness         "pi" or "opencode"; omitted means any harness
+#   harness         "pi", "opencode" or "claude-code"; omitted means any harness
 #   price_provider  models.dev provider to price the call with, when the harness's
 #                   provider ID is not a models.dev provider
 #   billing         "perToken" or "subscription"
@@ -33,3 +33,13 @@ provider = "github-copilot"
 billing = "perToken"
 valid_from = "2026-06-01T00:00:00Z"
 source = "https://the-decoder.com/github-copilot-switches-to-token-based-billing-in-june-2026/"
+
+# Claude Code transcripts do not record whether a session used a Claude subscription or an
+# API key. Subscription pricing shows API-equivalent cost, which is true either way, because
+# Anthropic's API rate is also the price an API key pays. `--claude-billing api` treats the
+# calls as billed per token instead.
+[[mode]]
+harness = "claude-code"
+provider = "anthropic"
+billing = "subscription"
+source = "Claude Code transcripts do not record the billing mode; see plans/archive/claude-code-implementation-plan.md section 7"

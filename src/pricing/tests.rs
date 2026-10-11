@@ -71,6 +71,7 @@ fn call<'a>(
         model: Some(model),
         at_ms: Some(ms(at)),
         usage,
+        billing_setting: None,
     }
 }
 

@@ -1,0 +1,54 @@
+{
+  "fixture": "-synthetic-project/parallel-last.jsonl",
+  "sessionId": "00000004-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000004",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s4-u1",
+    "s4-a1",
+    "s4-a2",
+    "s4-rX",
+    "s4-rY"
+  ],
+  "calls": [
+    {
+      "message": "msg_s4_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 5,
+        "cacheRead": 0,
+        "cacheWrite": 120,
+        "cacheWrite1h": 0,
+        "output": 40,
+        "reasoning": null
+      },
+      "context": [
+        "user:s4-u1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s4_x",
+          "name": "Read",
+          "failed": false
+        },
+        {
+          "id": "toolu_s4_y",
+          "name": "Read",
+          "failed": false
+        }
+      ]
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

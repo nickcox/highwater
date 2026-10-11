@@ -23,11 +23,20 @@ export const reconstructionLimitLabels: Record<string, string> = {
     'Some compaction records have no request usage; session usage totals may be incomplete.',
   projectedRequestBoundaries:
     'Migrated assistant records may omit original request boundaries or include synthetic attempts.',
+  unrecordedHarnessCalls:
+    "The harness's own model calls, such as title generation and compaction, are not recorded.",
+  unverifiedCompactionRetention:
+    'A compaction does not record which recent messages it kept; only its summary is carried forward.',
+  unrenderedAttachments:
+    'Some context the harness added was recorded without its text, so its size is unknown.',
 };
+
+/** Sources whose analyses must always carry a reconstruction coverage notice. */
+const PARTIAL_SOURCES = new Set(['opencode', 'claude-code']);
 
 export function assertReconstruction(analysis: SessionAnalysis): void {
   const coverage = analysis.reconstruction;
-  if (coverage === undefined && analysis.session.source !== 'opencode') return;
+  if (coverage === undefined && !PARTIAL_SOURCES.has(analysis.session.source)) return;
   if (
     !coverage ||
     coverage.status !== 'partial' ||

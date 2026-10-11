@@ -132,6 +132,49 @@ pub(crate) fn derive_with_cost_basis(
     calls: &[NormalizedModelCall],
     cost_basis: CostBasis,
 ) -> (Vec<CallEconomics>, EconomicsSummary) {
+    derive_calls(calls, cost_basis, |call| {
+        if cost_basis == CostBasis::PiModelRates {
+            derive_call(call)
+        } else {
+            let mut unsupported = CallEconomics::unsupported();
+            unsupported
+                .explanation_codes
+                .push("unsupportedDerivedEconomicsCostBasis".into());
+            unsupported
+        }
+    })
+}
+
+/// Cache figures for a source that records usage but no cost (Claude Code). The
+/// audited provider/API policies still decide which buckets make up the prompt;
+/// the cost interpretation, which is about Pi's recorded cost components, is
+/// left out.
+pub(crate) fn derive_usage_only(
+    calls: &[NormalizedModelCall],
+) -> (Vec<CallEconomics>, EconomicsSummary) {
+    derive_calls(calls, CostBasis::Unknown, |call| {
+        let mut derived = derive_call(call);
+        derived.cost_completeness = EconomicsCompleteness::Missing;
+        derived.pi_prompt_cost = None;
+        derived.explanation_codes.retain(|code| {
+            !matches!(
+                code.as_str(),
+                "cacheWriteTtlNotRetained"
+                    | "piCostComponentsIncomplete"
+                    | "piCostMissing"
+                    | "piCostTotalDiffersFromComponents"
+                    | "piModelRateCostBasis"
+            )
+        });
+        derived
+    })
+}
+
+fn derive_calls(
+    calls: &[NormalizedModelCall],
+    cost_basis: CostBasis,
+    derive: impl Fn(&NormalizedModelCall) -> CallEconomics,
+) -> (Vec<CallEconomics>, EconomicsSummary) {
     let mut derived_calls = Vec::with_capacity(calls.len());
     let mut summary = EconomicsSummary {
         cost_basis: cost_basis.into(),
@@ -142,15 +185,7 @@ pub(crate) fn derive_with_cost_basis(
     let mut read_sum = Some(0_u64);
 
     for call in calls {
-        let derived = if cost_basis == CostBasis::PiModelRates {
-            derive_call(call)
-        } else {
-            let mut unsupported = CallEconomics::unsupported();
-            unsupported
-                .explanation_codes
-                .push("unsupportedDerivedEconomicsCostBasis".into());
-            unsupported
-        };
+        let derived = derive(call);
         count_status(&mut summary.usage_completeness, derived.usage_completeness);
         count_status(&mut summary.cost_completeness, derived.cost_completeness);
 
@@ -619,6 +654,48 @@ mod tests {
             derive_call(&incomplete).usage_completeness,
             EconomicsCompleteness::Unsupported
         );
+    }
+
+    #[test]
+    fn claude_code_usage_gets_cache_figures_without_cost_interpretation() {
+        let calls = crate::claude_code::load(
+            std::path::Path::new(
+                "fixtures/claude-code/projects/-synthetic-project/compaction.jsonl",
+            ),
+            crate::claude_code::FileKind::Main,
+        )
+        .unwrap()
+        .session
+        .model_calls;
+        let (derived, summary) = derive_usage_only(&calls);
+        // msg_s6_2: 1 uncached, 400 read, 30 written.
+        let second = &derived[1];
+        assert_eq!(
+            second.policy_id.as_deref(),
+            Some("anthropic-messages-cache-v1")
+        );
+        assert_eq!(second.usage_completeness, EconomicsCompleteness::Complete);
+        assert_eq!(second.prompt_tokens, Some(431));
+        assert_eq!(second.cache_read_ratio, Some(400.0 / 431.0));
+        assert_eq!(second.cache_write_ratio, Some(30.0 / 431.0));
+        assert_eq!(second.cost_completeness, EconomicsCompleteness::Missing);
+        assert_eq!(second.pi_prompt_cost, None);
+        for call in &derived {
+            assert!(call
+                .explanation_codes
+                .iter()
+                .all(|code| !code.starts_with("piCost")
+                    && code != "piModelRateCostBasis"
+                    && code != "cacheWriteTtlNotRetained"));
+        }
+        assert_eq!(summary.cost_basis, EconomicsCostBasis::Unknown);
+        assert_eq!(summary.cache_read_eligible_calls, 4);
+        assert!(summary
+            .explanation_codes
+            .contains(&"unknownCostBasis".into()));
+        assert!(!summary
+            .explanation_codes
+            .contains(&"partialPiCostCoverage".into()));
     }
 
     #[test]

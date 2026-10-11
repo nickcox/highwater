@@ -7,6 +7,7 @@
   import {
     formatCostSubtotal,
     harnessName,
+    harnessSessionCostNote,
     sessionCostCoverage,
     sessionCostLines,
   } from '../cost-assessment';
@@ -18,6 +19,7 @@
     formatInteger,
     formatMetric,
     formatPercent,
+    formatSessionCost,
     formatWeight,
   } from '../context-river/format';
   export let indexed: IndexedAnalysis;
@@ -34,7 +36,7 @@
     'Unknown';
   $: coverage = tokenAnalysis.itemEstimateCoverage;
   $: quality = estimateQuality(analysis);
-  $: costCopy = describeCostBasis(economics.costBasis);
+  $: costCopy = describeCostBasis(economics.costBasis, session.source);
   // Framing-based reconciliation only applies to text-only routes; otherwise
   // summarise the approximate comparison the River draws instead.
   $: hasReconciliation = session.reconciliationComparableCalls > 0;
@@ -152,6 +154,17 @@
                   {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
                 </dd>
               </div>
+              {#if session.harnessSessionCost}
+                <div>
+                  <dt>{harnessName(session.source)}'s own total (USD)</dt>
+                  <dd>
+                    {formatSessionCost(session.harnessSessionCost.totalUsd)}
+                    <small class="metric-note"
+                      >{harnessSessionCostNote(session.harnessSessionCost, session.source)}</small
+                    >
+                  </dd>
+                </div>
+              {/if}
               <div>
                 <dt>Price data</dt>
                 <dd>

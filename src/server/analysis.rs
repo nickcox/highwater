@@ -1,6 +1,7 @@
 use super::error::FlightError;
 use crate::{
-    analysis::{analyze, AnalysisConfig, TokenizationPolicy},
+    analysis::{analyze, AnalysisConfig, ClaudeCodeBilling, TokenizationPolicy},
+    claude_code::FileKind,
     source::{self, SessionLocator},
 };
 use std::{
@@ -34,6 +35,11 @@ pub(super) struct AnalysisCacheKey {
     pub database_revision: Option<(String, [u8; 32])>,
     pub byte_size: u64,
     pub modified_nanos: u128,
+    /// Set when the file is a Claude Code transcript; Pi files and OpenCode
+    /// databases leave it empty, so their keys and ETags are unchanged.
+    pub claude_code: Option<FileKind>,
+    /// Only Claude Code keys depend on it.
+    pub claude_code_billing: ClaudeCodeBilling,
     pub tokenization: TokenizationPolicy,
     pub schema_version: u32,
     pub output_version: u32,
@@ -183,6 +189,9 @@ impl AnalysisService {
     ) -> SharedResult {
         match locator {
             SessionLocator::PiFile(path) => self.response(path, config).await,
+            SessionLocator::ClaudeCodeFile { path, kind } => {
+                self.response_file(path, Some(kind), config).await
+            }
             SessionLocator::OpenCode {
                 database,
                 native_id,
@@ -286,6 +295,8 @@ impl AnalysisService {
             database_revision: Some((locator.native_id.clone(), *snapshot.revision.as_bytes())),
             byte_size: 0,
             modified_nanos: 0,
+            claude_code: None,
+            claude_code_billing: ClaudeCodeBilling::default(),
             tokenization: config.tokenization,
             schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
             output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -317,11 +328,23 @@ impl AnalysisService {
     }
 
     pub async fn response(self: &Arc<Self>, path: PathBuf, config: AnalysisConfig) -> SharedResult {
+        self.response_file(path, None, config).await
+    }
+
+    /// Pi files and Claude Code transcripts share the size and modification time
+    /// fingerprint; `claude_code` says which reader the executor uses.
+    async fn response_file(
+        self: &Arc<Self>,
+        path: PathBuf,
+        claude_code: Option<FileKind>,
+        config: AnalysisConfig,
+    ) -> SharedResult {
         let key_path = path.clone();
-        let key_result = tokio::task::spawn_blocking(move || analysis_cache_key(&key_path, config))
-            .await
-            .map_err(FlightError::Task)
-            .and_then(|result| result);
+        let key_result =
+            tokio::task::spawn_blocking(move || file_cache_key(&key_path, claude_code, config))
+                .await
+                .map_err(FlightError::Task)
+                .and_then(|result| result);
         let key = match key_result {
             Ok(key) => key,
             Err(error) => {
@@ -430,10 +453,20 @@ async fn wait_for_flight(flight: Arc<AnalysisFlight>) -> SharedResult {
     result
 }
 
-/// Size/mtime identity deliberately preserves the existing cache contract; it
-/// cannot detect a rewrite that preserves both values. Never call on async workers.
+/// The key for a Pi file.
+#[cfg(test)]
 pub(super) fn analysis_cache_key(
     path: &Path,
+    config: AnalysisConfig,
+) -> Result<AnalysisCacheKey, FlightError> {
+    file_cache_key(path, None, config)
+}
+
+/// Size/mtime identity deliberately preserves the existing cache contract; it
+/// cannot detect a rewrite that preserves both values. Never call on async workers.
+fn file_cache_key(
+    path: &Path,
+    claude_code: Option<FileKind>,
     config: AnalysisConfig,
 ) -> Result<AnalysisCacheKey, FlightError> {
     let metadata = fs::metadata(path).map_err(FlightError::Io)?;
@@ -449,6 +482,12 @@ pub(super) fn analysis_cache_key(
         database_revision: None,
         byte_size: metadata.len(),
         modified_nanos,
+        claude_code,
+        claude_code_billing: if claude_code.is_some() {
+            config.claude_code_billing
+        } else {
+            ClaudeCodeBilling::default()
+        },
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -462,7 +501,14 @@ pub(super) fn execute_analysis(
 ) -> Result<Arc<CachedResponse>, FlightError> {
     let source_bytes = response_key.byte_size;
     let started = Instant::now();
-    let loaded = match source::load(&SessionLocator::PiFile(path.clone()), None) {
+    let locator = match response_key.claude_code {
+        None => SessionLocator::PiFile(path.clone()),
+        Some(kind) => SessionLocator::ClaudeCodeFile {
+            path: path.clone(),
+            kind,
+        },
+    };
+    let loaded = match source::load(&locator, None) {
         Ok(value) => value,
         Err(error) => {
             return Err(classify_parse_failure(
@@ -474,7 +520,13 @@ pub(super) fn execute_analysis(
     };
     let parse_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
-    let analysis = analyze(loaded.normalized, config).map_err(FlightError::Analysis)?;
+    let mut analysis = analyze(loaded.normalized, config).map_err(FlightError::Analysis)?;
+    if let Some(codes) = loaded.coverage_codes {
+        analysis.reconstruction = Some(crate::api::ReconstructionCoverage {
+            status: "partial",
+            explanation_codes: codes,
+        });
+    }
     let analysis_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
     let body = serde_json::to_vec(&analysis).map_err(FlightError::Serialization)?;
@@ -522,6 +574,17 @@ pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
         hasher.update(&(native_id.len() as u64).to_le_bytes());
         hasher.update(native_id.as_bytes());
         hasher.update(revision);
+    }
+    if let Some(kind) = key.claude_code {
+        hasher.update(b"\0claude-code\0");
+        hasher.update(match kind {
+            FileKind::Main => b"main",
+            FileKind::Subagent => b"agent",
+        });
+        hasher.update(match key.claude_code_billing {
+            ClaudeCodeBilling::Subscription => b"\0subscription".as_slice(),
+            ClaudeCodeBilling::Api => b"\0api".as_slice(),
+        });
     }
     hasher.update(&key.byte_size.to_le_bytes());
     hasher.update(&key.modified_nanos.to_le_bytes());

@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 110) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 127) throw new Error('Incomplete live Rust contract export.');
 
 function rawOutput(name: string): WireSessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -355,7 +355,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
     expect(manifest.schemaVersion).toBe(ANALYSIS_SCHEMA_VERSION);
-    expect(manifest.outputVersion).toBe(25);
+    expect(manifest.outputVersion).toBe(26);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

@@ -291,6 +291,7 @@ impl ReconstructionState {
                 .then_with(|| left.kind.cmp(&right.kind))
         });
         NormalizedSession {
+            harness_session_cost: None,
             id,
             source,
             title: None,

@@ -113,6 +113,13 @@ export function describeEconomicsCode(
     };
   }
 
+  if (code === 'unknownCostBasis' && source === 'claude-code') {
+    return {
+      title: 'Claude Code records no cost',
+      impact: describeCostBasis(costBasis, source).note,
+    };
+  }
+
   if (
     code === 'piModelRateCostBasis' ||
     code === 'sourceModelRateCostBasis' ||

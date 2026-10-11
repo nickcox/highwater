@@ -25,6 +25,18 @@ const sessions: SessionListItem[] = [
     byteSize: null,
     parentReference: 'opencode-parent',
   },
+  {
+    id: 'claude-code-three',
+    harness: 'claude-code',
+    displayName: 'Configure the status line',
+    fileName: 'agent-a16.jsonl',
+    workingDirectory: '/claude',
+    startedAt: null,
+    modifiedAt: null,
+    byteSize: 20,
+    parentReference: 'claude-code-parent',
+    subagentType: 'statusline-setup',
+  },
 ];
 
 afterEach(cleanup);
@@ -37,6 +49,24 @@ describe('Harness session picker', () => {
     expect(
       screen.getByRole('option', { name: '[OpenCode] OpenCode task · child session' }),
     ).toBeInTheDocument();
+  });
+
+  it('labels Claude Code subagents with their type and filters to Claude Code', async () => {
+    render(SessionPicker, { props: { sessions, selectedId: 'pi-one', onSelect: vi.fn() } });
+    expect(
+      screen.getByRole('option', {
+        name: '[Claude Code] Configure the status line · child session · statusline-setup',
+      }),
+    ).toBeInTheDocument();
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Harness' }), {
+      target: { value: 'claude-code' },
+    });
+    expect(
+      screen.getByRole('option', {
+        name: 'Configure the status line · child session · statusline-setup',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /OpenCode task/ })).not.toBeInTheDocument();
   });
 
   it('combines harness and search filters without changing the open session', async () => {

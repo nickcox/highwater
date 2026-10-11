@@ -72,7 +72,10 @@
   $: recordedMetrics = call ? recordedResponseMetrics(call.usage) : [];
   $: explanationCodes = call?.tokenAnalysis.explanationCodes ?? [];
   $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
-  $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
+  $: costCopy = describeCostBasis(
+    indexed.analysis.economics.costBasis,
+    indexed.analysis.session.source,
+  );
   $: costAssessment = call?.costAssessment ?? null;
   $: costRate = costAssessment ? costRateLine(costAssessment) : null;
   $: costRecorded = costAssessment

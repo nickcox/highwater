@@ -160,6 +160,7 @@ fn source_base64_length_is_encoded_size_not_decoded_image_size() {
         crate::analysis::AnalysisConfig {
             tokenization: crate::analysis::TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
+            claude_code_billing: Default::default(),
         },
     )
     .expect("image analysis");
@@ -238,7 +239,10 @@ fn normalized_fixture_parity() {
             .model_calls
             .iter()
             .all(|call| call.reported_usage.placeholder.is_none()));
-        let mut normalized = format!("{session:?}").replace("placeholder: None, ", "");
+        assert!(session.harness_session_cost.is_none());
+        let mut normalized = format!("{session:?}")
+            .replace("placeholder: None, ", "")
+            .replace(", harness_session_cost: None", "");
         // Remove only the additive counter metadata to keep the original
         // replay baseline pinned: no normalized usage or history may change.
         for call in &session.model_calls {

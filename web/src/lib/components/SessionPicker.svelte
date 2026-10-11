@@ -5,10 +5,15 @@
   export let selectedId: string | null;
   export let onSelect: (id: string) => void;
 
-  let harness: 'all' | 'pi' | 'opencode' = 'all';
+  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' = 'all';
   let search = '';
   const harnessOf = (session: SessionListItem) =>
-    session.harness ?? (session.id.startsWith('opencode-') ? 'opencode' : 'pi');
+    session.harness ??
+    (session.id.startsWith('opencode-')
+      ? 'opencode'
+      : session.id.startsWith('claude-code-')
+        ? 'claude-code'
+        : 'pi');
   $: filtered = sessions.filter(
     (session) =>
       (harness === 'all' || harnessOf(session) === harness) &&
@@ -32,6 +37,7 @@
         <option value="all">All harnesses</option>
         <option value="pi">Pi</option>
         <option value="opencode">OpenCode</option>
+        <option value="claude-code">Claude Code</option>
       </select>
     </label>
     <label

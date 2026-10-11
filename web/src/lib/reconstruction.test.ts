@@ -19,6 +19,22 @@ describe('source reconstruction coverage', () => {
     };
     expect(() => assertReconstruction(analysis)).not.toThrow();
   });
+  it('requires a notice for Claude Code and accepts its limitation codes', () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'claude-code';
+    expect(() => assertReconstruction(analysis)).toThrow(/coverage/);
+    analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: [
+        'missingHistoricalSystemPrompt',
+        'missingHistoricalToolDefinitions',
+        'unrecordedHarnessCalls',
+        'unverifiedCompactionRetention',
+        'unrenderedAttachments',
+      ],
+    };
+    expect(() => assertReconstruction(analysis)).not.toThrow();
+  });
   it('rejects invalid, unknown, duplicated, and empty qualifications', () => {
     for (const codes of [
       [],

@@ -1,10 +1,12 @@
 import { formatCost, formatSessionCost } from './context-river/format';
-import type { CostAssessment, CostSubtotal, CostSummary } from './types';
+import { formatSessionTime } from './session-label';
+import type { CostAssessment, CostSubtotal, CostSummary, HarnessSessionCost } from './types';
 
 /** How the interface names a harness in sentences. */
 export function harnessName(source: string): string {
   if (source === 'pi') return 'Pi';
   if (source === 'opencode') return 'OpenCode';
+  if (source === 'claude-code') return 'Claude Code';
   return 'the harness';
 }
 
@@ -83,6 +85,9 @@ export function costRuleText(cost: CostAssessment, source: string): string {
     case 'recordedCost':
       return `Billed per token; this is the cost ${harness} recorded.`;
     case 'billingModeTable':
+      if (source === 'claude-code' && cost.billingMode === 'subscription') {
+        return 'Claude Code does not record whether the session used a subscription or an API key, so this is the cost at the API rate, which applies either way. It is counted as API-equivalent; start TokenPlume with --claude-billing api to count it as billed.';
+      }
       return cost.billingMode === 'subscription'
         ? 'This provider is covered by a subscription, so this is what the call would have cost at the API rate. It is not a charge.'
         : cost.kind === 'free'
@@ -94,6 +99,8 @@ export function costRuleText(cost: CostAssessment, source: string): string {
       return cost.kind === 'free'
         ? 'The provider listed this model as free at the time.'
         : `${harness} recorded no cost, so it is estimated at the provider's rate.`;
+    case 'claudeCodeBillingSetting':
+      return "Billed per token: TokenPlume was started with --claude-billing api, because Claude Code does not record how the session was billed. Estimated at Anthropic's rate.";
     case 'failedAttempt':
       return 'The attempt failed; its recorded zeros are not a measurement, so no cost is shown.';
     case 'missingTime':
@@ -155,4 +162,17 @@ export function sessionCostCoverage(summary: CostSummary): string | null {
     );
   }
   return parts.length ? parts.join(' · ') : null;
+}
+
+/** The note under a harness's own session total: when the running total started,
+ * and that it covers more than the transcript shows. */
+export function harnessSessionCostNote(
+  cost: HarnessSessionCost,
+  source: string,
+  now = new Date(),
+): string {
+  const since =
+    cost.sinceMs === null ? null : formatSessionTime(new Date(cost.sinceMs).toISOString(), now);
+  const covers = `includes subagents and ${harnessName(source)}'s own calls, which are not in this transcript`;
+  return since ? `Since ${since} · ${covers}` : `Covers ${covers.replace(/^includes /, '')}`;
 }

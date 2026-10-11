@@ -50,6 +50,17 @@ pub(crate) struct SessionSummary {
     pub negative_residual_calls: usize,
     pub missing_provider_usage_calls: usize,
     pub cost_summary: CostSummary,
+    /// The harness's own running session total (Claude Code), or null. It can
+    /// include calls that are not in the transcript and is never added to costs.
+    pub harness_session_cost: Option<HarnessSessionCost>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HarnessSessionCost {
+    pub total_usd: f64,
+    /// UTC epoch milliseconds when the running total started, or null.
+    pub since_ms: Option<i64>,
 }
 
 /// Billed and API-equivalent costs are kept apart: an API-equivalent cost is what a

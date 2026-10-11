@@ -173,7 +173,10 @@
   let riverDisplayMode: RiverDisplayMode = 'items';
   let cacheViewMode: CacheViewMode = 'tokens';
   let economicsTrackMode: EconomicsTrackMode = 'off';
-  $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
+  $: costCopy = describeCostBasis(
+    indexed.analysis.economics.costBasis,
+    indexed.analysis.session.source,
+  );
   $: usageMappingLabel = usageNormalizationLabel(indexed.analysis.session.source);
   let economicsReadout = '';
   let economicsEventBreakdown: EconomicsEventBreakdown | null = null;

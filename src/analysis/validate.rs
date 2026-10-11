@@ -141,6 +141,13 @@ pub(super) fn validate_payload_numbers(
 pub(super) fn validate_normalized_session(
     session: &NormalizedSession,
 ) -> Result<ValidatedSession<'_>, AnalysisError> {
+    if let Some(cost) = session.harness_session_cost {
+        if !cost.total_usd.is_finite() || cost.total_usd < 0.0 {
+            return Err(invalid_session(
+                "harness session cost is not a valid amount",
+            ));
+        }
+    }
     let mut item_indices = HashMap::with_capacity(session.context_items.len());
     for (index, item) in session.context_items.iter().enumerate() {
         if item_indices.insert(item.id.as_str(), index).is_some() {

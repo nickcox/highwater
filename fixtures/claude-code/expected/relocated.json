@@ -1,0 +1,40 @@
+{
+  "fixture": "-synthetic-old-location/relocated.jsonl",
+  "sessionId": "00000013-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "new-location · 00000013",
+    "workingDirectory": "/synthetic/new-location",
+    "parentFixture": null
+  },
+  "branch": [
+    "s13-u1",
+    "s13-a1"
+  ],
+  "calls": [
+    {
+      "message": "msg_s13_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 3,
+        "cacheRead": 0,
+        "cacheWrite": 80,
+        "cacheWrite1h": 0,
+        "output": 2,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s13-u1"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

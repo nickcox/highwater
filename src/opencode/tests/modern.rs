@@ -68,6 +68,7 @@ fn validate(result: &ReplayResult) {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
+            claude_code_billing: Default::default(),
         },
     )
     .expect("source-neutral analysis contract");
@@ -661,6 +662,7 @@ fn known_system_update_text_never_claims_a_complete_historical_baseline() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
+            claude_code_billing: Default::default(),
         },
     )
     .expect("analysis");

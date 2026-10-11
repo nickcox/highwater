@@ -79,6 +79,7 @@ fn config() -> AnalysisConfig {
     AnalysisConfig {
         tokenization: TokenizationPolicy::Auto,
         perf_diagnostics: false,
+        claude_code_billing: Default::default(),
     }
 }
 

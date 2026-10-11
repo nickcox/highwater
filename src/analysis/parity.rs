@@ -15,6 +15,7 @@ fn transitions_borrow_source_ids_in_context_order() {
         AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
+            claude_code_billing: Default::default(),
         },
     );
     for (position, transition) in prepared.transitions.iter().enumerate() {
@@ -94,6 +95,7 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
+                    claude_code_billing: Default::default(),
                 },
             );
             let stats = prepared.registry.stats();
@@ -121,6 +123,7 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
+                    claude_code_billing: Default::default(),
                 },
             )
             .expect("analysis");
@@ -129,6 +132,7 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 AnalysisConfig {
                     tokenization: policy,
                     perf_diagnostics: false,
+                    claude_code_billing: Default::default(),
                 },
             )
             .expect("timed analysis");
@@ -253,6 +257,11 @@ fn fixture_outputs_preserve_corrected_baseline() {
             );
             assert!(json.contains(&addition), "cost summary serialized");
             json = json.replacen(&addition, "", 1);
+            // Output 26 adds the harness's own session total, null for Pi.
+            assert!(baseline.session.harness_session_cost.is_none());
+            let addition = ",\"harnessSessionCost\":null";
+            assert!(json.contains(addition), "harness session cost serialized");
+            json = json.replacen(addition, "", 1);
             digest.update(&(json.len() as u64).to_le_bytes());
             digest.update(json.as_bytes());
         }

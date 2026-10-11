@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   costRateLine,
+  costRuleText,
   formatAssessedCost,
   formatCostSubtotal,
   recordedByHarnessLine,
@@ -10,6 +11,23 @@ import {
 import { costAssessmentOf, costSummaryFor, testAnalysis } from './context-river/test-data';
 
 describe('cost assessment wording', () => {
+  it('explains how Claude Code calls are classified, for both billing settings', () => {
+    const subscription = {
+      ...costAssessmentOf('apiEquivalent', 1),
+      billingMode: 'subscription' as const,
+      classificationRule: 'billingModeTable' as const,
+    };
+    expect(costRuleText(subscription, 'claude-code')).toMatch(
+      /does not record.*--claude-billing api/,
+    );
+    expect(costRuleText(subscription, 'pi')).not.toContain('--claude-billing');
+    const api = {
+      ...costAssessmentOf('estimated', 1),
+      classificationRule: 'claudeCodeBillingSetting' as const,
+    };
+    expect(costRuleText(api, 'claude-code')).toMatch(/--claude-billing api/);
+  });
+
   it('marks estimates and ranges as approximate but not recorded costs', () => {
     expect(formatAssessedCost(costAssessmentOf('recorded', 0.25))).not.toContain('≈');
     expect(formatAssessedCost(costAssessmentOf('estimated', 0.25))).toMatch(/^≈ /);

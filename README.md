@@ -1,6 +1,6 @@
 # TokenPlume
 
-TokenPlume is a local Context River visualizer for Pi JSONL and OpenCode SQLite sessions. It reconstructs the active branch and historical model-call context, then lets you follow stable context items through their lifetimes and explicit compaction boundaries.
+TokenPlume is a local Context River visualizer for Pi JSONL, OpenCode SQLite and Claude Code CLI sessions. It reconstructs the active branch and historical model-call context, then lets you follow stable context items through their lifetimes and explicit compaction boundaries.
 
 ## Run
 
@@ -13,15 +13,19 @@ cargo run --release                        # large-session validation and normal
 cargo run --release -- --session-root ~/.pi/agent/sessions
 # Explicit OpenCode databases (repeatable; may be combined with --session-root):
 cargo run --release -- --opencode-db /path/to/opencode.db --opencode-db /path/to/opencode-stable.db
+# Explicit Claude Code projects directories (repeatable; may be combined with the others):
+cargo run --release -- --claude-root ~/.claude/projects
+# Claude Code sessions billed through an API key rather than a subscription:
+cargo run --release -- --claude-billing api
 # Optional: --port 43123 --tokenization auto
 ```
 
-Open the printed localhost URL. The server binds only to `127.0.0.1`, rejects requests that do not address it as `127.0.0.1` or `localhost` on its own port, and never modifies session files. Without source flags it discovers `~/.pi/agent/sessions` and OpenCode databases under `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`).
+Open the printed localhost URL. The server binds only to `127.0.0.1`, rejects requests that do not address it as `127.0.0.1` or `localhost` on its own port, and never modifies session files. Without source flags it discovers `~/.pi/agent/sessions`, OpenCode databases under `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`) and Claude Code transcripts under `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects`).
 
 ## Documentation
 
 - [User guide](docs/user-guide.md): opening sessions, the Context River, Composition, lifespans, view links and the cache and cost track.
-- [Data semantics](docs/data-semantics.md): tokenization, OpenCode support, the analysis API, and how reported usage, local estimates and missing values are kept apart.
+- [Data semantics](docs/data-semantics.md): tokenization, OpenCode and Claude Code support, the analysis API, and how reported usage, local estimates and missing values are kept apart.
 - [Architecture](docs/architecture.md): how the Rust server and Svelte frontend divide the work.
 - [Development](docs/development.md): toolchain requirements, checks, browser tests and benchmarks.
 - [Plans](plans/README.md): plans for future work, and an archive of completed plans and implementation notes.

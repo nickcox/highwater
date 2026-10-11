@@ -26,6 +26,7 @@ async fn ambiguous_short_references_never_select_an_arbitrary_file() {
         modified_at: None,
         harness: "pi".into(),
         parent_reference: None,
+        subagent_type: None,
         locator: None,
         source_revision: None,
         modified_nanos: None,

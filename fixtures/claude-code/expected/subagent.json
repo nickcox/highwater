@@ -1,0 +1,72 @@
+{
+  "fixture": "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl",
+  "sessionId": "00000016-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "subagent",
+    "title": "Configure the status line",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": "-synthetic-project/subagent-parent.jsonl",
+    "subagent": {
+      "agentId": "a16",
+      "agentType": "statusline-setup",
+      "parentToolUseId": "toolu_s16_agent"
+    }
+  },
+  "branch": [
+    "s16-su1",
+    "s16-sa1",
+    "s16-sr1",
+    "s16-sa2"
+  ],
+  "calls": [
+    {
+      "message": "msg_s16_sub_1",
+      "model": "claude-sonnet-5-5",
+      "failed": false,
+      "usage": {
+        "input": 4,
+        "cacheRead": 0,
+        "cacheWrite": 150,
+        "cacheWrite1h": 0,
+        "output": 20,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s16-su1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s16_sub_1",
+          "name": "Read",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s16_sub_2",
+      "model": "claude-sonnet-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 150,
+        "cacheWrite": 20,
+        "cacheWrite1h": 0,
+        "output": 6,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s16-su1",
+        "assistant:msg_s16_sub_1",
+        "tool:toolu_s16_sub_1"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

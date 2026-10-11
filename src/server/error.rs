@@ -33,7 +33,9 @@ pub(super) enum FlightError {
 impl From<crate::source::LoadError> for FlightError {
     fn from(error: crate::source::LoadError) -> Self {
         match error {
-            crate::source::LoadError::Pi(error) => Self::Source(error),
+            crate::source::LoadError::Pi(error) | crate::source::LoadError::ClaudeCode(error) => {
+                Self::Source(error)
+            }
             other => Self::SourceLoad(other),
         }
     }
@@ -88,6 +90,7 @@ fn load_details(error: &crate::source::LoadError) -> Details {
             "source history uses unsupported replay semantics",
         ),
         LoadError::Replay(_) => INVALID_SOURCE,
+        LoadError::ClaudeCode(error) => source_details(error),
         LoadError::Storage(error) => match error {
             StorageError::NotFound => NOT_FOUND,
             StorageError::Busy | StorageError::Cancelled => (

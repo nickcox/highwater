@@ -1,0 +1,139 @@
+{
+  "fixture": "-synthetic-project/compaction.jsonl",
+  "sessionId": "00000006-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000006",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s6-u1",
+    "s6-a1",
+    "s6-r1",
+    "s6-a2",
+    "s6-t1",
+    "s6-u2",
+    "s6-a3",
+    "s6-t2",
+    "s6-s1",
+    "s6-b1",
+    "s6-c1",
+    "s6-f1",
+    "s6-i1",
+    "s6-u3",
+    "s6-k1",
+    "s6-a4"
+  ],
+  "calls": [
+    {
+      "message": "msg_s6_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 5,
+        "cacheRead": 0,
+        "cacheWrite": 400,
+        "cacheWrite1h": 400,
+        "output": 25,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s6-u1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s6_1",
+          "name": "Read",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s6_2",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 400,
+        "cacheWrite": 30,
+        "cacheWrite1h": 0,
+        "output": 7,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s6-u1",
+        "assistant:msg_s6_1",
+        "tool:toolu_s6_1"
+      ],
+      "toolCallsAfter": []
+    },
+    {
+      "message": "msg_s6_3",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 430,
+        "cacheWrite": 20,
+        "cacheWrite1h": 0,
+        "output": 7,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s6-u1",
+        "assistant:msg_s6_1",
+        "tool:toolu_s6_1",
+        "assistant:msg_s6_2",
+        "user:s6-u2"
+      ],
+      "toolCallsAfter": []
+    },
+    {
+      "message": "msg_s6_4",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 2,
+        "cacheRead": 0,
+        "cacheWrite": 4100,
+        "cacheWrite1h": 4100,
+        "output": 7,
+        "reasoning": 0
+      },
+      "context": [
+        "summary:s6-c1",
+        "user:s6-u2",
+        "assistant:msg_s6_3",
+        "attachment:s6-f1",
+        "user:s6-u3",
+        "attachment:s6-k1"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [
+    {
+      "beforeCall": "msg_s6_4",
+      "tokensBefore": 50000,
+      "summary": "summary:s6-c1",
+      "retained": [
+        "user:s6-u2",
+        "assistant:msg_s6_3"
+      ],
+      "sources": [
+        "user:s6-u1",
+        "assistant:msg_s6_1",
+        "tool:toolu_s6_1",
+        "assistant:msg_s6_2"
+      ]
+    }
+  ],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls",
+    "missingCompactionUsage"
+  ],
+  "ownCostTotal": null
+}

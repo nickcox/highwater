@@ -31,7 +31,9 @@ export function formatByteSize(bytes: number | null): string | null {
 }
 
 export function harnessName(session: SessionListItem): string {
-  return session.harness === 'opencode' ? 'OpenCode' : 'Pi';
+  if (session.harness === 'opencode') return 'OpenCode';
+  if (session.harness === 'claude-code') return 'Claude Code';
+  return 'Pi';
 }
 
 /** Option labels for the picker. Identical labels get the file name (or
@@ -46,7 +48,10 @@ export function sessionOptionLabels(
       const parts = [session.displayName];
       const started = formatSessionTime(session.startedAt, now);
       if (started) parts.push(started);
-      if (session.parentReference) parts.push('child session');
+      if (session.parentReference)
+        parts.push(
+          session.subagentType ? `child session · ${session.subagentType}` : 'child session',
+        );
       const prefix = showHarness ? `[${harnessName(session)}] ` : '';
       return [session.id, `${prefix}${parts.join(' · ')}`];
     }),

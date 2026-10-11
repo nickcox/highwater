@@ -26,6 +26,16 @@ pub(crate) struct NormalizedSession {
     pub model_calls: Vec<NormalizedModelCall>,
     pub compactions: Vec<NormalizedCompaction>,
     pub lineage: Vec<NormalizedLineageEdge>,
+    pub harness_session_cost: Option<HarnessSessionCost>,
+}
+
+/// A session total the harness calculated itself (Claude Code's `cost-state`).
+/// It is a running total since `since_ms` and can include calls that are not in
+/// the transcript, so it is never added to call costs or spread across calls.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct HarnessSessionCost {
+    pub total_usd: f64,
+    pub since_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone)]

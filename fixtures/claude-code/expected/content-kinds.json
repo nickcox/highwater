@@ -1,0 +1,98 @@
+{
+  "fixture": "-synthetic-project/content-kinds.jsonl",
+  "sessionId": "00000011-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000011",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s11-u1",
+    "s11-a1",
+    "s11-r1",
+    "s11-a2",
+    "s11-r2",
+    "s11-a3",
+    "s11-a4"
+  ],
+  "calls": [
+    {
+      "message": "msg_s11_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 5,
+        "cacheRead": 0,
+        "cacheWrite": 150,
+        "cacheWrite1h": 0,
+        "output": 20,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s11-u1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s11_1",
+          "name": "ToolSearch",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s11_2",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 150,
+        "cacheWrite": 20,
+        "cacheWrite1h": 0,
+        "output": 10,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s11-u1",
+        "assistant:msg_s11_1",
+        "tool:toolu_s11_1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s11_2",
+          "name": "Screenshot",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s11_3",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 170,
+        "cacheWrite": 30,
+        "cacheWrite1h": 0,
+        "output": 15,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s11-u1",
+        "assistant:msg_s11_1",
+        "tool:toolu_s11_1",
+        "assistant:msg_s11_2",
+        "tool:toolu_s11_2"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls",
+    "unsupportedContent"
+  ],
+  "ownCostTotal": null
+}

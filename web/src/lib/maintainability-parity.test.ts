@@ -54,8 +54,8 @@ function serialize(value: unknown): string {
   return JSON.stringify(value, (key, entry) => {
     // Keep the original analytical/index/projection goldens: timing, the
     // schema-10 recorded-counter additions, the session subtotal coverage, the
-    // partial-estimate metric flag and the schema-13 cost assessments have their
-    // own live contract tests.
+    // partial-estimate metric flag, the schema-13 cost assessments and the
+    // schema-14 harness session cost have their own live contract tests.
     if (
       [
         'timing',
@@ -67,6 +67,7 @@ function serialize(value: unknown): string {
         'metricsIncludePartialEstimates',
         'costAssessment',
         'costSummary',
+        'harnessSessionCost',
       ].includes(key)
     )
       return undefined;

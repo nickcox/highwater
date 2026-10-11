@@ -1,0 +1,67 @@
+{
+  "fixture": "-synthetic-project/subagent-parent.jsonl",
+  "sessionId": "00000016-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000016",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s16-u1",
+    "s16-a1",
+    "s16-r1",
+    "s16-a2"
+  ],
+  "calls": [
+    {
+      "message": "msg_s16_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 5,
+        "cacheRead": 0,
+        "cacheWrite": 200,
+        "cacheWrite1h": 0,
+        "output": 30,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s16-u1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s16_agent",
+          "name": "Agent",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s16_2",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 200,
+        "cacheWrite": 20,
+        "cacheWrite1h": 0,
+        "output": 2,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s16-u1",
+        "assistant:msg_s16_1",
+        "tool:toolu_s16_agent"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

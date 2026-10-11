@@ -1,0 +1,75 @@
+{
+  "fixture": "-synthetic-project/attachments.jsonl",
+  "sessionId": "00000008-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000008",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s8-e1",
+    "s8-d1",
+    "s8-u1",
+    "s8-q1",
+    "s8-m1",
+    "s8-a1",
+    "s8-v1",
+    "s8-c1",
+    "s8-o1",
+    "s8-a2"
+  ],
+  "calls": [
+    {
+      "message": "msg_s8_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 6,
+        "cacheRead": 0,
+        "cacheWrite": 500,
+        "cacheWrite1h": 500,
+        "output": 5,
+        "reasoning": 0
+      },
+      "context": [
+        "attachment:s8-e1",
+        "user:s8-u1",
+        "attachment:s8-q1",
+        "meta:s8-m1"
+      ],
+      "toolCallsAfter": []
+    },
+    {
+      "message": "msg_s8_2",
+      "model": "claude-sonnet-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 500,
+        "cacheWrite": 60,
+        "cacheWrite1h": 0,
+        "output": 3,
+        "reasoning": 0
+      },
+      "context": [
+        "attachment:s8-e1",
+        "user:s8-u1",
+        "attachment:s8-q1",
+        "meta:s8-m1",
+        "assistant:msg_s8_1",
+        "meta:s8-v1",
+        "user:s8-c1",
+        "user:s8-o1"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

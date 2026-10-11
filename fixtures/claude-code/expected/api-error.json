@@ -1,0 +1,54 @@
+{
+  "fixture": "-synthetic-project/api-error.jsonl",
+  "sessionId": "00000010-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000010",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s10-u1",
+    "s10-e1",
+    "s10-t1",
+    "s10-u2",
+    "s10-a1"
+  ],
+  "calls": [
+    {
+      "message": "msg_s10_err",
+      "model": "<synthetic>",
+      "failed": true,
+      "usage": null,
+      "context": [
+        "user:s10-u1"
+      ],
+      "toolCallsAfter": []
+    },
+    {
+      "message": "msg_s10_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 4,
+        "cacheRead": 0,
+        "cacheWrite": 90,
+        "cacheWrite1h": 0,
+        "output": 2,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s10-u1",
+        "user:s10-u2"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

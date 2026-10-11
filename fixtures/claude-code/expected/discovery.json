@@ -1,0 +1,27 @@
+{
+  "root": "projects",
+  "sessions": [
+    "-synthetic-project/api-error.jsonl",
+    "-synthetic-project/attachments-unrendered.jsonl",
+    "-synthetic-project/attachments.jsonl",
+    "-synthetic-project/compaction-legacy.jsonl",
+    "-synthetic-project/compaction.jsonl",
+    "-synthetic-project/content-kinds.jsonl",
+    "-synthetic-project/cost-state-restarted.jsonl",
+    "-synthetic-project/cost-state.jsonl",
+    "-synthetic-project/parallel-last.jsonl",
+    "-synthetic-project/parallel-tools.jsonl",
+    "-synthetic-project/rewind.jsonl",
+    "-synthetic-project/simple.jsonl",
+    "-synthetic-project/split-response.jsonl",
+    "-synthetic-project/subagent-parent.jsonl",
+    "-synthetic-project/unfinished-line.jsonl",
+    "-synthetic-old-location/relocated.jsonl"
+  ],
+  "subagents": [
+    "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl"
+  ],
+  "ignored": [
+    "-synthetic-project/subagent-parent/other/ignored.jsonl"
+  ]
+}

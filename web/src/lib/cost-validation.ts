@@ -1,5 +1,11 @@
 import { AnalysisValidationError } from './analysis-validation';
-import type { CostAssessment, CostSubtotal, CostSummary, ModelCall } from './types';
+import type {
+  CostAssessment,
+  CostSubtotal,
+  CostSummary,
+  HarnessSessionCost,
+  ModelCall,
+} from './types';
 
 const KINDS = new Set(['recorded', 'estimated', 'apiEquivalent', 'free', 'unknown']);
 const RULES = new Set([
@@ -7,6 +13,7 @@ const RULES = new Set([
   'billingModeTable',
   'opencodeZeroWithListedPrice',
   'perTokenDefault',
+  'claudeCodeBillingSetting',
   'failedAttempt',
   'missingTime',
   'noPrice',
@@ -101,5 +108,18 @@ export function assertCostSummary(summary: CostSummary | undefined): void {
     (data.amendmentsImportedFrom !== null && typeof data.amendmentsImportedFrom !== 'string')
   ) {
     throw new AnalysisValidationError('Session cost summary has no price data source');
+  }
+}
+
+/** Claude Code's own total is optional, but when present it must be an amount, with
+ * a valid start time or none. */
+export function assertHarnessSessionCost(cost: HarnessSessionCost | null | undefined): void {
+  if (cost === null) return;
+  if (
+    !cost ||
+    !isAmount(cost.totalUsd) ||
+    (cost.sinceMs !== null && !(Number.isSafeInteger(cost.sinceMs) && cost.sinceMs >= 0))
+  ) {
+    throw new AnalysisValidationError('Session has an invalid harness session cost');
   }
 }

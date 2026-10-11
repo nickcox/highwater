@@ -24,6 +24,10 @@ pub(crate) enum SessionLocator {
         database: PathBuf,
         native_id: String,
     },
+    ClaudeCodeFile {
+        path: PathBuf,
+        kind: crate::claude_code::FileKind,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +46,9 @@ pub(crate) struct LoadedSession {
     pub database_revision: Option<blake3::Hash>,
     #[allow(dead_code)]
     pub replay_limitations: BTreeSet<ReplayLimitation>,
+    /// Coverage codes for a file source whose reconstruction is partial.
+    /// OpenCode reports its own through `analyze_reconstructed`.
+    pub coverage_codes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Error)]
@@ -52,6 +59,8 @@ pub(crate) enum LoadError {
     Storage(#[from] StorageError),
     #[error("opencode conversation cannot be reconstructed")]
     Replay(#[from] ReplayError),
+    #[error("claude code transcript cannot be loaded")]
+    ClaudeCode(#[source] SourceError),
 }
 
 /// Synchronous, intended for a bounded blocking worker. No source mutation.
@@ -72,6 +81,7 @@ pub(crate) fn load(
                 },
                 database_revision: None,
                 replay_limitations: BTreeSet::new(),
+                coverage_codes: None,
             })
         }
         SessionLocator::OpenCode {
@@ -96,6 +106,26 @@ pub(crate) fn load(
                 },
                 database_revision: Some(revision),
                 replay_limitations: reconstructed.limitations,
+                coverage_codes: None,
+            })
+        }
+        SessionLocator::ClaudeCodeFile { path, kind } => {
+            let loaded = crate::claude_code::load(path, *kind).map_err(LoadError::ClaudeCode)?;
+            Ok(LoadedSession {
+                normalized: loaded.session,
+                stats: LoadStats {
+                    records: loaded.records,
+                    selected_records: loaded.selected_records,
+                },
+                database_revision: None,
+                replay_limitations: BTreeSet::new(),
+                coverage_codes: Some(
+                    loaded
+                        .limitations
+                        .into_iter()
+                        .map(|limitation| limitation.as_str().to_owned())
+                        .collect(),
+                ),
             })
         }
     }

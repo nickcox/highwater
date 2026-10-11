@@ -21,6 +21,7 @@ pub(super) fn fake_session() -> NormalizedSession {
         last_model_call: 1,
     };
     NormalizedSession {
+        harness_session_cost: None,
         id: "fake".into(),
         source: SourceDescriptor {
             kind: "fake".into(),
@@ -58,6 +59,7 @@ pub(super) fn analysis_with_controlled_estimates(
     let config = AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
+        claude_code_billing: Default::default(),
     };
     let validated = validate_normalized_session(session).expect("valid synthetic session");
     let mut prepared = preparation::prepare(session, &validated, config);
@@ -81,7 +83,7 @@ pub(super) fn analysis_with_controlled_estimates(
             };
         }
     }
-    let calls = derive_calls(session, &prepared);
+    let calls = derive_calls(session, &prepared, config.claude_code_billing);
     let items = derive_items(session, &prepared);
     assemble_analysis(
         session,

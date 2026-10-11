@@ -1,6 +1,8 @@
 mod analysis;
 mod assets;
 mod catalog;
+#[cfg(test)]
+mod claude_code_tests;
 mod error;
 mod events;
 mod local_origin;
@@ -12,7 +14,7 @@ mod sources;
 use routes::router;
 mod watcher;
 
-use crate::analysis::{AnalysisConfig, TokenizationPolicy};
+use crate::analysis::{AnalysisConfig, ClaudeCodeBilling, TokenizationPolicy};
 #[cfg(test)]
 use analysis::{
     analysis_cache_key, classify_parse_failure, etag_for_key, AnalysisCache, AnalysisCacheKey,
@@ -66,6 +68,24 @@ impl From<TokenizationArg> for TokenizationPolicy {
     }
 }
 
+/// How Claude Code sessions were billed; the transcripts do not record it.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum ClaudeBillingArg {
+    /// A Claude subscription: calls are shown at API-equivalent cost.
+    Subscription,
+    /// An API key: calls are shown as estimated billed cost.
+    Api,
+}
+
+impl From<ClaudeBillingArg> for ClaudeCodeBilling {
+    fn from(value: ClaudeBillingArg) -> Self {
+        match value {
+            ClaudeBillingArg::Subscription => Self::Subscription,
+            ClaudeBillingArg::Api => Self::Api,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 pub(crate) struct Args {
     #[arg(long)]
@@ -73,6 +93,12 @@ pub(crate) struct Args {
     /// OpenCode SQLite database (repeatable). Explicit Pi roots remain Pi-only unless set.
     #[arg(long)]
     pub opencode_db: Vec<PathBuf>,
+    /// Claude Code projects directory (repeatable). Replaces the default
+    /// `$CLAUDE_CONFIG_DIR/projects` or `~/.claude/projects`.
+    #[arg(long)]
+    pub claude_root: Vec<PathBuf>,
+    #[arg(long, value_enum, default_value_t = ClaudeBillingArg::Subscription)]
+    pub claude_billing: ClaudeBillingArg,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
@@ -151,6 +177,9 @@ pub(crate) struct SessionFile {
     modified_at: Option<DateTime<Utc>>,
     harness: String,
     parent_reference: Option<String>,
+    /// A Claude Code subagent's type, from its metadata file. Omitted otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subagent_type: Option<String>,
     #[serde(skip)]
     locator: Option<crate::source::SessionLocator>,
     #[serde(skip)]
@@ -201,8 +230,18 @@ async fn run_with_watcher(
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .unwrap_or_else(|| home.join(".local/share"));
+    let claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute());
     let sources = tokio::task::spawn_blocking(move || {
-        sources::SourceSet::configured(args.session_root, args.opencode_db, &home, &data_home)
+        sources::SourceSet::configured(
+            args.session_root,
+            args.opencode_db,
+            args.claude_root,
+            &home,
+            &data_home,
+            claude_config_dir.as_deref(),
+        )
     })
     .await??;
     let root = sources.pi_root.clone().unwrap_or_default();
@@ -214,6 +253,13 @@ async fn run_with_watcher(
     if let Some(pi_root) = &sources.pi_root {
         if let Some(watcher) =
             start_watcher_or_degraded(pi_root, hint_sender.clone(), &signals, start_watcher)
+        {
+            watchers.push(watcher);
+        }
+    }
+    for claude_root in &sources.claude_roots {
+        if let Some(watcher) =
+            start_watcher_or_degraded(claude_root, hint_sender.clone(), &signals, start_watcher)
         {
             watchers.push(watcher);
         }
@@ -302,6 +348,7 @@ async fn run_with_watcher(
         config: AnalysisConfig {
             tokenization: args.tokenization.into(),
             perf_diagnostics,
+            claude_code_billing: args.claude_billing.into(),
         },
         analysis: Arc::new(AnalysisService::new(Arc::new(execute_analysis))),
     };

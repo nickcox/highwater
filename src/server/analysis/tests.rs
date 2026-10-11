@@ -10,6 +10,7 @@ fn config() -> AnalysisConfig {
     AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
+        claude_code_billing: Default::default(),
     }
 }
 fn path() -> PathBuf {

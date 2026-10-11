@@ -36,14 +36,26 @@ use validate::{validate_normalized_session, ValidatedSession};
 
 pub(crate) use tokenization::TokenizationPolicy;
 
-pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 13;
+pub(crate) const ANALYSIS_SCHEMA_VERSION: u32 = 14;
 // Bump this when serialized analysis output can change without a schema change.
-pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 25;
+pub(crate) const ANALYSIS_OUTPUT_VERSION: u32 = 26;
+
+/// How Claude Code calls are billed. The transcript does not record whether a
+/// session used a Claude subscription or an API key, so this is a setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub(crate) enum ClaudeCodeBilling {
+    /// Priced as API-equivalent, which is true whichever way the session was billed.
+    #[default]
+    Subscription,
+    /// Priced as billed per token.
+    Api,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AnalysisConfig {
     pub tokenization: TokenizationPolicy,
     pub perf_diagnostics: bool,
+    pub claude_code_billing: ClaudeCodeBilling,
 }
 
 #[derive(Debug, Error)]
@@ -155,7 +167,7 @@ pub(crate) fn analyze(
     let analysis_started = Instant::now();
     let prepared = preparation::prepare(&session, &validated, config);
     let metrics_started = Instant::now();
-    let calls = derive_calls(&session, &prepared);
+    let calls = derive_calls(&session, &prepared, config.claude_code_billing);
     let items = derive_items(&session, &prepared);
     let metrics_ms = metrics_started.elapsed().as_secs_f64() * 1000.0;
     debug_assert_eq!(
@@ -189,6 +201,7 @@ struct DerivedCalls {
 fn derive_calls(
     session: &NormalizedSession,
     prepared: &preparation::PreparedAnalysis<'_>,
+    claude_code_billing: ClaudeCodeBilling,
 ) -> DerivedCalls {
     let registry = &prepared.registry;
     let works = &prepared.works;
@@ -196,8 +209,11 @@ fn derive_calls(
     let derived_transitions = &prepared.transitions;
     let destination_estimates = &prepared.destination_estimates;
     let (cumulative_usages, usage_totals) = usage_rollup(&session.model_calls);
-    let (call_economics, economics_summary) =
-        economics::derive_with_cost_basis(&session.model_calls, session.source.cost_basis);
+    let (call_economics, economics_summary) = if session.source.kind == "claude-code" {
+        economics::derive_usage_only(&session.model_calls)
+    } else {
+        economics::derive_with_cost_basis(&session.model_calls, session.source.cost_basis)
+    };
     let mut model_calls = Vec::with_capacity(works.len());
     let mut cost_assessments = Vec::with_capacity(works.len());
     let mut residual_percents = Vec::new();
@@ -438,7 +454,7 @@ fn derive_calls(
             metrics_include_partial_estimates,
             age,
         };
-        let cost_assessment = assess_cost(work.call, &session.source.kind);
+        let cost_assessment = assess_cost(work.call, &session.source.kind, claude_code_billing);
         let cost_assessment_api = cost_assessment.to_api();
         cost_assessments.push(cost_assessment);
         model_calls.push(to_api_call(
@@ -482,8 +498,15 @@ fn derive_calls(
 }
 
 /// Prices a call by the time it completed, or started when that is all there is.
-fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
+fn assess_cost(
+    call: &NormalizedModelCall,
+    harness: &str,
+    claude_code_billing: ClaudeCodeBilling,
+) -> pricing::CostAssessment {
     let timing = timing::call_timing(call, harness == "pi");
+    let billing_setting = (harness == "claude-code"
+        && claude_code_billing == ClaudeCodeBilling::Api)
+        .then_some(pricing::Billing::PerToken);
     pricing::assess(
         pricing::embedded(),
         pricing::CallToPrice {
@@ -492,6 +515,7 @@ fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssess
             model: call.target.model.as_deref(),
             at_ms: timing.recorded_at_ms.or(timing.started_at_ms),
             usage: &call.reported_usage,
+            billing_setting,
         },
     )
 }
@@ -829,6 +853,12 @@ fn assemble_analysis(
             negative_residual_calls: negative_residuals,
             missing_provider_usage_calls: missing_provider_usage,
             cost_summary,
+            harness_session_cost: session.harness_session_cost.map(|cost| {
+                crate::api::HarnessSessionCost {
+                    total_usd: cost.total_usd,
+                    since_ms: cost.since_ms,
+                }
+            }),
         },
         display_weight_unit: chart_unit.as_str().into(),
         model_calls,

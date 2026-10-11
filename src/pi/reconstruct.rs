@@ -305,7 +305,7 @@ fn message_text_line(message: &Value) -> Option<String> {
     None
 }
 
-fn first_nonempty_line(text: &str) -> Option<String> {
+pub(crate) fn first_nonempty_line(text: &str) -> Option<String> {
     text.split(['\r', '\n', '\u{2028}', '\u{2029}'])
         .map(bounded_label)
         .find(|line| !line.is_empty())
@@ -412,7 +412,7 @@ fn tool_result_fallback(tool_name: Option<&str>) -> String {
     }
 }
 
-fn display_path_argument(path: &str, working_directory: Option<&str>) -> String {
+pub(crate) fn display_path_argument(path: &str, working_directory: Option<&str>) -> String {
     // Use lexical components only; historical labels must not depend on the current filesystem.
     let source_path = Path::new(path);
     if !source_path.is_absolute() && looks_like_windows_absolute_path(path) {
@@ -491,13 +491,13 @@ fn is_unsafe_label_control(character: char) -> bool {
         )
 }
 
-fn has_visible_label_text(value: &str) -> bool {
+pub(crate) fn has_visible_label_text(value: &str) -> bool {
     value
         .chars()
         .any(|character| !character.is_whitespace() && !is_unsafe_label_control(character))
 }
 
-fn bounded_label(value: &str) -> String {
+pub(crate) fn bounded_label(value: &str) -> String {
     let mut bounded = String::with_capacity(MAX_LABEL_CHARS);
     let mut character_count = 0;
     let mut pending_space = false;

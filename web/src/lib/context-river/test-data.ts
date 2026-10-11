@@ -435,6 +435,7 @@ export function testAnalysis(): SessionAnalysis {
       negativeResidualCalls: 0,
       missingProviderUsageCalls: 4,
       costSummary: costSummaryFor(calls),
+      harnessSessionCost: null,
     },
     displayWeightUnit: 'estimatedTokens',
     modelCalls: calls,

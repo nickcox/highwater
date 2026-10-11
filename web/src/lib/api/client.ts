@@ -8,8 +8,10 @@ export interface SessionListItem {
   startedAt: string | null;
   byteSize: number | null;
   modifiedAt: string | null;
-  harness?: 'pi' | 'opencode';
+  harness?: 'pi' | 'opencode' | 'claude-code';
   parentReference?: string | null;
+  /** A Claude Code subagent's type, such as `statusline-setup`. */
+  subagentType?: string;
 }
 
 export type LiveAvailability = 'active' | 'degraded';

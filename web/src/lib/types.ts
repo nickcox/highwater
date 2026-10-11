@@ -205,6 +205,7 @@ export type CostClassificationRule =
   | 'billingModeTable'
   | 'opencodeZeroWithListedPrice'
   | 'perTokenDefault'
+  | 'claudeCodeBillingSetting'
   | 'failedAttempt'
   | 'missingTime'
   | 'noPrice'
@@ -362,6 +363,15 @@ export interface SessionSummary {
   negativeResidualCalls: number;
   missingProviderUsageCalls: number;
   costSummary: CostSummary;
+  /** The harness's own running session total (Claude Code), or null. It can include
+   * calls that are not in the transcript and is never added to other costs. */
+  harnessSessionCost: HarnessSessionCost | null;
+}
+
+export interface HarnessSessionCost {
+  totalUsd: number;
+  /** UTC epoch milliseconds when the running total started, or null. */
+  sinceMs: number | null;
 }
 
 export interface ReconstructionCoverage {

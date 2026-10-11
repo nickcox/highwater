@@ -1,0 +1,64 @@
+{
+  "fixture": "-synthetic-project/cost-state-restarted.jsonl",
+  "sessionId": "00000015-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000015",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s15-u1",
+    "s15-a1",
+    "s15-u2",
+    "s15-a2"
+  ],
+  "calls": [
+    {
+      "message": "msg_s15_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 3,
+        "cacheRead": 0,
+        "cacheWrite": 80,
+        "cacheWrite1h": 0,
+        "output": 2,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s15-u1"
+      ],
+      "toolCallsAfter": []
+    },
+    {
+      "message": "msg_s15_2",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 80,
+        "cacheWrite": 10,
+        "cacheWrite1h": 0,
+        "output": 2,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s15-u1",
+        "assistant:msg_s15_1",
+        "user:s15-u2"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": {
+    "totalUsd": 0.3,
+    "startTimeMs": 1790899200000
+  }
+}

@@ -247,6 +247,7 @@ pub(super) fn discover(
                 modified_nanos,
                 harness: "pi".into(),
                 parent_reference: None,
+                subagent_type: None,
                 locator: None,
                 source_revision: None,
             });

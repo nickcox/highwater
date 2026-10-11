@@ -96,7 +96,10 @@
   let lastPublishedReadout = '';
   let lastPublishedEventBreakdownSignature = '';
 
-  $: costCopy = describeCostBasis(indexed.analysis.economics.costBasis);
+  $: costCopy = describeCostBasis(
+    indexed.analysis.economics.costBasis,
+    indexed.analysis.session.source,
+  );
   $: usageMappingLabel = usageNormalizationLabel(indexed.analysis.session.source);
   $: cacheProjection = mode === 'cache' ? projectCacheTrack(indexed.analysis) : null;
   $: costProjection = mode === 'cost' ? projectCostTrack(indexed.analysis) : null;

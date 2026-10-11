@@ -1,0 +1,113 @@
+{
+  "fixture": "-synthetic-project/parallel-tools.jsonl",
+  "sessionId": "00000003-0000-4000-8000-000000000000",
+  "listing": {
+    "kind": "main",
+    "title": "project · 00000003",
+    "workingDirectory": "/synthetic/project",
+    "parentFixture": null
+  },
+  "branch": [
+    "s3-u1",
+    "s3-a1",
+    "s3-a2",
+    "s3-rA",
+    "s3-rB",
+    "s3-a3",
+    "s3-rC",
+    "s3-a4",
+    "s3-rD",
+    "s3-a5"
+  ],
+  "calls": [
+    {
+      "message": "msg_s3_1",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 5,
+        "cacheRead": 0,
+        "cacheWrite": 300,
+        "cacheWrite1h": 300,
+        "output": 60,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s3-u1"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s3_a",
+          "name": "Read",
+          "failed": false
+        },
+        {
+          "id": "toolu_s3_b",
+          "name": "Read",
+          "failed": true
+        }
+      ]
+    },
+    {
+      "message": "msg_s3_2",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 300,
+        "cacheWrite": 50,
+        "cacheWrite1h": 0,
+        "output": 30,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s3-u1",
+        "assistant:msg_s3_1",
+        "tool:toolu_s3_a",
+        "tool:toolu_s3_b"
+      ],
+      "toolCallsAfter": [
+        {
+          "id": "toolu_s3_c",
+          "name": "Grep",
+          "failed": false
+        },
+        {
+          "id": "toolu_s3_d",
+          "name": "Grep",
+          "failed": false
+        }
+      ]
+    },
+    {
+      "message": "msg_s3_3",
+      "model": "claude-opus-5-5",
+      "failed": false,
+      "usage": {
+        "input": 1,
+        "cacheRead": 350,
+        "cacheWrite": 60,
+        "cacheWrite1h": 0,
+        "output": 12,
+        "reasoning": 0
+      },
+      "context": [
+        "user:s3-u1",
+        "assistant:msg_s3_1",
+        "tool:toolu_s3_a",
+        "tool:toolu_s3_b",
+        "assistant:msg_s3_2",
+        "tool:toolu_s3_c",
+        "tool:toolu_s3_d"
+      ],
+      "toolCallsAfter": []
+    }
+  ],
+  "compactions": [],
+  "limitations": [
+    "missingHistoricalSystemPrompt",
+    "missingHistoricalToolDefinitions",
+    "unrecordedHarnessCalls"
+  ],
+  "ownCostTotal": null
+}

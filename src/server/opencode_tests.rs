@@ -96,6 +96,7 @@ impl DatabaseFixture {
         SourceSet {
             pi_root: None,
             databases: vec![self.path.clone()],
+            claude_roots: Vec::new(),
         }
     }
     fn locator(&self) -> SessionLocator {
@@ -120,6 +121,7 @@ fn config() -> AnalysisConfig {
     AnalysisConfig {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
+        claude_code_billing: Default::default(),
     }
 }
 fn scanner(sources: &SourceSet) -> MixedScanner {
@@ -315,15 +317,32 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
     let data = fixture._directory.path().join("data");
     std::fs::create_dir_all(data.join("opencode")).expect("data home");
     std::fs::copy(&fixture.path, data.join("opencode/opencode.db")).expect("default DB");
-    let defaults =
-        SourceSet::configured(None, Vec::new(), &home, &data).expect("OpenCode-only defaults");
+    let defaults = SourceSet::configured(None, Vec::new(), Vec::new(), &home, &data, None)
+        .expect("OpenCode-only defaults");
     assert!(defaults.pi_root.is_none());
     assert_eq!(defaults.databases.len(), 1);
     let pi = std::fs::canonicalize("fixtures/pi").expect("Pi fixtures");
-    let explicit = SourceSet::configured(Some(pi), Vec::new(), &home, &data).expect("Pi-only");
+    let explicit = SourceSet::configured(Some(pi), Vec::new(), Vec::new(), &home, &data, None)
+        .expect("Pi-only");
     assert!(explicit.databases.is_empty());
-    assert!(SourceSet::configured(Some(home.join("missing")), Vec::new(), &home, &data).is_err());
-    assert!(SourceSet::configured(None, vec![data.join("missing.db")], &home, &data).is_err());
+    assert!(SourceSet::configured(
+        Some(home.join("missing")),
+        Vec::new(),
+        Vec::new(),
+        &home,
+        &data,
+        None
+    )
+    .is_err());
+    assert!(SourceSet::configured(
+        None,
+        vec![data.join("missing.db")],
+        Vec::new(),
+        &home,
+        &data,
+        None
+    )
+    .is_err());
 }
 
 #[test]
@@ -351,6 +370,7 @@ fn failed_database_retains_its_catalogue_while_healthy_sources_advance() {
     let sources = SourceSet {
         pi_root: None,
         databases: vec![fixture.path.clone(), healthy.path.clone()],
+        claude_roots: Vec::new(),
     };
     let signals = Arc::new(watcher::WatchSignals::default());
     let scanner = MixedScanner::new(&sources, Arc::clone(&signals));
@@ -449,6 +469,7 @@ async fn duplicate_database_native_ids_are_ambiguous_and_cache_entries_are_isola
     let sources = SourceSet {
         pi_root: None,
         databases: vec![first.path.clone(), second.path.clone()],
+        claude_roots: Vec::new(),
     };
     let entries = scan(&scanner(&sources));
     let id = entries[0].id.clone();

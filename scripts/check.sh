@@ -27,6 +27,8 @@ if [[ "$FULL" == 1 ]]; then
   TOKENPLUME_BROWSER_BUILD_PROFILE=release scripts/browser-smoke-integrated.sh
   scripts/browser-smoke-opencode-integrated.sh
   TOKENPLUME_BROWSER_BUILD_PROFILE=release scripts/browser-smoke-opencode-integrated.sh
+  scripts/browser-smoke-claude-code-integrated.sh
+  TOKENPLUME_BROWSER_BUILD_PROFILE=release scripts/browser-smoke-claude-code-integrated.sh
   scripts/benchmark-context-river.sh large
   python3 scripts/benchmark-opencode.py --full
 fi

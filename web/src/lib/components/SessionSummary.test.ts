@@ -83,6 +83,35 @@ describe('SessionSummary', () => {
     expect(cost).toHaveTextContent(/Cost\s*Unknown\s*4 calls without a price/);
   });
 
+  it("shows Claude Code's own total only in Session details, with what it covers", () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'claude-code';
+    analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: ['missingHistoricalSystemPrompt', 'unrecordedHarnessCalls'],
+    };
+    analysis.session.harnessSessionCost = { totalUsd: 2.28, sinceMs: Date.UTC(2026, 9, 10, 6, 3) };
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    expect(container.querySelector('.primary-metrics')).not.toHaveTextContent('own total');
+    const row = [...container.querySelectorAll('.session-details dl > div')].find((element) =>
+      element.textContent?.includes("Claude Code's own total"),
+    );
+    expect(row).toHaveTextContent(/2\.28/);
+    expect(row).toHaveTextContent(
+      /Since .* · includes subagents and Claude Code's own calls, which are not in this transcript/,
+    );
+    expect(container).toHaveTextContent('None: Claude Code records no cost');
+  });
+
+  it('has no own-total row when the harness recorded none', () => {
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(testAnalysis()) },
+    });
+    expect(container).not.toHaveTextContent('own total');
+  });
+
   it('shows framing-based reconciliation only when some call supports it', () => {
     const analysis = testAnalysis();
     analysis.session.reconciliationComparableCalls = 2;
