@@ -5,6 +5,7 @@ import { costAssessmentOf, testAnalysis } from '../../src/lib/context-river/test
 import type { SessionAnalysis, WireSessionAnalysis } from '../../src/lib/types';
 import { toWireAnalysis } from '../../src/lib/testing/wire-analysis';
 import { ITEM_TYPE_PALETTE } from '../../src/lib/context-river/colors';
+import { timingExplanation } from '../../src/lib/components/call-timing';
 import { compositionScenario } from '../../src/lib/testing/composition-scenarios';
 import { sessionScenario } from '../../src/lib/testing/session-scenarios';
 
@@ -1058,7 +1059,10 @@ test('Item types use distinct semantic colors consistently in ribbons and legend
     nodes.map((node) => node.getAttribute('fill')),
   );
   expect(new Set(actual).size).toBe(9);
-  expect([...actual].sort()).toEqual(Object.values(ITEM_TYPE_PALETTE).sort());
+  const sessionKinds = new Set(allKinds.contextItems.map((item) => item.kind));
+  expect([...actual].sort()).toEqual(
+    [...sessionKinds].map((kind) => ITEM_TYPE_PALETTE[kind]).sort(),
+  );
   const ribbonRgb = await grouped.evaluateAll((nodes) =>
     nodes.map((node) => getComputedStyle(node).fill).sort(),
   );
@@ -1328,7 +1332,7 @@ test('call timing follows each pinned response with qualified rates and explicit
   await expect(metrics.getByText('2 s', { exact: true })).toBeVisible();
   await expect(metrics.getByText('1 tok/s', { exact: true })).toHaveAttribute(
     'title',
-    /not generation-only speed/,
+    timingExplanation('pi'),
   );
   await next.click();
   await expect(metrics.getByText('1 s', { exact: true })).toBeVisible();
