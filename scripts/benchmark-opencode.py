@@ -44,7 +44,7 @@ def generate(connection, name, calls, characters):
 def run(binary, full):
     cases = [('small', 8, 256), ('medium', 160, 512)]
     if full:
-        cases += [('large', 64, 1024 * 1024), ('uncached', 700, 16)]
+        cases += [('large', 64, 1024 * 1024), ('uncached', 1600, 16)]
     with tempfile.TemporaryDirectory(prefix='tokenplume-opencode-benchmark-') as temporary:
         temporary = pathlib.Path(temporary)
         database = temporary / 'synthetic.db'
