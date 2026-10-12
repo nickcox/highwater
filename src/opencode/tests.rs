@@ -83,6 +83,15 @@ fn both_layouts_discover_without_reading_unrelated_tables() {
     for modern in [false, true] {
         let fixture = Fixture::new(modern);
         fixture.session("ses_child", Some("ses_example"), 200);
+        fixture.session("ses_empty", None, 300);
+        for session in ["ses_example", "ses_child"] {
+            fixture.message(
+                session,
+                &format!("msg_{session}"),
+                1,
+                json!({"role": "assistant"}),
+            );
+        }
         if modern {
             fixture
                 .writer
@@ -95,7 +104,8 @@ fn both_layouts_discover_without_reading_unrelated_tables() {
         assert_eq!(sessions[0].parent_id.as_deref(), Some("ses_example"));
         assert_eq!(sessions[1].directory, "/synthetic/project");
         assert!(!format!("{sessions:?}").contains("synthetic-secret"));
-        assert!(load_session(&fixture.path, "ses_example", None)
+        // A session with no response is not listed, but still loads.
+        assert!(load_session(&fixture.path, "ses_empty", None)
             .expect("empty session")
             .messages
             .is_empty());

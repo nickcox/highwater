@@ -289,6 +289,13 @@ fn sqlite_catalog_tracker_detects_wal_commits_without_session_timestamps() {
 fn mixed_catalog_metadata_has_harness_relationships_and_no_database_locator() {
     let fixture = DatabaseFixture::new();
     fixture.writer.execute("INSERT INTO session (id,parent_id,directory,title,version,time_created,time_updated) VALUES ('ses_child','ses_example','/synthetic','Child','1.4.0',20,200)", []).expect("child");
+    fixture
+        .writer
+        .execute(
+            "INSERT INTO message VALUES ('msg_child','ses_child',20,20,'{\"role\":\"assistant\"}')",
+            [],
+        )
+        .expect("child response");
     let mut sources = fixture.sources();
     sources.pi_root = Some(std::fs::canonicalize("fixtures/pi").expect("Pi fixtures"));
     let entries = scan(&scanner(&sources));

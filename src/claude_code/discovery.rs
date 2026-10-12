@@ -65,6 +65,9 @@ pub(crate) struct Listing {
     /// The first conversation record's timestamp, as written.
     pub started_at: Option<String>,
     pub subagent: Option<SubagentMetadata>,
+    /// Whether any assistant record appears. A transcript without one, such as a session
+    /// closed before its first prompt was sent, has nothing to chart.
+    pub has_responses: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -207,6 +210,9 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
         let Ok(line) = std::str::from_utf8(&raw) else {
             continue;
         };
+        if !listing.has_responses && line.contains("\"type\":\"assistant\"") {
+            listing.has_responses = true;
+        }
         if line.contains("\"type\":\"custom-title\"") {
             if let Some(title) = string_field(line, "customTitle") {
                 custom_title = Some(title);

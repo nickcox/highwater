@@ -222,7 +222,12 @@ impl ClaudeCodeSource {
             if cancelled.load(Ordering::Acquire) {
                 return Err(DiscoveryError::Cancelled);
             }
-            if let Some(listing) = self.listings.listing(&file)? {
+            // A transcript with no responses has nothing to show, so it is not offered.
+            if let Some(listing) = self
+                .listings
+                .listing(&file)?
+                .filter(|listing| listing.has_responses)
+            {
                 entries.push(claude_code_entry(file, listing));
             }
         }

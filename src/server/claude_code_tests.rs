@@ -134,6 +134,36 @@ fn a_repeated_root_does_not_list_a_transcript_twice() {
 }
 
 #[test]
+fn a_transcript_is_listed_once_it_has_a_response() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = fs::canonicalize(directory.path())
+        .expect("root")
+        .join("projects");
+    fs::create_dir_all(root.join("-project")).expect("project");
+    let transcript =
+        fs::read_to_string("fixtures/claude-code/projects/-synthetic-project/simple.jsonl")
+            .expect("fixture");
+    let (responses, prompts): (Vec<_>, Vec<_>) = transcript
+        .lines()
+        .partition(|line| line.contains("\"type\":\"assistant\""));
+    assert!(!responses.is_empty());
+    let path = root.join("-project/simple.jsonl");
+    fs::write(&path, prompts.join("\n") + "\n").expect("prompts");
+    let scanner = MixedScanner::new(
+        &claude_only(vec![root]),
+        Arc::new(watcher::WatchSignals::default()),
+    );
+    let scan = || {
+        scanner
+            .scan(Arc::new(AtomicBool::new(false)))
+            .expect("scan")
+    };
+    assert!(scan().is_empty());
+    fs::write(&path, transcript).expect("transcript");
+    assert_eq!(scan().len(), 1);
+}
+
+#[test]
 fn a_removed_root_empties_its_entries_and_other_sources_are_kept() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = fs::canonicalize(directory.path())

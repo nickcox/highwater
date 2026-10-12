@@ -314,6 +314,23 @@ fn sessions_query(layout: Layout) -> String {
     }
 }
 
+/// A session with no assistant message, such as one closed before its first prompt was sent,
+/// has nothing to chart, so discovery leaves it out after validating it like any other. Each
+/// generation keeps its messages in its own table, which may not exist in the other layouts.
+fn has_responses(layout: Layout) -> String {
+    let legacy = "EXISTS (SELECT 1 FROM message m WHERE m.session_id = s.id \
+                  AND json_extract(m.data, '$.role') = 'assistant')";
+    let modern = "EXISTS (SELECT 1 FROM session_message m WHERE m.session_id = s.id \
+                  AND m.type = 'assistant')";
+    match layout {
+        Layout::Legacy => legacy.into(),
+        Layout::Modern => modern.into(),
+        Layout::Mixed => {
+            format!("(s.generation = 0 AND {legacy}) OR (s.generation = 1 AND {modern})")
+        }
+    }
+}
+
 fn generation(row: &rusqlite::Row<'_>) -> Result<Generation, StorageError> {
     match row.get::<_, i64>(9)? {
         0 => Ok(Generation::Legacy),
@@ -485,8 +502,9 @@ pub(crate) fn discover(
     let tx = connection.transaction()?;
     let layout = validate_layout(&tx)?;
     let mut statement = tx.prepare(&format!(
-        "SELECT * FROM ({}) ORDER BY time_updated DESC, id",
-        sessions_query(layout)
+        "SELECT *, {1} AS responded FROM ({0}) AS s ORDER BY time_updated DESC, id",
+        sessions_query(layout),
+        has_responses(layout)
     ))?;
     let mut rows = statement.query([])?;
     let mut sessions = Vec::new();
@@ -494,7 +512,7 @@ pub(crate) fn discover(
     let mut bytes = 0;
     while let Some(row) = rows.next()? {
         cancelled(signal.as_deref())?;
-        if sessions.len() >= MAX_SESSIONS {
+        if ids.len() >= MAX_SESSIONS {
             return Err(StorageError::BudgetExceeded);
         }
         let session = metadata(row)?;
@@ -511,7 +529,9 @@ pub(crate) fn discover(
                 MAX_SNAPSHOT_BYTES,
             )?;
         }
-        sessions.push(session);
+        if row.get::<_, bool>(10)? {
+            sessions.push(session);
+        }
     }
     Ok(sessions)
 }

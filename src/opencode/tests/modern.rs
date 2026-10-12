@@ -451,7 +451,7 @@ fn mixed_generation_selection_is_consistent_deduplicated_and_never_blends_rows()
     f.writer.execute("INSERT INTO session VALUES ('ses_modern', NULL, '/synthetic/legacy', 'Legacy copy', '1.4.0', 1, 100, NULL, NULL)", []).expect("legacy metadata");
     f.writer
         .execute(
-            "INSERT INTO message VALUES ('msg_legacy', 'ses_modern', 1, 1, '{\"role\":\"user\"}')",
+            "INSERT INTO message VALUES ('msg_legacy', 'ses_modern', 1, 1, '{\"role\":\"assistant\"}')",
             [],
         )
         .expect("legacy body");
