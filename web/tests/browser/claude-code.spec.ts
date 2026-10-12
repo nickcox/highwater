@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseSession } from './session-picker';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -39,6 +40,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const harness = page.getByRole('combobox', { name: 'Harness' });
   const picker = page.getByRole('combobox', { name: 'Session' });
   await harness.selectOption('claude-code');
+  await picker.click();
   await expect(
     page.getByRole('option', {
       name: /^Configure the status line · .*child session · statusline-setup$/,
@@ -47,7 +49,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const analysisResponse = page.waitForResponse(
     (response) => response.url().includes(compaction.id) && response.url().endsWith('/analysis'),
   );
-  await picker.selectOption(compaction.id);
+  await chooseSession(page, compaction.id);
   const response = await analysisResponse;
   expect(response.status()).toBe(200);
   const analysis = await response.json();
@@ -75,7 +77,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   expect(unchanged.status()).toBe(304);
 
   const withTotal = claudeCode.find((session) => session.displayName === 'project · 00000014')!;
-  await picker.selectOption(withTotal.id);
+  await chooseSession(page, withTotal.id);
   await page.locator('#session-details summary').click();
   await expect(page.locator('#session-details')).toContainText("Claude Code's own total (USD)");
   await expect(page.locator('#session-details')).toContainText(

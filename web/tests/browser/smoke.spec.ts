@@ -393,7 +393,8 @@ async function mockApi(
 async function assertLoaded(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'TokenPlume' })).toBeVisible();
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveValue(
+  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+    'data-session-id',
     integrated ? /.+/ : 'browser-smoke',
   );
 }
@@ -476,17 +477,17 @@ test('keyboard Retry recovers an analysis failure without switching sessions', a
   await expect(retry).toHaveCount(0);
 });
 
-test('session picker controls align on desktop and wrap cleanly on narrow screens', async ({
+test('session picker controls align, share one row on narrow screens, and search in place', async ({
   page,
 }) => {
   test.skip(integrated, 'Mocked API only.');
   await mockApi(page);
   await page.goto('/');
   const harness = page.getByRole('combobox', { name: 'Harness' });
-  const search = page.getByRole('searchbox', { name: 'Search sessions' });
   const session = page.getByRole('combobox', { name: 'Session' });
   await expect(session).toBeVisible();
-  const controls = [harness, search, session];
+  await expect(page.getByRole('searchbox', { name: 'Search sessions' })).toHaveCount(0);
+  const controls = [harness, session];
   const desktop = await Promise.all(controls.map((control) => control.boundingBox()));
   for (const bounds of desktop) {
     expect(bounds).not.toBeNull();
@@ -502,14 +503,19 @@ test('session picker controls align on desktop and wrap cleanly on narrow screen
     ),
   );
   expect(appearance[1]).toEqual(appearance[0]);
-  expect(appearance[2]).toEqual(appearance[0]);
-  await search.focus();
-  expect(await search.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
+  const label = await session.inputValue();
+  await session.click();
+  await expect(page.getByRole('listbox', { name: 'Sessions' })).toBeVisible();
+  expect(await session.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
+  await session.fill('no session has this title');
+  await expect(page.getByRole('status')).toContainText('No sessions match');
+  await session.press('Escape');
+  await expect(page.getByRole('listbox', { name: 'Sessions' })).toHaveCount(0);
+  await expect(session).toHaveValue(label);
 
   await page.setViewportSize({ width: 390, height: 844 });
   const narrow = await Promise.all(controls.map((control) => control.boundingBox()));
   expect(narrow[1]!.y).toBe(narrow[0]!.y);
-  expect(narrow[2]!.y).toBeGreaterThan(narrow[0]!.y + narrow[0]!.height);
   for (const bounds of narrow) {
     expect(bounds!.height).toBe(36);
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -1182,7 +1188,10 @@ test('view links restore Composition scope and absent items, and reject stale re
   test.skip(integrated, 'Uses deterministic session IDs.');
   await mockApi(page);
   await page.goto('/#session=browser-smoke&view=composition&scope=atCall&pin=3&item=a&range=2:4');
-  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveValue('browser-smoke');
+  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+    'data-session-id',
+    'browser-smoke',
+  );
   await expect(page.getByRole('tab', { name: 'Composition', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -3282,13 +3291,16 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   expect(analysis.modelCalls[4].economics.promptTokens).toBe(70);
   expect(analysis.modelCalls[4].economics.cacheWriteStatus).toBe('reported');
   await assertLoaded(page);
-  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveValue(/^pi-[0-9a-f]{12}$/);
+  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+    'data-session-id',
+    /^pi-[0-9a-f]{12}$/,
+  );
   await expect(page).toHaveURL(/#session=pi-[0-9a-f]{12}/);
   const linkParams = new URLSearchParams(new URL(page.url()).hash.slice(1));
   expect(linkParams.has('tp')).toBe(false);
   expect(linkParams.has('v')).toBe(false);
   expect(linkParams.get('session')).toBe(
-    await page.getByRole('combobox', { name: 'Session' }).inputValue(),
+    (await page.getByRole('combobox', { name: 'Session' }).getAttribute('data-session-id'))!,
   );
   const chart = page.getByRole('application', { name: 'Context River' });
   await expect(page.getByTestId('visible-call-range')).toContainText('of');

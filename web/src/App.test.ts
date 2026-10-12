@@ -1,3 +1,4 @@
+import { chooseSession } from './lib/testing/session-picker';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { toWireAnalysis } from './lib/testing/wire-analysis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -389,7 +390,10 @@ describe('view links', () => {
       }),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(screen.getByRole('combobox', { name: 'Session' })).toHaveValue('one');
+    expect(screen.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+      'data-session-id',
+      'one',
+    );
     expect(screen.getByText('Pinned call 2', { exact: true })).toBeInTheDocument();
     expect(new URLSearchParams(window.location.hash.slice(1)).get('item')).toBe('summary');
   });
@@ -689,7 +693,7 @@ describe('Context River interactions', () => {
     });
     expect(screen.getByText('1 of 4 items')).toBeInTheDocument();
 
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     await waitFor(() =>
       expect((document.querySelector('.lifespan-disclosure') as HTMLDetailsElement).open).toBe(
         false,
@@ -742,7 +746,7 @@ describe('Context River interactions', () => {
     await fireEvent.click(economicsTrackButton('Cost'));
     expect(economicsTrackButton('Cost')).toHaveAttribute('aria-pressed', 'true');
 
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     await waitFor(() =>
       expect(economicsTrackButton('Cost')).toHaveAttribute('aria-pressed', 'true'),
     );
@@ -867,7 +871,7 @@ describe('Context River interactions', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Latest' }));
     await waitFor(() => expect(oldHost.scrollLeft).toBe(117));
 
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     await waitFor(() => expect(screen.queryByText('Selected item')).not.toBeInTheDocument());
     await waitFor(() => expect(document.querySelector('.river-scroll')).not.toBeNull());
     const newHost = document.querySelector('.river-scroll') as HTMLDivElement;
@@ -1093,11 +1097,11 @@ describe('analysis cache freshness', () => {
       }),
     );
     await renderLoaded();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     await waitFor(() =>
       expect(screen.getByRole('application', { name: 'Context River' })).toBeInTheDocument(),
     );
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('one');
     await fireEvent.click(await screen.findByRole('button', { name: 'bash: npm test' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
     expect(screen.getByText('Selected item')).toBeInTheDocument();
@@ -1153,9 +1157,14 @@ describe('analysis cache freshness', () => {
       }),
     );
     await renderLoaded();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
-    await waitFor(() => expect(screen.getByLabelText('Session')).toHaveValue('two'));
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('two');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+        'data-session-id',
+        'two',
+      ),
+    );
+    await chooseSession('one');
 
     expect(screen.getByRole('application', { name: 'Context River' })).toBeInTheDocument();
     expect(screen.queryByText('Analysing session…')).not.toBeInTheDocument();
@@ -1183,8 +1192,8 @@ describe('analysis cache freshness', () => {
     );
     await renderLoaded();
     expect(screen.getByText(/old-model/)).toBeInTheDocument();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('two');
+    await chooseSession('one');
     expect(screen.getByText(/old-model/)).toBeInTheDocument();
 
     refresh.resolve(analysisResponse('one', '"one-v2"', 'new-model'));
@@ -1212,8 +1221,8 @@ describe('analysis cache freshness', () => {
       }),
     );
     await renderLoaded();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('two');
+    await chooseSession('one');
 
     expect(await screen.findByRole('status', { name: 'Refresh warnings' })).toHaveTextContent(
       'Refresh failed; showing cached analysis',
@@ -1239,8 +1248,8 @@ describe('analysis cache freshness', () => {
       }),
     );
     await renderLoaded();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('two');
+    await chooseSession('one');
 
     expect(await screen.findByRole('status', { name: 'Refresh warnings' })).toHaveTextContent(
       'network unavailable',
@@ -1267,10 +1276,10 @@ describe('analysis cache freshness', () => {
       }),
     );
     await renderLoaded();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('two');
+    await chooseSession('one');
     expect(screen.getByText(/cached-one/)).toBeInTheDocument();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     lateRefresh.resolve(analysisResponse('one', '"one-v2"', 'late-one'));
 
     await waitFor(() => expect(screen.getByText(/selected-two/)).toBeInTheDocument());
@@ -1297,8 +1306,13 @@ describe('analysis cache freshness', () => {
     );
     await renderLoaded();
     for (const id of ['two', 'three', 'four', 'one']) {
-      await fireEvent.change(screen.getByLabelText('Session'), { target: { value: id } });
-      await waitFor(() => expect(screen.getByLabelText('Session')).toHaveValue(id));
+      await chooseSession(id);
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+          'data-session-id',
+          id,
+        ),
+      );
     }
     await waitFor(() => expect(counts.get('one')).toBe(2));
   });
@@ -1449,7 +1463,7 @@ describe('selected analysis request lifecycle', () => {
 
     render(App);
     await screen.findByLabelText('Session');
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     expect(await screen.findByText(/selected-two-model/)).toBeInTheDocument();
     pendingOne.resolve(
       new Response(JSON.stringify({ error: { message: 'old session failed' } }), {
@@ -1531,9 +1545,9 @@ describe('selected analysis request lifecycle', () => {
     );
 
     await renderLoaded();
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     await screen.findByText(/two-model/);
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('one');
     await waitFor(() => expect(oneRequests).toBe(2));
     catalogueRevision = 1;
     TestEventSource.instance.emit(
@@ -1666,7 +1680,7 @@ describe('selected analysis request lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Inspect latest call' }));
     expect(screen.getByRole('region', { name: 'Pinned call 4' })).toBeInTheDocument();
 
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'River' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('region', { name: 'Pinned call 4' })).toBeNull();
@@ -1901,7 +1915,7 @@ describe('warning ownership', () => {
       'catalogue unavailable',
     );
 
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'two' } });
+    await chooseSession('two');
     expect(await screen.findByText(/two-model/)).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Refresh warnings' })).toHaveTextContent(
       'catalogue unavailable',
@@ -1910,7 +1924,7 @@ describe('warning ownership', () => {
       'analysis unavailable',
     );
 
-    await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
+    await chooseSession('one');
     const warnings = await screen.findByRole('status', { name: 'Refresh warnings' });
     await waitFor(() => expect(warnings).toHaveTextContent('analysis unavailable'));
     expect(warnings).toHaveTextContent('catalogue unavailable');

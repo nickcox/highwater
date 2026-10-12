@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseSession } from './session-picker';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
@@ -68,16 +69,16 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   expect(openCode.id).toMatch(/^opencode-[0-9a-f]{12}$/);
   expect(list.sessions.some((session: { harness: string }) => session.harness === 'pi')).toBe(true);
   const picker = page.getByRole('combobox', { name: 'Session' });
-  await expect(picker).toHaveValue(/^pi-/);
-  const original = await picker.inputValue();
+  await expect(picker).toHaveAttribute('data-session-id', /^pi-/);
+  const original = (await picker.getAttribute('data-session-id'))!;
   const harness = page.getByRole('combobox', { name: 'Harness' });
   await expect(harness).toHaveValue('all');
   await harness.selectOption('opencode');
-  await expect(picker).toHaveValue(original);
+  await expect(picker).toHaveAttribute('data-session-id', original);
   const analysisResponse = page.waitForResponse(
     (response) => response.url().includes(openCode.id) && response.url().endsWith('/analysis'),
   );
-  await picker.selectOption(openCode.id);
+  await chooseSession(page, openCode.id);
   const response = await analysisResponse;
   const analysis = await response.json();
   expect(analysis.schemaVersion).toBe(16);
@@ -101,15 +102,17 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
     page.getByRole('heading', { name: 'Cumulative context usage · Whole session' }),
   ).toBeVisible();
   await page.reload();
-  await expect(picker).toHaveValue(openCode.id);
+  await expect(picker).toHaveAttribute('data-session-id', openCode.id);
   await expect(page.getByRole('tab', { name: 'Composition' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  await picker.selectOption(original);
-  await expect(picker).toHaveValue(original);
+  await chooseSession(page, original);
+  await expect(picker).toHaveAttribute('data-session-id', original);
+  // The new session's history entry is written once its analysis loads.
+  await expect(page).toHaveURL(new RegExp(`session=${original}&`));
   await page.goBack();
-  await expect(picker).toHaveValue(openCode.id);
+  await expect(picker).toHaveAttribute('data-session-id', openCode.id);
   await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
   const refreshed = page.waitForResponse(
     (response) =>

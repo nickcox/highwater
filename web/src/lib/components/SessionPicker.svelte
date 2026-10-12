@@ -1,12 +1,21 @@
+<script context="module" lang="ts">
+  let nextPicker = 0;
+</script>
+
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { SessionListItem } from '../api/client';
   import { sessionOptionLabels } from '../session-label';
   export let sessions: SessionListItem[];
   export let selectedId: string | null;
   export let onSelect: (id: string) => void;
 
+  const id = `session-picker-${nextPicker++}`;
   let harness: 'all' | 'pi' | 'opencode' | 'claude-code' = 'all';
-  let search = '';
+  /** Search text, used only while the list is open. */
+  let query = '';
+  let open = false;
+  let activeIndex = -1;
   const harnessOf = (session: SessionListItem) =>
     session.harness ??
     (session.id.startsWith('opencode-')
@@ -14,53 +23,132 @@
       : session.id.startsWith('claude-code-')
         ? 'claude-code'
         : 'pi');
-  $: filtered = sessions.filter(
-    (session) =>
-      (harness === 'all' || harnessOf(session) === harness) &&
-      `${session.displayName} ${session.workingDirectory ?? ''}`
-        .toLocaleLowerCase()
-        .includes(search.trim().toLocaleLowerCase()),
-  );
-  // Duplicate portable references are ambiguous on the server. Render one
+  // Duplicate portable references are ambiguous on the server. Offer one
   // option per reference instead of crashing a keyed list or selecting a DB.
-  $: choices = [...new Map(filtered.map((session) => [session.id, session])).values()];
-  $: selected = sessions.find((session) => session.id === selectedId);
-  $: selectedVisible = choices.some((session) => session.id === selectedId);
-  $: labels = sessionOptionLabels(choices, harness === 'all');
+  $: unique = [...new Map(sessions.map((session) => [session.id, session])).values()];
+  $: labels = sessionOptionLabels(unique, harness === 'all');
+  $: inHarness = unique.filter((session) => harness === 'all' || harnessOf(session) === harness);
+  $: choices = inHarness.filter((session) =>
+    `${session.displayName} ${session.workingDirectory ?? ''}`
+      .toLocaleLowerCase()
+      .includes(query.trim().toLocaleLowerCase()),
+  );
+  $: selected = unique.find((session) => session.id === selectedId);
+  $: selectedLabel = selected
+    ? `${labels.get(selected.id)}${inHarness.includes(selected) ? '' : ' — outside filters'}`
+    : '';
+  const optionId = (index: number) => `${id}-option-${index}`;
+
+  async function showActive(): Promise<void> {
+    await tick();
+    document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+  }
+  function openList(): void {
+    if (open) return;
+    open = true;
+    query = '';
+    activeIndex = Math.max(
+      0,
+      choices.findIndex((session) => session.id === selectedId),
+    );
+    void showActive();
+  }
+  function close(): void {
+    open = false;
+    query = '';
+    activeIndex = -1;
+  }
+  function choose(session: SessionListItem): void {
+    close();
+    if (session.id !== selectedId) onSelect(session.id);
+  }
+  function search(text: string): void {
+    open = true;
+    query = text;
+    activeIndex = choices.length > 0 ? 0 : -1;
+  }
+  function move(step: number): void {
+    if (!open) return openList();
+    if (choices.length === 0) return;
+    activeIndex = Math.min(choices.length - 1, Math.max(0, activeIndex + step));
+    void showActive();
+  }
+  function key(event: KeyboardEvent): void {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      move(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Enter' && open) {
+      event.preventDefault();
+      const session = choices[activeIndex];
+      if (session) choose(session);
+    } else if (event.key === 'Escape' && open) {
+      // Closing the list must not also clear the River's selection.
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    } else if (event.key === 'Tab') {
+      close();
+    }
+  }
 </script>
 
 <div class="picker">
-  <div class="filters">
-    <label
-      >Harness
-      <select bind:value={harness}>
-        <option value="all">All harnesses</option>
-        <option value="pi">Pi</option>
-        <option value="opencode">OpenCode</option>
-        <option value="claude-code">Claude Code</option>
-      </select>
-    </label>
-    <label
-      >Search sessions<input
-        type="search"
-        bind:value={search}
-        placeholder="Title or directory"
-      /></label
-    >
-  </div>
   <label
-    >Session
-    <select value={selectedId ?? ''} onchange={(event) => onSelect(event.currentTarget.value)}>
-      {#if !selectedVisible}<option value={selectedId ?? ''} disabled
-          >{selected ? `${selected.displayName} — outside filters` : 'Choose a session'}</option
-        >{/if}
-      {#each choices as session (session.id)}
-        <option value={session.id} title={session.fileName || session.displayName}>
-          {labels.get(session.id)}
-        </option>
-      {/each}
+    >Harness
+    <select bind:value={harness}>
+      <option value="all">All harnesses</option>
+      <option value="pi">Pi</option>
+      <option value="opencode">OpenCode</option>
+      <option value="claude-code">Claude Code</option>
     </select>
   </label>
+  <div class="session-field">
+    <label for={`${id}-input`}>Session</label>
+    <input
+      id={`${id}-input`}
+      type="text"
+      role="combobox"
+      autocomplete="off"
+      spellcheck="false"
+      aria-expanded={open}
+      aria-controls={`${id}-list`}
+      aria-autocomplete="list"
+      aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+      data-session-id={selectedId ?? ''}
+      title={open ? undefined : selectedLabel}
+      value={open ? query : selectedLabel}
+      placeholder={open ? 'Search by title or directory' : 'Choose a session'}
+      onclick={openList}
+      oninput={(event) => search(event.currentTarget.value)}
+      onkeydown={key}
+      onblur={close}
+    />
+    {#if open}
+      <!-- Pressing an option must not move focus away from the input and close the list first. -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <ul
+        id={`${id}-list`}
+        role="listbox"
+        aria-label="Sessions"
+        onmousedown={(event) => event.preventDefault()}
+      >
+        {#each choices as session, index (session.id)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <li
+            id={optionId(index)}
+            role="option"
+            aria-selected={session.id === selectedId}
+            class:active={index === activeIndex}
+            data-session-id={session.id}
+            title={session.fileName || session.displayName}
+            onclick={() => choose(session)}
+          >
+            {labels.get(session.id)}
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
   {#if choices.length === 0}<p role="status">
       No sessions match these filters. The open session is unchanged.
     </p>{/if}
@@ -68,17 +156,17 @@
 
 <style>
   .picker {
+    /* The list spans both columns, so labels have room on narrow screens. */
+    position: relative;
     display: grid;
-    grid-template-columns: 140px minmax(160px, 200px) minmax(0, 1fr);
+    grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
     align-items: start;
-    gap: 8px;
-    width: min(760px, 100%);
+    gap: 8px 16px;
+    width: min(600px, 100%);
     min-width: 0;
   }
-  .filters {
-    display: contents;
-  }
-  label {
+  label,
+  .session-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -100,6 +188,9 @@
     font: inherit;
     font-size: 14px;
   }
+  input {
+    text-overflow: ellipsis;
+  }
   input::placeholder {
     color: var(--secondary);
   }
@@ -108,18 +199,44 @@
     outline: 2px solid #9fc0ff;
     outline-offset: 2px;
   }
+  ul {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    z-index: 20;
+    max-height: min(360px, 60vh);
+    margin: 4px 0 0;
+    padding: 4px;
+    overflow-y: auto;
+    list-style: none;
+    border: 1px solid var(--control-border);
+    border-radius: 7px;
+    background: var(--surface);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  }
+  li {
+    padding: 6px 8px;
+    border-radius: 5px;
+    color: var(--text);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  li[aria-selected='true'] {
+    color: var(--accent);
+  }
+  li.active,
+  li:hover {
+    background: var(--action);
+    color: #fff;
+  }
   p {
     grid-column: 1 / -1;
     margin: 0;
     color: #9eabc0;
     font-size: 12px;
-  }
-  @media (max-width: 650px) {
-    .picker {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .picker > label {
-      grid-column: 1 / -1;
-    }
   }
 </style>
