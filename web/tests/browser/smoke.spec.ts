@@ -1035,6 +1035,42 @@ test('reported input extends the visible stack without becoming an item type or 
     .toBe(true);
 });
 
+test('item type hover shows its tokens in a card beside the pointer without moving the page', async ({
+  page,
+}) => {
+  test.skip(integrated, 'Uses a synthetic analysis with every item type.');
+  await mockApi(page, compositionScenario(27));
+  await page.goto('/#session=browser-smoke&display=itemTypes');
+  await assertLoaded(page);
+  const legend = page.getByRole('group', { name: 'Item type legend' });
+  const before = (await legend.boundingBox())!;
+  const bands = page.locator('.ribbon-group.group-ribbon .ribbon-hit');
+  await expect(bands.locator('title')).toHaveCount(0);
+  const card = page.locator('.group-hover-card');
+  // A band's bounding box can include points outside its shape, so hover each in turn.
+  let pointer: { x: number; y: number } | null = null;
+  for (let index = 0; index < (await bands.count()) && !pointer; index++) {
+    const band = bands.nth(index);
+    await band.hover({ timeout: 2000 }).catch(() => undefined);
+    if (await card.isVisible()) {
+      const bounds = (await band.boundingBox())!;
+      pointer = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    }
+  }
+  expect(pointer).not.toBeNull();
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(/ at call \d+/);
+  await expect(card).toContainText(/\d+ items/);
+  const placed = (await card.boundingBox())!;
+  expect(Math.abs(placed.y - pointer.y)).toBeLessThan(40);
+  expect(
+    Math.min(Math.abs(placed.x - pointer.x), Math.abs(placed.x + placed.width - pointer.x)),
+  ).toBeLessThan(40);
+  expect(await legend.boundingBox()).toEqual(before);
+  await page.mouse.move(0, 0);
+  await expect(card).toHaveCount(0);
+});
+
 test('Item types use distinct semantic colors consistently in ribbons and legend without changing individual colors', async ({
   page,
 }) => {

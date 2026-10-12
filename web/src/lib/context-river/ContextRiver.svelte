@@ -5,7 +5,7 @@
 <script lang="ts">
   const mergeId = `compaction-merge-${nextMergeId++}`;
   import { afterUpdate, beforeUpdate, onMount } from 'svelte';
-  import type { IndexedAnalysis } from '../types';
+  import type { IndexedAnalysis, ContextItemKind } from '../types';
   import { displayItemLabel } from '../item-label';
   import {
     anchorForCall as callAnchor,
@@ -176,7 +176,18 @@
         .slice(0, 12)
         .map((id) => displayItemLabel(indexed.itemById.get(id), id))
     : [];
-  let hoveredGroup: { kind: string; total: number; callIndex: number | null } | null = null;
+  /** The item type under the pointer, shown in a card beside it. `x` and `y` are relative to
+   * the chart; `flip` puts the card on the pointer's left near the right edge. */
+  let hoveredGroup: {
+    kind: ContextItemKind;
+    total: number;
+    callIndex: number | null;
+    itemCount: number;
+    x: number;
+    y: number;
+    flip: boolean;
+  } | null = null;
+  let chartPlot: HTMLDivElement;
   let economicsBreakdownElement: HTMLDivElement | null = null;
   let economicsBreakdownStyle = '';
   let economicsOverlayRevision = 0;
@@ -1036,15 +1047,22 @@
   }
 
   function showGroupHover(
-    kind: string,
+    kind: ContextItemKind,
     values: Map<number, number> | undefined,
-    clientX: number,
+    itemCount: number,
+    event: PointerEvent,
   ): void {
-    const callIndex = pointerCallAtX(clientX, true);
+    const callIndex = pointerCallAtX(event.clientX, true);
+    const bounds = chartPlot.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
     hoveredGroup = {
       kind,
       total: callIndex === null ? 0 : (values?.get(callIndex) ?? 0),
       callIndex,
+      itemCount,
+      x,
+      y: event.clientY - bounds.top,
+      flip: x > bounds.width - 260,
     };
   }
 
@@ -1279,7 +1297,7 @@
   </div>
 </div>
 <div class="chart-frame">
-  <div class="chart-plot">
+  <div class="chart-plot" bind:this={chartPlot}>
     <div
       class="vertical-axis-overlay"
       role="img"
@@ -1494,11 +1512,21 @@
                   aria-pressed={!isGroup && selectedItemId === ribbon.itemId}
                   onpointerenter={(event) =>
                     isGroup
-                      ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
+                      ? showGroupHover(
+                          ribbon.groupKind!,
+                          ribbon.valueByCall,
+                          ribbon.memberItemIds?.length ?? 0,
+                          event,
+                        )
                       : onHoverItem(ribbon.itemId, event)}
                   onpointermove={(event) =>
                     isGroup
-                      ? showGroupHover(ribbon.groupKind!, ribbon.valueByCall, event.clientX)
+                      ? showGroupHover(
+                          ribbon.groupKind!,
+                          ribbon.valueByCall,
+                          ribbon.memberItemIds?.length ?? 0,
+                          event,
+                        )
                       : onHoverItem(ribbon.itemId, event)}
                   onpointerleave={() => {
                     if (isGroup) hoveredGroup = null;
@@ -1525,7 +1553,8 @@
                     else selectFromKeyboard(event, ribbon.itemId);
                   }}
                 >
-                  <title>{ribbonLabel}</title>
+                  <!-- An item type's details follow the pointer in a card instead. -->
+                  {#if !isGroup}<title>{ribbonLabel}</title>{/if}
                 </path>
               </g>
             {/each}
@@ -1639,6 +1668,23 @@
           {/if}
         </svg>
       </div>
+      {#if hoveredGroup}
+        <div
+          class="group-hover-card"
+          class:flip={hoveredGroup.flip}
+          role="status"
+          style:left={`${hoveredGroup.x}px`}
+          style:top={`${hoveredGroup.y}px`}
+          style:--group-color={itemTypeColor(hoveredGroup.kind)}
+        >
+          <strong>{groupLabel(hoveredGroup.kind)}</strong>
+          <span
+            >{formatVerticalTick(hoveredGroup.total)}
+            {verticalAxisUnit} at call {hoveredGroup.callIndex ?? '—'}</span
+          >
+          <span>{hoveredGroup.itemCount.toLocaleString()} items</span>
+        </div>
+      {/if}
       {#if riverDisplayMode === 'itemTypes'}
         <div class="group-type-legend" role="group" aria-label="Item type legend">
           <strong>Item types</strong>
@@ -1672,12 +1718,6 @@
               >Call {pinnedCallIndex ?? hoveredCallIndex}: input comparison unavailable</span
             >
           {/if}
-        </div>
-      {/if}
-      {#if hoveredGroup}
-        <div class="group-hover-readout" role="status">
-          Item type {groupLabel(hoveredGroup.kind)} · {formatVerticalTick(hoveredGroup.total)}
-          {verticalAxisUnit} at call {hoveredGroup.callIndex ?? '—'}
         </div>
       {/if}
       <EconomicsControls
@@ -1785,8 +1825,7 @@
     position: relative;
     max-width: 100%;
   }
-  .group-type-legend,
-  .group-hover-readout {
+  .group-type-legend {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1812,10 +1851,29 @@
   .group-type-legend small {
     color: #91a4c4;
   }
-  .group-hover-readout {
-    padding: 4px 7px;
-    border-left: 2px solid #9fc0ff;
+  .group-hover-card {
+    position: absolute;
+    z-index: 4;
+    display: grid;
+    gap: 2px;
+    width: max-content;
+    max-width: 240px;
+    padding: 6px 9px;
+    border: 1px solid #34435e;
+    border-left: 3px solid var(--group-color);
+    border-radius: 6px;
     background: #10192d;
+    color: #c4d0e4;
+    font-size: 12px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+    pointer-events: none;
+    transform: translate(14px, 14px);
+  }
+  .group-hover-card.flip {
+    transform: translate(calc(-100% - 14px), 14px);
+  }
+  .group-hover-card strong {
+    color: #edf2fb;
   }
   .chart-plot {
     position: relative;
