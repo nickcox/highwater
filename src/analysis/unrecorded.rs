@@ -4,8 +4,9 @@
 //! At the first call of a segment that reports its input, that content is the reported
 //! input less the estimates of the call's recorded items, because the call has little else
 //! in context. A segment starts at the first call, at each compaction and at each change of
-//! model, since each can change the unrecorded content. The item stays in context to the
-//! end of its segment. Pi records its system context, so it is left out (see
+//! model, since each can change the unrecorded content. A failed attempt (such as Claude
+//! Code's `<synthetic>` error message) never reached a model, so its model is ignored. The
+//! item stays in context to the end of its segment. Pi records its system context, so it is left out (see
 //! docs/data-semantics.md, "Pi system context").
 
 use super::reconciliation::{reported_prompt_tokens, UsageCompleteness};
@@ -31,8 +32,10 @@ pub(super) fn add_unrecorded_context(
     let mut added = Vec::new();
     let mut start = 0;
     while start < calls.len() {
+        let mut model = reached_model(&calls[start]);
         let mut end = start + 1;
-        while end < calls.len() && !starts_segment(&calls[end - 1], &calls[end]) {
+        while end < calls.len() && !starts_segment(model, &calls[end]) {
+            model = model.or(reached_model(&calls[end]));
             end += 1;
         }
         let measured = calls[start..end].iter().find_map(|call| {
@@ -59,8 +62,18 @@ pub(super) fn add_unrecorded_context(
     }
 }
 
-fn starts_segment(previous: &NormalizedModelCall, call: &NormalizedModelCall) -> bool {
-    call.compaction_before.is_some() || call.target.model != previous.target.model
+/// The model a call was sent to, or `None` for a failed attempt, which did not reach one.
+fn reached_model(call: &NormalizedModelCall) -> Option<&Option<String>> {
+    call.reported_usage
+        .placeholder
+        .is_none()
+        .then_some(&call.target.model)
+}
+
+/// `model` is the segment's model so far, from its first call that reached one.
+fn starts_segment(model: Option<&Option<String>>, call: &NormalizedModelCall) -> bool {
+    call.compaction_before.is_some()
+        || reached_model(call).is_some_and(|reached| model.is_some_and(|model| model != reached))
 }
 
 /// `None` when the call cannot measure (no complete reported input, or an item without an
@@ -214,6 +227,27 @@ mod tests {
         let items = unrecorded(&session);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].first_model_call, 2);
+    }
+
+    #[test]
+    fn a_failed_attempt_does_not_split_its_segment() {
+        let failed = claude_code("api-error").model_calls.remove(0);
+        let mut session = claude_code("parallel-tools");
+        let middle = &mut session.model_calls[1];
+        middle.target = failed.target;
+        middle.reported_usage = failed.reported_usage;
+        let config = super::super::AnalysisConfig {
+            tokenization: TokenizationPolicy::Auto,
+            perf_diagnostics: false,
+        };
+        let analysis = super::super::analyze(session, config).expect("analysis");
+        let spans: Vec<_> = analysis
+            .context_items
+            .iter()
+            .filter(|item| item.kind == "unrecordedContext")
+            .map(|item| (item.first_model_call, item.last_model_call))
+            .collect();
+        assert_eq!(spans, [(1, 3)]);
     }
 
     #[test]
