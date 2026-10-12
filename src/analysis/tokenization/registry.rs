@@ -4,7 +4,12 @@ use super::{
 };
 use crate::analysis::diagnostics::DiagnosticCode;
 use crate::domain::{ModelTarget, NormalizedContextItem, MAX_SAFE_JSON_INTEGER};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
+};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct TokenizationStats {
@@ -161,6 +166,74 @@ impl ProfileRegistry {
         self.estimates.insert(key, index);
         self.stats.unique_estimates = self.stats.unique_estimates.saturating_add(1);
         index
+    }
+
+    /// Calculates the estimates in `pairs` that the registry does not hold yet, spread over the
+    /// available cores, so later lookups find them. Results are stored in the order of `pairs`,
+    /// so estimate indexes do not depend on which thread finishes first.
+    pub(crate) fn precompute(
+        &mut self,
+        pairs: &[(&NormalizedContextItem, PayloadFingerprint, ProfileIndex)],
+    ) {
+        let mut queued = HashSet::new();
+        let missing = pairs
+            .iter()
+            .filter(|(_, fingerprint, profile)| {
+                let key = (*profile, *fingerprint);
+                !self.estimates.contains_key(&key) && queued.insert(key)
+            })
+            .collect::<Vec<_>>();
+        let threads = thread::available_parallelism()
+            .map_or(1, NonZeroUsize::get)
+            .min(missing.len());
+        let next = AtomicUsize::new(0);
+        let profiles = &self.profile_values;
+        let results = thread::scope(|scope| {
+            let workers = (0..threads)
+                .map(|_| {
+                    scope.spawn(|| {
+                        let mut stats = TokenizationStats::default();
+                        let mut done = Vec::new();
+                        // Payload sizes vary widely, so each thread takes the next pair when
+                        // it finishes one rather than a fixed share.
+                        loop {
+                            let at = next.fetch_add(1, Ordering::Relaxed);
+                            let Some((item, _, profile)) = missing.get(at) else {
+                                break;
+                            };
+                            done.push((
+                                at,
+                                calculate(&item.payload, &profiles[profile.0], &mut stats),
+                            ));
+                        }
+                        (done, stats)
+                    })
+                })
+                .collect::<Vec<_>>();
+            workers
+                .into_iter()
+                .map(|worker| {
+                    worker
+                        .join()
+                        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+                })
+                .collect::<Vec<_>>()
+        });
+        let mut calculated = Vec::with_capacity(missing.len());
+        for (done, stats) in results {
+            self.stats.tokenizer_invocations = self
+                .stats
+                .tokenizer_invocations
+                .saturating_add(stats.tokenizer_invocations);
+            calculated.extend(done);
+        }
+        calculated.sort_by_key(|(at, _)| *at);
+        for ((_, fingerprint, profile), (_, estimate)) in missing.into_iter().zip(calculated) {
+            let index = EstimateIndex(self.estimate_values.len());
+            self.estimate_values.push(estimate);
+            self.estimates.insert((*profile, *fingerprint), index);
+            self.stats.unique_estimates = self.stats.unique_estimates.saturating_add(1);
+        }
     }
 
     /// Controlled estimates for analysis boundary regressions, without huge payloads.

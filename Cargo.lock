@@ -1142,6 +1142,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "rust-embed",
+ "rustc-hash",
  "serde",
  "serde_json",
  "tempfile",

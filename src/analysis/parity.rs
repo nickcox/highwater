@@ -16,6 +16,7 @@ fn transitions_borrow_source_ids_in_context_order() {
             tokenization: TokenizationPolicy::Heuristic,
             perf_diagnostics: false,
         },
+        ProfileRegistry::default(),
     );
     for (position, transition) in prepared.transitions.iter().enumerate() {
         let current = &session.model_calls[position].context_item_ids;
@@ -95,6 +96,7 @@ fn fixture_outputs_preserve_corrected_baseline() {
                     tokenization: policy,
                     perf_diagnostics: false,
                 },
+                ProfileRegistry::default(),
             );
             let stats = prepared.registry.stats();
             let planned_pairs = prepared

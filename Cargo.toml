@@ -28,6 +28,7 @@ mime_guess = "2"
 blake3 = "1"
 tiktoken = { version = "=4.1.2", default-features = false, features = ["vocab-openai"] }
 regex = "1"
+rustc-hash = "2"
 unicode-normalization = "0.1"
 unicode-general-category = "1.1.0"
 

@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(super) struct ValidatedSession<'a> {
-    pub(super) item_indices: HashMap<&'a str, usize>,
+    pub(super) item_indices: FxHashMap<&'a str, usize>,
     pub(super) compaction_indices: HashMap<&'a str, usize>,
 }
 
@@ -157,7 +157,8 @@ pub(super) fn validate_normalized_session(
             ));
         }
     }
-    let mut item_indices = HashMap::with_capacity(session.context_items.len());
+    let mut item_indices =
+        FxHashMap::with_capacity_and_hasher(session.context_items.len(), Default::default());
     for (index, item) in session.context_items.iter().enumerate() {
         if item_indices.insert(item.id.as_str(), index).is_some() {
             return Err(invalid_session(format!(
@@ -176,7 +177,7 @@ pub(super) fn validate_normalized_session(
     let terminal_boundary = call_count
         .checked_add(1)
         .ok_or_else(|| invalid_session("model-call boundary overflow"))?;
-    let mut expected_presence: HashMap<&str, Vec<PresenceRange>> = HashMap::new();
+    let mut expected_presence: FxHashMap<&str, Vec<PresenceRange>> = FxHashMap::default();
     for (position, call) in session.model_calls.iter().enumerate() {
         let expected_index = position
             .checked_add(1)
@@ -192,7 +193,8 @@ pub(super) fn validate_normalized_session(
             &format!("model-call {} index", call.index),
         )?;
         validate_reported_usage(&call.reported_usage, call.index)?;
-        let mut membership = HashSet::with_capacity(call.context_item_ids.len());
+        let mut membership =
+            FxHashSet::with_capacity_and_hasher(call.context_item_ids.len(), Default::default());
         for item_id in &call.context_item_ids {
             if !membership.insert(item_id.as_str()) {
                 return Err(invalid_session(format!(

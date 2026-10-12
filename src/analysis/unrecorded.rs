@@ -18,11 +18,15 @@ use std::collections::{BTreeMap, HashMap};
 
 const SOURCES: [&str; 2] = ["claude-code", "opencode"];
 
-pub(super) fn add_unrecorded_context(session: &mut NormalizedSession, policy: TokenizationPolicy) {
+/// Estimates go into `registry`, which the analysis keeps, so it does not tokenize these items again.
+pub(super) fn add_unrecorded_context(
+    session: &mut NormalizedSession,
+    registry: &mut ProfileRegistry,
+    policy: TokenizationPolicy,
+) {
     if policy == TokenizationPolicy::Off || !SOURCES.contains(&session.source.kind.as_str()) {
         return;
     }
-    let mut registry = ProfileRegistry::default();
     let calls = &session.model_calls;
     let mut added = Vec::new();
     let mut start = 0;
@@ -32,7 +36,7 @@ pub(super) fn add_unrecorded_context(session: &mut NormalizedSession, policy: To
             end += 1;
         }
         let measured = calls[start..end].iter().find_map(|call| {
-            measure(session, &mut registry, policy, call).map(|measure| (call.index, measure))
+            measure(session, registry, policy, call).map(|measure| (call.index, measure))
         });
         if let Some((anchor, Some(item))) = measured {
             added.push((item, anchor, calls[end - 1].index));
@@ -149,7 +153,11 @@ mod tests {
     #[test]
     fn each_segment_measures_its_unrecorded_content_at_its_first_reported_call() {
         let mut session = claude_code("compaction");
-        add_unrecorded_context(&mut session, TokenizationPolicy::Auto);
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Auto,
+        );
         let items = unrecorded(&session);
         let spans: Vec<_> = items
             .iter()
@@ -198,7 +206,11 @@ mod tests {
     #[test]
     fn a_failed_first_call_moves_the_measurement_to_the_next_call() {
         let mut session = claude_code("api-error");
-        add_unrecorded_context(&mut session, TokenizationPolicy::Auto);
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Auto,
+        );
         let items = unrecorded(&session);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].first_model_call, 2);
@@ -207,7 +219,11 @@ mod tests {
     #[test]
     fn nothing_is_inferred_without_estimates_or_for_pi() {
         let mut session = claude_code("simple");
-        add_unrecorded_context(&mut session, TokenizationPolicy::Off);
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Off,
+        );
         assert!(unrecorded(&session).is_empty());
         let mut pi = load(
             &SessionLocator::PiFile(PathBuf::from("fixtures/pi/simple.jsonl")),
@@ -215,7 +231,11 @@ mod tests {
         )
         .expect("pi fixture")
         .normalized;
-        add_unrecorded_context(&mut pi, TokenizationPolicy::Auto);
+        add_unrecorded_context(
+            &mut pi,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Auto,
+        );
         assert!(unrecorded(&pi).is_empty());
     }
 }

@@ -24,16 +24,17 @@ mod validate;
 
 use crate::{api::*, domain::*, pricing};
 use diagnostics::{diagnostic_strings, ChartFallbackReason, ChartUnit, DiagnosticCode};
-use metrics::{calculate_age, calculate_transition, TransitionMetrics};
+use metrics::{calculate_age, calculate_transition, TokenMap, TransitionMetrics};
 use reconciliation::{reconciliation_status, reported_prompt_tokens, UsageCompleteness};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     time::Instant,
 };
 use thiserror::Error;
 use tokenization::{
-    preview_payload, EstimateIndex, PayloadPreview, ProfileIndex, ProfileRegistry, TokenCoverage,
-    TokenEstimate, TokenizationMethod, TokenizationProfile,
+    payload_fingerprint, preview_payload, EstimateIndex, PayloadPreview, ProfileIndex,
+    ProfileRegistry, TokenCoverage, TokenEstimate, TokenizationMethod, TokenizationProfile,
 };
 use usage::{session_usage_subtotals, usage_rollup, UsageSnapshot};
 use validate::{validate_normalized_session, ValidatedSession};
@@ -60,7 +61,7 @@ pub(crate) enum AnalysisError {
 struct CallWork<'a> {
     call: &'a NormalizedModelCall,
     profile_index: ProfileIndex,
-    context_membership: HashSet<&'a str>,
+    context_membership: FxHashSet<&'a str>,
     /// Aligned with validated `call.context_item_ids`. Content uncertainty
     /// remains in the estimate, never in structural reference resolution.
     estimate_indexes: Vec<EstimateIndex>,
@@ -156,10 +157,12 @@ pub(crate) fn analyze(
     config: AnalysisConfig,
 ) -> Result<Analysis, AnalysisError> {
     validate_normalized_session(&session)?;
-    unrecorded::add_unrecorded_context(&mut session, config.tokenization);
-    let validated = validate_normalized_session(&session)?;
     let analysis_started = Instant::now();
-    let prepared = preparation::prepare(&session, &validated, config);
+    let mut registry = ProfileRegistry::default();
+    preparation::precompute_estimates(&session, &mut registry, config.tokenization);
+    unrecorded::add_unrecorded_context(&mut session, &mut registry, config.tokenization);
+    let validated = validate_normalized_session(&session)?;
+    let prepared = preparation::prepare(&session, &validated, config, registry);
     let metrics_started = Instant::now();
     let calls = derive_calls(&session, &prepared);
     let items = derive_items(&session, &prepared);
@@ -230,7 +233,7 @@ fn derive_calls(
             .iter()
             .zip(&work.estimate_indexes)
             .map(|(id, index)| (id.as_str(), registry.estimate_at(*index).tokens))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<TokenMap>();
         // Transition and age metrics use every numeric estimate. System prompts
         // and tool definitions are always partial and present at every call, so
         // requiring complete estimates left these metrics empty after call 1.
@@ -947,7 +950,7 @@ fn to_api_call(
 
 /// Every reference was resolved during validation, so lookups cannot miss.
 fn item_positions<'a>(
-    positions: &HashMap<&str, usize>,
+    positions: &FxHashMap<&str, usize>,
     ids: impl Iterator<Item = &'a str>,
 ) -> Vec<usize> {
     ids.map(|id| positions[id]).collect()
@@ -1008,7 +1011,7 @@ fn estimate_coverage<'a>(estimates: impl Iterator<Item = &'a TokenEstimate>) -> 
 fn framing_overhead_if_applicable(
     profile: &TokenizationProfile,
     call: &NormalizedModelCall,
-    items: &HashMap<&str, &NormalizedContextItem>,
+    items: &FxHashMap<&str, &NormalizedContextItem>,
 ) -> Option<u64> {
     let text_only = call.context_item_ids.iter().all(|item_id| {
         let Some(item) = items.get(item_id.as_str()) else {
@@ -1035,7 +1038,7 @@ fn framing_overhead_if_applicable(
     text_only.then(|| profile.framing_overhead(call.context_item_ids.len()))?
 }
 
-fn sum_map_values(values: &BTreeMap<&str, Option<u64>>) -> Option<u64> {
+fn sum_map_values(values: &TokenMap) -> Option<u64> {
     values.values().try_fold(0_u64, |total, value| {
         total
             .checked_add((*value)?)
@@ -1043,7 +1046,7 @@ fn sum_map_values(values: &BTreeMap<&str, Option<u64>>) -> Option<u64> {
     })
 }
 
-fn sum_ids(ids: &[String], values: &BTreeMap<&str, Option<u64>>) -> Option<u64> {
+fn sum_ids(ids: &[String], values: &TokenMap) -> Option<u64> {
     ids.iter().try_fold(0_u64, |total, id| {
         total
             .checked_add(values.get(id.as_str()).copied().flatten()?)

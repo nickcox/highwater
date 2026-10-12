@@ -6,9 +6,9 @@ use super::*;
 pub(super) struct PreparedAnalysis<'a> {
     pub registry: ProfileRegistry,
     pub works: Vec<CallWork<'a>>,
-    pub item_lookup: HashMap<&'a str, &'a NormalizedContextItem>,
+    pub item_lookup: FxHashMap<&'a str, &'a NormalizedContextItem>,
     /// Item ID to its position in `session.context_items` and the API item list.
-    pub item_positions: HashMap<&'a str, usize>,
+    pub item_positions: FxHashMap<&'a str, usize>,
     pub transitions: Vec<DerivedTransition<'a>>,
     pub destination_estimates: Vec<HashMap<&'a str, EstimateIndex>>,
     pub item_estimates: Vec<BTreeMap<String, EstimateIndex>>,
@@ -17,12 +17,47 @@ pub(super) struct PreparedAnalysis<'a> {
     pub tokenize_ms: f64,
 }
 
+/// Calculates, on several threads, every estimate `prepare` will look up: each call's items,
+/// and the previous call's items, which the call's transition measures at its own profile.
+pub(super) fn precompute_estimates(
+    session: &NormalizedSession,
+    registry: &mut ProfileRegistry,
+    policy: TokenizationPolicy,
+) {
+    let positions = session
+        .context_items
+        .iter()
+        .enumerate()
+        .map(|(position, item)| (item.id.as_str(), position))
+        .collect::<FxHashMap<_, _>>();
+    let mut fingerprints = vec![None; session.context_items.len()];
+    let mut queued = FxHashSet::default();
+    let mut pairs = Vec::new();
+    let mut previous: &[String] = &[];
+    for call in &session.model_calls {
+        let profile = registry.profile_index(&call.target, policy);
+        for id in call.context_item_ids.iter().chain(previous) {
+            let Some(&position) = positions.get(id.as_str()) else {
+                continue;
+            };
+            if queued.insert((position, profile)) {
+                let item = &session.context_items[position];
+                let fingerprint = *fingerprints[position]
+                    .get_or_insert_with(|| payload_fingerprint(&item.payload));
+                pairs.push((item, fingerprint, profile));
+            }
+        }
+        previous = &call.context_item_ids;
+    }
+    registry.precompute(&pairs);
+}
+
 pub(super) fn prepare<'a>(
     session: &'a NormalizedSession,
     validated: &ValidatedSession<'a>,
     config: AnalysisConfig,
+    mut registry: ProfileRegistry,
 ) -> PreparedAnalysis<'a> {
-    let mut registry = ProfileRegistry::default();
     let item_lookup = validated
         .item_indices
         .iter()

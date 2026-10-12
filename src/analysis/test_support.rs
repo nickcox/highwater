@@ -61,7 +61,8 @@ pub(super) fn analysis_with_controlled_estimates(
         perf_diagnostics: false,
     };
     let validated = validate_normalized_session(session).expect("valid synthetic session");
-    let mut prepared = preparation::prepare(session, &validated, config);
+    let mut prepared =
+        preparation::prepare(session, &validated, config, ProfileRegistry::default());
     assert_eq!(prepared.works.len(), per_call_tokens.len());
     let mut injected = HashSet::new();
     for (work, tokens) in prepared.works.iter().zip(per_call_tokens) {

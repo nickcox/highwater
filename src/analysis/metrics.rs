@@ -1,6 +1,10 @@
 use crate::api::CallAgeMetrics;
 use crate::domain::{NormalizedContextItem, MAX_SAFE_JSON_INTEGER};
-use std::collections::{BTreeMap, HashMap};
+use rustc_hash::FxHashMap;
+
+/// Each item's token estimate at one call, looked up by item ID. Built for every call, so it
+/// uses a fast hash rather than an ordered map.
+pub(crate) type TokenMap<'a> = FxHashMap<&'a str, Option<u64>>;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct TransitionMetrics {
@@ -19,7 +23,7 @@ pub(crate) fn calculate_transition(
     dropped_ids: &[&str],
     previous_ids: &[String],
     current_ids: &[String],
-    tokens: &BTreeMap<&str, Option<u64>>,
+    tokens: &TokenMap,
 ) -> TransitionMetrics {
     let added = sum_ids(added_ids, tokens);
     let retained = sum_ids(retained_ids, tokens);
@@ -64,8 +68,8 @@ pub(crate) fn calculate_transition(
 
 pub(crate) fn calculate_age(
     context_ids: &[String],
-    items: &HashMap<&str, &NormalizedContextItem>,
-    tokens: &BTreeMap<&str, Option<u64>>,
+    items: &FxHashMap<&str, &NormalizedContextItem>,
+    tokens: &TokenMap,
     call_index: usize,
 ) -> CallAgeMetrics {
     let ages: Vec<usize> = context_ids
@@ -141,7 +145,7 @@ pub(crate) fn calculate_age(
     }
 }
 
-fn sum_ids(ids: &[impl AsRef<str>], tokens: &BTreeMap<&str, Option<u64>>) -> Option<u64> {
+fn sum_ids(ids: &[impl AsRef<str>], tokens: &TokenMap) -> Option<u64> {
     ids.iter().try_fold(0_u64, |total, id| {
         total
             .checked_add(tokens.get(id.as_ref()).copied().flatten()?)

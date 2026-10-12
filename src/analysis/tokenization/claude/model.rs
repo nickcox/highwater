@@ -2,11 +2,9 @@
 //! (ctok's `main.py`: `FAMILIES` and `TokenizerModel`).
 
 use super::normalize::{BOW, CAPS, EOW, SHIFT};
+use rustc_hash::FxHashMap;
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::OnceLock,
-};
+use std::{collections::HashSet, sync::OnceLock};
 
 /// A Claude tokenizer generation, as ctok's families divide them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,16 +43,21 @@ pub(super) struct Model {
 /// The vocabulary stored backwards, because the tiling ends a piece at each position and scans
 /// candidate starts from right to left.
 pub(super) struct ReverseTrie {
-    children: HashMap<(u32, char), u32>,
+    /// Keyed by `(node << 32) | character`; looked up once or more per character tiled.
+    children: FxHashMap<u64, u32>,
     terminal: Vec<bool>,
 }
 
 pub(super) const ROOT: u32 = 0;
 
+fn key(node: u32, character: char) -> u64 {
+    (u64::from(node) << 32) | u64::from(character)
+}
+
 impl ReverseTrie {
     fn new<'a>(pieces: impl Iterator<Item = &'a str>) -> Self {
         let mut trie = Self {
-            children: HashMap::new(),
+            children: FxHashMap::default(),
             terminal: vec![false],
         };
         for piece in pieces {
@@ -63,7 +66,7 @@ impl ReverseTrie {
                 let next = trie.terminal.len() as u32;
                 node = *trie
                     .children
-                    .entry((node, character))
+                    .entry(key(node, character))
                     .or_insert_with(|| next);
                 if node == next {
                     trie.terminal.push(false);
@@ -75,7 +78,7 @@ impl ReverseTrie {
     }
 
     pub(super) fn child(&self, node: u32, character: char) -> Option<u32> {
-        self.children.get(&(node, character)).copied()
+        self.children.get(&key(node, character)).copied()
     }
 
     pub(super) fn is_terminal(&self, node: u32) -> bool {
