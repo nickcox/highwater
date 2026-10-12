@@ -174,9 +174,17 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
 
   for (const [position, call] of analysis.modelCalls.entries()) {
     const currentSet = contextSetByCall.get(call.index) ?? new Set<string>();
-    for (const id of call.contextItemIds) {
-      if (!itemById.has(id))
-        throw new AnalysisValidationError(`Call ${call.index} references unknown item ${id}`);
+    for (const [field, ids] of [
+      ['context', call.contextItemIds],
+      ['added', call.addedItemIds],
+      ['dropped', call.droppedItemIds],
+    ] as const) {
+      assertUnique(ids, `${field} item reference in call ${call.index}`);
+      for (const id of ids) {
+        if (!itemById.has(id)) {
+          throw new AnalysisValidationError(`Call ${call.index} references unknown item ${id}`);
+        }
+      }
     }
     if (['calculatedTokens', 'estimatedTokens'].includes(analysis.displayWeightUnit)) {
       if (call.tokenizationProfileId === null) {
@@ -188,18 +196,6 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
           throw new AnalysisValidationError(
             `Call ${call.index} is missing a token weight for ${id}`,
           );
-        }
-      }
-    }
-    for (const [field, ids] of [
-      ['context', call.contextItemIds],
-      ['added', call.addedItemIds],
-      ['dropped', call.droppedItemIds],
-    ] as const) {
-      assertUnique(ids, `${field} item reference in call ${call.index}`);
-      for (const id of ids) {
-        if (!itemById.has(id)) {
-          throw new AnalysisValidationError(`Call ${call.index} references unknown item ${id}`);
         }
       }
     }

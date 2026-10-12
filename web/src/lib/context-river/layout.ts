@@ -16,8 +16,32 @@ export function pathFor(points: readonly RibbonPoint[], linear: boolean): string
       .x((point) => point.x)
       .y0((point) => point.y0)
       .y1((point) => point.y1)
-      .curve(linear ? curveLinear : curveMonotoneX)(points) ?? ''
+      .curve(linear ? curveLinear : curveMonotoneX)(withoutFlatInteriors(points)) ?? ''
   );
+}
+
+/**
+ * Drops each point whose neighbours on both sides have the same edges as it, so a long-lived
+ * item does not add a path command for every call. The drawn shape is unchanged: both curves
+ * draw a flat segment as a straight line, and the monotone curve gives a point next to a flat
+ * segment a horizontal tangent whether or not the flat run's interior points are present.
+ */
+export function withoutFlatInteriors(points: readonly RibbonPoint[]): readonly RibbonPoint[] {
+  if (points.length < 3) return points;
+  const kept = [points[0]!];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1]!,
+      point = points[index]!,
+      next = points[index + 1]!;
+    const flat =
+      previous.y0 === point.y0 &&
+      point.y0 === next.y0 &&
+      previous.y1 === point.y1 &&
+      point.y1 === next.y1;
+    if (!flat) kept.push(point);
+  }
+  kept.push(points[points.length - 1]!);
+  return kept;
 }
 
 function midpoint(point: RibbonPoint): number {

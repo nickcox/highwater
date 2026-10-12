@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from '../testing/wire-analysis';
-import { layoutContextRiver } from './layout';
+import { curveLinear, curveMonotoneX, line, type CurveFactory } from 'd3-shape';
+import { layoutContextRiver, withoutFlatInteriors } from './layout';
+import type { RibbonPoint } from './types';
 import { testAnalysis } from './test-data';
 
 const options = {
@@ -210,5 +212,80 @@ describe('layoutContextRiver', () => {
     const layout = layoutContextRiver(indexTestAnalysis(analysis), options);
     expect(layout.columns).toEqual([]);
     expect(layout.ribbons).toEqual([]);
+  });
+});
+
+describe('withoutFlatInteriors', () => {
+  const at = (callIndex: number, y0: number, y1: number): RibbonPoint => ({
+    callIndex,
+    x: callIndex * 10,
+    y0,
+    y1,
+  });
+  // A ribbon that is flat, rises, is flat again, then moves only its lower edge.
+  const points = [
+    at(0, 50, 60),
+    at(1, 50, 60),
+    at(2, 50, 60),
+    at(3, 50, 60),
+    at(4, 40, 52),
+    at(5, 40, 52),
+    at(6, 40, 52),
+    at(7, 38, 52),
+    at(8, 38, 52),
+  ];
+
+  it('keeps the ends and every point where an edge changes', () => {
+    expect(withoutFlatInteriors(points).map((point) => point.callIndex)).toEqual([
+      0, 3, 4, 6, 7, 8,
+    ]);
+    expect(withoutFlatInteriors(points.slice(0, 2))).toHaveLength(2);
+  });
+
+  it('leaves both curves unchanged', () => {
+    // Records each segment and evaluates the edge's y at an x, solving the Bézier for x.
+    const edgeAt = (curve: CurveFactory, input: readonly RibbonPoint[], edge: 'y0' | 'y1') => {
+      const segments: number[][] = [];
+      let current = [0, 0];
+      const context = {
+        moveTo: (x: number, y: number) => (current = [x, y]),
+        lineTo: (x: number, y: number) => {
+          segments.push([...current, current[0]!, current[1]!, x, y, x, y]);
+          current = [x, y];
+        },
+        bezierCurveTo: (...control: number[]) => {
+          segments.push([...current, ...control]);
+          current = control.slice(4);
+        },
+        closePath: () => undefined,
+      };
+      line<RibbonPoint>()
+        .x((point) => point.x)
+        .y((point) => point[edge])
+        .curve(curve)
+        .context(context as unknown as CanvasRenderingContext2D)(input);
+      return (x: number): number => {
+        const [x0, y0, x1, y1, x2, y2, x3, y3] = segments.find(
+          (segment) => segment[0]! <= x && x <= segment[6]!,
+        )!;
+        const bezier = (t: number, a: number, b: number, c: number, d: number) =>
+          (1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t ** 2 * c + t ** 3 * d;
+        let low = 0,
+          high = 1;
+        for (let step = 0; step < 60; step += 1) {
+          const middle = (low + high) / 2;
+          if (bezier(middle, x0!, x1!, x2!, x3!) < x) low = middle;
+          else high = middle;
+        }
+        return bezier(low, y0!, y1!, y2!, y3!);
+      };
+    };
+    for (const curve of [curveMonotoneX, curveLinear]) {
+      for (const edge of ['y0', 'y1'] as const) {
+        const full = edgeAt(curve, points, edge);
+        const reduced = edgeAt(curve, withoutFlatInteriors(points), edge);
+        for (let x = 0; x <= 80; x += 0.25) expect(reduced(x)).toBeCloseTo(full(x), 9);
+      }
+    }
   });
 });
