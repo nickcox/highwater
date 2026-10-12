@@ -403,12 +403,6 @@ async function expandEconomics(page: Page): Promise<void> {
   if ((await trigger.count()) && (await trigger.getAttribute('aria-expanded')) === 'false')
     await trigger.click();
 }
-async function openViewOptions(page: Page): Promise<void> {
-  const options = page.locator('.view-options');
-  if (!(await options.evaluate((node) => (node as HTMLDetailsElement).open)))
-    await options.locator('summary').click();
-}
-
 async function restoreRiverRange(page: Page, start: number, end: number): Promise<void> {
   const bounds = [Math.min(start, end), Math.max(start, end)];
   await page.evaluate(([from, to]) => {
@@ -928,7 +922,6 @@ test('recorded Pi system and tools are visible at call 1 and survive revision an
     path: '.playwright/calm-workspace/pi-system-river-call1.png',
     fullPage: true,
   });
-  await openViewOptions(page);
   await page.getByRole('button', { name: 'Item types', exact: true }).click();
   await expect(page.getByRole('button', { name: /Item type System/ }).first()).toBeVisible();
   await expect(page.getByRole('group', { name: 'Item type legend' })).toContainText(
@@ -985,7 +978,6 @@ test('failed default-zero usage breaks the input reference and keeps raw zeros i
   await expect(
     inspector.getByText('Total tokens (raw placeholder)', { exact: true }).locator('..'),
   ).toContainText('0');
-  await openViewOptions(page);
   await page.getByRole('button', { name: 'Item types', exact: true }).click();
   await expect(legend).toContainText('input comparison unavailable');
   await expect(page.locator('.reported-input-line')).toHaveCount(2);
@@ -1025,7 +1017,6 @@ test('reported input extends the visible stack without becoming an item type or 
   await expect(page.locator('.unreconciled-input').first()).toHaveAttribute('mask', /input-mask/);
   await page.getByRole('button', { name: 'Next call', exact: true }).click();
   await expect(legend).toContainText('Call 2');
-  await openViewOptions(page);
   await page.getByRole('button', { name: 'Item types', exact: true }).click();
   await expect(legend).toBeVisible();
   await expect(page.getByRole('group', { name: 'Item type legend' })).not.toContainText(
@@ -1051,7 +1042,6 @@ test('Item types use distinct semantic colors consistently in ribbons and legend
   const fills = await page
     .locator('.ribbon-group .ribbon')
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('fill')));
-  await openViewOptions(page);
   await page.getByRole('button', { name: 'Item types', exact: true }).click();
   const grouped = page.locator('.ribbon-group .ribbon');
   await expect(grouped).toHaveCount(9);
@@ -1106,7 +1096,6 @@ test('River display grouping follows the URL, reload and Back/Forward with saved
   await mockApi(page);
   await page.goto('/#session=browser-smoke&display=itemTypes');
   await assertLoaded(page);
-  await openViewOptions(page);
   await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -1125,7 +1114,6 @@ test('River display grouping follows the URL, reload and Back/Forward with saved
   );
   await page.reload();
   await assertLoaded(page);
-  await openViewOptions(page);
   await expect(page.getByRole('button', { name: 'Items', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -1135,7 +1123,6 @@ test('River display grouping follows the URL, reload and Back/Forward with saved
   await expect(page).toHaveURL(/display=itemTypes(?:&|$)/);
   await page.goto('/#session=browser-smoke');
   await assertLoaded(page);
-  await openViewOptions(page);
   await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -1293,7 +1280,6 @@ test('compaction sources blend into the actual summary without interactive or re
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect(merges).toHaveCount(1);
   expect(await merges.getAttribute('d')).not.toMatch(/NaN|Infinity/);
-  await openViewOptions(page);
   await page.getByRole('button', { name: 'Item types', exact: true }).click();
   await expect(merges).toHaveCount(0);
 });
@@ -1450,7 +1436,6 @@ test('Go to call pins its target and preserves Fit all, zoom and independent ite
     await page.getByLabel('Call number').press('Enter');
     await expect(page.locator('#pinned-call-summary')).toHaveText(`Pinned call ${index}`);
     await expect(page.locator('#selected-item-summary')).toHaveText(selected!);
-    await expect(page.locator('.view-options')).not.toHaveAttribute('open', '');
     await expect(page.getByLabel('Call number')).toBeFocused();
   };
   await jump('80', 80);
@@ -1927,7 +1912,6 @@ test('cache share and grouped River views preserve exact identities', async ({ p
   await page.goto('/');
   await assertLoaded(page);
   await expandEconomics(page);
-  await openViewOptions(page);
 
   const cacheView = page.getByRole('group', { name: 'Cache view' });
   await cacheView.getByRole('button', { name: 'Tokens' }).click();
@@ -2111,7 +2095,6 @@ test('vertical scale controls explain local ribbon heights and keep the axis anc
   await mockApi(page, sessionScenario('longSession'));
   await page.goto('/');
   await assertLoaded(page);
-  await openViewOptions(page);
 
   const host = page.getByTestId('river-host');
   const axis = page.locator('.vertical-axis-overlay');
@@ -2187,9 +2170,6 @@ test('Go to call remains with the zoom controls without overflow across toolbar 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       width,
     );
-    await openViewOptions(page);
-    await expect(page.locator('.view-options').getByLabel('Call number')).toHaveCount(0);
-    await page.locator('.view-options summary').press('Escape');
     await page.screenshot({ path: `.playwright/calm-workspace/go-to-toolbar-${width}.png` });
   }
 });
@@ -2447,19 +2427,11 @@ test('native disclosures, Escape navigation, and exact-item emphasis work in a b
   await expect(page.locator('.ribbon-group.related, .ribbon-group.dimmed')).toHaveCount(0);
   await expect(page.locator('.lineage-connector.visible')).toHaveCount(1);
 
-  const goTo = page.locator('.view-options');
-  const goToSummary = goTo.locator('summary');
-  await goToSummary.press('Enter');
-  await expect(goTo).toHaveAttribute('open', '');
   const callInput = page.getByLabel('Call number');
   await expect(callInput).toBeVisible();
   await callInput.fill('3');
   await callInput.press('Escape');
   await expect(callInput).toHaveValue('');
-  await expect(goTo).toHaveAttribute('open', '');
-  await goToSummary.press('Escape');
-  await expect(goTo).not.toHaveAttribute('open', '');
-  await expect(goToSummary).toBeFocused();
   await expect(page.getByText('Selected item', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Pin model call 1' }).click();
@@ -2949,16 +2921,21 @@ test('blocked storage leaves quiet controls usable without private persistence',
   await mockApi(page, economicsScenario());
   await page.goto('/');
   await assertLoaded(page);
-  await openViewOptions(page);
   await expect(page.getByRole('group', { name: 'River layout' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Visible calls', exact: true }).click();
-  await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
+  await expect(page.getByRole('button', { name: 'Visible calls', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expandEconomics(page);
   await page.getByRole('button', { name: 'Cost', exact: true }).click();
   await expect(page.locator('.economics-track-svg')).toHaveAttribute('aria-label', /Cost track/);
   await page.reload();
   await assertLoaded(page);
-  await expect(page.locator('.view-status')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Session scale', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(page.locator('.economics-track-svg')).toHaveCount(0);
 });
 
@@ -2980,11 +2957,17 @@ test('retired Compact preference is ignored without losing scale, grouping or ec
   await assertLoaded(page);
   await expect(page.locator('.river-scroll .river-plot')).toHaveAttribute('height', '500');
   await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '222');
-  await expect(page.locator('.view-status')).toHaveText('Visible-call scale · Item types');
+  await expect(page.getByRole('button', { name: 'Visible calls', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   expect(await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1'))).toBe(
     legacy,
   );
-  await openViewOptions(page);
   await expect(page.getByRole('group', { name: 'River layout' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Compact River', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Balanced', exact: true })).toHaveCount(0);
@@ -3100,9 +3083,7 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   await mockApi(page, economicsScenario());
   await page.goto('/');
   await assertLoaded(page);
-  const options = page.locator('.view-options');
   const host = page.getByTestId('river-host');
-  await expect(options).not.toHaveAttribute('open', '');
   await expect(page.getByRole('button', { name: 'Cache & cost' })).toHaveAttribute(
     'aria-expanded',
     'false',
@@ -3125,14 +3106,13 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   await expect(item.locator('.technical-identifiers')).toHaveAttribute('open', '');
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
   expect((await host.boundingBox())!.width).toBeCloseTo(occupiedWidth, 1);
-  await openViewOptions(page);
   await page.getByRole('button', { name: 'Visible calls', exact: true }).click();
-  await page.keyboard.press('Escape');
-  await expect(options).not.toHaveAttribute('open', '');
-  await expect(options.locator('summary')).toBeFocused();
   await expect(page.locator('#selected-item-summary')).toBeVisible();
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
-  await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
+  await expect(page.getByRole('button', { name: 'Visible calls', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expandEconomics(page);
   await page.getByRole('button', { name: 'Share (%)', exact: true }).click();
   await page.locator('#economics-call-1').focus();
@@ -3143,10 +3123,8 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
     'aria-pressed',
     'true',
   );
-  await openViewOptions(page);
   await expect(page.getByLabel('Call number')).toBeVisible();
   await page.getByRole('tab', { name: 'Composition', exact: true }).click();
-  await expect(options).not.toHaveAttribute('open', '');
   await expect(page.locator('.go-to-disclosure')).toHaveCount(0);
   await page.getByRole('tab', { name: 'River', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
@@ -3155,7 +3133,10 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   );
   await page.reload();
   await assertLoaded(page);
-  await expect(page.locator('.view-status')).toHaveText('Visible-call scale');
+  await expect(page.getByRole('button', { name: 'Visible calls', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -3166,7 +3147,6 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   expect(
     await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1')),
   ).not.toContain('browser-smoke');
-  await openViewOptions(page);
   await expect(
     page.getByRole('button', { name: 'Reset view preferences', exact: true }),
   ).toHaveCount(0);
@@ -3174,7 +3154,10 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
     () => JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).economics,
   );
   await page.getByRole('button', { name: 'Session scale', exact: true }).click();
-  await expect(page.locator('.view-status')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Session scale', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(page.locator('.economics-track-svg')).toHaveCount(1);
   expect(
     await page.evaluate(

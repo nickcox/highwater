@@ -297,8 +297,6 @@ describe('view links', () => {
     const writes = vi.spyOn(localStorage, 'setItem');
     window.history.replaceState(null, '', '/#session=one');
     await renderLoaded();
-    const options = document.querySelector('.view-options') as HTMLDetailsElement;
-    options.open = true;
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Item types' })).toHaveAttribute(
         'aria-pressed',
@@ -315,8 +313,6 @@ describe('view links', () => {
     const writes = vi.spyOn(localStorage, 'setItem');
     window.history.replaceState(null, '', '/#session=one&display=items');
     await renderLoaded();
-    const options = document.querySelector('.view-options') as HTMLDetailsElement;
-    options.open = true;
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Items' })).toHaveAttribute('aria-pressed', 'true'),
     );
@@ -340,8 +336,6 @@ describe('view links', () => {
     window.history.replaceState(null, '', '/#session=one&display=itemTypes');
     const writes = vi.spyOn(localStorage, 'setItem');
     await renderLoaded();
-    const options = document.querySelector('.view-options') as HTMLDetailsElement;
-    options.open = true;
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Item types' })).toHaveAttribute(
         'aria-pressed',
@@ -713,14 +707,16 @@ describe('Context River interactions', () => {
     const second = render(App);
     await within(second.container).findByRole('application', { name: 'Context River' });
     expect(localStorage.getItem('tokenplume.presentation.v1')).toBeNull();
-    const firstOptions = first.container.querySelector('.view-options') as HTMLDetailsElement;
-    firstOptions.open = true;
     expect(within(first.container).queryByRole('group', { name: 'River layout' })).toBeNull();
     await fireEvent.click(within(first.container).getByRole('button', { name: 'Visible calls' }));
-    expect(
-      within(first.container).getByText('Visible-call scale', { exact: true }),
-    ).toBeInTheDocument();
-    expect(second.container.querySelector('.view-status')).toBeNull();
+    expect(within(first.container).getByRole('button', { name: 'Visible calls' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(second.container).getByRole('button', { name: 'Visible calls' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     expect(
       JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.verticalScale,
     ).toBe('visible');
@@ -731,7 +727,10 @@ describe('Context River interactions', () => {
       within(first.container).queryByRole('button', { name: 'Reset view preferences' }),
     ).toBeNull();
     await fireEvent.click(within(first.container).getByRole('button', { name: 'Session scale' }));
-    expect(first.container.querySelector('.view-status')).toBeNull();
+    expect(within(first.container).getByRole('button', { name: 'Session scale' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('starts economics closed and preserves explicit preferences when switching sessions', async () => {

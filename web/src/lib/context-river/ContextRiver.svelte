@@ -96,7 +96,6 @@
     type PresentationPreferences,
   } from '../state/presentation-preferences';
   let appliedPreferences: PresentationPreferences | null = null;
-  let viewOptions: HTMLDetailsElement;
   let economicsTrigger: HTMLButtonElement;
   let economicsHeader: HTMLDivElement;
   $: if (preferences !== appliedPreferences) {
@@ -139,25 +138,6 @@
   function setCacheView(mode: CacheViewMode): void {
     changePreferences({ ...preferences, economics: { ...preferences.economics, cacheView: mode } });
   }
-  function closeViewOptions(): void {
-    if (!viewOptions?.open) return;
-    const hadFocus = viewOptions.contains(document.activeElement);
-    viewOptions.open = false;
-    if (hadFocus && isVisible) viewOptions.querySelector('summary')?.focus();
-  }
-  function optionsKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && viewOptions.open) {
-      event.preventDefault();
-      event.stopPropagation();
-      closeViewOptions();
-    }
-  }
-  $: nonDefaultStatus = [
-    verticalScaleMode === 'visible' ? 'Visible-call scale' : '',
-    riverDisplayMode === 'itemTypes' ? 'Item types' : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
 
   type VerticalScaleMode = 'session' | 'visible';
   type RiverDisplayMode = 'items' | 'itemTypes';
@@ -286,7 +266,6 @@
   $: if (lastVisibility !== isVisible) {
     lastVisibility = isVisible;
     if (!isVisible) {
-      closeViewOptions();
       groupFocus.cancel();
       economicsInspectFocus.cancel();
       cancelAllGestureState();
@@ -1267,43 +1246,38 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<details class="view-options" bind:this={viewOptions} onkeydown={optionsKey}>
-  <summary>View options</summary>
-  <div class="vertical-scale-controls">
-    <div class="scale-toggle" role="group" aria-label="Vertical scale">
-      <span class="scale-label">Vertical scale</span>
-      <button
-        type="button"
-        class:active={verticalScaleMode === 'session'}
-        aria-pressed={verticalScaleMode === 'session'}
-        onclick={() => setScale('session')}>Session scale</button
-      >
-      <button
-        type="button"
-        class:active={verticalScaleMode === 'visible'}
-        aria-pressed={verticalScaleMode === 'visible'}
-        onclick={() => setScale('visible')}>Visible calls</button
-      >
-    </div>
-    <div class="scale-toggle" role="group" aria-label="River display">
-      <span class="scale-label">Display</span>
-      <button
-        type="button"
-        class:active={riverDisplayMode === 'items'}
-        aria-pressed={riverDisplayMode === 'items'}
-        onclick={() => setDisplay('items')}>Items</button
-      >
-      <button
-        type="button"
-        class:active={riverDisplayMode === 'itemTypes'}
-        aria-pressed={riverDisplayMode === 'itemTypes'}
-        onclick={() => setDisplay('itemTypes')}>Item types</button
-      >
-    </div>
+<div class="vertical-scale-controls">
+  <div class="scale-toggle" role="group" aria-label="Vertical scale">
+    <span class="scale-label">Vertical scale</span>
+    <button
+      type="button"
+      class:active={verticalScaleMode === 'session'}
+      aria-pressed={verticalScaleMode === 'session'}
+      onclick={() => setScale('session')}>Session scale</button
+    >
+    <button
+      type="button"
+      class:active={verticalScaleMode === 'visible'}
+      aria-pressed={verticalScaleMode === 'visible'}
+      onclick={() => setScale('visible')}>Visible calls</button
+    >
   </div>
-</details>
-{#if nonDefaultStatus}<p class="view-status">{nonDefaultStatus}</p>{/if}
+  <div class="scale-toggle" role="group" aria-label="River display">
+    <span class="scale-label">Display</span>
+    <button
+      type="button"
+      class:active={riverDisplayMode === 'items'}
+      aria-pressed={riverDisplayMode === 'items'}
+      onclick={() => setDisplay('items')}>Items</button
+    >
+    <button
+      type="button"
+      class:active={riverDisplayMode === 'itemTypes'}
+      aria-pressed={riverDisplayMode === 'itemTypes'}
+      onclick={() => setDisplay('itemTypes')}>Item types</button
+    >
+  </div>
+</div>
 <div class="chart-frame">
   <div class="chart-plot">
     <div
@@ -1768,26 +1742,12 @@
 </div>
 
 <style>
-  .view-options {
-    margin: 8px 0;
-    font-size: 12px;
-  }
-  .view-options > summary {
-    width: fit-content;
-    padding: 4px 0;
-    color: var(--secondary);
-  }
-  .view-status {
-    color: var(--accent);
-    font-size: 12px;
-    margin: 4px 0;
-  }
   .vertical-scale-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 16px;
-    margin: 0 0 8px;
+    margin: 6px 0 10px;
     color: #b8c4d9;
     font-size: 0.8rem;
   }
