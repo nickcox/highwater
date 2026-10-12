@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { RiverViewportStatus } from '../context-river/viewport';
   import { stepCallTarget } from '../context-river/viewport';
   import RiverCallJump from './RiverCallJump.svelte';
@@ -16,6 +17,16 @@
   $: noCalls = callIndices.length === 0;
   $: previous = viewport.ready ? stepCallTarget(callIndices, pinnedCallIndex, viewport, -1) : null;
   $: next = viewport.ready ? stepCallTarget(callIndices, pinnedCallIndex, viewport, 1) : null;
+  let previousButton: HTMLButtonElement;
+  let nextButton: HTMLButtonElement;
+  // A focused button that becomes disabled leaves focus on the page, where the single-letter
+  // h and l shortcuts do nothing. Moving focus to the other step button keeps them working at
+  // the first and last calls. The focused button is checked before the buttons update, and the
+  // other one is focused after, once it is enabled.
+  $: if (next === null && previous !== null && document.activeElement === nextButton)
+    void tick().then(() => previousButton.focus());
+  $: if (previous === null && next !== null && document.activeElement === previousButton)
+    void tick().then(() => nextButton.focus());
   $: rangeText = noCalls
     ? 'No model calls'
     : !viewport.ready
@@ -35,6 +46,7 @@
     <button
       type="button"
       class="step-call"
+      bind:this={previousButton}
       aria-label="Previous call"
       aria-keyshortcuts="ArrowLeft h"
       title="Previous call (← / h)"
@@ -44,6 +56,7 @@
     <button
       type="button"
       class="step-call"
+      bind:this={nextButton}
       aria-label="Next call"
       aria-keyshortcuts="ArrowRight l"
       title="Next call (→ / l)"

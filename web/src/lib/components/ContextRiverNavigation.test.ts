@@ -49,6 +49,26 @@ describe('ContextRiverNavigation', () => {
     expect(screen.getByRole('button', { name: 'Next call' })).toBeInTheDocument();
   });
 
+  it('moves focus to the other step button when the focused one reaches the end', async () => {
+    const view = render(ContextRiverNavigation, {
+      props: {
+        viewport: zoomedViewport,
+        callIndices: [1, 2, 3],
+        pinnedCallIndex: 2,
+        ...navigationCallbacks(),
+      },
+    });
+    const previous = screen.getByRole('button', { name: 'Previous call' });
+    const next = screen.getByRole('button', { name: 'Next call' });
+    next.focus();
+    await view.rerender({ pinnedCallIndex: 3 });
+    expect(next).toBeDisabled();
+    expect(previous).toHaveFocus();
+    await view.rerender({ pinnedCallIndex: 1 });
+    expect(previous).toBeDisabled();
+    expect(next).toHaveFocus();
+  });
+
   it('places the jump beside zoom controls and cancels editing without navigating', async () => {
     const callbacks = navigationCallbacks();
     render(ContextRiverNavigation, {
