@@ -1099,7 +1099,7 @@ describe('analysis cache freshness', () => {
       expect(screen.getByRole('application', { name: 'Context River' })).toBeInTheDocument(),
     );
     await fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'one' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'bash: npm test' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'bash: npm test' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 2' }));
     expect(screen.getByText('Selected item')).toBeInTheDocument();
     await expandLifespans();
@@ -1915,7 +1915,7 @@ describe('warning ownership', () => {
     const warnings = await screen.findByRole('status', { name: 'Refresh warnings' });
     await waitFor(() => expect(warnings).toHaveTextContent('analysis unavailable'));
     expect(warnings).toHaveTextContent('catalogue unavailable');
-    expect(screen.getByRole('application', { name: 'Context River' })).toBeInTheDocument();
+    expect(await screen.findByRole('application', { name: 'Context River' })).toBeInTheDocument();
 
     TestEventSource.instance.emit('sessionsChanged', JSON.stringify({ generation, revision: '1' }));
     await waitFor(() => expect(catalogueRequests).toBe(3));

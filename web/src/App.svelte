@@ -170,6 +170,20 @@
   // must not invalidate geometry and projections when the analysis is unchanged.
   let indexed: IndexedAnalysis | null = null;
   $: if (indexed !== $sessionController.indexed) indexed = $sessionController.indexed;
+  // A newly selected session's River mounts a frame after its summary, so the summary is shown
+  // while the River, the slowest part to build, is laid out.
+  let riverSessionId: string | null = null;
+  $: if (indexed) deferRiver($sessionController.selectedSessionId);
+  function deferRiver(sessionId: string | null): void {
+    if (sessionId === riverSessionId) return;
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        if ($sessionController.selectedSessionId !== sessionId) return;
+        riverSessionId = sessionId;
+        if (pendingViewLink) queueViewRestore();
+      }),
+    );
+  }
   $: quality = indexed ? estimateQuality(indexed.analysis) : null;
   $: pinnedCall =
     interaction.pinnedCallIndex === null
@@ -310,6 +324,8 @@
       };
     }
     if (snapshot.selectedSessionId !== requested.session || !snapshot.indexed) return;
+    // Waits for the River to mount, so the linked range is applied at the River's size.
+    if (riverSessionId !== requested.session) return;
     const validated = validateViewLink(requested, snapshot.indexed);
     if (validated.notice)
       viewLinkNotice = [viewLinkNotice, validated.notice].filter(Boolean).join(' ');
@@ -896,29 +912,33 @@
               />
             {/key}
             <div class="chart-area">
-              {#key $sessionController.selectedSessionId}
-                <ContextRiver
-                  bind:this={riverComponent}
-                  {indexed}
-                  preferences={presentation}
-                  onPreferencesChange={updatePresentation}
-                  pinnedCallIndex={interaction.pinnedCallIndex}
-                  hoveredCallIndex={interaction.hoveredCallIndex}
-                  selectedItemId={interaction.selectedItemId}
-                  hoveredItemId={interaction.hoveredItemId}
-                  {navigationCommand}
-                  isVisible={visualizationView === 'river'}
-                  onViewportChange={updateViewport}
-                  onNavigationSettled={navigationSettled}
-                  onSelectionVisibility={updateSelectionVisibility}
-                  onHoverCall={hoverCall}
-                  onPinCall={pinCall}
-                  onHoverItem={hoverItem}
-                  onSelectItem={selectItem}
-                  onEmptyClick={emptyClick}
-                  onEscape={handleEscape}
-                />
-              {/key}
+              {#if riverSessionId !== $sessionController.selectedSessionId}
+                <p class="river-pending" role="status">Drawing the River…</p>
+              {:else}
+                {#key $sessionController.selectedSessionId}
+                  <ContextRiver
+                    bind:this={riverComponent}
+                    {indexed}
+                    preferences={presentation}
+                    onPreferencesChange={updatePresentation}
+                    pinnedCallIndex={interaction.pinnedCallIndex}
+                    hoveredCallIndex={interaction.hoveredCallIndex}
+                    selectedItemId={interaction.selectedItemId}
+                    hoveredItemId={interaction.hoveredItemId}
+                    {navigationCommand}
+                    isVisible={visualizationView === 'river'}
+                    onViewportChange={updateViewport}
+                    onNavigationSettled={navigationSettled}
+                    onSelectionVisibility={updateSelectionVisibility}
+                    onHoverCall={hoverCall}
+                    onPinCall={pinCall}
+                    onHoverItem={hoverItem}
+                    onSelectItem={selectItem}
+                    onEmptyClick={emptyClick}
+                    onEscape={handleEscape}
+                  />
+                {/key}
+              {/if}
               {#if selectedItemOutsideRiver && selectedItem}
                 <div class="selection-location-note" role="status">
                   <span>The selected item has no presence in the current River view.</span>
@@ -1245,6 +1265,12 @@
   .chart-area {
     position: relative;
     min-width: 0;
+  }
+  .river-pending {
+    min-height: 360px;
+    margin: 0;
+    padding: 24px;
+    color: #bdc7d8;
   }
   .selection-location-note {
     display: flex;
