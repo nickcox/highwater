@@ -610,15 +610,6 @@
       />
       {#each eventClusters as cluster (cluster.id)}
         {@const event = cluster.events[0]!}
-        {#each cluster.events as member (member.id)}
-          {#if Math.abs(member.x - cluster.x) > 1}<line
-              class="event-anchor-connector"
-              x1={member.x}
-              x2={cluster.x}
-              y1={eventMarkerY}
-              y2={eventMarkerY}
-            />{/if}
-        {/each}
         <g
           id={cluster.id}
           class={`track-event-trigger ${cluster.events.length === 1 ? 'track-event-singleton' : 'track-event-cluster'} track-${event?.kind ?? 'cluster'} ${event?.kind === 'compaction' ? 'track-compaction-marker' : event?.kind === 'targetChange' ? 'track-target-change' : event?.kind === 'ratioChange' ? 'track-ratioChange ratio-change-marker' : ''}`}
@@ -862,12 +853,6 @@
     stroke: transparent;
     stroke-width: 2;
     pointer-events: all;
-  }
-  .event-anchor-connector {
-    stroke: #7287ad;
-    stroke-dasharray: 2 2;
-    stroke-width: 1;
-    pointer-events: none;
   }
   .event-count-badge {
     stroke-width: 1.25;

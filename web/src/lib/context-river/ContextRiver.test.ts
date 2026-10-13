@@ -438,7 +438,6 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(eventTriggers[1]?.querySelector('title')).toHaveTextContent(
       'Target changes from anthropic / m',
     );
-    expect(view.container.querySelectorAll('.event-anchor-connector').length).toBeGreaterThan(0);
 
     const nextMark = view.container.querySelector('#economics-call-2') as SVGGElement;
     await fireEvent.keyDown(view.container.querySelector('#economics-call-1') as SVGGElement, {
