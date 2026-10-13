@@ -57,7 +57,8 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   expect(analysis.session.source).toBe('claude-code');
   expect(analysis.modelCalls).toHaveLength(4);
   expect(analysis.compactions).toHaveLength(1);
-  const coverage = page.getByRole('complementary', { name: 'Reconstruction coverage' });
+  // The reconstruction limits are listed in the estimate-quality note.
+  const coverage = page.locator('#estimate-quality-note');
   await expect(coverage).toContainText("The harness's own model calls");
   await expect(coverage).toContainText('Some compaction records have no request usage');
   await expect(page.locator('.cost-metric')).toContainText('Cost');

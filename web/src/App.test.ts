@@ -548,7 +548,7 @@ describe('Context River interactions', () => {
     expect(document.querySelectorAll('#inspector > .panel')).toHaveLength(1);
   });
 
-  it('opens chart help, closes it on Escape, and routes to Session details', async () => {
+  it('opens chart help and closes it on Escape', async () => {
     const { container } = await renderLoaded();
     await fireEvent.click(screen.getByRole('button', { name: 'Pin model call 1' }));
     const trigger = screen.getByRole('button', { name: 'Chart help' });
@@ -564,12 +564,6 @@ describe('Context River interactions', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(trigger).toHaveFocus();
     expect(container.querySelector('.call-details')).toHaveTextContent('Pinned call 1');
-
-    await fireEvent.click(trigger);
-    await fireEvent.click(screen.getByText('Open Session details'));
-    const sessionDetails = document.getElementById('session-details') as HTMLDetailsElement;
-    expect(sessionDetails.open).toBe(true);
-    expect(document.getElementById('session-details-summary')).toHaveFocus();
   });
 
   it('shows a styled context-item inspector on hover without changing the persistent panel', async () => {

@@ -1,43 +1,63 @@
 import { describe, expect, it } from 'vitest';
 import { testAnalysis } from './context-river/test-data';
-import { estimateQuality } from './estimate-quality';
+import { indexTestAnalysis } from './testing/wire-analysis';
+import { estimateSummary } from './estimate-quality';
+import type { IndexedAnalysis } from './types';
 
-describe('estimate quality', () => {
-  it('describes ordinary local estimates as information rather than a warning', () => {
-    const quality = estimateQuality(testAnalysis());
-    expect(quality.tone).toBe('info');
-    expect(quality.label).toBe('Estimated tokens');
-    expect(quality.message).toContain('best-effort local token estimates');
+function indexed(): IndexedAnalysis {
+  return indexTestAnalysis(testAnalysis());
+}
+
+/** A session whose estimates were compared with the reported input on 12 calls. */
+function reconciled(medianShare: number): IndexedAnalysis {
+  const value = indexed();
+  value.analysis.session.reconciliationComparableCalls = 12;
+  value.analysis.session.medianAbsoluteResidualPercent = medianShare;
+  return value;
+}
+
+describe('estimate summary', () => {
+  it('rates estimates by their median gap from the reported input', () => {
+    expect(estimateSummary(reconciled(0.01)).level).toBe('good');
+    expect(estimateSummary(reconciled(0.05)).level).toBe('partial');
+    expect(estimateSummary(reconciled(0.2)).level).toBe('rough');
+    const good = estimateSummary(reconciled(0.005));
+    expect(good.label).toBe('Estimates: good');
+    expect(good.lead).toContain('differ from the input the provider reported by 0.5%');
+    expect(good.lead).toContain('12 calls');
   });
 
-  it('uses one plain-language warning for partial coverage', () => {
-    const analysis = testAnalysis();
-    analysis.tokenAnalysis.itemEstimateCoverage.partialItems = 1;
-    analysis.tokenAnalysis.fallbackReason = 'partial-token-coverage';
-    const quality = estimateQuality(analysis);
-    expect(quality.tone).toBe('warning');
-    expect(quality.label).toBe('Estimated tokens · partial coverage');
-    expect(quality.message).toContain('Some context items have partial or unavailable');
-    expect(quality.rawFallbackCode).toBe('partial-token-coverage');
-    expect(quality.message).not.toContain('partial-token-coverage');
+  it('rates by counting method when nothing can be compared', () => {
+    const value = indexed();
+    value.analysis.tokenAnalysis.tokenizerMethods = { characterHeuristic: 3 };
+    const summary = estimateSummary(value);
+    expect(summary.level).toBe('rough');
+    expect(summary.lead).toContain('No call has reported input to compare against');
+    expect(summary.reasons).toContain(
+      'Some tokens are estimated from character counts, which is rough.',
+    );
   });
 
-  it('keeps unavailable token geometry explicit and structural', () => {
-    const analysis = testAnalysis();
-    analysis.displayWeightUnit = 'unavailable';
-    analysis.tokenAnalysis.chartUnit = 'unavailable';
-    const quality = estimateQuality(analysis);
-    expect(quality.tone).toBe('unavailable');
-    expect(quality.label).toBe('Token geometry unavailable · structural view');
-    expect(quality.message).toContain('not measured token sizes');
+  it('lists only the reasons that apply, in plain language', () => {
+    const value = reconciled(0.01);
+    value.analysis.tokenAnalysis.itemEstimateCoverage.partialItems = 2;
+    value.analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: ['missingHistoricalSystemPrompt'],
+    };
+    const { reasons } = estimateSummary(value);
+    expect(reasons).toContain('Historical system instructions are not recorded completely.');
+    expect(reasons.some((reason) => reason.startsWith('2 of '))).toBe(true);
+    expect(reasons.join(' ')).not.toMatch(/partial-token-coverage|apiSerializationEstimate/);
   });
 
-  it('does not expose an unknown fallback identifier in the user-facing message', () => {
-    const analysis = testAnalysis();
-    analysis.tokenAnalysis.fallbackReason = 'future-internal-code';
-    const quality = estimateQuality(analysis);
-    expect(quality.message).toContain('fallback estimation method');
-    expect(quality.message).not.toContain('future-internal-code');
-    expect(quality.rawFallbackCode).toBe('future-internal-code');
+  it('says plainly when token sizes are unavailable', () => {
+    const value = indexed();
+    value.analysis.displayWeightUnit = 'unavailable';
+    value.analysis.tokenAnalysis.fallbackReason = 'tokenizationDisabled';
+    const summary = estimateSummary(value);
+    expect(summary.level).toBe('unavailable');
+    expect(summary.label).toBe('Estimates: unavailable');
+    expect(summary.reasons[0]).toBe('Token counting is turned off for this server.');
   });
 });

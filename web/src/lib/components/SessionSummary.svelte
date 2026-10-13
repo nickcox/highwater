@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { IndexedAnalysis } from '../types';
-  import { estimateQuality } from '../estimate-quality';
+  import { estimateSummary } from '../estimate-quality';
+  import InfoPopover from './InfoPopover.svelte';
   import { describeCostBasis, isPiSource } from '../cost-basis';
-  import { reconstructionLimitLabels } from '../reconstruction';
   import { recordedCoverageNote } from '../recorded-usage';
   import {
     formatCostSubtotal,
@@ -13,7 +13,6 @@
   } from '../cost-assessment';
   import { summarizeInputComparisons } from '../context-river/reported-input';
   import {
-    chartUnitLabel,
     coverageLabel,
     formatCost,
     formatInteger,
@@ -35,7 +34,7 @@
     [...new Set(analysis.modelCalls.map((call) => call.model).filter(Boolean))].join(', ') ||
     'Unknown';
   $: coverage = tokenAnalysis.itemEstimateCoverage;
-  $: quality = estimateQuality(analysis);
+  $: estimates = estimateSummary(indexed);
   $: costCopy = describeCostBasis(economics.costBasis, session.source);
   // Framing-based reconciliation only applies to text-only routes; otherwise
   // summarise the approximate comparison the River draws instead.
@@ -57,20 +56,6 @@
 </script>
 
 <section class="summary" aria-label="Session summary">
-  {#if analysis.reconstruction}
-    <aside aria-label="Reconstruction coverage" class="reconstruction-coverage">
-      <strong>Reconstructed conversation only.</strong> This is not a complete historical model
-      request. System instructions, tool declarations, and request transformations may be missing.
-      <details>
-        <summary class="disclosure">Reconstruction limits</summary>
-        <ul>
-          {#each analysis.reconstruction.explanationCodes as code}<li>
-              {reconstructionLimitLabels[code]}
-            </li>{/each}
-        </ul>
-      </details>
-    </aside>
-  {/if}
   <div class="primary-metrics">
     <div><span>Model calls</span><b>{formatInteger(analysis.modelCalls.length)}</b></div>
     <div><span>Context items</span><b>{formatInteger(analysis.contextItems.length)}</b></div>
@@ -97,7 +82,18 @@
   </div>
 
   <div class="session-status">
-    <p class="session-quality" class:warning={quality.tone !== 'info'}>{quality.label}</p>
+    <!-- One indicator for how far the token estimates can be trusted; its note explains why. -->
+    <div class={`estimate-level ${estimates.level}`}>
+      {estimates.label}<InfoPopover
+        id="estimate-quality-note"
+        label={`Why are estimates ${estimates.level}?`}
+      >
+        <p class="estimate-lead">{estimates.lead}</p>
+        {#if estimates.reasons.length > 0}<ul class="estimate-reasons">
+            {#each estimates.reasons as reason (reason)}<li>{reason}</li>{/each}
+          </ul>{/if}
+      </InfoPopover>
+    </div>
     <details class="session-details" id="session-details">
       <summary class="disclosure" id="session-details-summary">Session details</summary>
       <div class="detail-columns">
@@ -264,14 +260,6 @@
           <section>
             <h3>Token estimates and diagnostics</h3>
             <dl>
-              <div>
-                <dt>Estimate quality</dt>
-                <dd>{quality.message}</dd>
-              </div>
-              <div>
-                <dt>Chart unit</dt>
-                <dd>{chartUnitLabel(analysis.displayWeightUnit)}</dd>
-              </div>
               {#if tokenAnalysis.fallbackReason}
                 <div>
                   <dt>Fallback code</dt>
@@ -320,18 +308,6 @@
                 </div>
               {:else if inputSummary}
                 <div>
-                  <dt>Reported input not reconstructed (approximate)</dt>
-                  <dd>
-                    {#if inputSummary.comparedCalls === 0}
-                      Unavailable: no call has both complete reported input and numeric estimates
-                    {:else}
-                      Median {formatPercent(inputSummary.medianGapShare)} of reported input · up to
-                      {formatMetric(inputSummary.maximumGap)} tokens ·
-                      {formatInteger(inputSummary.comparedCalls)} calls compared
-                    {/if}
-                  </dd>
-                </div>
-                <div>
                   <dt>Calls where the estimate exceeds reported input</dt>
                   <dd>{formatInteger(inputSummary.estimateAboveReportedCalls)}</dd>
                 </div>
@@ -373,16 +349,6 @@
     margin-top: 16px;
     min-width: 0;
   }
-  .reconstruction-coverage {
-    color: var(--warning);
-    font-size: 12px;
-    margin-bottom: 12px;
-    overflow-wrap: anywhere;
-  }
-  /* Its disclosure belongs to the warning, so it keeps the warning's colour. */
-  .reconstruction-coverage summary {
-    color: inherit;
-  }
   .primary-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -419,14 +385,32 @@
     display: block;
     clear: both;
   }
-  .session-quality {
+  .estimate-level {
     float: left;
-    color: var(--secondary);
+    display: inline-flex;
+    align-items: center;
     margin: 0 16px 0 0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: 13px;
   }
-  .session-quality.warning {
+  .estimate-level.good {
+    color: var(--accent);
+  }
+  .estimate-level.partial {
     color: var(--warning);
+  }
+  .estimate-level.rough {
+    color: var(--error);
+  }
+  .estimate-lead {
+    margin: 0;
+  }
+  .estimate-reasons {
+    margin: 8px 0 0;
+    padding-left: 18px;
+  }
+  .estimate-reasons li + li {
+    margin-top: 4px;
   }
   .session-details {
     max-width: 100%;

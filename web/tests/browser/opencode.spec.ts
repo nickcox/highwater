@@ -36,7 +36,7 @@ async function checkDirectoryReplacement(page: import('@playwright/test').Page) 
     )
     .toBe(true);
   await page.goto('/#session=' + entry.id);
-  await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
+  await expect(page.locator('.estimate-level')).toBeVisible();
   const before = (await page.request.get('/api/sessions')).headers()['etag'];
   execFileSync('python3', [
     '-c',
@@ -84,7 +84,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   expect(analysis.schemaVersion).toBe(16);
   expect(analysis.session.source).toBe('opencode');
   expect(analysis.reconstruction.status).toBe('partial');
-  await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
+  await expect(page.locator('.estimate-level')).toBeVisible();
   // The summary shows one cost, or Unknown when no call has one.
   const costSummary = analysis.session.costSummary;
   await expect(page.locator('.cost-metric')).toContainText(
@@ -113,7 +113,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   await expect(page).toHaveURL(new RegExp(`session=${original}&`));
   await page.goBack();
   await expect(picker).toHaveAttribute('data-session-id', openCode.id);
-  await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
+  await expect(page.locator('.estimate-level')).toBeVisible();
   const refreshed = page.waitForResponse(
     (response) =>
       response.url().includes(openCode.id) &&
@@ -134,7 +134,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
       item.preview.text.includes('Synthetic revision'),
     ),
   ).toBe(true);
-  await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toBeVisible();
+  await expect(page.locator('.estimate-level')).toBeVisible();
   await page.getByRole('option', { name: /^User message,/ }).click();
   await page.locator('.item-details summary').filter({ hasText: 'Content preview' }).click();
   await expect(page.locator('.item-details').getByText(/Synthetic revision/)).toBeVisible();
@@ -160,7 +160,7 @@ test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh',
   expect(modern).toBeTruthy();
   await page.goto('/#session=' + modern.id + '&pin=1');
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Reconstruction coverage' })).toContainText(
+  await expect(page.locator('#estimate-quality-note')).toContainText(
     'Some compaction records have no request usage',
   );
   const initial = await page.request.get(`/api/sessions/${modern.id}/analysis`);

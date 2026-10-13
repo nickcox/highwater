@@ -2850,7 +2850,7 @@ test('capture partial-estimate baseline screenshot', async ({ page }) => {
   await mockApi(page, sessionScenario('partialGeometry'));
   await page.goto('/');
   await assertLoaded(page);
-  await expect(page.locator('.session-quality')).toContainText('partial coverage');
+  await expect(page.locator('.estimate-level')).toContainText('Estimates:');
   await expect(page.getByText('Token estimate caveat')).toHaveCount(0);
   await captureBaselineState(page, directory!, 'desktop-partial-estimates');
 });
@@ -2861,9 +2861,7 @@ test('capture unavailable-geometry baseline screenshot', async ({ page }) => {
   await mockApi(page, sessionScenario('unavailableGeometry'));
   await page.goto('/');
   await assertLoaded(page);
-  await expect(page.locator('.session-quality')).toHaveText(
-    'Token geometry unavailable · structural view',
-  );
+  await expect(page.locator('.estimate-level')).toContainText('Estimates: unavailable');
   await captureBaselineState(page, directory!, 'desktop-unavailable-geometry');
 });
 

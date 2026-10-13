@@ -46,7 +46,6 @@
     resetInteraction,
   } from './lib/state/interaction';
   import type { IndexedAnalysis, InteractionState } from './lib/types';
-  import { estimateQuality } from './lib/estimate-quality';
   import type { RiverNavigationCommand, RiverViewportStatus } from './lib/context-river/viewport';
   import { stepCallTarget } from './lib/context-river/viewport';
   import {
@@ -184,7 +183,6 @@
       }),
     );
   }
-  $: quality = indexed ? estimateQuality(indexed.analysis) : null;
   $: pinnedCall =
     interaction.pinnedCallIndex === null
       ? null
@@ -435,14 +433,6 @@
     copyLinkNotice = '';
     fallbackViewUrl = '';
     sessionController.select(sessionId);
-  }
-
-  function openSessionDetails(): void {
-    const summary = document.getElementById('session-details-summary');
-    const details = summary?.closest('details');
-    if (!summary || !details) return;
-    details.open = true;
-    summary.focus();
   }
 
   function resetViewportStatus(): void {
@@ -833,12 +823,8 @@
         <div class="panel-head">
           <div>
             <h2>{explorationTitle}</h2>
-            {#if visualizationView === 'river' && quality}
-              <ChartHelp
-                {quality}
-                isVisible={visualizationView === 'river'}
-                onOpenDiagnostics={openSessionDetails}
-              />
+            {#if visualizationView === 'river'}
+              <ChartHelp isVisible={visualizationView === 'river'} />
             {/if}
           </div>
           <div class="panel-actions">

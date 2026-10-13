@@ -22,10 +22,13 @@ describe('SessionSummary', () => {
     expect(details).toHaveTextContent('Provider prompt');
     expect(details).toHaveTextContent('Compactions');
     expect(details).toHaveTextContent('Working directory');
-    expect(details).toHaveTextContent('Reported input not reconstructed (approximate)');
+    expect(details).not.toHaveTextContent('Reported input not reconstructed');
     expect(details).not.toHaveTextContent('Residual median / maximum');
-    expect(details).toHaveTextContent('Some item weights use best-effort local token estimates.');
+    expect(details).not.toHaveTextContent('Estimate quality');
     expect(details).toHaveTextContent('best-effort-tokenization');
+    const indicator = container.querySelector('.estimate-level')!;
+    expect(indicator).toHaveTextContent(/^Estimates: (good|partial|rough)/);
+    expect(indicator.closest('details')).toBeNull();
 
     const columns = container.querySelector('.detail-columns')!;
     const groups = [...columns.querySelectorAll(':scope > .detail-column')];

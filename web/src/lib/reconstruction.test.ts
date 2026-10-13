@@ -48,17 +48,19 @@ describe('source reconstruction coverage', () => {
       expect(() => assertReconstruction(analysis)).toThrow(/coverage/);
     }
   });
-  it('shows the reconstruction caveat outside collapsed session details', () => {
+  it('explains the reconstruction limits in the estimate-quality note, outside Session details', () => {
     const analysis = testAnalysis();
     analysis.reconstruction = {
       status: 'partial',
       explanationCodes: ['missingHistoricalSystemPrompt', 'unknownOutputAccounting'],
     };
-    render(SessionSummary, { props: { indexed: indexTestAnalysis(analysis) } });
-    const coverage = screen.getByRole('complementary', { name: 'Reconstruction coverage' });
-    expect(coverage).toHaveTextContent('Reconstructed conversation only.');
-    expect(coverage).toHaveTextContent('This is not a complete historical model request.');
-    expect(coverage).toHaveTextContent('Output/reasoning overlap is unverified');
-    expect(coverage.closest('details')).toBeNull();
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    const note = container.querySelector('#estimate-quality-note')!;
+    expect(note).toHaveTextContent('Historical system instructions are not recorded completely.');
+    expect(note).toHaveTextContent('Output/reasoning overlap is unverified');
+    expect(note.closest('details')).toBeNull();
+    expect(screen.queryByRole('complementary', { name: 'Reconstruction coverage' })).toBeNull();
   });
 });

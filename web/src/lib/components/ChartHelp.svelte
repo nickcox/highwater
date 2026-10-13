@@ -1,9 +1,5 @@
 <script lang="ts">
   import { afterUpdate, onMount } from 'svelte';
-  import type { EstimateQuality } from '../estimate-quality';
-
-  export let quality: EstimateQuality;
-  export let onOpenDiagnostics: () => void = () => {};
   export let isVisible = true;
   $: if (!isVisible) close(false);
 
@@ -55,11 +51,6 @@
     }
   }
 
-  function openDiagnostics(): void {
-    close(false);
-    onOpenDiagnostics();
-  }
-
   afterUpdate(placePopover);
   onMount(() => {
     container?.addEventListener('keydown', handleKeyDown);
@@ -92,10 +83,6 @@
     style={popoverStyle}
   >
     <h3 id="chart-help-title">Chart help</h3>
-    <p class="quality-message">{quality.message}</p>
-    <button type="button" class="diagnostics-link" onclick={openDiagnostics}>
-      Open Session details
-    </button>
     <h4>Navigate the river</h4>
     <ul>
       <li>Drag across a range to zoom; scroll horizontally or Shift-drag to pan.</li>
@@ -183,27 +170,11 @@
   p {
     margin: 5px 0;
   }
-  .quality-message {
-    color: #e2e8f3;
-  }
   ul {
     margin: 5px 0;
     padding-left: 20px;
   }
   li + li {
     margin-top: 4px;
-  }
-  .diagnostics-link {
-    min-height: 34px;
-    padding: 6px 9px;
-    border: 1px solid #52678c;
-    border-radius: 6px;
-    color: #eef2f8;
-    background: #1b2a46;
-    font: inherit;
-    cursor: pointer;
-  }
-  .diagnostics-link:hover {
-    background: #253958;
   }
 </style>

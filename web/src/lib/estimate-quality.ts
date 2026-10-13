@@ -1,65 +1,113 @@
-import type { SessionAnalysis } from './types';
+import type { IndexedAnalysis } from './types';
+import { summarizeInputComparisons } from './context-river/reported-input';
+import { reconstructionLimitLabels } from './reconstruction';
+import { formatInteger, formatMetric, formatPercent } from './context-river/format';
 
-export type EstimateQualityTone = 'info' | 'warning' | 'unavailable';
+export type EstimateLevel = 'good' | 'partial' | 'rough' | 'unavailable';
 
-export interface EstimateQuality {
-  tone: EstimateQualityTone;
+/** How far the River's token estimates can be trusted, for one indicator and its "Why?" note. */
+export interface EstimateSummary {
+  level: EstimateLevel;
+  /** For example "Estimates: good". */
   label: string;
-  message: string;
-  rawFallbackCode: string | null;
+  /** The main evidence for the level. */
+  lead: string;
+  /** Everything else that affects the estimates in this session, in plain language. */
+  reasons: string[];
 }
 
-function unitLabel(analysis: SessionAnalysis): string {
-  return analysis.displayWeightUnit === 'calculatedTokens'
-    ? 'Calculated tokens'
-    : 'Estimated tokens';
-}
+/** Median gap between the River's totals and the reported input, as a share of the input. */
+const GOOD_GAP = 0.02;
+const PARTIAL_GAP = 0.1;
 
-function fallbackMessage(code: string | null): string | null {
-  switch (code) {
-    case null:
-      return null;
-    case 'best-effort-tokenization':
-      return 'Some item weights use best-effort local token estimates.';
-    case 'tokenizationDisabled':
-      return 'Token analysis is disabled; token-weighted geometry is unavailable.';
-    case 'partial-token-coverage':
-      return 'Some context items do not have complete token estimates.';
-    default:
-      return 'A fallback estimation method is in use; see Session details for its method and diagnostics.';
-  }
-}
+const METHOD_REASONS: Record<string, string> = {
+  modelTokenizer: "Tokens are counted with the model's own tokenizer.",
+  apiSerializationEstimate:
+    "Tokens are counted with a reconstruction of the model's tokenizer, and the request format around them is estimated.",
+  characterHeuristic: 'Some tokens are estimated from character counts, which is rough.',
+};
 
-export function estimateQuality(analysis: SessionAnalysis): EstimateQuality {
-  const rawFallbackCode = analysis.tokenAnalysis.fallbackReason;
-  if (analysis.displayWeightUnit === 'unavailable') {
+const UNAVAILABLE_REASONS: Record<string, string> = {
+  tokenizationDisabled: 'Token counting is turned off for this server.',
+  'one-or-more-context-items-unavailable': 'Some context items have no content to count.',
+};
+
+function gapEvidence(indexed: IndexedAnalysis): { share: number; lead: string } | null {
+  const { session } = indexed.analysis;
+  if (session.reconciliationComparableCalls > 0 && session.medianAbsoluteResidualPercent !== null) {
+    const share = session.medianAbsoluteResidualPercent;
     return {
-      tone: 'unavailable',
-      label: 'Token geometry unavailable · structural view',
-      message:
-        'Item token widths are unavailable. The river shows structural placeholders, not measured token sizes.',
-      rawFallbackCode,
+      share,
+      lead: `On median, the River's totals differ from the input the provider reported by ${formatPercent(share)}, across ${formatInteger(session.reconciliationComparableCalls)} calls.`,
     };
   }
-
-  const coverage = analysis.tokenAnalysis.itemEstimateCoverage;
-  if (coverage.partialItems > 0 || coverage.unavailableItems > 0) {
-    return {
-      tone: 'warning',
-      label: `${unitLabel(analysis)} · partial coverage`,
-      message:
-        'Some context items have partial or unavailable token estimates. Geometry uses available local estimates only; provider-reported prompt usage remains separate.',
-      rawFallbackCode,
-    };
-  }
-
-  const fallback = fallbackMessage(rawFallbackCode);
+  const comparison = summarizeInputComparisons(indexed);
+  if (comparison.medianGapShare === null) return null;
+  const largest =
+    comparison.maximumGap === null
+      ? ''
+      : ` The largest gap is ${formatMetric(comparison.maximumGap)} tokens.`;
   return {
-    tone: 'info',
-    label: unitLabel(analysis),
-    message:
-      fallback ??
-      'Token sizes are calculated locally from context items. Provider-reported prompt usage can include framing and serialization not assigned to items.',
-    rawFallbackCode,
+    share: comparison.medianGapShare,
+    lead: `On median, the River's totals differ from the input the provider reported by ${formatPercent(comparison.medianGapShare)}, across ${formatInteger(comparison.comparedCalls)} calls.${largest}`,
   };
+}
+
+export function estimateSummary(indexed: IndexedAnalysis): EstimateSummary {
+  const { analysis } = indexed;
+  const { tokenAnalysis } = analysis;
+  const reasons = (analysis.reconstruction?.explanationCodes ?? [])
+    .map((code) => reconstructionLimitLabels[code])
+    .filter((reason): reason is string => Boolean(reason));
+
+  if (analysis.displayWeightUnit === 'unavailable') {
+    const fallback = UNAVAILABLE_REASONS[tokenAnalysis.fallbackReason ?? ''];
+    return {
+      level: 'unavailable',
+      label: 'Estimates: unavailable',
+      lead: "Token sizes aren't available for this session, so the River shows every item at the same placeholder size.",
+      reasons: fallback ? [fallback, ...reasons] : reasons,
+    };
+  }
+
+  if (analysis.contextItems.some((item) => item.kind === 'unrecordedContext')) {
+    reasons.push(
+      'Content the source does not record, such as the system prompt and tool definitions, is measured from reported usage as "Unrecorded request context".',
+    );
+  }
+  const coverage = tokenAnalysis.itemEstimateCoverage;
+  if (coverage.partialItems > 0) {
+    reasons.push(
+      `${formatInteger(coverage.partialItems)} of ${formatInteger(coverage.totalItems)} items have only part of their content counted.`,
+    );
+  }
+  if (coverage.unavailableItems > 0) {
+    reasons.push(
+      `${formatInteger(coverage.unavailableItems)} of ${formatInteger(coverage.totalItems)} items could not be counted.`,
+    );
+  }
+  const methods = Object.keys(tokenAnalysis.tokenizerMethods);
+  for (const method of methods) {
+    const reason = METHOD_REASONS[method];
+    if (reason) reasons.push(reason);
+  }
+
+  const evidence = gapEvidence(indexed);
+  let level: EstimateLevel;
+  let lead: string;
+  if (evidence) {
+    level =
+      evidence.share <= GOOD_GAP ? 'good' : evidence.share <= PARTIAL_GAP ? 'partial' : 'rough';
+    lead = evidence.lead;
+  } else {
+    const complete = coverage.partialItems === 0 && coverage.unavailableItems === 0;
+    level = methods.includes('characterHeuristic')
+      ? 'rough'
+      : complete && methods.every((method) => method === 'modelTokenizer')
+        ? 'good'
+        : 'partial';
+    lead =
+      'No call has reported input to compare against, so this is based on how the tokens were counted.';
+  }
+  return { level, label: `Estimates: ${level}`, lead, reasons };
 }
