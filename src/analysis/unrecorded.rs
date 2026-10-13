@@ -64,10 +64,7 @@ pub(super) fn add_unrecorded_context(
 
 /// The model a call was sent to, or `None` for a failed attempt, which did not reach one.
 fn reached_model(call: &NormalizedModelCall) -> Option<&Option<String>> {
-    call.reported_usage
-        .placeholder
-        .is_none()
-        .then_some(&call.target.model)
+    super::reached_a_model(call).then_some(&call.target.model)
 }
 
 /// `model` is the segment's model so far, from its first call that reached one.

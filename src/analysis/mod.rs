@@ -152,6 +152,41 @@ fn derive_transition<'a>(
     }
 }
 
+/// Whether a call reached a model. A failed attempt, such as Claude Code's `<synthetic>` error
+/// message, records placeholder usage instead.
+pub(super) fn reached_a_model(call: &NormalizedModelCall) -> bool {
+    call.reported_usage.placeholder.is_none()
+}
+
+/// The model each call's context is estimated for. A failed attempt never reached a model, so
+/// its context is estimated for the nearest earlier call that did (otherwise the next one), the
+/// model the session was using. Estimating it for its own placeholder model gave it a different
+/// tokenizer, which roughly halved the River at every failed call.
+pub(super) fn tokenization_targets(calls: &[NormalizedModelCall]) -> Vec<&ModelTarget> {
+    let mut targets = Vec::with_capacity(calls.len());
+    let mut previous = None;
+    for call in calls {
+        if reached_a_model(call) {
+            previous = Some(&call.target);
+        }
+        targets.push(previous);
+    }
+    let mut next = None;
+    for (target, call) in targets.iter_mut().zip(calls).rev() {
+        if reached_a_model(call) {
+            next = Some(&call.target);
+        }
+        if target.is_none() {
+            *target = next;
+        }
+    }
+    targets
+        .into_iter()
+        .zip(calls)
+        .map(|(target, call)| target.unwrap_or(&call.target))
+        .collect()
+}
+
 pub(crate) fn analyze(
     mut session: NormalizedSession,
     config: AnalysisConfig,

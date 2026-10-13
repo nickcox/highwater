@@ -1214,3 +1214,62 @@ fn zero_reported_prompt_is_not_divided() {
         None
     );
 }
+
+fn claude_code_fixture(name: &str) -> NormalizedSession {
+    let locator = crate::source::SessionLocator::ClaudeCodeFile {
+        path: format!("fixtures/claude-code/projects/-synthetic-project/{name}.jsonl").into(),
+        kind: crate::claude_code::FileKind::Main,
+    };
+    crate::source::load(&locator, None)
+        .expect("fixture")
+        .normalized
+}
+
+#[test]
+fn a_failed_attempt_is_estimated_for_the_model_the_session_was_using() {
+    let failed = claude_code_fixture("api-error").model_calls.remove(0);
+    assert_eq!(failed.target.model.as_deref(), Some("<synthetic>"));
+    let mut session = claude_code_fixture("parallel-tools");
+    let fail = |session: &mut NormalizedSession, position: usize| {
+        session.model_calls[position].target = failed.target.clone();
+        session.model_calls[position].reported_usage = failed.reported_usage.clone();
+    };
+
+    // A failed first call takes the next call's model; a session where every call failed keeps
+    // each call's own.
+    let mut first = session.clone();
+    fail(&mut first, 0);
+    assert_eq!(
+        tokenization_targets(&first.model_calls)[0],
+        &first.model_calls[1].target
+    );
+    let mut all = session.clone();
+    for position in 0..all.model_calls.len() {
+        fail(&mut all, position);
+    }
+    assert!(tokenization_targets(&all.model_calls)
+        .iter()
+        .all(|target| target.model.as_deref() == Some("<synthetic>")));
+
+    fail(&mut session, 1);
+    assert_eq!(
+        tokenization_targets(&session.model_calls)[1],
+        &session.model_calls[0].target
+    );
+    let analysis = analyze(
+        session,
+        AnalysisConfig {
+            tokenization: TokenizationPolicy::Auto,
+            perf_diagnostics: false,
+        },
+    )
+    .expect("analysis");
+    assert_eq!(
+        analysis.model_calls[1].tokenization_profile_id,
+        analysis.model_calls[0].tokenization_profile_id
+    );
+    assert!(analysis
+        .context_items
+        .iter()
+        .all(|item| item.token_estimates.len() == 1));
+}

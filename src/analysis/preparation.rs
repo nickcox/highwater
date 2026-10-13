@@ -34,8 +34,9 @@ pub(super) fn precompute_estimates(
     let mut queued = FxHashSet::default();
     let mut pairs = Vec::new();
     let mut previous: &[String] = &[];
-    for call in &session.model_calls {
-        let profile = registry.profile_index(&call.target, policy);
+    let targets = tokenization_targets(&session.model_calls);
+    for (call, target) in session.model_calls.iter().zip(targets) {
+        let profile = registry.profile_index(target, policy);
         for id in call.context_item_ids.iter().chain(previous) {
             let Some(&position) = positions.get(id.as_str()) else {
                 continue;
@@ -87,8 +88,9 @@ pub(super) fn prepare<'a>(
     let works = session
         .model_calls
         .iter()
-        .map(|call| {
-            let profile_index = registry.profile_index(&call.target, config.tokenization);
+        .zip(tokenization_targets(&session.model_calls))
+        .map(|(call, target)| {
+            let profile_index = registry.profile_index(target, config.tokenization);
             let estimate_indexes = call
                 .context_item_ids
                 .iter()
