@@ -753,17 +753,22 @@
   <header class="titlebar">
     <div>
       <h1>TokenPlume</h1>
-      <p class="live-status">
-        <span data-testid="live-status">Live updates: {$sessionController.liveStatus}</span
-        >{#if selectedSessionDetail}<span class="session-detail" title={selectedSessionDetail}
-            >{' · '}{selectedSessionDetail}</span
-          >{/if}
-      </p>
+      <!-- Refresh sits at the end of the status line, so it does not add a row to the header. -->
+      <div class="status-row">
+        <p class="live-status">
+          <span data-testid="live-status">Live updates: {$sessionController.liveStatus}</span
+          >{#if selectedSessionDetail}<span class="session-detail" title={selectedSessionDetail}
+              >{' · '}{selectedSessionDetail}</span
+            >{/if}
+        </p>
+        {#if ($sessionController.liveStatus !== 'live' || $sessionController.sessions.length === 0) && !$sessionController.catalogueWarning && !$sessionController.analysisWarning && !$sessionController.sessionListError && !$sessionController.analysisError}
+          <button type="button" class="status-refresh" onclick={() => sessionController.retry()}
+            >Refresh</button
+          >
+        {/if}
+      </div>
       {#if $sessionController.refreshing && !$sessionController.loading}
         <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
-      {/if}
-      {#if ($sessionController.liveStatus !== 'live' || $sessionController.sessions.length === 0) && !$sessionController.catalogueWarning && !$sessionController.analysisWarning && !$sessionController.sessionListError && !$sessionController.analysisError}
-        <button type="button" onclick={() => sessionController.retry()}>Refresh</button>
       {/if}
     </div>
     {#if $sessionController.sessions.length > 0}<SessionPicker
@@ -1099,6 +1104,25 @@
   .titlebar p {
     color: #96a2b8;
     margin: 4px 0 0;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 720px;
+    margin-top: 4px;
+  }
+  .titlebar .status-row > .live-status {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+  }
+  .status-refresh {
+    flex: none;
+    min-height: 0;
+    padding: 2px 9px;
+    font-size: 12px;
+    line-height: 1.4;
   }
   .live-status {
     max-width: 640px;

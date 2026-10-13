@@ -80,7 +80,8 @@
   }
   type TrackEventCluster = EconomicsEventCluster<TrackEvent>;
 
-  $: trackHeight = mode === 'cost' ? 222 : 300;
+  // The event lane below the bars is one marker row high (46px).
+  $: trackHeight = mode === 'cost' ? 190 : 262;
   $: eventHeaderTop = mode === 'cost' ? 116 : 188;
   const eventHeaderHeight = 16;
   $: eventLaneTop = eventHeaderTop + eventHeaderHeight + 2;
@@ -595,8 +596,8 @@
       </text>
     {/each}
     <g class="track-event-header" aria-label="Economics event annotations">
-      <text x={margin.left + 4} y={eventHeaderTop + 10}>Events</text>
-      <text x={margin.left + 48} y={eventHeaderTop + 10}>
+      <text x={margin.left + 4} y={eventHeaderTop + 12}>Events</text>
+      <text x={margin.left + 56} y={eventHeaderTop + 12}>
         Numbers count events; activate for details
       </text>
     </g>
@@ -667,7 +668,7 @@
               width={cluster.badgeWidth}
               height={eventMarkerHeight}
               rx="5"
-            /><text class="event-count" x={cluster.x} y={eventMarkerY + 3} text-anchor="middle">
+            /><text class="event-count" x={cluster.x} y={eventMarkerY + 4} text-anchor="middle">
               {cluster.badgeLabel}
             </text>{/if}
         </g>
@@ -836,7 +837,7 @@
   }
   .track-event-header {
     fill: #899abd;
-    font-size: 8px;
+    font-size: 11px;
     pointer-events: none;
   }
   .track-event-header text:first-child {
@@ -875,7 +876,7 @@
   }
   .event-count {
     fill: #fff;
-    font-size: 7px;
+    font-size: 11px;
     font-weight: 750;
     pointer-events: none;
   }

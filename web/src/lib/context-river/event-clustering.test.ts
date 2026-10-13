@@ -19,9 +19,9 @@ describe('economics event clustering', () => {
       event('a', 48, 2, 'ratioChange'),
       event('b', 51, 3, 'compaction'),
       event('c', 53, 4, 'targetChange'),
-      event('d', 160, 8, 'compaction'),
+      event('d', 260, 8, 'compaction'),
     ];
-    const clusters = clusterEconomicsEvents(events, { chartWidth: 220, left: 42, right: 24 });
+    const clusters = clusterEconomicsEvents(events, { chartWidth: 320, left: 42, right: 24 });
     expect(clusters.flatMap((cluster) => cluster.events).map(({ id }) => id)).toEqual(
       events.map(({ id }) => id),
     );

@@ -86,7 +86,8 @@ function badgeWidth<T extends ClusterableEconomicsEvent>(
   markerSize: number,
 ): number {
   if (events.length === 1) return markerSize;
-  return Math.max(42, 14 + eventBadgeText(events).length * 5.2);
+  // About 7px per character at the badge's 11px bold text.
+  return Math.max(46, 14 + eventBadgeText(events).length * 7.2);
 }
 
 function buildCluster<T extends ClusterableEconomicsEvent>(

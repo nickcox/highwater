@@ -1815,7 +1815,7 @@ test('cache and cost tracks share the river axis and expose a ratio change', asy
   const track = page.locator('.economics-track-svg');
   await expect(track).toBeVisible();
   await expect(page.locator('.plot-background')).toHaveAttribute('height', '410');
-  await page.getByText('Legend and data quality', { exact: true }).click();
+  await page.getByText('Key and data availability', { exact: true }).click();
   await expect(page.getByText('Fresh / uncached input')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cache', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -3001,7 +3001,7 @@ test('retired Compact preference is ignored without losing scale, grouping or ec
   await page.goto('/');
   await assertLoaded(page);
   await expect(page.locator('.river-scroll .river-plot')).toHaveAttribute('height', '500');
-  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '222');
+  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '190');
   await expect(page.getByRole('button', { name: 'Visible calls', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -3023,7 +3023,7 @@ test('retired Compact preference is ignored without losing scale, grouping or ec
   expect(stored.river).toEqual({ verticalScale: 'visible', display: 'items' });
   expect(stored.economics).toEqual({ expanded: true, lastMode: 'cost', cacheView: 'share' });
   await page.getByRole('button', { name: 'Cache', exact: true }).click();
-  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '300');
+  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '262');
   await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',

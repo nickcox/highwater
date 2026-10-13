@@ -110,12 +110,15 @@
     margin: 8px 0 12px;
     min-width: 0;
   }
+  /* One button row tall, so the range lines up with the first row of controls even when
+     they wrap onto a second row. */
   .viewport-status {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: 4px 12px;
     min-width: 0;
+    min-height: 32px;
   }
   .range {
     color: #e5ebf7;

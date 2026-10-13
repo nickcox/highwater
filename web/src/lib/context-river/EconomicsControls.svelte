@@ -142,8 +142,9 @@
           </div>
         {/if}
       </div>
+      <!-- One disclosure for the event and data-quality key and how this mode's values are measured. -->
       <details class="economics-legend">
-        <summary class="disclosure">Events &amp; data quality</summary>
+        <summary class="disclosure">Key and data availability</summary>
         <div class="track-legend-group" aria-label="Events">
           <span class="legend-group-title">Events</span>
           <div class="track-legend">
@@ -162,10 +163,7 @@
             <span><i class="swatch zero"></i>Measured zero</span>
           </div>
         </div>
-      </details>
-      {#if mode === 'cache'}
-        <details class="economics-legend">
-          <summary class="disclosure">Legend and data quality</summary>
+        {#if mode === 'cache'}
           <p class="availability-summary">
             <b>Data availability.</b>
             {cachePresentation.summary}
@@ -187,10 +185,7 @@
             Share (%) divides each applicable bucket by that call's audited positive prompt-token
             denominator. Missing, partial, unsupported, and zero-prompt calls remain distinct.
           </p>
-        </details>
-      {:else}
-        <details class="economics-legend">
-          <summary class="disclosure">Legend and data quality</summary>
+        {:else}
           <p class="availability-summary">
             <b>Data availability.</b>
             Billed calls show the cost the harness recorded, or an estimate at the provider's rate when
@@ -198,8 +193,8 @@
             that is not a charge. A shaded bar marks a range. {costCopy.note}
             Unavailable values are not zero.
           </p>
-        </details>
-      {/if}
+        {/if}
+      </details>
     {/if}
   </div>
 </div>
