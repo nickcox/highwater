@@ -54,13 +54,12 @@
 >
   <button
     bind:this={triggerElement}
-    class="economics-disclosure"
+    class="economics-disclosure disclosure"
     type="button"
     aria-expanded={mode !== 'off'}
     aria-controls="economics-expanded"
     onclick={() => onModeChange(mode === 'off' ? lastMode : 'off')}
   >
-    <span class="disclosure-marker" aria-hidden="true">{mode === 'off' ? '▸' : '▾'}</span>
     <span>Cache &amp; cost</span>
   </button>
   <div id="economics-expanded" hidden={mode === 'off'}>
@@ -144,7 +143,7 @@
         {/if}
       </div>
       <details class="economics-legend">
-        <summary>Events &amp; data quality</summary>
+        <summary class="disclosure">Events &amp; data quality</summary>
         <div class="track-legend-group" aria-label="Events">
           <span class="legend-group-title">Events</span>
           <div class="track-legend">
@@ -166,7 +165,7 @@
       </details>
       {#if mode === 'cache'}
         <details class="economics-legend">
-          <summary>Legend and data quality</summary>
+          <summary class="disclosure">Legend and data quality</summary>
           <p class="availability-summary">
             <b>Data availability.</b>
             {cachePresentation.summary}
@@ -191,7 +190,7 @@
         </details>
       {:else}
         <details class="economics-legend">
-          <summary>Legend and data quality</summary>
+          <summary class="disclosure">Legend and data quality</summary>
           <p class="availability-summary">
             <b>Data availability.</b>
             Billed calls show the cost the harness recorded, or an estimate at the provider's rate when
@@ -218,15 +217,11 @@
     background: transparent;
     color: var(--secondary);
     font: inherit;
-    font-size: 12px;
+    font-size: 13px;
   }
   .economics-disclosure:hover {
     background: transparent;
     color: var(--text);
-  }
-  .disclosure-marker {
-    width: 10px;
-    text-align: center;
   }
   .scale-toggle {
     display: flex;
@@ -297,12 +292,15 @@
     outline: 2px solid #9fc0ff;
     outline-offset: 2px;
   }
+  /* Matches the River's legend: 12px text, with each group's title leading its items. */
   .track-legend-groups {
     display: flex;
     flex-wrap: wrap;
     align-items: start;
     gap: 8px 18px;
     padding-top: 6px;
+    color: #c4d0e4;
+    font-size: 12px;
   }
   .essential-legend {
     padding: 2px 0 0;
@@ -335,16 +333,15 @@
     overflow-wrap: anywhere;
   }
   .track-legend-group {
-    display: grid;
-    gap: 2px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 12px;
     min-width: 0;
   }
   .legend-group-title {
-    color: #91a4c4;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+    color: #edf2fb;
+    font-weight: 650;
   }
   .track-legend {
     display: flex;
@@ -361,8 +358,8 @@
   }
   .swatch {
     display: inline-block;
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
     border: 1px solid #b8c4d9;
     border-radius: 2px;
     flex: 0 0 auto;

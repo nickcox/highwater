@@ -592,13 +592,16 @@
   .browse-controls select {
     min-width: 0;
     width: 100%;
-    background: var(--plot);
+    background-color: var(--plot);
     border: 1px solid var(--control-border);
     border-radius: 6px;
     color: #eef2f8;
     padding: 7px 8px;
     font: inherit;
     font-size: 12px;
+  }
+  .browse-controls select {
+    padding-right: 32px;
   }
   .browse-controls button {
     white-space: nowrap;

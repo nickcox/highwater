@@ -62,7 +62,7 @@
       <strong>Reconstructed conversation only.</strong> This is not a complete historical model
       request. System instructions, tool declarations, and request transformations may be missing.
       <details>
-        <summary>Reconstruction limits</summary>
+        <summary class="disclosure">Reconstruction limits</summary>
         <ul>
           {#each analysis.reconstruction.explanationCodes as code}<li>
               {reconstructionLimitLabels[code]}
@@ -99,7 +99,7 @@
   <div class="session-status">
     <p class="session-quality" class:warning={quality.tone !== 'info'}>{quality.label}</p>
     <details class="session-details" id="session-details">
-      <summary id="session-details-summary">Session details</summary>
+      <summary class="disclosure" id="session-details-summary">Session details</summary>
       <div class="detail-columns">
         <div class="detail-column">
           <section>
@@ -379,6 +379,10 @@
     margin-bottom: 12px;
     overflow-wrap: anywhere;
   }
+  /* Its disclosure belongs to the warning, so it keeps the warning's colour. */
+  .reconstruction-coverage summary {
+    color: inherit;
+  }
   .primary-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -431,7 +435,6 @@
   .session-details > summary {
     float: left;
   }
-  .session-details > summary,
   .profiles {
     color: #aebbd0;
   }

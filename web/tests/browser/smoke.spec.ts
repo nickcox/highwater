@@ -2909,7 +2909,7 @@ test('Cache & cost uses a borderless disclosure with stable naming and remembere
   await assertLoaded(page);
   const trigger = page.getByRole('button', { name: 'Cache & cost', exact: true });
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  await expect(trigger.locator('.disclosure-marker')).toHaveText('▸');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   const style = await trigger.evaluate((node) => ({
     border: getComputedStyle(node).borderTopWidth,
     background: getComputedStyle(node).backgroundColor,
@@ -2928,7 +2928,7 @@ test('Cache & cost uses a borderless disclosure with stable naming and remembere
   );
   await trigger.press('Space');
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  await expect(trigger.locator('.disclosure-marker')).toHaveText('▾');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   await page.screenshot({
     path: '.playwright/calm-workspace/cache-cost-disclosure-expanded.png',
     fullPage: true,

@@ -1296,7 +1296,7 @@
     >
   </div>
 </div>
-<div class="chart-frame">
+<div class="chart-frame" style:--plot-left={`${margin.left}px`}>
   <div class="chart-plot" bind:this={chartPlot}>
     <div
       class="vertical-axis-overlay"
@@ -1830,9 +1830,10 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 5px 12px;
-    margin: 6px 0 0 42px;
+    /* Legends start where the plot does, under the first call. */
+    margin: 6px 0 0 var(--plot-left);
     color: #c4d0e4;
-    font-size: 11px;
+    font-size: 12px;
   }
   .group-type-legend strong {
     color: #edf2fb;
@@ -2033,7 +2034,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem 1rem;
-    padding: 0.45rem 0.75rem;
+    padding: 0.45rem 0 0.45rem var(--plot-left);
     color: #aab4c7;
     font-size: 0.75rem;
   }

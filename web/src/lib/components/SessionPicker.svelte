@@ -180,16 +180,21 @@
     min-width: 0;
     box-sizing: border-box;
     height: 36px;
-    padding: 7px 9px;
+    padding: 7px 32px 7px 9px;
     border: 1px solid var(--control-border);
     border-radius: 7px;
-    background: var(--surface);
+    background-color: var(--surface);
     color: var(--text);
     font: inherit;
     font-size: 14px;
   }
   input {
     text-overflow: ellipsis;
+    /* Shows that the field opens a list, like the Harness dropdown beside it. */
+    background-image: var(--chevron);
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px 8px;
   }
   input::placeholder {
     color: var(--secondary);
