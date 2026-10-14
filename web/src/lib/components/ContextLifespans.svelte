@@ -272,7 +272,6 @@
       <span class="disclosure-chevron" aria-hidden="true"></span>
       <span class="lifespan-heading">
         <h2>Context lifespans · {itemCountLabel(allItems.length)}</h2>
-        <span class="disclosure-action">{expanded ? 'Collapse' : 'Expand'} lifespans</span>
       </span>
       {#if filtersActive}<span class="result-count"
           >{formatInteger(visibleItems.length)} of {formatInteger(allItems.length)} items</span
@@ -534,10 +533,6 @@
     display: grid;
     min-width: 0;
     gap: 2px;
-  }
-  .disclosure-action {
-    color: var(--secondary);
-    font-size: 12px;
   }
   .lifespan-header:focus-visible {
     outline: 2px solid #9fc0ff;

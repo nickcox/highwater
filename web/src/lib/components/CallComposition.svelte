@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InfoPopover from './InfoPopover.svelte';
   import { onMount, tick } from 'svelte';
   import type { IndexedAnalysis } from '../types';
   import { itemColor, itemTextColor } from '../context-river/colors';
@@ -361,7 +362,7 @@
     <header class="composition-header">
       <div class="scope-title">
         <h3>{scopeHeading}</h3>
-        <p>{unitLabel} · {projectionDescription} · {methodDescription}</p>
+        <p>{unitLabel} · {projectionDescription}</p>
       </div>
       {#if pinnedCallIndex !== null}
         <div class="endpoint-actions">
@@ -386,9 +387,36 @@
       {/if}
     </header>
 
-    {#if scope === 'cumulative' && profileDescriptions.length > 0}
-      <details class="profile-diagnostics">
-        <summary>Profile details</summary>
+    <!-- Only worth saying when some item appearances have no numeric estimate. -->
+    {#if totalAppearanceCount === 0 || numericAppearanceCount !== totalAppearanceCount}
+      <p class="coverage-headline">{coverageHeadline()}</p>
+    {/if}
+    <div class="composition-totals" aria-label="Composition totals and coverage">
+      <strong
+        >{formatMetric(projection.measuredTokenTotal)}
+        {projectionItemsLabel}{#if coverageIsPartial}<InfoPopover
+            id="composition-totals-note"
+            label="About these totals"
+            >Totals and shares use only the item appearances with numeric estimates. Some
+            appearances have no estimate or are only partly counted, so the totals can be lower than
+            the true figure.</InfoPopover
+          >{/if}</strong
+      >
+      <span>
+        {formatMetric(projection.items.length)} items
+        {#if projection.unmeasuredItemCount > 0}
+          · {formatMetric(projection.measuredItemCount)} with numeric estimates
+        {/if}
+      </span>
+      {#if projection.unmeasuredItemCount > 0}<span
+          >{formatMetric(projection.unmeasuredItemCount)} items unavailable</span
+        >{/if}
+    </div>
+    <!-- How the estimates were made and exactly how many there are, for checking the estimator. -->
+    <details class="coverage-details">
+      <summary>Diagnostics</summary>
+      <p>Tokenizer: {methodDescription}</p>
+      {#if scope === 'cumulative' && profileDescriptions.length > 0}
         <ul>
           {#each profileDescriptions as profile (profile.id)}
             <li>
@@ -397,33 +425,12 @@
             </li>
           {/each}
         </ul>
-      </details>
-    {:else if scope === 'atCall' && call?.tokenizationProfileId}
-      <details class="profile-diagnostics">
-        <summary>Profile details</summary>
+      {:else if scope === 'atCall' && call?.tokenizationProfileId}
         <p>
           <code>{call.tokenizationProfileId}</code>
           <CopyButton value={call.tokenizationProfileId} label="profile ID" />
         </p>
-      </details>
-    {/if}
-
-    <p class="coverage-headline">{coverageHeadline()}</p>
-    <div class="composition-totals" aria-label="Composition totals and coverage">
-      <strong>{formatMetric(projection.measuredTokenTotal)} {projectionItemsLabel}</strong>
-      <span>
-        {formatMetric(projection.items.length)} items
-        {#if projection.unmeasuredItemCount > 0}
-          · {formatMetric(projection.measuredItemCount)} with numeric estimates
-        {/if}
-      </span>
-      {#if coverageIsPartial}<span>Available-estimate subset</span>{/if}
-      {#if projection.unmeasuredItemCount > 0}<span
-          >{formatMetric(projection.unmeasuredItemCount)} items unavailable</span
-        >{/if}
-    </div>
-    <details class="coverage-details">
-      <summary>Exact coverage counts</summary>
+      {/if}
       <p>
         {formatMetric(numericAppearanceCount)} of {formatMetric(totalAppearanceCount)} item appearances
         have numeric estimates in this {scope === 'atCall' ? 'call' : 'cumulative scope'}.
@@ -797,7 +804,6 @@
     font-size: 11px;
   }
   .composition-help,
-  .profile-diagnostics,
   .reconciliation {
     margin: 8px 0;
     color: #aebbd0;
@@ -819,16 +825,13 @@
   }
   .help-content p,
   .reconciliation p,
-  .profile-diagnostics p {
-    margin: 5px 0;
-  }
-  .profile-diagnostics ul {
+  .coverage-details ul {
     display: grid;
     gap: 5px;
     padding-left: 20px;
     overflow-wrap: anywhere;
   }
-  .profile-diagnostics code {
+  .coverage-details code {
     overflow-wrap: anywhere;
   }
   .reconciliation dl {

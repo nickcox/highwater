@@ -2511,7 +2511,12 @@ test('wide exploration keeps a bounded sticky inspector beside the chart', async
   expect(lifespanBounds!.y).toBeGreaterThanOrEqual(chartBounds!.y + chartBounds!.height);
   expect(await inspector.evaluate((element) => getComputedStyle(element).maxHeight)).toBe('868px');
 
-  await page.evaluate(() => window.scrollTo(0, 320));
+  // The mocked page is barely taller than the viewport, so add room below it to scroll into.
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '1000px';
+    window.scrollTo(0, 320);
+  });
+  expect(await page.evaluate(() => window.scrollY)).toBe(320);
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   const stickyTop = await inspector.evaluate((element) => element.getBoundingClientRect().top);
   expect(stickyTop).toBeGreaterThanOrEqual(12);
