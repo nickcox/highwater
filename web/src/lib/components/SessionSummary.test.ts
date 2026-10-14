@@ -19,7 +19,7 @@ describe('SessionSummary', () => {
     const details = container.querySelector('details.session-details') as HTMLDetailsElement;
     expect(details.open).toBe(false);
     expect(details.querySelector('summary')).toHaveTextContent('Session details');
-    expect(details).toHaveTextContent('Provider prompt');
+    expect(details).toHaveTextContent('Input tokens, all calls');
     expect(details).toHaveTextContent('Compactions');
     expect(details).toHaveTextContent('Working directory');
     expect(details).not.toHaveTextContent('Reported input not reconstructed');
@@ -31,13 +31,19 @@ describe('SessionSummary', () => {
     expect(indicator.closest('details')).toBeNull();
 
     const columns = container.querySelector('.detail-columns')!;
-    const groups = [...columns.querySelectorAll(':scope > .detail-column')];
+    const groups = [...columns.querySelectorAll(':scope > section')];
     expect(groups).toHaveLength(2);
     expect(groups[0]).toHaveTextContent('Usage breakdown');
-    expect(groups[0]).toHaveTextContent('Reported usage and economics');
-    expect(groups[0]).toHaveTextContent('not provider-billed charges');
-    expect(groups[0]).toHaveTextContent('Session metadata');
-    expect(groups[1]).toHaveTextContent('Token estimates and diagnostics');
+    expect(groups[0]).toHaveTextContent('Cache-read share');
+    expect(groups[1]).toHaveTextContent('Session metadata');
+    expect(groups[1]).not.toHaveTextContent('Source');
+    // The estimator's own figures sit in one closed Diagnostics section.
+    const diagnostics = details.querySelector('details.diagnostics') as HTMLDetailsElement;
+    expect(diagnostics.open).toBe(false);
+    expect(diagnostics).toHaveTextContent('Tokenizer methods');
+    expect(diagnostics).toHaveTextContent('Estimate coverage');
+    expect(columns).not.toHaveTextContent('Tokenizer methods');
+    expect(details).not.toHaveTextContent('Calls missing provider usage');
   });
 
   it('shows billed cost with its call count and the calls without a price', () => {

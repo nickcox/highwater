@@ -79,7 +79,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
 
   const withTotal = claudeCode.find((session) => session.displayName === 'project · 00000014')!;
   await chooseSession(page, withTotal.id);
-  await page.locator('#session-details summary').click();
+  await page.locator('#session-details-summary').click();
   await expect(page.locator('#session-details')).toContainText("Claude Code's own total (USD)");
   await expect(page.locator('#session-details')).toContainText(
     "includes subagents and Claude Code's own calls, which are not in this transcript",

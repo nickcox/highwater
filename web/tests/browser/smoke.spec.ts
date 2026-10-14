@@ -559,7 +559,7 @@ test('mocked app loads a session, selects an item, and navigates the chart', asy
     await expect(page.getByText('Pinned call 1')).toBeVisible();
     await captureBaselineState(page, screenshotDirectory, 'desktop-selected-pinned');
     const sessionDetails = page.locator('.session-details');
-    await sessionDetails.locator('summary').click();
+    await sessionDetails.locator('#session-details-summary').click();
     await expect(sessionDetails).toHaveAttribute('open', '');
     await captureBaselineState(page, screenshotDirectory, 'desktop-session-details-expanded');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -2458,10 +2458,10 @@ test('native disclosures, Escape navigation, and exact-item emphasis work in a b
   const sessionDetails = page.locator('.session-details');
   await expect(sessionDetails).not.toHaveAttribute('open', '');
   await expect(sessionDetails.getByRole('heading', { name: 'Usage breakdown' })).not.toBeVisible();
-  await sessionDetails.locator('summary').press('Enter');
+  await sessionDetails.locator('#session-details-summary').press('Enter');
   await expect(sessionDetails).toHaveAttribute('open', '');
   await expect(sessionDetails.getByRole('heading', { name: 'Usage breakdown' })).toBeVisible();
-  await sessionDetails.locator('summary').press('Enter');
+  await sessionDetails.locator('#session-details-summary').press('Enter');
   await expect(sessionDetails).not.toHaveAttribute('open', '');
 
   const chart = page.getByRole('application', { name: 'Context River' });

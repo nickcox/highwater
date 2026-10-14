@@ -30,9 +30,16 @@
   $: providers =
     [...new Set(analysis.modelCalls.map((call) => call.provider).filter(Boolean))].join(', ') ||
     'Unknown';
+  // A failed attempt never reached a model; Claude Code names its placeholder "<synthetic>".
   $: models =
-    [...new Set(analysis.modelCalls.map((call) => call.model).filter(Boolean))].join(', ') ||
-    'Unknown';
+    [
+      ...new Set(
+        analysis.modelCalls
+          .filter((call) => !call.usage.placeholder)
+          .map((call) => call.model)
+          .filter(Boolean),
+      ),
+    ].join(', ') || 'Unknown';
   $: coverage = tokenAnalysis.itemEstimateCoverage;
   $: estimates = estimateSummary(indexed);
   $: costCopy = describeCostBasis(economics.costBasis, session.source);
@@ -50,9 +57,6 @@
     session.reportedPromptTokens === null
       ? null
       : recordedCoverageNote(session.reportedUsageCoverage);
-  $: usageMappingLabel = isPiSource(session.source)
-    ? 'audited Pi provider/API mappings'
-    : 'audited provider/API mappings';
 </script>
 
 <section class="summary" aria-label="Session summary">
@@ -97,249 +101,245 @@
     <details class="session-details" id="session-details">
       <summary class="disclosure" id="session-details-summary">Session details</summary>
       <div class="detail-columns">
-        <div class="detail-column">
-          <section>
-            <h3>Usage breakdown</h3>
-            <dl>
+        <section>
+          <h3>Usage breakdown</h3>
+          <dl>
+            <div>
+              <dt>
+                Input tokens, all calls<InfoPopover
+                  id="input-tokens-note"
+                  label="About input tokens"
+                  >Input tokens summed over every call. Each call sends the whole context again, so
+                  most of these are cache reads.</InfoPopover
+                >
+              </dt>
+              <dd>
+                {formatMetric(session.reportedPromptTokens)}
+                {#if usageCoverageNote}<small class="metric-note">{usageCoverageNote}</small>{/if}
+              </dd>
+            </div>
+            <div>
+              <dt>Output tokens, all calls</dt>
+              <dd>{formatMetric(session.reportedCompletionTokens)}</dd>
+            </div>
+            <div>
+              <dt>Reasoning tokens, all calls</dt>
+              <dd>
+                {#if session.reportedReasoningTokens === null}Not recorded<InfoPopover
+                    id="reasoning-tokens-note"
+                    label="Why reasoning tokens are not recorded"
+                    >{harnessName(session.source)} does not record reasoning tokens separately for these
+                    calls. Any reasoning is included in the output tokens.</InfoPopover
+                  >{:else}{formatMetric(session.reportedReasoningTokens)}{/if}
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Cache-read share<InfoPopover
+                  id="cache-read-share-note"
+                  label="About cache-read share"
+                  >The share of input tokens read from the provider's cache, over the {coverageLabel(
+                    economics.cacheReadEligibleCalls,
+                    analysis.modelCalls.length,
+                  )} calls with complete usage.</InfoPopover
+                >
+              </dt>
+              <dd>{formatPercent(economics.cacheReadRatio)}</dd>
+            </div>
+            <div>
+              <dt>Compactions</dt>
+              <dd>{formatInteger(analysis.compactions.length)}</dd>
+            </div>
+            <div>
+              <dt>Billed cost (USD)</dt>
+              <dd>
+                {costSummary.billed.calls > 0
+                  ? formatCostSubtotal(costSummary.billed, true)
+                  : 'None'}
+              </dd>
+            </div>
+            <div>
+              <dt>API-equivalent cost of subscription calls (USD)</dt>
+              <dd>
+                {costSummary.apiEquivalent.calls > 0
+                  ? formatCostSubtotal(costSummary.apiEquivalent, true)
+                  : 'None'}
+              </dd>
+            </div>
+            <div>
+              <dt>Recorded by {harnessName(session.source)} (USD)</dt>
+              <dd>
+                {formatCost(session.reportedCostTotal)}
+                {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
+              </dd>
+            </div>
+            {#if session.harnessSessionCost}
               <div>
-                <dt>Provider prompt</dt>
+                <dt>{harnessName(session.source)}'s own total (USD)</dt>
                 <dd>
-                  {formatMetric(session.reportedPromptTokens)}
-                  {#if usageCoverageNote}<small class="metric-note">{usageCoverageNote}</small>{/if}
+                  {formatSessionCost(session.harnessSessionCost.totalUsd)}
+                  <small class="metric-note"
+                    >{harnessSessionCostNote(session.harnessSessionCost, session.source)}</small
+                  >
                 </dd>
               </div>
-              <div>
-                <dt>Provider output</dt>
-                <dd>{formatMetric(session.reportedCompletionTokens)}</dd>
-              </div>
-              <div>
-                <dt>Provider reasoning</dt>
-                <dd>{formatMetric(session.reportedReasoningTokens)}</dd>
-              </div>
-              <div>
-                <dt>Reported usage completeness</dt>
-                <dd>{session.reportedUsageCompleteness}</dd>
-              </div>
-              <div>
-                <dt>Compactions</dt>
-                <dd>{formatInteger(analysis.compactions.length)}</dd>
-              </div>
-              <div>
-                <dt>Billed cost (USD)</dt>
-                <dd>
-                  {costSummary.billed.calls > 0
-                    ? formatCostSubtotal(costSummary.billed, true)
-                    : 'None'}
-                </dd>
-              </div>
-              <div>
-                <dt>API-equivalent cost of subscription calls (USD)</dt>
-                <dd>
-                  {costSummary.apiEquivalent.calls > 0
-                    ? formatCostSubtotal(costSummary.apiEquivalent, true)
-                    : 'None'}
-                </dd>
-              </div>
-              <div>
-                <dt>Recorded by {harnessName(session.source)} (USD)</dt>
-                <dd>
-                  {formatCost(session.reportedCostTotal)}
-                  {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
-                </dd>
-              </div>
-              {#if session.harnessSessionCost}
-                <div>
-                  <dt>{harnessName(session.source)}'s own total (USD)</dt>
-                  <dd>
-                    {formatSessionCost(session.harnessSessionCost.totalUsd)}
-                    <small class="metric-note"
-                      >{harnessSessionCostNote(session.harnessSessionCost, session.source)}</small
-                    >
-                  </dd>
-                </div>
-              {/if}
-              <div>
-                <dt>Price data</dt>
-                <dd>
-                  models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
+            {/if}
+            <div>
+              <dt>Price data</dt>
+              <dd>
+                models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
+                  0,
+                  10,
+                )}){#if priceData.amendmentsImportedFrom}, corrections from model-prices {priceData.amendmentsImportedFrom.slice(
                     0,
-                    10,
-                  )}){#if priceData.amendmentsImportedFrom}, corrections from model-prices {priceData.amendmentsImportedFrom.slice(
-                      0,
-                      7,
-                    )}{/if}
-                </dd>
-              </div>
-              <div>
-                <dt>Recorded cost basis</dt>
-                <dd>{costCopy.basisLabel}</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section>
-            <h3>Reported usage and economics</h3>
-            <p>
-              Token ratios use {usageMappingLabel}. Some adapters normalize absent provider buckets
-              to zero, so completeness describes persisted normalized usage, not proof the provider
-              explicitly sent every zero. {costCopy.note}
-            </p>
-            <dl>
-              <div>
-                <dt>Cache-read share</dt>
-                <dd>
-                  {formatPercent(economics.cacheReadRatio)} ·
-                  {coverageLabel(economics.cacheReadEligibleCalls, analysis.modelCalls.length)}
-                  calls with complete supported usage
-                </dd>
-              </div>
-              <div>
-                <dt>Usage policy coverage (complete / partial / missing / unsupported)</dt>
-                <dd>
-                  {formatInteger(economics.usageCompleteness.complete)} complete ·
-                  {formatInteger(economics.usageCompleteness.partial)} partial ·
-                  {formatInteger(economics.usageCompleteness.missing)} missing ·
-                  {formatInteger(economics.usageCompleteness.unsupported)} unsupported
-                </dd>
-              </div>
-              <div>
-                <dt>
-                  {costCopy.label} component coverage (complete / partial / missing / unsupported)
-                </dt>
-                <dd>
-                  {formatInteger(economics.costCompleteness.complete)} complete ·
-                  {formatInteger(economics.costCompleteness.partial)} partial ·
-                  {formatInteger(economics.costCompleteness.missing)} missing ·
-                  {formatInteger(economics.costCompleteness.unsupported)} unsupported
-                </dd>
-              </div>
-              <div>
-                <dt>Cache-write limits</dt>
-                <dd>
-                  {#if isPiSource(session.source)}
-                    Anthropic writes are aggregated across TTLs. Copilot Responses uses separately
-                    recorded writes; older direct OpenAI adapter zeros do not establish measured
-                    zero writes. See each call's audited policy.
-                  {:else}
-                    Cache-write detail follows the source normalization policy; see call details for
-                    the policy and completeness status.
-                  {/if}
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section>
-            <h3>Session metadata</h3>
-            <dl>
-              <div>
-                <dt>Provider</dt>
-                <dd>{providers}</dd>
-              </div>
-              <div>
-                <dt>Model</dt>
-                <dd>{models}</dd>
-              </div>
-              <div>
-                <dt>Source</dt>
-                <dd>{session.source}</dd>
-              </div>
+                    7,
+                  )}{/if}
+              </dd>
+            </div>
+            <div>
+              <dt>Recorded cost basis</dt>
+              <dd>{costCopy.basisLabel}</dd>
+            </div>
+          </dl>
+        </section>
+        <section>
+          <h3>Session metadata</h3>
+          <dl>
+            <div>
+              <dt>Provider</dt>
+              <dd>{providers} · recorded by {harnessName(session.source)}</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd>{models}</dd>
+            </div>
+            {#if session.title}
               <div>
                 <dt>Title</dt>
-                <dd>{session.title ?? 'Unknown'}</dd>
+                <dd>{session.title}</dd>
               </div>
-              <div>
-                <dt>Working directory</dt>
-                <dd>{session.workingDirectory ?? 'Unknown'}</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
-
-        <div class="detail-column">
-          <section>
-            <h3>Token estimates and diagnostics</h3>
-            <dl>
-              {#if tokenAnalysis.fallbackReason}
-                <div>
-                  <dt>Fallback code</dt>
-                  <dd><code>{tokenAnalysis.fallbackReason}</code></dd>
-                </div>
-              {/if}
-              <div>
-                <dt>Estimate coverage (complete / partial / unavailable)</dt>
-                <dd>
-                  {coverageLabel(coverage.completeItems, coverage.totalItems)} complete ·
-                  {formatInteger(coverage.partialItems)} partial ·
-                  {formatInteger(coverage.unavailableItems)} unavailable
-                </dd>
-              </div>
-              <div>
-                <dt>Calculated token-turns</dt>
-                <dd>{formatMetric(session.calculatedTokenTurns)}</dd>
-              </div>
-              <div>
-                <dt>Token-turn exposure coverage</dt>
-                <dd>
-                  {coverageLabel(
-                    session.calculatedTokenTurnsCoverage.coveredCalls,
-                    session.calculatedTokenTurnsCoverage.totalCalls,
-                  )}
-                </dd>
-              </div>
-              {#if hasReconciliation}
-                <div>
-                  <dt>Reconciliation (complete / comparable calls)</dt>
-                  <dd>
-                    {formatInteger(session.reconciliationCompleteCalls)} /
-                    {formatInteger(session.reconciliationComparableCalls)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Residual median / maximum</dt>
-                  <dd>
-                    {formatPercent(session.medianAbsoluteResidualPercent)} /
-                    {formatPercent(session.maximumAbsoluteResidualPercent)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Negative residual calls</dt>
-                  <dd>{formatInteger(session.negativeResidualCalls)}</dd>
-                </div>
-              {:else if inputSummary}
-                <div>
-                  <dt>Calls where the estimate exceeds reported input</dt>
-                  <dd>{formatInteger(inputSummary.estimateAboveReportedCalls)}</dd>
-                </div>
-              {/if}
-              <div>
-                <dt>Calls missing provider usage</dt>
-                <dd>{formatInteger(session.missingProviderUsageCalls)}</dd>
-              </div>
-              <div>
-                <dt>Tokenizer methods</dt>
-                <dd>
-                  {Object.entries(tokenAnalysis.tokenizerMethods)
-                    .map(([method, count]) => `${method}: ${formatInteger(count)}`)
-                    .join(' · ') || 'None'}
-                </dd>
-              </div>
-            </dl>
-            {#if tokenAnalysis.profiles.length > 0}
-              <h4>Tokenization profiles</h4>
-              <ul class="profiles">
-                {#each tokenAnalysis.profiles as profile (profile.id)}
-                  <li>
-                    {profile.provider} / {profile.model} · {profile.method} · {profile.tokenizerFamily}
-                    (v{profile.version}){#if profile.api}
-                      · {profile.api}{/if}
-                  </li>
-                {/each}
-              </ul>
             {/if}
-          </section>
-        </div>
+            <div>
+              <dt>Working directory</dt>
+              <dd>{session.workingDirectory ?? 'Unknown'}</dd>
+            </div>
+          </dl>
+        </section>
       </div>
+      <!-- How the estimates and usage figures were worked out, for checking the estimator. -->
+      <details class="diagnostics">
+        <summary class="disclosure">Diagnostics</summary>
+        <dl>
+          <div>
+            <dt>Reported usage completeness</dt>
+            <dd>{session.reportedUsageCompleteness}</dd>
+          </div>
+          <div>
+            <dt>Usage policy coverage (complete / partial / missing / unsupported)</dt>
+            <dd>
+              {formatInteger(economics.usageCompleteness.complete)} complete ·
+              {formatInteger(economics.usageCompleteness.partial)} partial ·
+              {formatInteger(economics.usageCompleteness.missing)} missing ·
+              {formatInteger(economics.usageCompleteness.unsupported)} unsupported
+            </dd>
+          </div>
+          {#if session.source !== 'claude-code'}
+            <div>
+              <dt>
+                {costCopy.label} component coverage (complete / partial / missing / unsupported)
+              </dt>
+              <dd>
+                {formatInteger(economics.costCompleteness.complete)} complete ·
+                {formatInteger(economics.costCompleteness.partial)} partial ·
+                {formatInteger(economics.costCompleteness.missing)} missing ·
+                {formatInteger(economics.costCompleteness.unsupported)} unsupported
+              </dd>
+            </div>
+          {/if}
+          {#if isPiSource(session.source)}
+            <div>
+              <dt>Cache-write limits</dt>
+              <dd>
+                Anthropic writes are aggregated across TTLs. Copilot Responses uses separately
+                recorded writes; older direct OpenAI adapter zeros do not establish measured zero
+                writes. See each call's audited policy.
+              </dd>
+            </div>
+          {/if}
+          {#if tokenAnalysis.fallbackReason}
+            <div>
+              <dt>Fallback code</dt>
+              <dd><code>{tokenAnalysis.fallbackReason}</code></dd>
+            </div>
+          {/if}
+          <div>
+            <dt>Estimate coverage (complete / partial / unavailable)</dt>
+            <dd>
+              {coverageLabel(coverage.completeItems, coverage.totalItems)} complete ·
+              {formatInteger(coverage.partialItems)} partial ·
+              {formatInteger(coverage.unavailableItems)} unavailable
+            </dd>
+          </div>
+          <div>
+            <dt>Calculated token-turns</dt>
+            <dd>{formatMetric(session.calculatedTokenTurns)}</dd>
+          </div>
+          <div>
+            <dt>Token-turn exposure coverage</dt>
+            <dd>
+              {coverageLabel(
+                session.calculatedTokenTurnsCoverage.coveredCalls,
+                session.calculatedTokenTurnsCoverage.totalCalls,
+              )}
+            </dd>
+          </div>
+          {#if hasReconciliation}
+            <div>
+              <dt>Reconciliation (complete / comparable calls)</dt>
+              <dd>
+                {formatInteger(session.reconciliationCompleteCalls)} /
+                {formatInteger(session.reconciliationComparableCalls)}
+              </dd>
+            </div>
+            <div>
+              <dt>Residual median / maximum</dt>
+              <dd>
+                {formatPercent(session.medianAbsoluteResidualPercent)} /
+                {formatPercent(session.maximumAbsoluteResidualPercent)}
+              </dd>
+            </div>
+            <div>
+              <dt>Negative residual calls</dt>
+              <dd>{formatInteger(session.negativeResidualCalls)}</dd>
+            </div>
+          {:else if inputSummary}
+            <div>
+              <dt>Calls where the estimate exceeds reported input</dt>
+              <dd>{formatInteger(inputSummary.estimateAboveReportedCalls)}</dd>
+            </div>
+          {/if}
+          <div>
+            <dt>Tokenizer methods</dt>
+            <dd>
+              {Object.entries(tokenAnalysis.tokenizerMethods)
+                .map(([method, count]) => `${method}: ${formatInteger(count)}`)
+                .join(' · ') || 'None'}
+            </dd>
+          </div>
+        </dl>
+        {#if tokenAnalysis.profiles.length > 0}
+          <h4>Tokenization profiles</h4>
+          <ul class="profiles">
+            {#each tokenAnalysis.profiles as profile (profile.id)}
+              <li>
+                {profile.provider} / {profile.model} · {profile.method} · {profile.tokenizerFamily}
+                (v{profile.version}){#if profile.api}
+                  · {profile.api}{/if}
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </details>
     </details>
   </div>
 </section>
@@ -443,12 +443,6 @@
     border: 1px solid var(--separator);
     border-radius: 8px;
   }
-  .detail-column {
-    display: grid;
-    align-content: start;
-    gap: 14px;
-    min-width: 0;
-  }
   h3 {
     margin: 0 0 7px;
     color: #e2e8f3;
@@ -472,6 +466,13 @@
     margin: 1px 0 0;
     overflow-wrap: anywhere;
     color: #d7e0ef;
+  }
+  .diagnostics {
+    margin-top: 10px;
+    padding: 0 12px;
+  }
+  .diagnostics > dl {
+    margin-top: 8px;
   }
   .profiles {
     margin: 0;
