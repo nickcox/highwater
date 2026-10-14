@@ -12,13 +12,23 @@ fn valid_instant(value: Option<i64>) -> Option<i64> {
 
 /// Pi's checked built-in adapters initialize message.timestamp before requesting
 /// a response. Unknown/custom APIs retain their instants but have no inferred rate.
-pub(super) fn call_timing(call: &NormalizedModelCall, pi_source: bool) -> CallTiming {
+/// VS Code Copilot's start instant comes only from a call's trace span, which runs from
+/// sending the request to the end of the response.
+pub(super) fn call_timing(call: &NormalizedModelCall, harness: &str) -> CallTiming {
     let mut timing = CallTiming {
         started_at_ms: valid_instant(call.timestamps.started_at_ms),
         recorded_at_ms: valid_instant(call.timestamps.recorded_at_ms),
         ..CallTiming::default()
     };
-    if !pi_source
+    if harness == "vscode-copilot" {
+        if let Some(ms) = duration(&timing) {
+            timing.duration_ms = Some(ms);
+            timing.basis = Some("vscode-copilot-trace-spans");
+            timing.effective_output_tokens_per_second = rate(call, ms);
+        }
+        return timing;
+    }
+    if harness != "pi"
         || !matches!(
             call.target.api.as_deref(),
             Some(
@@ -42,27 +52,34 @@ pub(super) fn call_timing(call: &NormalizedModelCall, pi_source: bool) -> CallTi
     ) {
         return timing;
     }
-    let duration = timing
-        .started_at_ms
-        .zip(timing.recorded_at_ms)
-        .and_then(|(start, end)| end.checked_sub(start))
-        .and_then(|ms| u64::try_from(ms).ok())
-        .filter(|ms| *ms > 0 && *ms <= MAX_SAFE_JSON_INTEGER);
-    if let Some(ms) = duration {
+    if let Some(ms) = duration(&timing) {
         timing.duration_ms = Some(ms);
         timing.basis = Some("pi-message-timestamps");
         if matches!(
             call.stop_reason.as_deref(),
             Some("stop" | "toolUse" | "length")
         ) {
-            timing.effective_output_tokens_per_second = call
-                .reported_usage
-                .output
-                .filter(|tokens| *tokens <= MAX_SAFE_JSON_INTEGER)
-                .map(|tokens| tokens as f64 * 1000.0 / ms as f64);
+            timing.effective_output_tokens_per_second = rate(call, ms);
         }
     }
     timing
+}
+
+fn duration(timing: &CallTiming) -> Option<u64> {
+    timing
+        .started_at_ms
+        .zip(timing.recorded_at_ms)
+        .and_then(|(start, end)| end.checked_sub(start))
+        .and_then(|ms| u64::try_from(ms).ok())
+        .filter(|ms| *ms > 0 && *ms <= MAX_SAFE_JSON_INTEGER)
+}
+
+/// Reported output, including reasoning, per second of the call.
+fn rate(call: &NormalizedModelCall, ms: u64) -> Option<f64> {
+    call.reported_usage
+        .output
+        .filter(|tokens| *tokens <= MAX_SAFE_JSON_INTEGER)
+        .map(|tokens| tokens as f64 * 1000.0 / ms as f64)
 }
 
 #[cfg(test)]
@@ -71,13 +88,28 @@ mod tests {
     use crate::{analysis::test_support::fake_session, domain::CallTimestamps};
 
     fn call_timing(call: &NormalizedModelCall) -> CallTiming {
-        super::call_timing(call, true)
+        super::call_timing(call, "pi")
+    }
+
+    #[test]
+    fn copilot_trace_spans_give_a_duration_and_rate() {
+        let mut call = call();
+        call.stop_reason = None;
+        let timing = super::call_timing(&call, "vscode-copilot");
+        assert_eq!(timing.duration_ms, Some(2000));
+        assert_eq!(timing.effective_output_tokens_per_second, Some(50.0));
+        assert_eq!(timing.basis, Some("vscode-copilot-trace-spans"));
+        // Without a trace span there is no start instant.
+        call.timestamps.started_at_ms = None;
+        let timing = super::call_timing(&call, "vscode-copilot");
+        assert_eq!(timing.duration_ms, None);
+        assert_eq!(timing.basis, None);
     }
 
     #[test]
     fn other_sources_keep_instants_without_claiming_pi_timing_semantics() {
         let call = call();
-        let timing = super::call_timing(&call, false);
+        let timing = super::call_timing(&call, "opencode");
         assert_eq!(timing.started_at_ms, call.timestamps.started_at_ms);
         assert_eq!(timing.duration_ms, None);
         assert_eq!(timing.basis, None);

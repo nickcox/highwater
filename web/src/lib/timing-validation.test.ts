@@ -18,6 +18,33 @@ function timed() {
   return analysis;
 }
 
+function copilotTimed() {
+  const analysis = timed();
+  analysis.session.source = 'vscode-copilot';
+  analysis.reconstruction = { status: 'partial', explanationCodes: ['unrecordedHarnessCalls'] };
+  const call = analysis.modelCalls[0];
+  call.api = 'anthropic-messages';
+  call.stopReason = 'stop';
+  call.timing.basis = 'vscode-copilot-trace-spans';
+  return analysis;
+}
+
+describe('VS Code Copilot trace span timing', () => {
+  it('accepts a trace span duration whatever the stop reason', () => {
+    const analysis = copilotTimed();
+    analysis.modelCalls[0].stopReason = null;
+    expect(indexTestAnalysis(analysis).analysis.modelCalls[0].timing.durationMs).toBe(2000);
+  });
+  it.each(['other-source', 'mismatch', 'wrong-rate'])('rejects %s', (kind) => {
+    const analysis = copilotTimed();
+    const call = analysis.modelCalls[0];
+    if (kind === 'other-source') analysis.session.source = 'pi';
+    if (kind === 'mismatch') call.timing.recordedAtMs! += 1;
+    if (kind === 'wrong-rate') call.timing.effectiveOutputTokensPerSecond = 100;
+    expect(() => indexTestAnalysis(analysis)).toThrow(AnalysisValidationError);
+  });
+});
+
 describe('call timing boundary validation', () => {
   it('accepts usable and independently retained unknown-source instants without repairing data', () => {
     const analysis = timed();

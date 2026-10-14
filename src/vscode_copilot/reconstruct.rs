@@ -1,31 +1,45 @@
 //! Turns a replayed session into model calls and context items. Section 5 of
 //! plans/vscode-copilot-implementation-plan.md describes the rules.
 
-use super::Limitation;
+use super::{
+    traces::{TraceCall, Traces},
+    Limitation,
+};
 use crate::{
     domain::*,
     pi::reconstruct::{bounded_label, display_path_argument, first_nonempty_line},
 };
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 pub(super) struct Reconstruction {
     pub session: NormalizedSession,
     pub limitations: BTreeSet<Limitation>,
 }
 
-struct State {
+struct State<'t> {
     working_directory: Option<String>,
     items: Vec<NormalizedContextItem>,
-    /// Items in context for the next call, in order.
+    item_indexes: HashMap<String, usize>,
+    /// Conversation items in context for the next call, in order.
     active: Vec<usize>,
     calls: Vec<NormalizedModelCall>,
     limitations: BTreeSet<Limitation>,
+    traces: Option<&'t Traces>,
+    /// Trace calls already matched to a request, by span ID.
+    claimed: HashSet<&'t str>,
+    /// The latest system prompt item recorded for each model. A Responses API call that
+    /// continues an earlier response does not repeat the instructions it was given.
+    systems: HashMap<Option<String>, usize>,
+    /// The conversation summary in effect, from the latest compaction.
+    summary: Option<String>,
+    compactions: Vec<NormalizedCompaction>,
 }
 
 pub(super) fn reconstruct(
     session: &Value,
     working_directory: Option<String>,
+    traces: Option<&Traces>,
 ) -> Result<Reconstruction, SourceError> {
     let id =
         text(session.get("sessionId")).ok_or(SourceError::RequiredField { field: "sessionId" })?;
@@ -37,17 +51,47 @@ pub(super) fn reconstruct(
     let mut state = State {
         working_directory,
         items: Vec::new(),
+        item_indexes: HashMap::new(),
         active: Vec::new(),
         calls: Vec::new(),
-        limitations: [
-            Limitation::MissingHistoricalSystemPrompt,
-            Limitation::MissingHistoricalToolDefinitions,
-            Limitation::UnrecordedHarnessCalls,
-        ]
-        .into(),
+        limitations: [Limitation::UnrecordedHarnessCalls].into(),
+        traces,
+        claimed: HashSet::new(),
+        systems: HashMap::new(),
+        summary: None,
+        compactions: Vec::new(),
     };
+    // Trace calls that name a request's response belong to that request.
+    if let Some(traces) = traces {
+        let responses: HashSet<&str> = requests
+            .iter()
+            .filter_map(|request| request.pointer("/result/metadata/responseId")?.as_str())
+            .collect();
+        state.claimed = traces
+            .calls
+            .iter()
+            .filter(|call| {
+                call.response_id
+                    .as_deref()
+                    .is_some_and(|id| responses.contains(id))
+            })
+            .map(|call| call.span_id.as_str())
+            .collect();
+    }
     for (position, request) in requests.iter().enumerate() {
-        state.apply_request(request, position)?;
+        let window_end = requests
+            .get(position + 1)
+            .and_then(|next| next.get("timestamp"))
+            .and_then(Value::as_i64);
+        state.apply_request(request, position, window_end)?;
+    }
+    if state.calls.iter().any(|call| !call.tool_loadout_known) {
+        state
+            .limitations
+            .insert(Limitation::MissingHistoricalSystemPrompt);
+        state
+            .limitations
+            .insert(Limitation::MissingHistoricalToolDefinitions);
     }
     let working_directory = state.working_directory.clone();
     Ok(Reconstruction {
@@ -85,8 +129,9 @@ fn counter(value: Option<&Value>, field: &'static str) -> Result<Option<u64>, So
     }
 }
 
-/// One model call: a round of a request, or a request that recorded no rounds.
-struct Round<'a> {
+/// One model call: a round of a request, a request that recorded no rounds, or a call
+/// known only from the trace records.
+struct Round<'t> {
     id: String,
     model: Option<String>,
     api: Option<String>,
@@ -94,19 +139,132 @@ struct Round<'a> {
     response: String,
     /// The round's reasoning tokens, as Copilot recorded them with its thinking.
     thinking_tokens: Option<u64>,
-    tool_calls: &'a [Value],
+    /// `(id, name, arguments)`.
+    tool_calls: Vec<(String, String, String)>,
     /// A request without rounds whose response shows tool calls: several model calls
     /// recorded as one.
     combined: bool,
+    trace: Option<&'t TraceCall>,
 }
 
-impl State {
-    fn apply_request(&mut self, request: &Value, position: usize) -> Result<(), SourceError> {
+/// Copilot adds `__vscode-<number>` to tool-call IDs in the session file; the trace
+/// records use the ID without it.
+fn base_tool_call_id(id: &str) -> &str {
+    id.split_once("__vscode-").map_or(id, |(base, _)| base)
+}
+
+/// A request's rounds and trace calls match when there are as many of each and each
+/// round made the same tool calls as its trace call.
+fn rounds_match(rounds: &[Round<'_>], calls: &[&TraceCall]) -> bool {
+    rounds.len() == calls.len()
+        && rounds.iter().zip(calls).all(|(round, call)| {
+            let recorded: BTreeSet<&str> = round
+                .tool_calls
+                .iter()
+                .map(|(id, ..)| base_tool_call_id(id))
+                .collect();
+            let traced: BTreeSet<&str> = call
+                .tool_calls
+                .iter()
+                .map(|(id, ..)| base_tool_call_id(id))
+                .collect();
+            recorded == traced
+        })
+}
+
+/// A model call known from its trace record, for a request that recorded no rounds.
+fn traced_round(call: &TraceCall) -> Round<'_> {
+    Round {
+        id: call.span_id.clone(),
+        model: call.model.clone(),
+        api: call.api.clone(),
+        recorded_at_ms: Some(call.ended_at_ms),
+        response: call.output_text.clone(),
+        thinking_tokens: call.reasoning,
+        tool_calls: call.tool_calls.clone(),
+        combined: false,
+        trace: Some(call),
+    }
+}
+
+/// Usage from a trace record. Its input includes the cached part; OpenAI models report
+/// no cache writes.
+fn traced_usage(call: &TraceCall) -> ReportedUsage {
+    let cache_read = call.cache_read.unwrap_or(0);
+    let cache_write = call.cache_write.unwrap_or(0);
+    let input = call
+        .input
+        .and_then(|input| input.checked_sub(cache_read)?.checked_sub(cache_write));
+    ReportedUsage {
+        input,
+        cache_read: input.map(|_| cache_read),
+        cache_write: input.map(|_| cache_write),
+        output: call.output,
+        recorded_output: call.output,
+        output_reasoning_relationship: if call.output.is_some() {
+            OutputReasoningRelationship::IncludesReasoning
+        } else {
+            OutputReasoningRelationship::Unknown
+        },
+        reasoning: call.reasoning,
+        ..ReportedUsage::default()
+    }
+}
+
+impl<'t> State<'t> {
+    /// The trace calls of a request: those naming its response, or for a request with no
+    /// response ID (one that was stopped), the unclaimed calls between it and the next.
+    fn trace_calls(&self, request: &Value, window_end: Option<i64>) -> Vec<&'t TraceCall> {
+        let Some(traces) = self.traces else {
+            return Vec::new();
+        };
+        if let Some(response) = request
+            .pointer("/result/metadata/responseId")
+            .and_then(Value::as_str)
+        {
+            return traces
+                .calls
+                .iter()
+                .filter(|call| call.response_id.as_deref() == Some(response))
+                .collect();
+        }
+        let Some(start) = request.get("timestamp").and_then(Value::as_i64) else {
+            return Vec::new();
+        };
+        traces
+            .calls
+            .iter()
+            .filter(|call| {
+                !self.claimed.contains(call.span_id.as_str())
+                    && call.started_at_ms >= start
+                    && window_end.is_none_or(|end| call.started_at_ms < end)
+            })
+            .collect()
+    }
+
+    fn apply_request(
+        &mut self,
+        request: &Value,
+        position: usize,
+        window_end: Option<i64>,
+    ) -> Result<(), SourceError> {
         let request_id = text(request.get("requestId")).unwrap_or_else(|| format!("{position}"));
-        let rounds = rounds(request, &request_id)?;
+        let mut rounds = rounds(request, &request_id)?;
         if rounds.is_empty() {
             // A cancelled request with no response never reached a model.
             return Ok(());
+        }
+        let traced = self.trace_calls(request, window_end);
+        if !traced.is_empty() {
+            if rounds[0].combined {
+                rounds = traced.iter().map(|call| traced_round(call)).collect();
+            } else if rounds_match(&rounds, &traced) {
+                for (round, call) in rounds.iter_mut().zip(&traced) {
+                    round.trace = Some(call);
+                }
+            } else {
+                self.limitations.insert(Limitation::TraceRecordsIncomplete);
+            }
         }
         let metadata = request.pointer("/result/metadata");
         if let Some(context) = metadata
@@ -183,6 +341,11 @@ impl State {
             self.limitations.insert(Limitation::UnrecordedRounds);
         }
         for (position, round) in rounds.into_iter().enumerate() {
+            if let Some(call) = round.trace {
+                let usage = traced_usage(call);
+                self.apply_round(&request_id, round, usage, results);
+                continue;
+            }
             // The request's input is its last call's; its output is every call's together,
             // so it is a call's own output only when there is one call.
             let output = if single { output_tokens } else { None };
@@ -207,21 +370,113 @@ impl State {
         Ok(())
     }
 
+    /// The system prompt and tool definition items a traced call recorded, and whether
+    /// both were recorded.
+    fn loadout(&mut self, call: &TraceCall) -> (Vec<usize>, bool) {
+        let system = match &call.system {
+            Some(text) => {
+                let index = self.loadout_item(
+                    format!("vscode-copilot:system:{}", short_hash(text)),
+                    ContextItemKind::System,
+                    "System prompt".into(),
+                    BTreeMap::new(),
+                    TokenizationPayload::SystemPrompt {
+                        text: text.clone(),
+                        complete: true,
+                    },
+                );
+                self.systems.insert(call.model.clone(), index);
+                Some(index)
+            }
+            None => self.systems.get(&call.model).copied(),
+        };
+        let mut loadout: Vec<usize> = system.into_iter().collect();
+        if let Some(tools) = &call.tools {
+            // Copilot sends Claude only the tools before `tool_search` in full. The ones after
+            // it are deferred: the model loads them through `tool_search` when it needs them.
+            let sent = match tools.iter().position(|(name, _)| name == "tool_search") {
+                Some(position) if call.api.as_deref() == Some("anthropic-messages") => {
+                    &tools[..=position]
+                }
+                _ => &tools[..],
+            };
+            for (name, definition) in sent {
+                loadout.push(self.loadout_item(
+                    format!(
+                        "vscode-copilot:tool-definition:{name}:{}",
+                        short_hash(definition)
+                    ),
+                    ContextItemKind::ToolDefinition,
+                    format!("{} definition", bounded_label(name)),
+                    BTreeMap::from([("toolName".into(), name.clone())]),
+                    TokenizationPayload::ToolDefinition {
+                        text: definition.clone(),
+                        complete: true,
+                    },
+                ));
+            }
+        }
+        (loadout, system.is_some() && call.tools.is_some())
+    }
+
+    /// The same text is the same item for every call that recorded it.
+    fn loadout_item(
+        &mut self,
+        id: String,
+        kind: ContextItemKind,
+        label: String,
+        metadata: BTreeMap<String, String>,
+        payload: TokenizationPayload,
+    ) -> usize {
+        if let Some(index) = self.item_indexes.get(&id) {
+            return *index;
+        }
+        let bytes = match &payload {
+            TokenizationPayload::SystemPrompt { text, .. }
+            | TokenizationPayload::ToolDefinition { text, .. } => byte_length(text),
+            _ => 0,
+        };
+        let index = self.items.len();
+        self.item_indexes.insert(id.clone(), index);
+        self.items.push(NormalizedContextItem {
+            id,
+            kind,
+            label,
+            source_record_id: None,
+            source_tool_call_id: None,
+            metadata,
+            serialized_size_bytes: bytes,
+            payload,
+            presence: Vec::new(),
+            first_model_call: 0,
+            last_model_call: 0,
+        });
+        index
+    }
+
     fn apply_round(
         &mut self,
         request_id: &str,
-        round: Round<'_>,
+        round: Round<'t>,
         usage: ReportedUsage,
         results: Option<&Value>,
     ) {
         let index = self.calls.len() + 1;
-        let context_item_ids = self
-            .active
+        let compaction_before = round.trace.and_then(|call| {
+            let summary = call.summary.as_ref()?;
+            (self.summary.as_ref() != Some(summary)).then(|| self.compact(summary, call, index))
+        });
+        let (loadout, loadout_known) = match round.trace {
+            Some(call) => self.loadout(call),
+            None => (Vec::new(), false),
+        };
+        let in_context: Vec<usize> = loadout.iter().chain(&self.active).copied().collect();
+        let context_item_ids = in_context
             .iter()
             .map(|item| self.items[*item].id.clone())
             .collect();
-        for item in &self.active {
-            extend_presence(&mut self.items[*item], index);
+        for item in in_context {
+            extend_presence(&mut self.items[item], index);
         }
         let mut blocks = Vec::new();
         if !round.response.is_empty() {
@@ -229,17 +484,7 @@ impl State {
         }
         let mut tool_calls_after = Vec::new();
         let mut tools = Vec::new();
-        for tool_call in round.tool_calls {
-            let Some(id) = text(tool_call.get("id")) else {
-                self.limitations.insert(Limitation::UnsupportedContent);
-                continue;
-            };
-            let name = text(tool_call.get("name")).unwrap_or_default();
-            let arguments = tool_call
-                .get("arguments")
-                .and_then(Value::as_str)
-                .unwrap_or("{}")
-                .to_owned();
+        for (id, name, arguments) in round.tool_calls {
             blocks.push(AssistantContentBlock::ToolCall {
                 id: id.clone(),
                 name: name.clone(),
@@ -253,23 +498,32 @@ impl State {
             tools.push((id, name, arguments));
         }
         self.calls.push(NormalizedModelCall {
-            tool_loadout_known: false,
+            tool_loadout_known: loadout_known,
             index,
             source_record_id: format!("{request_id}:{}", round.id),
             target: ModelTarget {
                 provider: Some("github-copilot".into()),
-                model: round.model.clone(),
-                api: round.api.clone(),
+                model: round
+                    .trace
+                    .and_then(|call| call.model.clone())
+                    .or_else(|| round.model.clone()),
+                api: round
+                    .trace
+                    .and_then(|call| call.api.clone())
+                    .or_else(|| round.api.clone()),
             },
             reported_usage: usage,
-            stop_reason: None,
+            stop_reason: round.trace.and_then(|call| call.finish_reason.clone()),
             timestamps: CallTimestamps {
-                started_at_ms: None,
-                recorded_at_ms: round.recorded_at_ms,
+                started_at_ms: round.trace.map(|call| call.started_at_ms),
+                recorded_at_ms: round
+                    .trace
+                    .map(|call| call.ended_at_ms)
+                    .or(round.recorded_at_ms),
             },
             context_item_ids,
             tool_calls_after,
-            compaction_before: None,
+            compaction_before,
         });
         // The response's thinking is sent back with later requests: encrypted for OpenAI
         // models, so it is sized by the reasoning tokens Copilot recorded for it.
@@ -317,22 +571,105 @@ impl State {
             });
         }
         for (id, name, arguments) in tools {
-            self.apply_tool_result(request_id, &id, name, &arguments, results);
+            // What the model was sent, when a trace input shows it; otherwise the session
+            // file's result; otherwise the tool's own result from the trace records.
+            let sent = self
+                .traces
+                .and_then(|traces| traces.sent_tool_results.get(base_tool_call_id(&id)));
+            let content = match (sent, results.and_then(|results| results.get(&id))) {
+                (Some(text), _) => Some(MessageContent::text(text.clone())),
+                (None, Some(result)) => Some(self.recorded_result(result)),
+                (None, None) => self
+                    .traces
+                    .and_then(|traces| traces.tool_results.get(base_tool_call_id(&id)))
+                    .map(|text| MessageContent::text(text.clone())),
+            };
+            // A tool call that was cancelled before it ran has no result.
+            if let Some(content) = content {
+                self.apply_tool_result(request_id, &id, name, &arguments, content);
+            }
         }
     }
 
-    fn apply_tool_result(
-        &mut self,
-        request_id: &str,
-        id: &str,
-        name: String,
-        arguments: &str,
-        results: Option<&Value>,
-    ) {
-        // A tool call that was cancelled before it ran has no result.
-        let Some(result) = results.and_then(|results| results.get(id)) else {
-            return;
+    /// Copilot replaced the older conversation with a summary before call `before`. The
+    /// call's input shows what it kept: workspace context, and the responses and tool
+    /// results whose tool calls it still includes, with their thinking.
+    fn compact(&mut self, summary: &str, call: &TraceCall, before: usize) -> String {
+        let kept_call = |id: &str| call.input_tool_call_ids.contains(base_tool_call_id(id));
+        let kept_assistants: HashSet<String> = self
+            .active
+            .iter()
+            .map(|index| &self.items[*index])
+            .filter(|item| match &item.payload {
+                TokenizationPayload::AssistantMessage { blocks, .. } => {
+                    blocks.iter().any(|block| match block {
+                        AssistantContentBlock::ToolCall { id, .. } => kept_call(id),
+                        _ => false,
+                    })
+                }
+                _ => false,
+            })
+            .map(|item| item.id.clone())
+            .collect();
+        let kept = |item: &NormalizedContextItem| match item.kind {
+            ContextItemKind::CustomMessage => true,
+            ContextItemKind::AssistantMessage => kept_assistants.contains(&item.id),
+            ContextItemKind::Thinking => {
+                kept_assistants.contains(&item.id.replacen(":thinking:", ":assistant:", 1))
+            }
+            ContextItemKind::ToolResult => {
+                item.source_tool_call_id.as_deref().is_some_and(kept_call)
+            }
+            _ => false,
         };
+        let (retained, dropped): (Vec<usize>, Vec<usize>) = self
+            .active
+            .iter()
+            .partition(|index| kept(&self.items[**index]));
+        let id = format!("vscode-copilot:summary:{}", short_hash(summary));
+        let summary_index = self.items.len();
+        self.item_indexes.insert(id.clone(), summary_index);
+        self.items.push(NormalizedContextItem {
+            id: id.clone(),
+            kind: ContextItemKind::CompactionSummary,
+            label: "Conversation summary".into(),
+            source_record_id: Some(call.span_id.clone()),
+            source_tool_call_id: None,
+            metadata: BTreeMap::new(),
+            serialized_size_bytes: byte_length(summary),
+            payload: TokenizationPayload::CompactionSummary(summary.to_owned()),
+            presence: Vec::new(),
+            first_model_call: 0,
+            last_model_call: 0,
+        });
+        let (context, conversation): (Vec<usize>, Vec<usize>) = retained
+            .iter()
+            .partition(|index| self.items[**index].kind == ContextItemKind::CustomMessage);
+        self.active = context
+            .into_iter()
+            .chain([summary_index])
+            .chain(conversation)
+            .collect();
+        self.compactions.push(NormalizedCompaction {
+            id: id.clone(),
+            before_model_call: before,
+            source_item_ids: dropped
+                .iter()
+                .map(|index| self.items[*index].id.clone())
+                .collect(),
+            retained_item_ids: retained
+                .iter()
+                .map(|index| self.items[*index].id.clone())
+                .collect(),
+            summary_item_id: id.clone(),
+            tokens_before: None,
+        });
+        self.summary = Some(summary.to_owned());
+        id
+    }
+
+    /// A tool result from the session file's `toolCallResults`.
+    fn recorded_result(&mut self, result: &Value) -> MessageContent {
         let parts: Vec<ContentPart> = array(result.get("content"))
             .iter()
             .map(|part| {
@@ -350,7 +687,17 @@ impl State {
                 )
             })
             .collect();
-        let content = MessageContent { parts };
+        MessageContent { parts }
+    }
+
+    fn apply_tool_result(
+        &mut self,
+        request_id: &str,
+        id: &str,
+        name: String,
+        arguments: &str,
+        content: MessageContent,
+    ) {
         let input: Value = serde_json::from_str(arguments).unwrap_or(Value::Null);
         let mut metadata = BTreeMap::new();
         if !name.is_empty() {
@@ -378,6 +725,7 @@ impl State {
 
     fn insert(&mut self, item: NormalizedContextItem) -> usize {
         let index = self.items.len();
+        self.item_indexes.insert(item.id.clone(), index);
         self.items.push(item);
         self.active.push(index);
         index
@@ -391,7 +739,10 @@ impl State {
         source: SourceDescriptor,
     ) -> NormalizedSession {
         let Self {
-            mut items, calls, ..
+            mut items,
+            calls,
+            compactions,
+            ..
         } = self;
         for item in &mut items {
             let lifetime = item.lifetime();
@@ -402,9 +753,43 @@ impl State {
             }
         }
         // An item added after the last call (the final response) was never sent.
+        let visible: HashSet<String> = items
+            .iter()
+            .filter(|item| !item.presence.is_empty())
+            .map(|item| item.id.clone())
+            .collect();
+        let compactions: Vec<NormalizedCompaction> = compactions
+            .into_iter()
+            .filter(|compaction| visible.contains(&compaction.summary_item_id))
+            .map(|mut compaction| {
+                compaction.source_item_ids.retain(|id| visible.contains(id));
+                compaction
+                    .retained_item_ids
+                    .retain(|id| visible.contains(id));
+                compaction
+            })
+            .collect();
+        let mut lineage: Vec<NormalizedLineageEdge> = compactions
+            .iter()
+            .flat_map(|compaction| {
+                compaction
+                    .source_item_ids
+                    .iter()
+                    .map(|source| NormalizedLineageEdge {
+                        from: source.clone(),
+                        to: compaction.summary_item_id.clone(),
+                        kind: "frameworkCompaction".into(),
+                    })
+            })
+            .collect();
+        lineage.sort_by(|left, right| {
+            left.to
+                .cmp(&right.to)
+                .then_with(|| left.from.cmp(&right.from))
+        });
         let mut context_items: Vec<_> = items
             .into_iter()
-            .filter(|item| !item.presence.is_empty())
+            .filter(|item| visible.contains(&item.id))
             .collect();
         context_items.sort_by(|left, right| {
             left.first_model_call
@@ -419,8 +804,8 @@ impl State {
             working_directory,
             context_items,
             model_calls: calls,
-            compactions: Vec::new(),
-            lineage: Vec::new(),
+            compactions,
+            lineage,
         }
     }
 }
@@ -428,7 +813,7 @@ impl State {
 /// The request's model calls, from `result.metadata.toolCallRounds`. A request that
 /// recorded no rounds (older versions, or one still running) but has a response is one
 /// call, whose response is the request's markdown.
-fn rounds<'a>(request: &'a Value, request_id: &str) -> Result<Vec<Round<'a>>, SourceError> {
+fn rounds<'t>(request: &Value, request_id: &str) -> Result<Vec<Round<'t>>, SourceError> {
     let metadata = request.pointer("/result/metadata");
     let request_model = model_name(
         metadata
@@ -459,8 +844,21 @@ fn rounds<'a>(request: &'a Value, request_id: &str) -> Result<Vec<Round<'a>>, So
                         round.pointer("/thinking/tokens"),
                         "toolCallRounds.thinking.tokens",
                     )?,
-                    tool_calls: array(round.get("toolCalls")),
+                    tool_calls: array(round.get("toolCalls"))
+                        .iter()
+                        .filter_map(|call| {
+                            Some((
+                                text(call.get("id"))?,
+                                text(call.get("name")).unwrap_or_default(),
+                                call.get("arguments")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("{}")
+                                    .to_owned(),
+                            ))
+                        })
+                        .collect(),
                     combined: false,
+                    trace: None,
                 })
             })
             .collect();
@@ -481,10 +879,11 @@ fn rounds<'a>(request: &'a Value, request_id: &str) -> Result<Vec<Round<'a>>, So
             .and_then(Value::as_i64),
         response,
         thinking_tokens: None,
-        tool_calls: &[],
+        tool_calls: Vec::new(),
         combined: array(request.get("response")).iter().any(|part| {
             part.get("kind").and_then(Value::as_str) == Some("toolInvocationSerialized")
         }),
+        trace: None,
     }])
 }
 
@@ -559,6 +958,11 @@ fn markdown(request: &Value) -> String {
         })
         .collect::<Vec<_>>()
         .join("")
+}
+
+/// A short, stable name for a system prompt or tool definition's text.
+fn short_hash(text: &str) -> String {
+    blake3::hash(text.as_bytes()).to_hex()[..16].to_owned()
 }
 
 fn byte_length(text: &str) -> u64 {

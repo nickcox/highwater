@@ -98,7 +98,7 @@ function validateEnvelope(input: SessionAnalysis): void {
     }
   }
   assertEconomicsSummary(input.economics, input.modelCalls);
-  input.modelCalls.forEach((call) => assertCallTiming(call, input.session.source === 'pi'));
+  input.modelCalls.forEach((call) => assertCallTiming(call, input.session.source));
   input.modelCalls.forEach(assertCostAssessment);
   assertCostSummary(input.session.costSummary);
   assertHarnessSessionCost(input.session.harnessSessionCost);

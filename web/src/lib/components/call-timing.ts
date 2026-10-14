@@ -1,12 +1,14 @@
 const RATE = 'The rate is reported output, including reasoning, over that time.';
 
 /** What a call's response time measures, for the source that recorded it. */
-export function timingExplanation(source: string): string {
+export function timingExplanation(source: string, traced = false): string {
   switch (source) {
     case 'claude-code':
       return 'Claude Code does not record when a request started, so the response time and output rate are unavailable.';
     case 'vscode-copilot':
-      return 'VS Code Copilot records when each response finished but not when it started, so the response time and output rate are unavailable.';
+      return traced
+        ? `From Copilot sending the request to the end of the response, as its trace records show. ${RATE}`
+        : "VS Code Copilot's trace record for this call is gone (Copilot keeps them for a few days), and the session file does not record when a response started, so the response time and output rate are unavailable.";
     case 'pi':
       return `From Pi starting the response to recording it, including waiting and retries. ${RATE}`;
     case 'opencode':

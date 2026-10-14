@@ -530,7 +530,7 @@ fn derive_calls(
 
 /// Prices a call by the time it completed, or started when that is all there is.
 fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
-    let timing = timing::call_timing(call, harness == "pi");
+    let timing = timing::call_timing(call, harness);
     pricing::assess(
         pricing::embedded(),
         pricing::CallToPrice {
@@ -918,7 +918,7 @@ fn to_api_call(
     derived: ApiCallDerived,
 ) -> ModelCall {
     let usage = &work.call.reported_usage;
-    let timing = timing::call_timing(work.call, harness == "pi");
+    let timing = timing::call_timing(work.call, harness);
     ModelCall {
         index: work.call.index,
         source_record_id: work.call.source_record_id.clone(),

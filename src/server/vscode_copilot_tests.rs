@@ -190,3 +190,44 @@ fn copilot_cache_keys_and_etags_differ_from_pi_keys_for_the_same_file() {
     assert_ne!(pi, copilot);
     assert_ne!(etag_for_key(&pi), etag_for_key(&copilot));
 }
+
+#[test]
+fn a_copilot_cache_key_changes_with_its_trace_database() {
+    let directory = tempfile::tempdir().expect("temporary folder");
+    let user = fs::canonicalize(directory.path())
+        .expect("folder")
+        .join("User");
+    let sessions = user.join("workspaceStorage/abc/chatSessions");
+    fs::create_dir_all(&sessions).expect("sessions");
+    let session = sessions.join("session.jsonl");
+    fs::copy(
+        user_dir().join("workspaceStorage/0a1b2c3d/chatSessions/11111111-agent.jsonl"),
+        &session,
+    )
+    .expect("session file");
+    let config = AnalysisConfig {
+        tokenization: TokenizationPolicy::Heuristic,
+        perf_diagnostics: false,
+    };
+    let key = || {
+        super::analysis::file_cache_key(
+            &session,
+            super::analysis::FileReader::VsCodeCopilot,
+            config,
+        )
+        .expect("key")
+    };
+    let without = key();
+    let database = user.join("globalStorage/github.copilot-chat/agent-traces.db");
+    fs::create_dir_all(database.parent().expect("folder")).expect("folder");
+    fs::write(&database, "records").expect("database");
+    let with = key();
+    assert_ne!(without, with);
+    assert_ne!(etag_for_key(&without), etag_for_key(&with));
+    fs::write(database.with_extension("db-wal"), "more records").expect("log");
+    assert_ne!(
+        with,
+        key(),
+        "new records in the write-ahead log change the key"
+    );
+}

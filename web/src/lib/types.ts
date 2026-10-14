@@ -166,7 +166,7 @@ export interface CallTiming {
   recordedAtMs: number | null;
   durationMs: number | null;
   effectiveOutputTokensPerSecond: number | null;
-  basis: 'pi-message-timestamps' | null;
+  basis: 'pi-message-timestamps' | 'vscode-copilot-trace-spans' | null;
 }
 
 export interface ModelCall {

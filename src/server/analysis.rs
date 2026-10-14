@@ -473,7 +473,7 @@ pub(super) fn analysis_cache_key(
 
 /// Size/mtime identity deliberately preserves the existing cache contract; it
 /// cannot detect a rewrite that preserves both values. Never call on async workers.
-fn file_cache_key(
+pub(super) fn file_cache_key(
     path: &Path,
     reader: FileReader,
     config: AnalysisConfig,
@@ -486,9 +486,20 @@ fn file_cache_key(
         .map_err(FlightError::Fingerprint)?
         .as_nanos();
     let canonical_path = fs::canonicalize(path).map_err(FlightError::Io)?;
+    // A Copilot session's analysis also reads its trace database.
+    let database_revision = match reader {
+        FileReader::VsCodeCopilot => crate::vscode_copilot::traces::database_for(&canonical_path)
+            .map(|database| {
+                (
+                    "vscode-copilot-traces".to_owned(),
+                    crate::vscode_copilot::traces::fingerprint(&database),
+                )
+            }),
+        _ => None,
+    };
     Ok(AnalysisCacheKey {
         path: canonical_path,
-        database_revision: None,
+        database_revision,
         byte_size: metadata.len(),
         modified_nanos,
         reader,

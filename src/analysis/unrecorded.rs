@@ -35,8 +35,14 @@ pub(super) fn add_unrecorded_context(
     let mut start = 0;
     while start < calls.len() {
         let mut model = reached_model(&calls[start]);
+        let loadout_known = calls[start].tool_loadout_known;
         let mut end = start + 1;
-        while end < calls.len() && !starts_segment(model, &calls[end]) {
+        // A call whose system prompt and tools are recorded has no unrecorded content, so
+        // it never shares a segment with one whose are not.
+        while end < calls.len()
+            && !starts_segment(model, &calls[end])
+            && calls[end].tool_loadout_known == loadout_known
+        {
             model = model.or(reached_model(&calls[end]));
             end += 1;
         }
@@ -93,6 +99,9 @@ fn measure(
 ) -> Option<Option<NormalizedContextItem>> {
     if call.stop_reason.as_deref() == Some("compaction-aggregate") {
         return None;
+    }
+    if call.tool_loadout_known {
+        return Some(None);
     }
     let (Some(reported), UsageCompleteness::Complete) =
         reported_prompt_tokens(&call.reported_usage)
@@ -168,6 +177,33 @@ mod tests {
             .iter()
             .filter(|item| item.kind == ContextItemKind::UnrecordedContext)
             .collect()
+    }
+
+    #[test]
+    fn calls_with_a_recorded_system_prompt_and_tools_have_no_unrecorded_content() {
+        let mut session = claude_code("compaction");
+        for call in &mut session.model_calls {
+            call.tool_loadout_known = true;
+        }
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Auto,
+        );
+        assert!(unrecorded(&session).is_empty());
+
+        // A call whose loadout is unknown starts its own segment, so its content is not
+        // spread over the calls whose loadout is known.
+        let mut session = claude_code("compaction");
+        session.model_calls[0].tool_loadout_known = true;
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Auto,
+        );
+        assert!(unrecorded(&session)
+            .iter()
+            .all(|item| item.presence[0].start_call > 1));
     }
 
     #[test]

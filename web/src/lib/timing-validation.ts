@@ -13,7 +13,8 @@ const PI_TIMING_APIS = new Set([
   'pi-messages',
 ]);
 
-export function assertCallTiming(call: ModelCall, piSource: boolean): void {
+export function assertCallTiming(call: ModelCall, source: string): void {
+  const piSource = source === 'pi';
   const timing = call.timing;
   const fail = () => {
     throw new AnalysisValidationError(`Call ${call.index} has invalid response timing`);
@@ -31,6 +32,33 @@ export function assertCallTiming(call: ModelCall, piSource: boolean): void {
     if (rate !== null || basis !== null) fail();
     return;
   }
+  const output = call.usage.output;
+  if (output !== null && (!Number.isSafeInteger(output) || output < 0)) fail();
+  const assertRate = (expected: number | null) => {
+    if (expected === null) {
+      if (rate !== null) fail();
+    } else if (
+      rate === null ||
+      !Number.isFinite(rate) ||
+      rate < 0 ||
+      Math.abs(rate - expected) > Math.max(1, Math.abs(expected)) * 1e-9
+    )
+      fail();
+  };
+  // A VS Code Copilot call's trace span: from sending the request to the end of the response.
+  if (basis === 'vscode-copilot-trace-spans') {
+    if (
+      source !== 'vscode-copilot' ||
+      !Number.isSafeInteger(durationMs) ||
+      durationMs <= 0 ||
+      timing.startedAtMs === null ||
+      timing.recordedAtMs === null ||
+      timing.recordedAtMs - timing.startedAtMs !== durationMs
+    )
+      fail();
+    assertRate(output !== null ? (output * 1000) / durationMs : null);
+    return;
+  }
   if (
     !Number.isSafeInteger(durationMs) ||
     durationMs <= 0 ||
@@ -44,16 +72,5 @@ export function assertCallTiming(call: ModelCall, piSource: boolean): void {
   )
     fail();
   const complete = ['stop', 'toolUse', 'length'].includes(call.stopReason ?? '');
-  const output = call.usage.output;
-  if (output !== null && (!Number.isSafeInteger(output) || output < 0)) fail();
-  const expected = complete && output !== null ? (output * 1000) / durationMs : null;
-  if (expected === null) {
-    if (rate !== null) fail();
-  } else if (
-    rate === null ||
-    !Number.isFinite(rate) ||
-    rate < 0 ||
-    Math.abs(rate - expected) > Math.max(1, Math.abs(expected)) * 1e-9
-  )
-    fail();
+  assertRate(complete && output !== null ? (output * 1000) / durationMs : null);
 }
