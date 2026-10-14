@@ -205,6 +205,9 @@ pub(crate) struct ModelCall {
     pub transition_item_counts: TransitionItemCounts,
     pub tool_calls_after: Vec<ToolCall>,
     pub compaction_before: Option<String>,
+    /// Present only when true, so other sources' responses are unchanged.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub retried: bool,
     pub tokenization_profile_id: Option<String>,
     pub token_analysis: CallTokenAnalysis,
     pub economics: CallEconomics,

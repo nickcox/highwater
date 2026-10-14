@@ -240,7 +240,10 @@ fn derive_calls(
     let derived_transitions = &prepared.transitions;
     let destination_estimates = &prepared.destination_estimates;
     let (cumulative_usages, usage_totals) = usage_rollup(&session.model_calls);
-    let (call_economics, economics_summary) = if session.source.kind == "claude-code" {
+    let (call_economics, economics_summary) = if matches!(
+        session.source.kind.as_str(),
+        "claude-code" | "vscode-copilot"
+    ) {
         economics::derive_usage_only(&session.model_calls)
     } else {
         economics::derive_with_cost_basis(&session.model_calls, session.source.cost_basis)
@@ -976,6 +979,7 @@ fn to_api_call(
             })
             .collect(),
         compaction_before: work.call.compaction_before.clone(),
+        retried: work.call.retried,
         tokenization_profile_id: Some(profile.id.clone()),
         token_analysis: derived.token_analysis,
         economics,

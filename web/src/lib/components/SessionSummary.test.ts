@@ -127,6 +127,27 @@ describe('SessionSummary', () => {
     expect(container.querySelector('.session-details')).not.toHaveTextContent('Billed cost');
   });
 
+  it("shows VS Code Copilot's own total only when it differs from the recorded total", () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'vscode-copilot';
+    analysis.reconstruction = { status: 'partial', explanationCodes: ['unrecordedHarnessCalls'] };
+    analysis.session.harnessSessionCost = { totalUsd: 0.06, sinceMs: null };
+    analysis.session.reportedCostTotal = 0.06;
+    const ownTotal = (container: HTMLElement) =>
+      [...container.querySelectorAll('.session-details dl > div')].find((element) =>
+        element.textContent?.includes("VS Code Copilot's own total"),
+      );
+    const same = render(SessionSummary, { props: { indexed: indexTestAnalysis(analysis) } });
+    expect(ownTotal(same.container)).toBeUndefined();
+    same.unmount();
+    // Calls whose trace records are gone have no recorded cost of their own.
+    analysis.session.reportedCostTotal = 0.04;
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    expect(ownTotal(container)).toHaveTextContent(/including calls whose trace record is gone/);
+  });
+
   it('has no own-total row when the harness recorded none', () => {
     const { container } = render(SessionSummary, {
       props: { indexed: indexTestAnalysis(testAnalysis()) },

@@ -400,3 +400,16 @@ fn a_request_without_rounds_uses_its_markdown_response() {
         .iter()
         .any(|item| item.id.contains("request_w2")));
 }
+
+#[test]
+fn credits_are_a_single_call_requests_cost_and_add_up_to_the_session_total() {
+    let session = load(&agent_session()).expect("load").session;
+    let cost = |call: usize| session.model_calls[call].reported_usage.cost.total;
+    // Request 1's credits cover both its calls, so neither is given them.
+    assert_eq!(cost(0), None);
+    assert_eq!(cost(1), None);
+    assert_eq!(cost(2), Some(0.0025));
+    let total = session.harness_session_cost.expect("Copilot's total");
+    assert!((total.total_usd - 0.0075).abs() < 1e-12);
+    assert_eq!(total.since_ms, None);
+}

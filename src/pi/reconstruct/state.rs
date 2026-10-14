@@ -173,6 +173,7 @@ impl ReconstructionState {
             }
             let contextual = assistant_response_is_contextual(call.stop_reason.as_deref());
             self.calls.push(NormalizedModelCall {
+                retried: false,
                 tool_loadout_known: self.system.loadout_known,
                 index,
                 source_record_id: item

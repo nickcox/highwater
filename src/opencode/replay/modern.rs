@@ -253,6 +253,7 @@ fn push_call(
     }
     let pending = state.pending_compaction.take();
     state.session.model_calls.push(NormalizedModelCall {
+        retried: false,
         index,
         source_record_id: message.id.clone(),
         target,

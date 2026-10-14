@@ -138,6 +138,7 @@
   function inputBucketLabel(policyId: string | null): string {
     if (
       policyId === 'anthropic-messages-cache-v1' ||
+      policyId === 'github-copilot-messages-cache-v1' ||
       policyId === 'github-copilot-responses-cache-v1'
     )
       return 'Fresh input';
@@ -170,6 +171,7 @@
   function inputShareLabel(policyId: string | null): string {
     if (
       policyId === 'anthropic-messages-cache-v1' ||
+      policyId === 'github-copilot-messages-cache-v1' ||
       policyId === 'github-copilot-responses-cache-v1'
     )
       return 'Fresh-input share';
@@ -231,6 +233,9 @@
           {call.index}
         </h3>
         <span>{call.provider ?? 'Unknown provider'} / {call.model ?? 'Unknown model'}</span>
+        {#if call.retried}<span class="retry-note"
+            >Copilot recorded this call as a retry after an error.</span
+          >{/if}
       </div>
     </header>
 
@@ -442,8 +447,9 @@
           <dt>{inputShareLabel(call.economics.policyId)}</dt>
           <dd>{freshRatioValue()}</dd>
         </div>
-        <!-- Claude Code records no cost, so these rows would only ever say Unknown. -->
-        {#if indexed.analysis.session.source !== 'claude-code'}
+        <!-- Claude Code records no cost, and VS Code Copilot only a total, so these rows would
+             only ever say Unknown. -->
+        {#if !['claude-code', 'vscode-copilot'].includes(indexed.analysis.session.source)}
           <div>
             <dt>{costCopy.label} component completeness</dt>
             <dd>{call.economics.costCompleteness}</dd>
@@ -786,6 +792,10 @@
     color: #aebbd0;
     font-size: 12px;
     overflow-wrap: anywhere;
+  }
+  header .retry-note {
+    display: block;
+    margin-top: 2px;
   }
   .essential-metrics,
   .detail-rows,

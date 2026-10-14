@@ -233,6 +233,7 @@ impl State<'_> {
             .and_then(Value::as_str)
             .map(str::to_owned);
         self.calls.push(NormalizedModelCall {
+            retried: false,
             tool_loadout_known: false,
             index,
             source_record_id: message_id.clone(),

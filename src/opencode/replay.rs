@@ -596,6 +596,7 @@ fn assistant(
             }));
     let call_compaction = state.pending_compaction.take();
     state.session.model_calls.push(NormalizedModelCall {
+        retried: false,
         tool_loadout_known: false,
         index: call_index,
         source_record_id: message.id.clone(),

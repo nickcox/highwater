@@ -42,6 +42,9 @@ pub(crate) struct HarnessSessionCost {
 pub(crate) struct NormalizedModelCall {
     /// Verified recorded loadout baseline, including an explicitly empty one.
     pub tool_loadout_known: bool,
+    /// The harness recorded the call as a retry after an error (VS Code Copilot's
+    /// `retry-error-panel/editAgent` trace records).
+    pub retried: bool,
     pub index: usize,
     pub source_record_id: String,
     pub target: ModelTarget,

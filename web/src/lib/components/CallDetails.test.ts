@@ -409,3 +409,18 @@ describe('CallDetails cost', () => {
     );
   });
 });
+
+describe('CallDetails for VS Code Copilot', () => {
+  it('notes a retried call and leaves out cost components Copilot does not record', () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'vscode-copilot';
+    analysis.reconstruction = { status: 'partial', explanationCodes: ['unrecordedHarnessCalls'] };
+    analysis.modelCalls[0].retried = true;
+    const indexed = indexTestAnalysis(analysis);
+    render(CallDetails, { props: { call: indexed.analysis.modelCalls[0], indexed, pinned: true } });
+    expect(
+      screen.getByText('Copilot recorded this call as a retry after an error.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/component completeness/)).toBeNull();
+  });
+});

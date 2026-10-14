@@ -102,6 +102,7 @@ export interface CacheTrackProjection extends EconomicsTrackProjection<CacheTrac
 
 const THREE_BUCKET_POLICIES = new Set([
   'anthropic-messages-cache-v1',
+  'github-copilot-messages-cache-v1',
   'github-copilot-responses-cache-v1',
 ]);
 const OPENAI_CHAT_POLICY = 'openai-completions-cache-v1';

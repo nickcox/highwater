@@ -14,7 +14,8 @@ const BUSY_TIMEOUT: Duration = Duration::from_millis(250);
 const MAX_SQLITE_VALUE_BYTES: i32 = 32 * 1024 * 1024;
 /// Model calls of a chat request in agent mode, including retried ones.
 const AGENTS: [&str; 2] = ["panel/editAgent", "retry-error-panel/editAgent"];
-const ATTRIBUTES: [&str; 9] = [
+const ATTRIBUTES: [&str; 10] = [
+    "copilot_chat.copilot_usage_nano_aiu",
     "gen_ai.input.messages",
     "gen_ai.response.id",
     "gen_ai.usage.cache_creation.input_tokens",
@@ -66,6 +67,10 @@ pub(crate) fn fingerprint(database: &Path) -> [u8; 32] {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct TraceCall {
     pub span_id: String,
+    /// Recorded as `retry-error-panel/editAgent`.
+    pub retry: bool,
+    /// What Copilot charged for the call, in billionths of a credit.
+    pub usage_nano_credits: Option<u64>,
     pub started_at_ms: i64,
     pub ended_at_ms: i64,
     pub model: Option<String>,
@@ -200,6 +205,7 @@ fn read(connection: &Connection, session_id: &str) -> Result<Traces, TraceError>
         }
         calls.push(TraceCall {
             span_id,
+            retry: row.get::<_, Option<String>>(4)?.as_deref() == Some(AGENTS[1]),
             started_at_ms: instant(row.get(1)?),
             ended_at_ms: instant(row.get(2)?),
             model: row.get(5)?,
@@ -248,7 +254,7 @@ fn attributes<'a>(
     spans: impl Iterator<Item = &'a str>,
 ) -> Result<HashMap<String, HashMap<String, String>>, TraceError> {
     let mut statement = connection.prepare(
-        "SELECT key, value FROM span_attributes WHERE span_id = ?1 AND key IN (?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "SELECT key, value FROM span_attributes WHERE span_id = ?1 AND key IN (?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
     )?;
     let mut output = HashMap::new();
     for span in spans {
@@ -264,6 +270,7 @@ fn attributes<'a>(
             ATTRIBUTES[6],
             ATTRIBUTES[7],
             ATTRIBUTES[8],
+            ATTRIBUTES[9],
         ))?;
         while let Some(row) = rows.next()? {
             if let Some(value) = row.get::<_, Option<String>>(1)? {
@@ -293,6 +300,9 @@ fn apply_attributes(call: &mut TraceCall, values: &HashMap<String, String>) {
             .and_then(|value| serde_json::from_str::<Value>(value).ok())
     };
     call.response_id = values.get("gen_ai.response.id").cloned();
+    call.usage_nano_credits = values
+        .get("copilot_chat.copilot_usage_nano_aiu")
+        .and_then(|value| value.parse().ok());
     call.cache_write = values
         .get("gen_ai.usage.cache_creation.input_tokens")
         .and_then(|value| value.parse().ok())

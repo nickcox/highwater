@@ -20,4 +20,10 @@ describe('cost basis copy', () => {
     expect(describeCostBasis('providerReported').label).toBe('Provider-reported cost');
     expect(describeCostBasis('unknown').label).toBe('Reported cost');
   });
+
+  it('names Copilot credits as the basis for VS Code Copilot', () => {
+    const copy = describeCostBasis('unknown', 'vscode-copilot');
+    expect(copy.label).toBe('Copilot-recorded cost');
+    expect(copy.basisLabel).toBe('Copilot credits, at $0.01 a credit');
+  });
 });

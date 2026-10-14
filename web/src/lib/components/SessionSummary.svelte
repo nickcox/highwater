@@ -57,6 +57,14 @@
     session.reportedPromptTokens === null
       ? null
       : recordedCoverageNote(session.reportedUsageCoverage);
+  // Copilot's own total repeats the recorded total when every call has a record.
+  $: showHarnessTotal =
+    session.harnessSessionCost !== null &&
+    !(
+      session.source === 'vscode-copilot' &&
+      session.reportedCostTotal !== null &&
+      Math.abs(session.reportedCostTotal - session.harnessSessionCost.totalUsd) < 1e-9
+    );
 </script>
 
 <section class="summary" aria-label="Session summary">
@@ -187,7 +195,7 @@
                 {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
               </dd>
             </div>
-            {#if session.harnessSessionCost}
+            {#if showHarnessTotal && session.harnessSessionCost}
               <div>
                 <dt>{harnessName(session.source)}'s own total (USD)</dt>
                 <dd>
@@ -241,7 +249,7 @@
               {formatInteger(economics.usageCompleteness.unsupported)} unsupported
             </dd>
           </div>
-          {#if session.source !== 'claude-code'}
+          {#if !['claude-code', 'vscode-copilot'].includes(session.source)}
             <div>
               <dt>
                 {costCopy.label} component coverage (complete / partial / missing / unsupported)

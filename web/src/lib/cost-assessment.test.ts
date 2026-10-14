@@ -5,6 +5,7 @@ import {
   costRuleText,
   formatAssessedCost,
   formatCostSubtotal,
+  harnessSessionCostNote,
   recordedByHarnessLine,
   sessionCost,
   sessionCostCoverage,
@@ -86,5 +87,18 @@ describe('cost assessment wording', () => {
         apiEquivalent: { low: null, high: null, calls: 0 },
       }),
     ).toBeNull();
+  });
+
+  it("describes Copilot's recorded credits and its session total", () => {
+    const recorded = {
+      ...costAssessmentOf('recorded', 0.0045),
+      classificationRule: 'recordedCost' as const,
+    };
+    expect(costRuleText(recorded, 'vscode-copilot')).toBe(
+      'Billed per token; this is what Copilot recorded charging, in credits at $0.01 each.',
+    );
+    expect(harnessSessionCostNote({ totalUsd: 0.13, sinceMs: null }, 'vscode-copilot')).toMatch(
+      /credits Copilot recorded for every request/,
+    );
   });
 });

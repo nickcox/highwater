@@ -34,6 +34,8 @@ struct State<'t> {
     /// The conversation summary in effect, from the latest compaction.
     summary: Option<String>,
     compactions: Vec<NormalizedCompaction>,
+    /// The credits the session file records for its requests.
+    credits: f64,
 }
 
 pub(super) fn reconstruct(
@@ -60,6 +62,7 @@ pub(super) fn reconstruct(
         systems: HashMap::new(),
         summary: None,
         compactions: Vec::new(),
+        credits: 0.0,
     };
     // Trace calls that name a request's response belong to that request.
     if let Some(traces) = traces {
@@ -187,6 +190,11 @@ fn traced_round(call: &TraceCall) -> Round<'_> {
     }
 }
 
+/// The US dollar value of a Copilot credit. A credit's dollar value is not recorded; at
+/// $0.01, the credits Copilot recorded for Claude calls equal their price at the
+/// `github-copilot` rates in the price table exactly.
+const CREDIT_USD: f64 = 0.01;
+
 /// Usage from a trace record. Its input includes the cached part; OpenAI models report
 /// no cache writes.
 fn traced_usage(call: &TraceCall) -> ReportedUsage {
@@ -207,6 +215,12 @@ fn traced_usage(call: &TraceCall) -> ReportedUsage {
             OutputReasoningRelationship::Unknown
         },
         reasoning: call.reasoning,
+        cost: ReportedCost {
+            total: call
+                .usage_nano_credits
+                .map(|nano| nano as f64 / 1e9 * CREDIT_USD),
+            ..ReportedCost::default()
+        },
         ..ReportedUsage::default()
     }
 }
@@ -334,6 +348,14 @@ impl<'t> State<'t> {
                 .or_else(|| metadata.and_then(|metadata| metadata.get("outputTokens"))),
             "completionTokens",
         )?;
+        // The credits Copilot charged for the request: every call's together.
+        let credits = request
+            .get("copilotCredits")
+            .and_then(Value::as_f64)
+            .filter(|credits| credits.is_finite() && *credits >= 0.0);
+        if let Some(credits) = credits {
+            self.credits += credits;
+        }
         let results = metadata.and_then(|metadata| metadata.get("toolCallResults"));
         let last = rounds.len() - 1;
         let single = rounds.len() == 1 && !rounds[0].combined;
@@ -349,7 +371,14 @@ impl<'t> State<'t> {
             // The request's input is its last call's; its output is every call's together,
             // so it is a call's own output only when there is one call.
             let output = if single { output_tokens } else { None };
+            let cost = ReportedCost {
+                total: credits
+                    .filter(|_| single)
+                    .map(|credits| credits * CREDIT_USD),
+                ..ReportedCost::default()
+            };
             let usage = ReportedUsage {
+                cost,
                 input_total: if position == last {
                     prompt_tokens
                 } else {
@@ -499,6 +528,7 @@ impl<'t> State<'t> {
         }
         self.calls.push(NormalizedModelCall {
             tool_loadout_known: loadout_known,
+            retried: round.trace.is_some_and(|call| call.retry),
             index,
             source_record_id: format!("{request_id}:{}", round.id),
             target: ModelTarget {
@@ -742,6 +772,7 @@ impl<'t> State<'t> {
             mut items,
             calls,
             compactions,
+            credits,
             ..
         } = self;
         for item in &mut items {
@@ -797,7 +828,11 @@ impl<'t> State<'t> {
                 .then_with(|| left.id.cmp(&right.id))
         });
         NormalizedSession {
-            harness_session_cost: None,
+            // Copilot's own total for the session: the credits it recorded for each request.
+            harness_session_cost: (credits > 0.0).then_some(HarnessSessionCost {
+                total_usd: credits * CREDIT_USD,
+                since_ms: None,
+            }),
             id,
             source,
             title,

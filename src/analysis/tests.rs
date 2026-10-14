@@ -366,6 +366,7 @@ fn transition_membership_preserves_context_order_and_metrics() {
         item("d", 2, 3),
     ];
     let call = |index, ids: &[&str]| NormalizedModelCall {
+        retried: false,
         tool_loadout_known: false,
         index,
         source_record_id: format!("call-{index}"),
@@ -800,6 +801,7 @@ fn mixed_complete_and_unavailable_item_calls_are_partial_with_numeric_value() {
     }];
     session.context_items[0].last_model_call = 2;
     session.model_calls.push(NormalizedModelCall {
+        retried: false,
         tool_loadout_known: false,
         index: 2,
         source_record_id: "call-2".into(),

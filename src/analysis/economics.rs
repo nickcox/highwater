@@ -23,6 +23,9 @@ enum Policy {
     OpenAiResponses,
     OpenAiCodexResponses,
     GithubCopilotResponses,
+    /// Claude through VS Code Copilot. Copilot's trace records split cache reads and writes
+    /// from the input as Anthropic does. Only VS Code Copilot sessions use it.
+    GithubCopilotMessages,
 }
 
 impl From<CostBasis> for EconomicsCostBasis {
@@ -59,12 +62,15 @@ impl Policy {
             Self::OpenAiResponses => "openai-responses-cache-read-v1",
             Self::OpenAiCodexResponses => "openai-codex-responses-cache-read-v1",
             Self::GithubCopilotResponses => "github-copilot-responses-cache-v1",
+            Self::GithubCopilotMessages => "github-copilot-messages-cache-v1",
         }
     }
 
     fn cache_write_status(self) -> CacheWriteStatus {
         match self {
-            Self::AnthropicMessages | Self::GithubCopilotResponses => CacheWriteStatus::Reported,
+            Self::AnthropicMessages
+            | Self::GithubCopilotResponses
+            | Self::GithubCopilotMessages => CacheWriteStatus::Reported,
             Self::OpenAiCompletions => CacheWriteStatus::NotReported,
             Self::OpenAiResponses | Self::OpenAiCodexResponses => CacheWriteStatus::NotRetainedByPi,
         }
@@ -72,9 +78,9 @@ impl Policy {
 
     fn prompt_fields(self, usage: &ReportedUsage) -> [Option<u64>; 3] {
         match self {
-            Self::AnthropicMessages | Self::GithubCopilotResponses => {
-                [usage.input, usage.cache_read, usage.cache_write]
-            }
+            Self::AnthropicMessages
+            | Self::GithubCopilotResponses
+            | Self::GithubCopilotMessages => [usage.input, usage.cache_read, usage.cache_write],
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => {
                 [usage.input, usage.cache_read, None]
             }
@@ -83,14 +89,18 @@ impl Policy {
 
     fn prompt_field_count(self) -> usize {
         match self {
-            Self::AnthropicMessages | Self::GithubCopilotResponses => 3,
+            Self::AnthropicMessages
+            | Self::GithubCopilotResponses
+            | Self::GithubCopilotMessages => 3,
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => 2,
         }
     }
 
     fn cost_fields(self, cost: &ReportedCost) -> [Option<f64>; 5] {
         match self {
-            Self::AnthropicMessages | Self::GithubCopilotResponses => [
+            Self::AnthropicMessages
+            | Self::GithubCopilotResponses
+            | Self::GithubCopilotMessages => [
                 cost.input,
                 cost.output,
                 cost.cache_read,
@@ -105,14 +115,18 @@ impl Policy {
 
     fn cost_field_count(self) -> usize {
         match self {
-            Self::AnthropicMessages | Self::GithubCopilotResponses => 5,
+            Self::AnthropicMessages
+            | Self::GithubCopilotResponses
+            | Self::GithubCopilotMessages => 5,
             Self::OpenAiCompletions | Self::OpenAiResponses | Self::OpenAiCodexResponses => 4,
         }
     }
 
     fn prompt_cost_fields(self, cost: &ReportedCost) -> Option<[f64; 3]> {
         match self {
-            Self::AnthropicMessages | Self::GithubCopilotResponses => {
+            Self::AnthropicMessages
+            | Self::GithubCopilotResponses
+            | Self::GithubCopilotMessages => {
                 Some([cost.input?, cost.cache_read?, cost.cache_write?])
             }
             Self::OpenAiCompletions => Some([cost.input?, cost.cache_read?, 0.0]),
@@ -145,15 +159,25 @@ pub(crate) fn derive_with_cost_basis(
     })
 }
 
-/// Cache figures for a source that records usage but no cost (Claude Code). The
-/// audited provider/API policies still decide which buckets make up the prompt;
-/// the cost interpretation, which is about Pi's recorded cost components, is
-/// left out.
+/// Cache figures for a source that records usage but no cost components (Claude Code,
+/// and VS Code Copilot, which records only a total). The audited provider/API policies
+/// still decide which buckets make up the prompt; the cost interpretation, which is about
+/// Pi's recorded cost components, is left out.
 pub(crate) fn derive_usage_only(
     calls: &[NormalizedModelCall],
 ) -> (Vec<CallEconomics>, EconomicsSummary) {
     derive_calls(calls, CostBasis::Unknown, |call| {
-        let mut derived = derive_call(call);
+        let policy = match (call.target.provider.as_deref(), call.target.api.as_deref()) {
+            (Some("github-copilot"), Some("anthropic-messages")) => {
+                Some(Policy::GithubCopilotMessages)
+            }
+            _ => Policy::identify(&call.target),
+        };
+        let mut derived = derive_with(call, policy);
+        // A call without an audited policy stays unsupported throughout.
+        if derived.policy_id.is_none() {
+            return derived;
+        }
         derived.cost_completeness = EconomicsCompleteness::Missing;
         derived.pi_prompt_cost = None;
         derived.explanation_codes.retain(|code| {
@@ -261,7 +285,11 @@ fn derive_calls(
 }
 
 fn derive_call(call: &NormalizedModelCall) -> CallEconomics {
-    let Some(policy) = Policy::identify(&call.target) else {
+    derive_with(call, Policy::identify(&call.target))
+}
+
+fn derive_with(call: &NormalizedModelCall, policy: Option<Policy>) -> CallEconomics {
+    let Some(policy) = policy else {
         return CallEconomics::unsupported();
     };
 
@@ -326,7 +354,7 @@ fn derive_call(call: &NormalizedModelCall) -> CallEconomics {
     };
     let cache_write_ratio = if matches!(
         policy,
-        Policy::AnthropicMessages | Policy::GithubCopilotResponses
+        Policy::AnthropicMessages | Policy::GithubCopilotResponses | Policy::GithubCopilotMessages
     ) && usage_completeness == EconomicsCompleteness::Complete
     {
         usage
@@ -338,7 +366,10 @@ fn derive_call(call: &NormalizedModelCall) -> CallEconomics {
     };
     let fresh_ratio = if matches!(
         policy,
-        Policy::AnthropicMessages | Policy::OpenAiCompletions | Policy::GithubCopilotResponses
+        Policy::AnthropicMessages
+            | Policy::OpenAiCompletions
+            | Policy::GithubCopilotResponses
+            | Policy::GithubCopilotMessages
     ) && usage_completeness == EconomicsCompleteness::Complete
     {
         usage
@@ -653,6 +684,42 @@ mod tests {
         assert_eq!(
             derive_call(&incomplete).usage_completeness,
             EconomicsCompleteness::Unsupported
+        );
+    }
+
+    #[test]
+    fn copilot_claude_calls_have_their_own_cache_policy_in_usage_only_economics() {
+        let mut call = crate::analysis::test_support::fake_session()
+            .model_calls
+            .remove(0);
+        call.target = ModelTarget {
+            provider: Some("github-copilot".into()),
+            model: Some("claude-haiku-5.5".into()),
+            api: Some("anthropic-messages".into()),
+        };
+        call.reported_usage = ReportedUsage {
+            input: Some(4),
+            cache_read: Some(13_728),
+            cache_write: Some(28_739),
+            output: Some(1_621),
+            ..ReportedUsage::default()
+        };
+        let (derived, _) = derive_usage_only(std::slice::from_ref(&call));
+        assert_eq!(
+            derived[0].policy_id.as_deref(),
+            Some("github-copilot-messages-cache-v1")
+        );
+        assert_eq!(derived[0].prompt_tokens, Some(42_471));
+        // Pi's own economics leave the same target unsupported.
+        let (pi, _) = derive(std::slice::from_ref(&call));
+        assert_eq!(pi[0].policy_id, None);
+        // A call with no recorded API has no policy, and stays wholly unsupported.
+        call.target.api = None;
+        let (derived, _) = derive_usage_only(std::slice::from_ref(&call));
+        assert_eq!(derived[0].policy_id, None);
+        assert_eq!(
+            derived[0].cost_completeness,
+            CallEconomics::unsupported().cost_completeness
         );
     }
 

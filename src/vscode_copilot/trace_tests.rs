@@ -171,7 +171,9 @@ fn gpt_spans(tool_call: &'static str) -> Vec<Span> {
             cached: Some(1500),
             output: Some(60),
             reasoning: Some(20),
+            agent: Some("retry-error-panel/editAgent"),
             attributes: vec![
+                ("copilot_chat.copilot_usage_nano_aiu", "454055500".into()),
                 ("gen_ai.response.id", "response-1".into()),
                 ("copilot_chat.request.shape", shape.clone()),
                 ("gen_ai.system_instructions", system),
@@ -435,4 +437,15 @@ fn a_conversation_summary_in_a_calls_input_is_a_compaction() {
         .lineage
         .iter()
         .all(|edge| edge.to == compaction.summary_item_id));
+}
+
+#[test]
+fn a_traced_call_has_the_cost_copilot_recorded_and_its_retry() {
+    let (_directory, path) = user_folder(&gpt_session(), &gpt_spans("call_read"));
+    let calls = loaded(&path).session.model_calls;
+    let cost = calls[0].reported_usage.cost.total.expect("recorded cost");
+    assert!((cost - 0.004_540_555).abs() < 1e-12);
+    assert!(calls[0].retried);
+    assert!(!calls[1].retried);
+    assert_eq!(calls[1].reported_usage.cost.total, None);
 }

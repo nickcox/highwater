@@ -58,8 +58,19 @@ const CLAUDE_CODE_COPY: CostBasisCopy = {
   trackCaveat: 'no recorded cost',
 };
 
+/** VS Code Copilot records what it charged for each call, in credits, but no components. */
+const VSCODE_COPILOT_COPY: CostBasisCopy = {
+  ...COST_BASIS_COPY.unknown,
+  label: 'Copilot-recorded cost',
+  totalLabel: 'Copilot-recorded cost total',
+  basisLabel: 'Copilot credits, at $0.01 a credit',
+  note: 'Copilot records what it charged for each call in credits, in trace records it keeps for a few days, and for each request in the session file. Calls without a record are priced from the price table.',
+  trackCaveat: 'recorded by Copilot',
+};
+
 export function describeCostBasis(basis: EconomicsCostBasis, source?: string): CostBasisCopy {
   if (source === 'claude-code') return CLAUDE_CODE_COPY;
+  if (source === 'vscode-copilot') return VSCODE_COPILOT_COPY;
   return COST_BASIS_COPY[basis] ?? COST_BASIS_COPY.unknown;
 }
 

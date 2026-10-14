@@ -243,7 +243,8 @@ fn normalized_fixture_parity() {
             .replace("placeholder: None, ", "")
             .replace(", harness_session_cost: None", "")
             .replace(", thinking_reported: false", "")
-            .replace("input_total: None, ", "");
+            .replace("input_total: None, ", "")
+            .replace("retried: false, ", "");
         // Remove only the additive counter metadata to keep the original
         // replay baseline pinned: no normalized usage or history may change.
         for call in &session.model_calls {

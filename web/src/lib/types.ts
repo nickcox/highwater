@@ -197,6 +197,8 @@ export interface ModelCall {
   };
   toolCallsAfter: Array<{ id: string; name: string; failed: boolean }>;
   compactionBefore: string | null;
+  /** Present when the harness recorded the call as a retry after an error (VS Code Copilot). */
+  retried?: boolean;
   tokenizationProfileId: string | null;
   tokenAnalysis: CallTokenAnalysis;
   economics: CallEconomics;

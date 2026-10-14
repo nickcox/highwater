@@ -9,6 +9,15 @@ export const ECONOMICS_POLICIES = {
     hasWriteRatio: true,
     categories: ['cacheRead', 'cacheWrite', 'fresh'],
   },
+  // Claude through VS Code Copilot, whose trace records split the input as Anthropic does.
+  'github-copilot-messages-cache-v1': {
+    provider: 'github-copilot',
+    api: 'anthropic-messages',
+    cacheWriteStatus: 'reported',
+    hasFreshRatio: true,
+    hasWriteRatio: true,
+    categories: ['cacheRead', 'cacheWrite', 'fresh'],
+  },
   'github-copilot-responses-cache-v1': {
     provider: 'github-copilot',
     api: 'openai-responses',

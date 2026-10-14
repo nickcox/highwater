@@ -90,7 +90,9 @@ export function costRuleText(cost: CostAssessment, source: string): string {
   const harness = harnessName(source);
   switch (cost.classificationRule) {
     case 'recordedCost':
-      return `Billed per token; this is the cost ${harness} recorded.`;
+      return source === 'vscode-copilot'
+        ? 'Billed per token; this is what Copilot recorded charging, in credits at $0.01 each.'
+        : `Billed per token; this is the cost ${harness} recorded.`;
     case 'billingModeTable':
       if (unknownBilling(cost, source)) return "At Anthropic's API rate.";
       return cost.billingMode === 'subscription'
@@ -179,6 +181,9 @@ export function harnessSessionCostNote(
   source: string,
   now = new Date(),
 ): string {
+  if (source === 'vscode-copilot') {
+    return 'The credits Copilot recorded for every request, at $0.01 each, including calls whose trace record is gone';
+  }
   const since =
     cost.sinceMs === null ? null : formatSessionTime(new Date(cost.sinceMs).toISOString(), now);
   const covers = `includes subagents and ${harnessName(source)}'s own calls, which are not in this transcript`;
