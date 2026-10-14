@@ -112,7 +112,8 @@ describe('ItemDetails presence feedback', () => {
     expect(screen.getByText('Expanded preview truncated.')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
     expect(view.container.querySelector('.content-preview')).toHaveTextContent('Compact');
-    expect(screen.getByText(/Compact preview truncated/)).toBeInTheDocument();
+    // Show more already signals more content, so the compact preview needs no note.
+    expect(screen.queryByText(/Compact preview truncated/)).toBeNull();
     expect(screen.queryByText('Expanded preview truncated.')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
     await view.rerender({ item: null });

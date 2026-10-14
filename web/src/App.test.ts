@@ -647,7 +647,7 @@ describe('Context River interactions', () => {
     const itemDetails = container.querySelector('.item-details')!;
     expect(itemDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(3);
     expect(
-      within(itemDetails as HTMLElement).getByText('Estimate basis & coverage', { exact: true }),
+      within(itemDetails as HTMLElement).getByText('Estimate basis', { exact: true }),
     ).toBeInTheDocument();
     expect((itemDetails.querySelector('.technical-identifiers') as HTMLDetailsElement).open).toBe(
       false,

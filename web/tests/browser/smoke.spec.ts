@@ -2588,7 +2588,7 @@ test('Composition View details reveals the selected item summary', async ({ page
   const summary = page.locator('#selected-item-summary');
   await expect(summary).toBeFocused();
   await expect(summary).toBeInViewport();
-  await expect(inspector).toContainText('Whole-session exposure · estimated token-turns');
+  await expect(inspector).toContainText('Whole-session exposure');
 });
 
 test('economics overlays stay contained while the River pans and zooms', async ({ page }) => {

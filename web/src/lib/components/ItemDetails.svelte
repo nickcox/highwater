@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InfoPopover from './InfoPopover.svelte';
   import { claudeEstimateNote } from '../token-estimate';
   import type { ContextItem, IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
@@ -35,7 +36,6 @@
   $: directSuccessors = item
     ? (indexed.outgoingLineage.get(item.id) ?? []).map((edge) => edge.to)
     : [];
-  $: finalCallIndex = indexed.analysis.modelCalls[indexed.analysis.modelCalls.length - 1]?.index;
   $: callCount = indexed.analysis.modelCalls.length;
   $: requestedCall = callIndex === null ? null : (indexed.callByIndex.get(callIndex) ?? null);
   $: pinnedCall =
@@ -155,9 +155,6 @@
               <b>Content preview</b>
               {item.preview.text}
             </p>{:else}<p class="preview-note">No content preview is available.</p>{/if}
-          {#if item.preview?.truncated}<p class="preview-note">
-              Compact preview truncated; technical identifiers are available below.
-            </p>{/if}
         {/if}
         {#if hasExpandedPreview}
           <button
@@ -206,7 +203,15 @@
         </dd>
       </div>
       <div>
-        <dt>Whole-session exposure · estimated token-turns</dt>
+        <dt>
+          Whole-session exposure<InfoPopover
+            id={`item-exposure-note-${item.id}`}
+            label="About whole-session exposure"
+            >The item's estimated tokens added up over every call it appears in, in estimated
+            token-turns. It shows how much context the item took up across the session; it is not
+            usage or cost.</InfoPopover
+          >
+        </dt>
         <dd>
           {exposureLabel(item.tokenTurns, 'calculatedTokens')}
           {#if item.tokenTurnsCoverage.coveredCalls < item.tokenTurnsCoverage.totalCalls}<small
@@ -221,22 +226,23 @@
         </dd>
       </div>
     </dl>
-    <details use:rememberSection={{ state: sections, key: 'basis' }}>
-      <summary>Estimate basis &amp; coverage</summary>
-      {#if selectedCall && selectedEstimate}
-        {selectedProfile
-          ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
-          : methodLabel(selectedEstimate.method)} · call {selectedCall.index}
-        {#if claudeEstimateNote(selectedProfile)}<small class="metric-note"
-            >{claudeEstimateNote(selectedProfile)}</small
-          >{/if}
-      {:else if pinnedCallIndex !== null}
-        No applicable estimate at pinned call {pinnedCallIndex}
-      {:else}
-        No applicable model-call estimate
-      {/if}
-      · {selectedEstimate?.coverage ?? 'unavailable'}
-    </details>
+    {#if sourceCompactions.length > 0 || retainedCompactions.length > 0 || summaryCompaction}
+      <h4>Compaction</h4>
+      {#if sourceCompactions.length > 0}<p>
+          Structurally replaced before call {sourceCompactions
+            .map((event) => event.beforeModelCall)
+            .join(', ')}. Connector width does not represent contribution.
+        </p>{/if}
+      {#if retainedCompactions.length > 0}<p>
+          Retained unchanged through compaction before call {retainedCompactions
+            .map((event) => event.beforeModelCall)
+            .join(', ')}.
+        </p>{/if}
+      {#if summaryCompaction}<p>
+          Summary of {formatMetric(summaryCompaction.sourceItemIds.length)} structurally replaced items
+          before call {summaryCompaction.beforeModelCall}.
+        </p>{/if}
+    {/if}
 
     {#if directPredecessors.length > 0 || directSuccessors.length > 0}
       <div class="lineage-actions">
@@ -261,8 +267,26 @@
     {/if}
 
     <details class="item-diagnostics" use:rememberSection={{ state: sections, key: 'diagnostics' }}>
-      <summary>Token estimates and diagnostics</summary>
+      <summary>Diagnostics</summary>
       <dl class="detail-rows">
+        <div>
+          <dt>Estimate basis</dt>
+          <dd>
+            {#if selectedCall && selectedEstimate}
+              {selectedProfile
+                ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
+                : methodLabel(selectedEstimate.method)} · call {selectedCall.index}
+              {#if claudeEstimateNote(selectedProfile)}<small class="metric-note"
+                  >{claudeEstimateNote(selectedProfile)}</small
+                >{/if}
+            {:else if pinnedCallIndex !== null}
+              No applicable estimate at pinned call {pinnedCallIndex}
+            {:else}
+              No applicable model-call estimate
+            {/if}
+            · {selectedEstimate?.coverage ?? 'unavailable'}
+          </dd>
+        </div>
         <div>
           <dt>Token coverage</dt>
           <dd>
@@ -276,27 +300,6 @@
         <div>
           <dt>Serialized diagnostic size</dt>
           <dd>{formatWeight(item.displayWeight, 'serializedBytes')}</dd>
-        </div>
-        <div>
-          <dt>Presence ranges</dt>
-          <dd>
-            {item.presence.map((range) => `${range.startCall}–${range.endCall}`).join(', ') ||
-              'None'}
-          </dd>
-        </div>
-        <div>
-          <dt>Age at final model call</dt>
-          <dd>
-            {item.ageAtFinalModelCall === null
-              ? 'Unknown'
-              : `${formatMetric(item.ageAtFinalModelCall)} calls`}
-          </dd>
-        </div>
-        <div>
-          <dt>Present at final model call</dt>
-          <dd>
-            {item.lastModelCall === finalCallIndex && item.presence.length > 0 ? 'Yes' : 'No'}
-          </dd>
         </div>
         {#if selectedEstimate}
           <div>
@@ -333,23 +336,6 @@
             </li>
           {/each}
         </ul>
-      {/if}
-      {#if sourceCompactions.length > 0 || retainedCompactions.length > 0 || summaryCompaction}
-        <h4>Compaction and lineage</h4>
-        {#if sourceCompactions.length > 0}<p>
-            Structurally replaced before call {sourceCompactions
-              .map((event) => event.beforeModelCall)
-              .join(', ')}. Connector width does not represent contribution.
-          </p>{/if}
-        {#if retainedCompactions.length > 0}<p>
-            Retained unchanged through compaction before call {retainedCompactions
-              .map((event) => event.beforeModelCall)
-              .join(', ')}.
-          </p>{/if}
-        {#if summaryCompaction}<p>
-            Summary of {formatMetric(summaryCompaction.sourceItemIds.length)} structurally replaced items
-            before call {summaryCompaction.beforeModelCall}.
-          </p>{/if}
       {/if}
     </details>
 
