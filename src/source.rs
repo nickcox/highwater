@@ -28,6 +28,9 @@ pub(crate) enum SessionLocator {
         path: PathBuf,
         kind: crate::claude_code::FileKind,
     },
+    VsCodeCopilotFile {
+        path: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -61,6 +64,8 @@ pub(crate) enum LoadError {
     Replay(#[from] ReplayError),
     #[error("claude code transcript cannot be loaded")]
     ClaudeCode(#[source] SourceError),
+    #[error("vs code copilot session cannot be loaded")]
+    VsCodeCopilot(#[source] SourceError),
 }
 
 /// Synchronous, intended for a bounded blocking worker. No source mutation.
@@ -116,6 +121,25 @@ pub(crate) fn load(
                 stats: LoadStats {
                     records: loaded.records,
                     selected_records: loaded.selected_records,
+                },
+                database_revision: None,
+                replay_limitations: BTreeSet::new(),
+                coverage_codes: Some(
+                    loaded
+                        .limitations
+                        .into_iter()
+                        .map(|limitation| limitation.as_str().to_owned())
+                        .collect(),
+                ),
+            })
+        }
+        SessionLocator::VsCodeCopilotFile { path } => {
+            let loaded = crate::vscode_copilot::load(path).map_err(LoadError::VsCodeCopilot)?;
+            Ok(LoadedSession {
+                normalized: loaded.session,
+                stats: LoadStats {
+                    records: loaded.records,
+                    selected_records: loaded.records,
                 },
                 database_revision: None,
                 replay_limitations: BTreeSet::new(),

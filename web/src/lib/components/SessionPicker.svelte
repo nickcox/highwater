@@ -11,7 +11,7 @@
   export let onSelect: (id: string) => void;
 
   const id = `session-picker-${nextPicker++}`;
-  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' = 'all';
+  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' | 'vscode-copilot' = 'all';
   /** Search text, used only while the list is open. */
   let query = '';
   let open = false;
@@ -22,7 +22,9 @@
       ? 'opencode'
       : session.id.startsWith('claude-code-')
         ? 'claude-code'
-        : 'pi');
+        : session.id.startsWith('vscode-copilot-')
+          ? 'vscode-copilot'
+          : 'pi');
   // Duplicate portable references are ambiguous on the server. Offer one
   // option per reference instead of crashing a keyed list or selecting a DB.
   $: unique = [...new Map(sessions.map((session) => [session.id, session])).values()];
@@ -100,6 +102,7 @@
       <option value="pi">Pi</option>
       <option value="opencode">OpenCode</option>
       <option value="claude-code">Claude Code</option>
+      <option value="vscode-copilot">VS Code Copilot</option>
     </select>
   </label>
   <div class="session-field">

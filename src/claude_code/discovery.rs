@@ -34,7 +34,7 @@ pub(crate) struct FileStamp {
 }
 
 impl FileStamp {
-    fn of(metadata: &fs::Metadata) -> Self {
+    pub(crate) fn of(metadata: &fs::Metadata) -> Self {
         Self {
             byte_size: metadata.len(),
             modified_nanos: modified_nanos(metadata.modified().ok()),

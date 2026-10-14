@@ -7,6 +7,7 @@ mod pi;
 mod pricing;
 mod server;
 mod source;
+mod vscode_copilot;
 
 use clap::Parser;
 

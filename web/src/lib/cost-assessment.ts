@@ -7,6 +7,7 @@ export function harnessName(source: string): string {
   if (source === 'pi') return 'Pi';
   if (source === 'opencode') return 'OpenCode';
   if (source === 'claude-code') return 'Claude Code';
+  if (source === 'vscode-copilot') return 'VS Code Copilot';
   return 'the harness';
 }
 

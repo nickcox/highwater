@@ -5,6 +5,8 @@ export function timingExplanation(source: string): string {
   switch (source) {
     case 'claude-code':
       return 'Claude Code does not record when a request started, so the response time and output rate are unavailable.';
+    case 'vscode-copilot':
+      return 'VS Code Copilot records when each response finished but not when it started, so the response time and output rate are unavailable.';
     case 'pi':
       return `From Pi starting the response to recording it, including waiting and retries. ${RATE}`;
     case 'opencode':

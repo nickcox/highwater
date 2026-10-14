@@ -35,12 +35,19 @@ pub(super) struct AnalysisCacheKey {
     pub database_revision: Option<(String, [u8; 32])>,
     pub byte_size: u64,
     pub modified_nanos: u128,
-    /// Set when the file is a Claude Code transcript; Pi files and OpenCode
-    /// databases leave it empty, so their keys and ETags are unchanged.
-    pub claude_code: Option<FileKind>,
+    /// Which reader opens the file. OpenCode databases use `Pi`, which adds nothing
+    /// to the ETag, so Pi and OpenCode keys and ETags are unchanged.
+    pub reader: FileReader,
     pub tokenization: TokenizationPolicy,
     pub schema_version: u32,
     pub output_version: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum FileReader {
+    Pi,
+    ClaudeCode(FileKind),
+    VsCodeCopilot,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -188,7 +195,12 @@ impl AnalysisService {
         match locator {
             SessionLocator::PiFile(path) => self.response(path, config).await,
             SessionLocator::ClaudeCodeFile { path, kind } => {
-                self.response_file(path, Some(kind), config).await
+                self.response_file(path, FileReader::ClaudeCode(kind), config)
+                    .await
+            }
+            SessionLocator::VsCodeCopilotFile { path } => {
+                self.response_file(path, FileReader::VsCodeCopilot, config)
+                    .await
             }
             SessionLocator::OpenCode {
                 database,
@@ -293,7 +305,7 @@ impl AnalysisService {
             database_revision: Some((locator.native_id.clone(), *snapshot.revision.as_bytes())),
             byte_size: 0,
             modified_nanos: 0,
-            claude_code: None,
+            reader: FileReader::Pi,
             tokenization: config.tokenization,
             schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
             output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -325,20 +337,20 @@ impl AnalysisService {
     }
 
     pub async fn response(self: &Arc<Self>, path: PathBuf, config: AnalysisConfig) -> SharedResult {
-        self.response_file(path, None, config).await
+        self.response_file(path, FileReader::Pi, config).await
     }
 
-    /// Pi files and Claude Code transcripts share the size and modification time
-    /// fingerprint; `claude_code` says which reader the executor uses.
+    /// Pi files, Claude Code transcripts and Copilot Chat sessions share the size and
+    /// modification time fingerprint; `reader` says which reader the executor uses.
     async fn response_file(
         self: &Arc<Self>,
         path: PathBuf,
-        claude_code: Option<FileKind>,
+        reader: FileReader,
         config: AnalysisConfig,
     ) -> SharedResult {
         let key_path = path.clone();
         let key_result =
-            tokio::task::spawn_blocking(move || file_cache_key(&key_path, claude_code, config))
+            tokio::task::spawn_blocking(move || file_cache_key(&key_path, reader, config))
                 .await
                 .map_err(FlightError::Task)
                 .and_then(|result| result);
@@ -456,14 +468,14 @@ pub(super) fn analysis_cache_key(
     path: &Path,
     config: AnalysisConfig,
 ) -> Result<AnalysisCacheKey, FlightError> {
-    file_cache_key(path, None, config)
+    file_cache_key(path, FileReader::Pi, config)
 }
 
 /// Size/mtime identity deliberately preserves the existing cache contract; it
 /// cannot detect a rewrite that preserves both values. Never call on async workers.
 fn file_cache_key(
     path: &Path,
-    claude_code: Option<FileKind>,
+    reader: FileReader,
     config: AnalysisConfig,
 ) -> Result<AnalysisCacheKey, FlightError> {
     let metadata = fs::metadata(path).map_err(FlightError::Io)?;
@@ -479,7 +491,7 @@ fn file_cache_key(
         database_revision: None,
         byte_size: metadata.len(),
         modified_nanos,
-        claude_code,
+        reader,
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -493,12 +505,13 @@ pub(super) fn execute_analysis(
 ) -> Result<Arc<CachedResponse>, FlightError> {
     let source_bytes = response_key.byte_size;
     let started = Instant::now();
-    let locator = match response_key.claude_code {
-        None => SessionLocator::PiFile(path.clone()),
-        Some(kind) => SessionLocator::ClaudeCodeFile {
+    let locator = match response_key.reader {
+        FileReader::Pi => SessionLocator::PiFile(path.clone()),
+        FileReader::ClaudeCode(kind) => SessionLocator::ClaudeCodeFile {
             path: path.clone(),
             kind,
         },
+        FileReader::VsCodeCopilot => SessionLocator::VsCodeCopilotFile { path: path.clone() },
     };
     let loaded = match source::load(&locator, None) {
         Ok(value) => value,
@@ -567,12 +580,18 @@ pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
         hasher.update(native_id.as_bytes());
         hasher.update(revision);
     }
-    if let Some(kind) = key.claude_code {
-        hasher.update(b"\0claude-code\0");
-        hasher.update(match kind {
-            FileKind::Main => b"main",
-            FileKind::Subagent => b"agent",
-        });
+    match key.reader {
+        FileReader::Pi => {}
+        FileReader::ClaudeCode(kind) => {
+            hasher.update(b"\0claude-code\0");
+            hasher.update(match kind {
+                FileKind::Main => b"main",
+                FileKind::Subagent => b"agent",
+            });
+        }
+        FileReader::VsCodeCopilot => {
+            hasher.update(b"\0vscode-copilot\0");
+        }
     }
     hasher.update(&key.byte_size.to_le_bytes());
     hasher.update(&key.modified_nanos.to_le_bytes());

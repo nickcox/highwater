@@ -97,6 +97,7 @@ impl DatabaseFixture {
             pi_root: None,
             databases: vec![self.path.clone()],
             claude_roots: Vec::new(),
+            vscode_user_dirs: Vec::new(),
         }
     }
     fn locator(&self) -> SessionLocator {
@@ -323,13 +324,31 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
     let data = fixture._directory.path().join("data");
     std::fs::create_dir_all(data.join("opencode")).expect("data home");
     std::fs::copy(&fixture.path, data.join("opencode/opencode.db")).expect("default DB");
-    let defaults = SourceSet::configured(None, Vec::new(), Vec::new(), &home, &data, None)
-        .expect("OpenCode-only defaults");
+    let defaults = SourceSet::configured(
+        None,
+        Vec::new(),
+        Vec::new(),
+        &home,
+        &data,
+        None,
+        Vec::new(),
+        &[],
+    )
+    .expect("OpenCode-only defaults");
     assert!(defaults.pi_root.is_none());
     assert_eq!(defaults.databases.len(), 1);
     let pi = std::fs::canonicalize("fixtures/pi").expect("Pi fixtures");
-    let explicit = SourceSet::configured(Some(pi), Vec::new(), Vec::new(), &home, &data, None)
-        .expect("Pi-only");
+    let explicit = SourceSet::configured(
+        Some(pi),
+        Vec::new(),
+        Vec::new(),
+        &home,
+        &data,
+        None,
+        Vec::new(),
+        &[],
+    )
+    .expect("Pi-only");
     assert!(explicit.databases.is_empty());
     assert!(SourceSet::configured(
         Some(home.join("missing")),
@@ -337,7 +356,9 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         Vec::new(),
         &home,
         &data,
-        None
+        None,
+        Vec::new(),
+        &[]
     )
     .is_err());
     assert!(SourceSet::configured(
@@ -346,7 +367,9 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         Vec::new(),
         &home,
         &data,
-        None
+        None,
+        Vec::new(),
+        &[]
     )
     .is_err());
 }
@@ -377,6 +400,7 @@ fn failed_database_retains_its_catalogue_while_healthy_sources_advance() {
         pi_root: None,
         databases: vec![fixture.path.clone(), healthy.path.clone()],
         claude_roots: Vec::new(),
+        vscode_user_dirs: Vec::new(),
     };
     let signals = Arc::new(watcher::WatchSignals::default());
     let scanner = MixedScanner::new(&sources, Arc::clone(&signals));
@@ -476,6 +500,7 @@ async fn duplicate_database_native_ids_are_ambiguous_and_cache_entries_are_isola
         pi_root: None,
         databases: vec![first.path.clone(), second.path.clone()],
         claude_roots: Vec::new(),
+        vscode_user_dirs: Vec::new(),
     };
     let entries = scan(&scanner(&sources));
     let id = entries[0].id.clone();

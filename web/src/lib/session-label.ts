@@ -33,6 +33,7 @@ export function formatByteSize(bytes: number | null): string | null {
 export function harnessName(session: SessionListItem): string {
   if (session.harness === 'opencode') return 'OpenCode';
   if (session.harness === 'claude-code') return 'Claude Code';
+  if (session.harness === 'vscode-copilot') return 'VS Code Copilot';
   return 'Pi';
 }
 

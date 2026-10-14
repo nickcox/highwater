@@ -78,8 +78,9 @@
   // already gives them; each call lists only its own.
   $: sessionWideCodes = sessionWideExplanationCodes(indexed.analysis);
   $: callExplanationCodes = explanationCodes.filter((code) => !sessionWideCodes.has(code));
-  // Claude Code never records when a request started, so its calls show one "Not recorded" row.
-  $: timingRecorded = indexed.analysis.session.source !== 'claude-code';
+  // Claude Code and VS Code Copilot never record when a request started, so their calls show
+  // one "Not recorded" row.
+  $: timingRecorded = !['claude-code', 'vscode-copilot'].includes(indexed.analysis.session.source);
 
   $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
   $: costCopy = describeCostBasis(

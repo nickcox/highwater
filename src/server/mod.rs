@@ -11,6 +11,8 @@ mod opencode_tests;
 mod routes;
 mod scan;
 mod sources;
+#[cfg(test)]
+mod vscode_copilot_tests;
 use routes::router;
 mod watcher;
 
@@ -79,6 +81,10 @@ pub(crate) struct Args {
     /// `$CLAUDE_CONFIG_DIR/projects` or `~/.claude/projects`.
     #[arg(long)]
     pub claude_root: Vec<PathBuf>,
+    /// VS Code user data folder (repeatable), for Copilot Chat sessions. Replaces the
+    /// default `Code` and `Code - Insiders` folders for this platform.
+    #[arg(long)]
+    pub vscode_user_dir: Vec<PathBuf>,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
@@ -213,6 +219,7 @@ async fn run_with_watcher(
     let claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute());
+    let vscode_defaults = sources::default_vscode_user_dirs(&home);
     let sources = tokio::task::spawn_blocking(move || {
         sources::SourceSet::configured(
             args.session_root,
@@ -221,6 +228,8 @@ async fn run_with_watcher(
             &home,
             &data_home,
             claude_config_dir.as_deref(),
+            args.vscode_user_dir,
+            &vscode_defaults,
         )
     })
     .await??;
@@ -242,6 +251,18 @@ async fn run_with_watcher(
             start_watcher_or_degraded(claude_root, hint_sender.clone(), &signals, start_watcher)
         {
             watchers.push(watcher);
+        }
+    }
+    for user_dir in &sources.vscode_user_dirs {
+        for folder in crate::vscode_copilot::discovery::session_folders(user_dir) {
+            if !folder.is_dir() {
+                continue;
+            }
+            if let Some(watcher) =
+                start_watcher_or_degraded(&folder, hint_sender.clone(), &signals, start_watcher)
+            {
+                watchers.push(watcher);
+            }
         }
     }
     for database in &sources.databases {

@@ -26,6 +26,7 @@ chrono = { version = "0.4", features = ["serde"] }
 rust-embed = "8"
 mime_guess = "2"
 blake3 = "1"
+percent-encoding = "2"
 tiktoken = { version = "=4.1.2", default-features = false, features = ["vocab-openai"] }
 regex = "1"
 rustc-hash = "2"

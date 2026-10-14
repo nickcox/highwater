@@ -1,0 +1,4 @@
+{"kind":0,"v":{"version":3,"creationDate":1790100000000,"initialLocation":"panel","responderUsername":"GitHub Copilot","sessionId":"22222222-remote","hasPendingEdits":false,"requests":[],"pendingRequests":[],"inputState":{"attachments":[],"mode":{"id":"agent","kind":"agent"},"inputText":""}}}
+{"kind":2,"k":["requests"],"v":[{"requestId":"request_r1","timestamp":1790100001000,"agent":{"extensionId":{"value":"GitHub.copilot-chat"},"extensionVersion":"0.54.0"},"modelId":"copilot/claude-haiku-5.5","message":{"text":"Summarise the service","parts":[]},"response":[],"modelState":{"value":0}}]}
+{"kind":2,"k":["requests",0,"response"],"v":[{"value":"It serves the build API."}]}
+{"kind":1,"k":["requests",0,"result"],"v":{"timings":{"firstProgress":500,"totalElapsed":1500},"metadata":{"responseId":"response-r1"}}}

@@ -18,6 +18,7 @@ fn claude_only(roots: Vec<PathBuf>) -> SourceSet {
         pi_root: None,
         databases: Vec::new(),
         claude_roots: roots,
+        vscode_user_dirs: Vec::new(),
     }
 }
 
@@ -213,8 +214,17 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
     fs::create_dir_all(configured.join("projects")).expect("configured root");
     let canonical = |path: PathBuf| fs::canonicalize(path).expect("canonical");
 
-    let defaults = SourceSet::configured(None, Vec::new(), Vec::new(), &home, &data, None)
-        .expect("default Claude Code root");
+    let defaults = SourceSet::configured(
+        None,
+        Vec::new(),
+        Vec::new(),
+        &home,
+        &data,
+        None,
+        Vec::new(),
+        &[],
+    )
+    .expect("default Claude Code root");
     assert_eq!(
         defaults.claude_roots,
         vec![canonical(home.join(".claude/projects"))]
@@ -227,6 +237,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         &home,
         &data,
         Some(&configured),
+        Vec::new(),
+        &[],
     )
     .expect("CLAUDE_CONFIG_DIR root");
     assert_eq!(
@@ -235,9 +247,17 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
     );
 
     let pi = fs::canonicalize("fixtures/pi").expect("Pi fixtures");
-    let pi_only =
-        SourceSet::configured(Some(pi.clone()), Vec::new(), Vec::new(), &home, &data, None)
-            .expect("Pi only");
+    let pi_only = SourceSet::configured(
+        Some(pi.clone()),
+        Vec::new(),
+        Vec::new(),
+        &home,
+        &data,
+        None,
+        Vec::new(),
+        &[],
+    )
+    .expect("Pi only");
     assert!(pi_only.claude_roots.is_empty());
 
     let explicit = SourceSet::configured(
@@ -247,6 +267,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         &home,
         &data,
         None,
+        Vec::new(),
+        &[],
     )
     .expect("Pi and explicit Claude Code");
     assert_eq!(explicit.claude_roots, vec![fixture_root()]);
@@ -257,14 +279,25 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         vec![directory.path().join("missing")],
         &home,
         &data,
-        None
+        None,
+        Vec::new(),
+        &[]
     )
     .is_err());
 
     let empty_home = directory.path().join("empty-home");
-    let error = SourceSet::configured(None, Vec::new(), Vec::new(), &empty_home, &data, None)
-        .err()
-        .expect("nothing to read");
+    let error = SourceSet::configured(
+        None,
+        Vec::new(),
+        Vec::new(),
+        &empty_home,
+        &data,
+        None,
+        Vec::new(),
+        &[],
+    )
+    .err()
+    .expect("nothing to read");
     assert!(error.to_string().contains("--claude-root"));
 }
 
@@ -339,14 +372,14 @@ fn claude_code_cache_keys_and_etags_differ_from_pi_keys_for_the_same_file() {
         perf_diagnostics: false,
     };
     let pi = analysis_cache_key(&path, config).expect("Pi key");
-    assert_eq!(pi.claude_code, None);
+    assert_eq!(pi.reader, super::analysis::FileReader::Pi);
     let claude_code = AnalysisCacheKey {
-        claude_code: Some(FileKind::Main),
+        reader: super::analysis::FileReader::ClaudeCode(FileKind::Main),
         ..pi.clone()
     };
     assert_ne!(etag_for_key(&pi), etag_for_key(&claude_code));
     let subagent = AnalysisCacheKey {
-        claude_code: Some(FileKind::Subagent),
+        reader: super::analysis::FileReader::ClaudeCode(FileKind::Subagent),
         ..pi.clone()
     };
     assert_ne!(etag_for_key(&claude_code), etag_for_key(&subagent));

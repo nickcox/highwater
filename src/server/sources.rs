@@ -12,6 +12,7 @@ use crate::{
     },
     opencode::storage::{self, CatalogTracker},
     source::SessionLocator,
+    vscode_copilot::discovery::{self as vscode_discovery, ListingCache as VsCodeListingCache},
 };
 use chrono::{DateTime, Utc};
 use std::{
@@ -28,11 +29,15 @@ pub(super) struct SourceSet {
     pub pi_root: Option<PathBuf>,
     pub databases: Vec<PathBuf>,
     pub claude_roots: Vec<PathBuf>,
+    /// VS Code user data folders, for Copilot Chat sessions.
+    pub vscode_user_dirs: Vec<PathBuf>,
 }
 
 impl SourceSet {
-    /// An explicit `--session-root` is Pi only: it turns off the OpenCode and
-    /// Claude Code defaults unless their own flags are also given.
+    /// An explicit `--session-root` is Pi only: it turns off the OpenCode, Claude Code
+    /// and VS Code defaults unless their own flags are also given. `vscode_defaults` are
+    /// the platform's VS Code user data folders; those that exist are used.
+    #[allow(clippy::too_many_arguments)]
     pub fn configured(
         pi: Option<PathBuf>,
         databases: Vec<PathBuf>,
@@ -40,6 +45,8 @@ impl SourceSet {
         home: &Path,
         data_home: &Path,
         claude_config_dir: Option<&Path>,
+        vscode_user_dirs: Vec<PathBuf>,
+        vscode_defaults: &[PathBuf],
     ) -> Result<Self, AppError> {
         let explicit_pi = pi.is_some();
         let default_databases = databases.is_empty() && !explicit_pi;
@@ -93,9 +100,29 @@ impl SourceSet {
                 claude_roots.push(root);
             }
         }
-        if pi_root.is_none() && databases.is_empty() && claude_roots.is_empty() {
+        let vscode_candidates = if vscode_user_dirs.is_empty() && !explicit_pi {
+            vscode_defaults
+                .iter()
+                .filter(|path| path.is_dir())
+                .cloned()
+                .collect()
+        } else {
+            vscode_user_dirs
+        };
+        let mut vscode_user_dirs = Vec::new();
+        for folder in vscode_candidates {
+            let folder = canonical_root(&folder)?;
+            if !vscode_user_dirs.contains(&folder) {
+                vscode_user_dirs.push(folder);
+            }
+        }
+        if pi_root.is_none()
+            && databases.is_empty()
+            && claude_roots.is_empty()
+            && vscode_user_dirs.is_empty()
+        {
             return Err(AppError::Message(
-                "no local sessions found; configure --session-root, --opencode-db or --claude-root"
+                "no local sessions found; configure --session-root, --opencode-db, --claude-root or --vscode-user-dir"
                     .into(),
             ));
         }
@@ -103,7 +130,110 @@ impl SourceSet {
             pi_root,
             databases,
             claude_roots,
+            vscode_user_dirs,
         })
+    }
+}
+
+/// VS Code's user data folders for this platform: `Code` and `Code - Insiders`.
+pub(super) fn default_vscode_user_dirs(home: &Path) -> Vec<PathBuf> {
+    let base = if cfg!(target_os = "macos") {
+        home.join("Library/Application Support")
+    } else if cfg!(windows) {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .unwrap_or_else(|| home.join("AppData/Roaming"))
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .unwrap_or_else(|| home.join(".config"))
+    };
+    ["Code", "Code - Insiders"]
+        .into_iter()
+        .map(|product| base.join(product).join("User"))
+        .collect()
+}
+
+pub(super) fn vscode_copilot_reference(session_id: &str) -> String {
+    let mut hash =
+        blake3::Hasher::new_derive_key("TokenPlume VS Code Copilot session reference v1");
+    hash.update(b"id\0");
+    hash.update(session_id.as_bytes());
+    format!("vscode-copilot-{}", &hash.finalize().to_hex()[..12])
+}
+
+fn vscode_copilot_entry(
+    file: vscode_discovery::SessionFile,
+    listing: vscode_discovery::Listing,
+) -> SessionFile {
+    let file_name = file
+        .path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let session_id = listing
+        .session_id
+        .clone()
+        .unwrap_or_else(|| file_name.trim_end_matches(".jsonl").to_owned());
+    let short_id: String = session_id.chars().take(8).collect();
+    let display_name = listing.title.clone().unwrap_or_else(|| {
+        match listing
+            .working_directory
+            .as_deref()
+            .and_then(|folder| folder.trim_end_matches('/').rsplit('/').next())
+            .filter(|name| !name.is_empty())
+        {
+            Some(project) => format!("{project} · {short_id}"),
+            None => short_id.clone(),
+        }
+    });
+    SessionFile {
+        id: vscode_copilot_reference(&session_id),
+        path: String::new(),
+        file_name,
+        display_name: display_name.chars().take(160).collect(),
+        working_directory: listing.working_directory,
+        started_at: listing
+            .created_at_ms
+            .and_then(DateTime::<Utc>::from_timestamp_millis),
+        byte_size: Some(file.stamp.byte_size),
+        modified_at: file.modified.map(DateTime::<Utc>::from),
+        modified_nanos: file.stamp.modified_nanos,
+        harness: "vscode-copilot".into(),
+        parent_reference: None,
+        subagent_type: None,
+        locator: Some(SessionLocator::VsCodeCopilotFile { path: file.path }),
+        source_revision: None,
+    }
+}
+
+struct VsCodeCopilotSource {
+    user_dir: PathBuf,
+    listings: VsCodeListingCache,
+    last_good: Vec<SessionFile>,
+}
+
+impl VsCodeCopilotSource {
+    fn discover(&mut self, cancelled: &AtomicBool) -> Result<Vec<SessionFile>, DiscoveryError> {
+        let files = vscode_discovery::find_files(&self.user_dir, Some(cancelled))?;
+        self.listings.retain(&files);
+        let mut entries = Vec::new();
+        for file in files {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(DiscoveryError::Cancelled);
+            }
+            // Most session files are chats that were opened and never used.
+            if let Some(listing) = self
+                .listings
+                .listing(&file)?
+                .filter(|listing| listing.requests > 0)
+            {
+                entries.push(vscode_copilot_entry(file, listing));
+            }
+        }
+        Ok(entries)
     }
 }
 
@@ -244,6 +374,7 @@ struct DiscoveryState {
     pi_last_good: Vec<SessionFile>,
     databases: Vec<DatabaseSource>,
     claude_code: Vec<ClaudeCodeSource>,
+    vscode_copilot: Vec<VsCodeCopilotSource>,
 }
 
 pub(super) struct MixedScanner {
@@ -274,6 +405,15 @@ impl MixedScanner {
                     .map(|root| ClaudeCodeSource {
                         root: root.clone(),
                         listings: ListingCache::default(),
+                        last_good: Vec::new(),
+                    })
+                    .collect(),
+                vscode_copilot: sources
+                    .vscode_user_dirs
+                    .iter()
+                    .map(|user_dir| VsCodeCopilotSource {
+                        user_dir: user_dir.clone(),
+                        listings: VsCodeListingCache::default(),
                         last_good: Vec::new(),
                     })
                     .collect(),
@@ -383,6 +523,16 @@ impl MixedScanner {
                 Err(_) => failed = true,
             }
         }
+        for source in &mut state.vscode_copilot {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(ScanError::Cancelled);
+            }
+            match source.discover(&cancelled) {
+                Ok(entries) => source.last_good = entries,
+                Err(DiscoveryError::Cancelled) => return Err(ScanError::Cancelled),
+                Err(_) => failed = true,
+            }
+        }
         // A transient source read failure must not permanently disable healthy
         // filesystem watchers. A subsequent successful scan clears this state.
         self.signals
@@ -402,6 +552,22 @@ impl MixedScanner {
                     .filter(|entry| match &entry.locator {
                         Some(SessionLocator::ClaudeCodeFile { path, .. }) => {
                             claude_code_paths.insert(path.clone())
+                        }
+                        _ => true,
+                    })
+                    .cloned(),
+            );
+        }
+        // Repeated user data folders can find the same session twice.
+        let mut vscode_paths = HashSet::new();
+        for source in &state.vscode_copilot {
+            entries.extend(
+                source
+                    .last_good
+                    .iter()
+                    .filter(|entry| match &entry.locator {
+                        Some(SessionLocator::VsCodeCopilotFile { path }) => {
+                            vscode_paths.insert(path.clone())
                         }
                         _ => true,
                     })

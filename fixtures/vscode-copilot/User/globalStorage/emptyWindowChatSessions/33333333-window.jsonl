@@ -1,0 +1,4 @@
+{"kind":0,"v":{"version":3,"creationDate":1790200000000,"initialLocation":"panel","responderUsername":"GitHub Copilot","sessionId":"33333333-window","hasPendingEdits":false,"requests":[],"pendingRequests":[],"inputState":{"attachments":[],"mode":{"id":"agent","kind":"agent"},"inputText":""}}}
+{"kind":2,"k":["requests"],"v":[{"requestId":"request_w1","timestamp":1790200001000,"agent":{"extensionId":{"value":"GitHub.copilot-chat"},"extensionVersion":"0.41.2"},"modelId":"copilot/gpt-4.1","message":{"text":"What does git rebase --onto do?","parts":[]},"response":[],"modelState":{"value":0}}]}
+{"kind":2,"k":["requests",0,"response"],"v":[{"value":"It moves commits onto a new base."}]}
+{"kind":1,"k":["requests",0,"result"],"v":{"timings":{"firstProgress":400,"totalElapsed":900},"metadata":{}}}

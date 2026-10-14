@@ -83,6 +83,34 @@ describe('Harness session picker', () => {
     expect(offered()).toEqual(['Configure the status line · child session · statusline-setup']);
   });
 
+  it('labels VS Code Copilot sessions and filters to them', async () => {
+    const withCopilot: SessionListItem[] = [
+      ...sessions,
+      {
+        id: 'vscode-copilot-four',
+        harness: 'vscode-copilot',
+        displayName: 'Fix the failing parser test',
+        fileName: 'four.jsonl',
+        workingDirectory: '/copilot',
+        startedAt: null,
+        modifiedAt: null,
+        byteSize: 30,
+      },
+    ];
+    render(SessionPicker, {
+      props: { sessions: withCopilot, selectedId: 'pi-one', onSelect: vi.fn() },
+    });
+    await fireEvent.click(picker());
+    expect(
+      screen.getByRole('option', { name: '[VS Code Copilot] Fix the failing parser test' }),
+    ).toBeInTheDocument();
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Harness' }), {
+      target: { value: 'vscode-copilot' },
+    });
+    await fireEvent.click(picker());
+    expect(offered()).toEqual(['Fix the failing parser test']);
+  });
+
   it('combines harness and search filters without changing the open session', async () => {
     const onSelect = vi.fn();
     render(SessionPicker, { props: { sessions, selectedId: 'pi-one', onSelect } });
