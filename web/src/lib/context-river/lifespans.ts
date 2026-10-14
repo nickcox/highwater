@@ -64,25 +64,50 @@ export function sizeEstimateTokens(item: ContextItem, profileId: string | null):
   return item.tokenEstimates.find((estimate) => estimate.profileId === profileId)?.tokens ?? null;
 }
 
+/** Token-turn exposure across every version shown on one row; null when none is known. */
+export function rowTokenTurns(versions: readonly ContextItem[]): number | null {
+  const known = versions
+    .map(tokenTurnExposure)
+    .filter((tokenTurns): tokenTurns is number => tokenTurns !== null);
+  return known.length === 0 ? null : known.reduce((total, tokenTurns) => total + tokenTurns, 0);
+}
+
+export function rowPresenceCount(versions: readonly ContextItem[]): number {
+  return versions.reduce((total, version) => total + presenceCount(version), 0);
+}
+
+/**
+ * Sorts rows by their first item. A row also shows that item's later versions, given by
+ * `versionsOf`: its exposure and calls present are summed over them, and its size is the
+ * latest version's.
+ */
 export function sortLifespans(
   items: readonly ContextItem[],
   mode: LifespanSortMode = 'tokenTurns',
   sizeProfileId: string | null = null,
+  versionsOf: (item: ContextItem) => readonly ContextItem[] = (item) => [item],
 ): ContextItem[] {
   const sourceOrder = new Map(items.map((item, index) => [item.id, index]));
+  const latest = (item: ContextItem) => {
+    const versions = versionsOf(item);
+    return versions[versions.length - 1] ?? item;
+  };
   return [...items].sort((a, b) => {
     let comparison = 0;
     if (mode === 'firstAppearance') {
       comparison = compareNullableAscending(firstAppearance(a), firstAppearance(b));
     } else if (mode === 'presenceCount') {
-      comparison = presenceCount(b) - presenceCount(a);
+      comparison = rowPresenceCount(versionsOf(b)) - rowPresenceCount(versionsOf(a));
     } else if (mode === 'size') {
       comparison = compareNullableDescending(
-        sizeEstimateTokens(a, sizeProfileId),
-        sizeEstimateTokens(b, sizeProfileId),
+        sizeEstimateTokens(latest(a), sizeProfileId),
+        sizeEstimateTokens(latest(b), sizeProfileId),
       );
     } else {
-      comparison = compareNullableDescending(tokenTurnExposure(a), tokenTurnExposure(b));
+      comparison = compareNullableDescending(
+        rowTokenTurns(versionsOf(a)),
+        rowTokenTurns(versionsOf(b)),
+      );
     }
     return (
       comparison ||

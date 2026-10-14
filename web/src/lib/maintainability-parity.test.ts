@@ -68,6 +68,7 @@ function serialize(value: unknown): string {
         'costAssessment',
         'costSummary',
         'harnessSessionCost',
+        'versionByItemId',
       ].includes(key)
     )
       return undefined;

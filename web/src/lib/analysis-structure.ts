@@ -6,6 +6,7 @@ import type {
   SessionAnalysis,
 } from './types';
 import { stableItemOrder } from './analysis-ordering';
+import { itemVersions } from './item-versions';
 import { AnalysisValidationError, assertUnique } from './analysis-validation';
 
 function addToMap<K, V>(map: Map<K, V[]>, key: K, value: V): void {
@@ -290,6 +291,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     itemEstimateByProfile,
     contextSetByCall,
     orderedItemIdsByCall,
+    versionByItemId: itemVersions(analysis.contextItems),
   };
   return indexed;
 }

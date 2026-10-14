@@ -8,6 +8,7 @@ import type {
   RibbonPoint,
   RibbonSegment,
   RiverLayoutOptions,
+  VersionMarkLayout,
 } from './types';
 
 export function pathFor(points: readonly RibbonPoint[], linear: boolean): string {
@@ -135,6 +136,7 @@ export function layoutContextRiver(
       ribbons: [],
       compactions: [],
       lineageConnectors: [],
+      versionMarks: [],
       innerWidth,
       innerHeight,
       maxTotalDisplayWeight: 0,
@@ -151,6 +153,7 @@ export function layoutContextRiver(
         x: options.margin.left + innerWidth,
       })),
       lineageConnectors: [],
+      versionMarks: [],
       innerWidth,
       innerHeight,
       maxTotalDisplayWeight: 0,
@@ -242,6 +245,7 @@ export function layoutContextRiver(
   }));
 
   const ribbons: RibbonSegment[] = [];
+  const versionMarks: VersionMarkLayout[] = [];
   if (groupByKind) {
     for (const [kind, memberItemIds] of groupMembers) {
       const presentCalls = analysis.modelCalls
@@ -324,6 +328,29 @@ export function layoutContextRiver(
             ...points,
           ];
           touchesCompaction = true;
+        }
+        // A version that is replaced at the next call runs on to the new version's first point,
+        // so the two read as one ribbon that changes there. Only the system prompt is marked
+        // where it changes: tool definitions are too thin for a mark to be told apart.
+        const nextId = indexed.versionByItemId.get(item.id)?.nextId;
+        const replacement =
+          nextId &&
+          rangeIndex === item.presence.length - 1 &&
+          !sourceCompaction &&
+          itemById.get(nextId)?.firstModelCall === range.endCall + 1
+            ? geometry.get(nextId)?.get(range.endCall + 1)
+            : undefined;
+        if (replacement && nextId) {
+          points = [...points, replacement];
+          if (item.kind === 'system')
+            versionMarks.push({
+              key: `${nextId}:version`,
+              itemId: nextId,
+              callIndex: replacement.callIndex,
+              x: replacement.x,
+              y0: replacement.y0,
+              y1: replacement.y1,
+            });
         }
         // A merged singleton is padded only on the left; its right edge stays
         // at the last actual call so the decorative flow owns the transition.
@@ -412,6 +439,7 @@ export function layoutContextRiver(
     ribbons,
     compactions,
     lineageConnectors,
+    versionMarks,
     innerWidth,
     innerHeight,
     maxTotalDisplayWeight,

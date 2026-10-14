@@ -3,6 +3,7 @@ import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
+import { versionScenario } from '../testing/version-scenario';
 import ItemDetails from './ItemDetails.svelte';
 import { inspectorSections } from '../state/inspector-sections';
 
@@ -161,5 +162,32 @@ describe('ItemDetails presence feedback', () => {
       screen.getByText(/has no model-call presence.*no location to reveal/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reveal in River' })).toBeNull();
+  });
+});
+
+describe('ItemDetails versions', () => {
+  it('lists the versions and what changed with each new system prompt', async () => {
+    const indexed = indexTestAnalysis(versionScenario());
+    const onSelectItem = vi.fn();
+    render(ItemDetails, { props: { item: indexed.itemById.get('s3')!, indexed, onSelectItem } });
+    expect(screen.getByText('System · version 3 of 3')).toBeInTheDocument();
+    expect(screen.getByText('Version 3 · call 4 · 110 tokens · this version')).toBeInTheDocument();
+    expect(
+      screen.getByText('Call 2: tools added: fetch, source_check, web_search'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Call 4: tool definitions changed: web_search; tools removed: fetch'),
+    ).toBeInTheDocument();
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Version 2 · calls 2–3 · 120 tokens' }),
+    );
+    expect(onSelectItem).toHaveBeenLastCalledWith('s2');
+  });
+
+  it('lists tool definition versions without describing the change', () => {
+    const indexed = indexTestAnalysis(versionScenario());
+    render(ItemDetails, { props: { item: indexed.itemById.get('web1')!, indexed } });
+    expect(screen.getByText('Tool Definition · version 1 of 2')).toBeInTheDocument();
+    expect(screen.queryByText(/^Call \d+:/)).toBeNull();
   });
 });

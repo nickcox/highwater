@@ -4,6 +4,7 @@ import { curveLinear, curveMonotoneX, line, type CurveFactory } from 'd3-shape';
 import { layoutContextRiver, withoutFlatInteriors } from './layout';
 import type { RibbonPoint } from './types';
 import { testAnalysis } from './test-data';
+import { versionScenario } from '../testing/version-scenario';
 
 const options = {
   width: 800,
@@ -287,5 +288,23 @@ describe('withoutFlatInteriors', () => {
         for (let x = 0; x <= 80; x += 0.25) expect(reduced(x)).toBeCloseTo(full(x), 9);
       }
     }
+  });
+});
+
+describe('versions in the River', () => {
+  it('runs each version on to the next and marks only where the system prompt changes', () => {
+    const river = layoutContextRiver(indexTestAnalysis(versionScenario()), options);
+    const ribbon = (itemId: string) => river.ribbons.find((segment) => segment.itemId === itemId)!;
+    expect(ribbon('s1').points.map((point) => point.callIndex)).toEqual([1, 2]);
+    expect(ribbon('s2').points.map((point) => point.callIndex)).toEqual([2, 3, 4]);
+    expect(ribbon('s3').points.map((point) => point.callIndex)).toEqual([4, 4]);
+    expect(ribbon('web1').points.map((point) => point.callIndex)).toEqual([2, 3, 4]);
+    expect(ribbon('fetch').points.map((point) => point.callIndex)).toEqual([2, 3]);
+    expect(river.versionMarks.map((mark) => [mark.itemId, mark.callIndex])).toEqual([
+      ['s2', 2],
+      ['s3', 4],
+    ]);
+    const s3Start = ribbon('s3').points.find((point) => point.callIndex === 4)!;
+    expect(river.versionMarks[1]).toMatchObject({ y0: s3Start.y0, y1: s3Start.y1 });
   });
 });

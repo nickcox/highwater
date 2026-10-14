@@ -1,3 +1,4 @@
+import type { ItemVersion } from './item-versions';
 export type ContextItemKind =
   | 'system'
   | 'toolDefinition'
@@ -426,6 +427,8 @@ export interface IndexedAnalysis {
   compactionsBySummaryId: Map<string, CompactionEvent[]>;
   compactionBySourceId: Map<string, CompactionEvent[]>;
   compactionsByRetainedId: Map<string, CompactionEvent[]>;
+  /** System prompts and tool definitions that replaced, or were replaced by, another version. */
+  versionByItemId: Map<string, ItemVersion>;
 }
 
 export interface InteractionState {

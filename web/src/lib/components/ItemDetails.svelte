@@ -3,6 +3,7 @@
   import { claudeEstimateNote } from '../token-estimate';
   import type { ContextItem, IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
+  import { systemPromptChange, versionChain } from '../item-versions';
   import { presenceCount } from '../context-river/lifespans';
   import { describeTokenDiagnostic } from '../diagnostics';
   import CopyButton from './CopyButton.svelte';
@@ -36,6 +37,9 @@
   $: directSuccessors = item
     ? (indexed.outgoingLineage.get(item.id) ?? []).map((edge) => edge.to)
     : [];
+  $: version = item ? (indexed.versionByItemId.get(item.id) ?? null) : null;
+  $: versions =
+    item && version ? versionChain(indexed.itemById, indexed.versionByItemId, item.id) : [];
   $: callCount = indexed.analysis.modelCalls.length;
   $: requestedCall = callIndex === null ? null : (indexed.callByIndex.get(callIndex) ?? null);
   $: pinnedCall =
@@ -98,6 +102,26 @@
     }
   }
 
+  /** The version's size at the first call it appears in. */
+  function versionTokens(other: ContextItem): number | null {
+    const profileId = indexed.callByIndex.get(other.firstModelCall)?.tokenizationProfileId ?? '';
+    return indexed.itemEstimateByProfile.get(other.id)?.get(profileId)?.tokens ?? null;
+  }
+
+  function versionSummary(other: ContextItem, number: number): string {
+    return `Version ${number} · ${rangesLabel(other)} · ${formatMetric(versionTokens(other))} tokens`;
+  }
+
+  function rangesLabel(other: ContextItem): string {
+    return other.presence
+      .map((range) =>
+        range.startCall === range.endCall
+          ? `call ${range.startCall}`
+          : `calls ${range.startCall}–${range.endCall}`,
+      )
+      .join(', ');
+  }
+
   function presenceLabel(): string {
     if (!item || item.presence.length === 0) return 'No model-call presence';
     return item.presence
@@ -114,7 +138,11 @@
   {#if item}
     <header class="item-identity">
       <div>
-        <span>{kindLabel(item.kind)}</span>
+        <span
+          >{kindLabel(item.kind)}{version
+            ? ` · version ${version.number} of ${version.count}`
+            : ''}</span
+        >
         <h3 id="selected-item-summary" class="selected-item-summary" tabindex="-1">
           {displayItemLabel(item)}
         </h3>
@@ -242,6 +270,30 @@
           Summary of {formatMetric(summaryCompaction.sourceItemIds.length)} structurally replaced items
           before call {summaryCompaction.beforeModelCall}.
         </p>{/if}
+    {/if}
+
+    {#if version}
+      <h4>Versions</h4>
+      <ol class="versions">
+        {#each versions as other, index (other.id)}
+          <li>
+            {#if other.id === item.id}
+              <b>{versionSummary(other, index + 1)} · this version</b>
+            {:else}
+              <button type="button" onclick={() => onSelectItem(other.id)}
+                >{versionSummary(other, index + 1)}</button
+              >
+            {/if}
+            {#if index > 0 && item.kind === 'system'}<small
+                >Call {other.firstModelCall}: {systemPromptChange(
+                  indexed.analysis.contextItems,
+                  indexed.versionByItemId,
+                  other.firstModelCall,
+                )}</small
+              >{/if}
+          </li>
+        {/each}
+      </ol>
     {/if}
 
     {#if directPredecessors.length > 0 || directSuccessors.length > 0}
@@ -501,6 +553,26 @@
     margin-top: 2px;
     color: var(--secondary);
     font-size: 12px;
+  }
+  .versions {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+  }
+  .versions li {
+    display: grid;
+    justify-items: start;
+    gap: 2px;
+  }
+  .versions b {
+    font-weight: 600;
+  }
+  .versions small {
+    color: #8f9cb2;
+    overflow-wrap: anywhere;
   }
   .lineage-actions {
     display: grid;

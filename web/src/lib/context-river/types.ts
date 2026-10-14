@@ -51,6 +51,17 @@ export interface CompactionBoundaryLayout {
   x: number;
 }
 
+/** Where a new version of a system prompt or tool definition replaces the previous one. */
+export interface VersionMarkLayout {
+  key: string;
+  /** The new version. */
+  itemId: string;
+  callIndex: number;
+  x: number;
+  y0: number;
+  y1: number;
+}
+
 export interface LineageConnectorLayout {
   key: string;
   fromItemId: string;
@@ -74,6 +85,7 @@ export interface ContextRiverLayout {
   ribbons: RibbonSegment[];
   compactions: CompactionBoundaryLayout[];
   lineageConnectors: LineageConnectorLayout[];
+  versionMarks: VersionMarkLayout[];
   innerWidth: number;
   innerHeight: number;
   maxTotalDisplayWeight: number;

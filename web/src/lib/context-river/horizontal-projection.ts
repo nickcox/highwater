@@ -45,6 +45,7 @@ export function projectRiverHorizontally(
         ribbons: [],
         compactions: [],
         lineageConnectors: [],
+        versionMarks: [],
         maxTotalDisplayWeight: 0,
       },
       scale,

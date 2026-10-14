@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import { compositionScenario } from '../testing/composition-scenarios';
+import { versionScenario } from '../testing/version-scenario';
 import ContextLifespans from './ContextLifespans.svelte';
 
 const emptyHover = () => {};
@@ -354,5 +355,41 @@ describe('ContextLifespans long sessions', () => {
         beyond.id,
       ),
     );
+  });
+});
+
+describe('ContextLifespans versions', () => {
+  it('shows every version of the system prompt on one row and selects the version clicked', async () => {
+    const onSelectItem = vi.fn();
+    const view = render(ContextLifespans, {
+      props: {
+        indexed: indexTestAnalysis(versionScenario()),
+        onSelectItem,
+        onHoverItem: emptyHover,
+      },
+    });
+    await expandLifespans();
+    const rows = [...view.container.querySelectorAll<HTMLElement>('[data-lifespan-item-id]')];
+    expect(rows.map((row) => row.dataset.lifespanItemId).sort()).toEqual([
+      'check',
+      'fetch',
+      'read',
+      's1',
+      'user',
+      'web1',
+    ]);
+    const system = view.container.querySelector('[data-lifespan-item-id="s1"]')!;
+    expect(system).toHaveAttribute(
+      'aria-label',
+      'System prompt; System; Present at calls 1–4 · 3 versions',
+    );
+    expect(system.querySelectorAll('.version-mark')).toHaveLength(2);
+    expect(system.querySelector('.meta')).toHaveTextContent('450');
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'System prompt version 3, calls 4 through 4' }),
+    );
+    expect(onSelectItem).toHaveBeenLastCalledWith('s3');
+    await view.rerender({ selectedItemId: 's2' });
+    expect(system).toHaveClass('selected');
   });
 });

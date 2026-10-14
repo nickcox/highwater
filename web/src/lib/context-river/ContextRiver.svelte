@@ -1233,6 +1233,11 @@
     }
   }
 
+  /** Versions of a system prompt or tool definition share the first version's colour. */
+  function ribbonItemColor(id: string): string {
+    return itemColor(indexed.versionByItemId.get(id)?.firstId ?? id);
+  }
+
   function itemAccessibleLabel(id: string): string {
     return displayItemLabel(indexed.itemById.get(id), id);
   }
@@ -1404,8 +1409,8 @@
                 x2={connector.targetX}
                 y2={connector.sourceY}
               >
-                <stop offset="0%" stop-color={itemColor(connector.fromItemId)} />
-                <stop offset="100%" stop-color={itemColor(connector.toItemId)} />
+                <stop offset="0%" stop-color={ribbonItemColor(connector.fromItemId)} />
+                <stop offset="100%" stop-color={ribbonItemColor(connector.toItemId)} />
               </linearGradient>
             {/each}
             <pattern
@@ -1479,7 +1484,7 @@
               {@const isGroup = ribbon.groupKind !== undefined}
               {@const ribbonColor = ribbon.groupKind
                 ? itemTypeColor(ribbon.groupKind)
-                : itemColor(ribbon.itemId)}
+                : ribbonItemColor(ribbon.itemId)}
               {@const ribbonLabel = isGroup
                 ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
                 : itemAccessibleLabel(ribbon.itemId)}
@@ -1625,7 +1630,7 @@
                 class="ribbon-emphasis hovered"
                 vector-effect="non-scaling-stroke"
                 d={hoveredRibbon.path}
-                fill={itemColor(hoveredRibbon.itemId)}
+                fill={ribbonItemColor(hoveredRibbon.itemId)}
               />
             {/if}
             {#if selectedRibbon}
@@ -1633,9 +1638,19 @@
                 class="ribbon-emphasis selected"
                 vector-effect="non-scaling-stroke"
                 d={selectedRibbon.path}
-                fill={itemColor(selectedRibbon.itemId)}
+                fill={ribbonItemColor(selectedRibbon.itemId)}
               />
             {/if}
+            {#each river.versionMarks as mark (mark.key)}
+              <line
+                class="version-mark"
+                vector-effect="non-scaling-stroke"
+                x1={mark.x}
+                x2={mark.x}
+                y1={mark.y0}
+                y2={mark.y1}
+              />
+            {/each}
           </g>
           {#if selectionRect && selectionRect.width > 0}
             <rect
@@ -2117,6 +2132,11 @@
   }
   .compaction-merge-emphasis.emphasized {
     opacity: 0.65;
+  }
+  .version-mark {
+    stroke: #fff;
+    stroke-width: 1.5;
+    opacity: 0.8;
   }
   .lineage-connector {
     fill: none;

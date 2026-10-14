@@ -1,4 +1,5 @@
 import type { SessionAnalysis } from './types';
+import { itemVersions } from './item-versions';
 
 export function stableItemOrder(
   analysis: Pick<SessionAnalysis, 'modelCalls' | 'contextItems' | 'compactions'>,
@@ -17,6 +18,15 @@ export function stableItemOrder(
     if (item.kind === 'system') ranks.set(item.id, -2_000_000 + base);
     else if (item.kind === 'toolDefinition') ranks.set(item.id, -1_000_000 + base);
     else ranks.set(item.id, base);
+  }
+
+  // A new version of a system prompt or tool definition takes the place of the one it replaced.
+  const versions = [...itemVersions(analysis.contextItems)].sort(
+    ([, left], [, right]) => left.number - right.number,
+  );
+  for (const [id, version] of versions) {
+    const previousRank = version.previousId === null ? undefined : ranks.get(version.previousId);
+    if (previousRank !== undefined) ranks.set(id, previousRank);
   }
 
   // Compactions are sorted, so a summary from an earlier event can itself anchor

@@ -1,17 +1,18 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import type { ContextItemKind, IndexedAnalysis, PresenceRange } from '../types';
+  import type { ContextItem, ContextItemKind, IndexedAnalysis, PresenceRange } from '../types';
   import { conciseLifespanLabels, displayItemLabel } from '../item-label';
   import { itemColor } from '../context-river/colors';
   import {
     callAxisTicks,
     nearestLifespanCall,
-    presenceCount,
+    rowPresenceCount,
+    rowTokenTurns,
     sizeComparisonProfileId,
     sortLifespans,
-    tokenTurnExposure,
     type LifespanSortMode,
   } from '../context-river/lifespans';
+  import { versionChain } from '../item-versions';
   import { coverageLabel, exposureLabel, formatInteger } from '../context-river/format';
 
   const KIND_ORDER: ContextItemKind[] = [
@@ -92,20 +93,38 @@
     pinnedCallIndex === null || !callPositionByIndex.has(pinnedCallIndex)
       ? null
       : position(pinnedCallIndex);
-  $: items = sortLifespans(allItems, sortMode, sizeProfileId);
+  // Later versions of a system prompt or tool definition share their first version's row.
+  $: firstVersions = allItems.filter(
+    (item) => (indexed.versionByItemId.get(item.id)?.number ?? 1) === 1,
+  );
+  $: versionsByRowId = new Map(
+    firstVersions.map((item) => [
+      item.id,
+      versionChain(indexed.itemById, indexed.versionByItemId, item.id),
+    ]),
+  );
+  $: versionsOf = (item: ContextItem): readonly ContextItem[] =>
+    versionsByRowId.get(item.id) ?? [item];
+  $: items = sortLifespans(firstVersions, sortMode, sizeProfileId, versionsOf);
   $: scopedItems =
     scope === 'presentAtPin' && pinnedCallItemIds !== null
-      ? items.filter((item) => pinnedCallItemIds.has(item.id))
+      ? items.filter((item) =>
+          versionsOf(item).some((version) => pinnedCallItemIds.has(version.id)),
+        )
       : items;
   $: searchNeedle = searchText.trim().slice(0, SEARCH_LIMIT).toLowerCase();
   $: visibleItems = scopedItems.filter((item) => {
     const kindMatches = selectedKind === 'all' || item.kind === selectedKind;
     const searchMatches =
       searchNeedle.length === 0 ||
-      item.label.toLowerCase().includes(searchNeedle) ||
-      (item.preview?.text ?? '').toLowerCase().includes(searchNeedle);
+      versionsOf(item).some(
+        (version) =>
+          version.label.toLowerCase().includes(searchNeedle) ||
+          (version.preview?.text ?? '').toLowerCase().includes(searchNeedle),
+      );
     return kindMatches && searchMatches;
   });
+  $: visibleItemCount = visibleItems.reduce((total, item) => total + versionsOf(item).length, 0);
   // A new filter or sort starts again from the first page.
   $: (searchNeedle, selectedKind, scope, sortMode, (rowLimit = ROW_PAGE_SIZE));
   $: renderedItems = visibleItems.slice(0, rowLimit);
@@ -119,7 +138,7 @@
   $: selectedItemHidden =
     selectedItemId !== null &&
     filtersActive &&
-    !visibleItems.some((item) => item.id === selectedItemId);
+    !visibleItems.some((item) => rowContains(item, selectedItemId));
   $: if (findRequest && findRequest.requestId !== handledFindRequestId) {
     handledFindRequestId = findRequest.requestId;
     pendingFindItemId = findRequest.itemId;
@@ -159,10 +178,20 @@
     else onSelectItem(id, callIndex);
   }
 
-  function segmentStyle(range: PresenceRange, color: string): string {
+  /** A segment that meets another version of the same item runs to the boundary between them. */
+  function segmentStyle(
+    range: PresenceRange,
+    color: string,
+    meetsPrevious = false,
+    meetsNext = false,
+  ): string {
     const half = callCount <= 1 ? 8 : Math.min(2.2, 35 / Math.max(1, callCount - 1));
-    const left = Math.max(0, position(range.startCall) - half);
-    const right = Math.min(100, position(range.endCall) + half);
+    const left = meetsPrevious
+      ? boundaryPosition(range.startCall)
+      : Math.max(0, position(range.startCall) - half);
+    const right = meetsNext
+      ? boundaryPosition(range.endCall + 1)
+      : Math.min(100, position(range.endCall) + half);
     return `left:${left}%;width:${Math.max(1, right - left)}%;background-color:${color}`;
   }
 
@@ -183,16 +212,54 @@
     return displayItemLabel(item, 'Unlabelled item');
   }
 
-  function lifetimeLabel(item: IndexedAnalysis['analysis']['contextItems'][number]): string {
-    if (item.presence.length === 0) return 'No model-call presence';
-    const ranges = item.presence
+  function rowContains(item: ContextItem, id: string | null): boolean {
+    return versionsOf(item).some((version) => version.id === id);
+  }
+
+  /** The row that shows the item: its first version's. */
+  function rowItemId(id: string): string {
+    return indexed.versionByItemId.get(id)?.firstId ?? id;
+  }
+
+  /** Presence across every version on the row, joining ranges where one version follows another. */
+  function rowPresence(item: ContextItem): PresenceRange[] {
+    const ranges: PresenceRange[] = [];
+    for (const range of versionsOf(item).flatMap((version) => version.presence)) {
+      const last = ranges[ranges.length - 1];
+      if (last && range.startCall === last.endCall + 1)
+        ranges[ranges.length - 1] = { ...last, endCall: range.endCall };
+      else ranges.push(range);
+    }
+    return ranges;
+  }
+
+  function lifetimeLabel(item: ContextItem): string {
+    const presence = rowPresence(item);
+    if (presence.length === 0) return 'No model-call presence';
+    const versionCount = versionsOf(item).length;
+    const versions = versionCount > 1 ? ` · ${versionCount} versions` : '';
+    const ranges = presence
       .map((range) =>
         range.startCall === range.endCall
           ? `call ${range.startCall}`
           : `calls ${range.startCall}–${range.endCall}`,
       )
       .join(', ');
-    return `Present at ${ranges}`;
+    return `Present at ${ranges}${versions}`;
+  }
+
+  function coveredCalls(item: ContextItem): number {
+    return versionsOf(item).reduce(
+      (total, version) => total + version.tokenTurnsCoverage.coveredCalls,
+      0,
+    );
+  }
+
+  function totalCalls(item: ContextItem): number {
+    return versionsOf(item).reduce(
+      (total, version) => total + version.tokenTurnsCoverage.totalCalls,
+      0,
+    );
   }
 
   function kindLabel(kind: ContextItemKind): string {
@@ -231,7 +298,7 @@
 
   async function focusRequestedItem(requestId = handledFindRequestId): Promise<void> {
     if (!componentActive || requestId !== handledFindRequestId || !pendingFindItemId) return;
-    const requestedId = pendingFindItemId;
+    const requestedId = rowItemId(pendingFindItemId);
     const index = visibleItems.findIndex((item) => item.id === requestedId);
     if (index >= rowLimit) {
       rowLimit = Math.ceil((index + 1) / ROW_PAGE_SIZE) * ROW_PAGE_SIZE;
@@ -239,7 +306,7 @@
       if (!componentActive || requestId !== handledFindRequestId) return;
     }
     const row = [...(root?.querySelectorAll<HTMLElement>('[data-lifespan-item-id]') ?? [])].find(
-      (candidate) => candidate.dataset.lifespanItemId === pendingFindItemId,
+      (candidate) => candidate.dataset.lifespanItemId === requestedId,
     );
     if (row) {
       row.scrollIntoView({ block: 'center' });
@@ -274,7 +341,7 @@
         <h2>Context lifespans · {itemCountLabel(allItems.length)}</h2>
       </span>
       {#if filtersActive}<span class="result-count"
-          >{formatInteger(visibleItems.length)} of {formatInteger(allItems.length)} items</span
+          >{formatInteger(visibleItemCount)} of {formatInteger(allItems.length)} items</span
         >{/if}
     </summary>
     {#if expanded}
@@ -411,7 +478,7 @@
               <div
                 id={rowId(item.id)}
                 class="row"
-                class:selected={selectedItemId === item.id}
+                class:selected={rowContains(item, selectedItemId)}
                 tabindex="-1"
                 aria-label={`${fullItemLabel(item)}; ${kindLabel(item.kind)}; ${lifetimeLabel(item)}`}
                 data-lifespan-item-id={item.id}
@@ -442,33 +509,57 @@
                       aria-hidden="true"
                     ></span>
                   {/each}
-                  {#each item.presence as range, rangeIndex (`${item.id}:${rangeIndex}`)}
-                    <button
-                      type="button"
-                      class="segment"
-                      class:compacted={isCompactedEnd(item.id, range)}
-                      aria-label={`${fullItemLabel(item)}, calls ${range.startCall} through ${range.endCall}`}
-                      aria-pressed={selectedItemId === item.id}
-                      title={`${label}: calls ${range.startCall}–${range.endCall}`}
-                      style={segmentStyle(range, itemColor(item.id))}
-                      onpointerenter={(event) => onHoverItem(item.id, event)}
-                      onpointermove={(event) => onHoverItem(item.id, event)}
-                      onpointerleave={() => onHoverItem(null)}
-                      onclick={(event) => selectSegment(event, item.id, range)}
-                    ></button>
+                  {#each versionsOf(item) as version, versionIndex (version.id)}
+                    {@const versionLabel =
+                      versionsOf(item).length > 1
+                        ? `${fullItemLabel(item)} version ${versionIndex + 1}`
+                        : fullItemLabel(item)}
+                    {#each version.presence as range, rangeIndex (`${version.id}:${rangeIndex}`)}
+                      {@const replacedAfter =
+                        rangeIndex === version.presence.length - 1 &&
+                        versionsOf(item)[versionIndex + 1]?.firstModelCall === range.endCall + 1}
+                      {@const replacesBefore =
+                        rangeIndex === 0 &&
+                        versionIndex > 0 &&
+                        versionsOf(item)[versionIndex - 1]?.lastModelCall === range.startCall - 1}
+                      <button
+                        type="button"
+                        class="segment"
+                        class:compacted={isCompactedEnd(version.id, range)}
+                        class:replaced-after={replacedAfter}
+                        class:replaces-before={replacesBefore}
+                        aria-label={`${versionLabel}, calls ${range.startCall} through ${range.endCall}`}
+                        aria-pressed={selectedItemId === version.id}
+                        title={`${versionLabel === fullItemLabel(item) ? label : versionLabel}: calls ${range.startCall}–${range.endCall}`}
+                        style={segmentStyle(
+                          range,
+                          itemColor(item.id),
+                          replacesBefore,
+                          replacedAfter,
+                        )}
+                        onpointerenter={(event) => onHoverItem(version.id, event)}
+                        onpointermove={(event) => onHoverItem(version.id, event)}
+                        onpointerleave={() => onHoverItem(null)}
+                        onclick={(event) => selectSegment(event, version.id, range)}
+                      ></button>
+                    {/each}
+                    {#if versionIndex > 0}
+                      <span
+                        class="version-mark"
+                        style={`left:${boundaryPosition(version.firstModelCall)}%`}
+                        aria-hidden="true"
+                      ></span>
+                    {/if}
                   {/each}
                 </div>
                 <div
                   class="meta"
-                  title={`${presenceCount(item)} calls; ${coverageLabel(item.tokenTurnsCoverage.coveredCalls, item.tokenTurnsCoverage.totalCalls)} tokenized`}
+                  title={`${rowPresenceCount(versionsOf(item))} calls; ${coverageLabel(coveredCalls(item), totalCalls(item))} tokenized`}
                 >
-                  {exposureLabel(tokenTurnExposure(item), 'calculatedTokens')}
-                  {#if item.tokenTurnsCoverage.coveredCalls < item.tokenTurnsCoverage.totalCalls}
+                  {exposureLabel(rowTokenTurns(versionsOf(item)), 'calculatedTokens')}
+                  {#if coveredCalls(item) < totalCalls(item)}
                     <small
-                      >{coverageLabel(
-                        item.tokenTurnsCoverage.coveredCalls,
-                        item.tokenTurnsCoverage.totalCalls,
-                      )} calls covered</small
+                      >{coverageLabel(coveredCalls(item), totalCalls(item))} calls covered</small
                     >
                   {/if}
                 </div>
@@ -829,6 +920,15 @@
     border-radius: 4px;
     cursor: pointer;
   }
+  /* Versions that follow on directly meet without a rounded gap. */
+  .segment.replaced-after {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .segment.replaces-before {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
   .segment.compacted {
     border-right: 4px double #fff;
     background-image: repeating-linear-gradient(
@@ -843,6 +943,15 @@
   }
   .boundary {
     top: 0;
+  }
+  /* Where a new version of a system prompt or tool definition starts; matches the River's mark. */
+  .version-mark {
+    position: absolute;
+    z-index: 3;
+    top: 3px;
+    height: 16px;
+    border-left: 1.5px solid rgba(255, 255, 255, 0.8);
+    pointer-events: none;
   }
   .meta {
     text-align: right;
