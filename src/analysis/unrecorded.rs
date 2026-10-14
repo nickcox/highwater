@@ -1,13 +1,15 @@
 //! Request content a source does not record, inferred from reported usage.
 //!
-//! Claude Code and OpenCode do not record the system prompt or tool definitions they send.
+//! Claude Code, OpenCode and VS Code Copilot's session files do not record the system prompt or
+//! tool definitions they send.
 //! At the first call of a segment that reports its input, that content is the reported
 //! input less the estimates of the call's recorded items, because the call has little else
 //! in context. A segment starts at the first call, at each compaction and at each change of
 //! model, since each can change the unrecorded content. A failed attempt (such as Claude
 //! Code's `<synthetic>` error message) never reached a model, so its model is ignored. The
-//! item stays in context to the end of its segment. Pi records its system context, so it is left out (see
-//! docs/data-semantics.md, "Pi system context").
+//! item stays in context to the end of its segment; for VS Code Copilot it also covers the
+//! segment's calls before the measuring call. Pi records its system context, so it is left out
+//! (see docs/data-semantics.md, "Pi system context").
 
 use super::reconciliation::{reported_prompt_tokens, UsageCompleteness};
 use super::tokenization::{ProfileRegistry, TokenCoverage, TokenizationPolicy};
@@ -17,7 +19,7 @@ use crate::domain::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-const SOURCES: [&str; 2] = ["claude-code", "opencode"];
+const SOURCES: [&str; 3] = ["claude-code", "opencode", "vscode-copilot"];
 
 /// Estimates go into `registry`, which the analysis keeps, so it does not tokenize these items again.
 pub(super) fn add_unrecorded_context(
@@ -42,7 +44,15 @@ pub(super) fn add_unrecorded_context(
             measure(session, registry, policy, call).map(|measure| (call.index, measure))
         });
         if let Some((anchor, Some(item))) = measured {
-            added.push((item, anchor, calls[end - 1].index));
+            // A Copilot session file reports input only on a request's last call, so the
+            // segment's earlier calls, which carried the same system prompt and tools, start
+            // with the content measured later.
+            let first = if session.source.kind == "vscode-copilot" {
+                calls[start].index
+            } else {
+                anchor
+            };
+            added.push((item, first, calls[end - 1].index));
         }
         start = end;
     }
@@ -158,6 +168,33 @@ mod tests {
             .iter()
             .filter(|item| item.kind == ContextItemKind::UnrecordedContext)
             .collect()
+    }
+
+    #[test]
+    fn copilot_unrecorded_content_covers_the_calls_before_the_measuring_call() {
+        let locator = SessionLocator::VsCodeCopilotFile {
+            path: PathBuf::from(
+                "fixtures/vscode-copilot/User/workspaceStorage/0a1b2c3d/chatSessions/11111111-agent.jsonl",
+            ),
+        };
+        let mut session = load(&locator, None).expect("fixture").normalized;
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Heuristic,
+        );
+        let items = unrecorded(&session);
+        // Calls 1 and 2 use one model; only call 2 reports its input. Call 3 changes model
+        // and reports none, so it measures nothing.
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].presence,
+            vec![PresenceRange {
+                start_call: 1,
+                end_call: 2
+            }]
+        );
+        assert_eq!(session.model_calls[0].context_item_ids[0], items[0].id);
     }
 
     #[test]

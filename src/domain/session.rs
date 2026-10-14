@@ -84,6 +84,9 @@ pub(crate) struct ReportedUsage {
     /// Qualified accounting fields below remain absent when this is present.
     pub placeholder: Option<PlaceholderUsage>,
     pub input: Option<u64>,
+    /// The total input, including any cached part, when the source reports only the total
+    /// (a VS Code Copilot session file). `input` and the cache counters are then unknown.
+    pub input_total: Option<u64>,
     /// Normalized completion total, including reasoning exactly once when known.
     pub output: Option<u64>,
     /// Uncombined output counter supplied by the source, independent of total availability.

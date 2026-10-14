@@ -242,7 +242,8 @@ fn normalized_fixture_parity() {
         let mut normalized = format!("{session:?}")
             .replace("placeholder: None, ", "")
             .replace(", harness_session_cost: None", "")
-            .replace(", thinking_reported: false", "");
+            .replace(", thinking_reported: false", "")
+            .replace("input_total: None, ", "");
         // Remove only the additive counter metadata to keep the original
         // replay baseline pinned: no normalized usage or history may change.
         for call in &session.model_calls {

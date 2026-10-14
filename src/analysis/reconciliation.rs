@@ -21,6 +21,14 @@ impl UsageCompleteness {
 pub(crate) fn reported_prompt_tokens(usage: &ReportedUsage) -> (Option<u64>, UsageCompleteness) {
     let fields = [usage.input, usage.cache_read, usage.cache_write];
     let known = fields.iter().filter(|value| value.is_some()).count();
+    if known == 0 {
+        if let Some(total) = usage
+            .input_total
+            .filter(|total| *total <= MAX_SAFE_JSON_INTEGER)
+        {
+            return (Some(total), UsageCompleteness::Complete);
+        }
+    }
     let completeness = match known {
         3 => UsageCompleteness::Complete,
         0 => UsageCompleteness::Missing,
@@ -164,6 +172,27 @@ mod tests {
             ]
             .map(UsageCompleteness::as_str),
             ["complete", "partial", "missing"]
+        );
+    }
+
+    #[test]
+    fn a_reported_total_is_used_only_when_no_part_is_known() {
+        let total = ReportedUsage {
+            input_total: Some(1800),
+            ..ReportedUsage::default()
+        };
+        assert_eq!(
+            reported_prompt_tokens(&total),
+            (Some(1800), UsageCompleteness::Complete)
+        );
+        let parts = ReportedUsage {
+            input: Some(1),
+            input_total: Some(1800),
+            ..ReportedUsage::default()
+        };
+        assert_eq!(
+            reported_prompt_tokens(&parts),
+            (None, UsageCompleteness::Partial)
         );
     }
 

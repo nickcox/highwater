@@ -18,6 +18,12 @@ pub(crate) enum Limitation {
     MissingHistoricalToolDefinitions,
     /// Copilot's own calls (titles, progress messages, tool grouping) are not recorded.
     UnrecordedHarnessCalls,
+    /// A request with attachments recorded without the message as sent, so only the
+    /// typed text is known.
+    UnrenderedAttachments,
+    /// A request that made several model calls but recorded no rounds (one stopped or
+    /// interrupted, for example) is shown as one call.
+    UnrecordedRounds,
     UnsupportedContent,
 }
 
@@ -27,6 +33,8 @@ impl Limitation {
             Self::MissingHistoricalSystemPrompt => "missingHistoricalSystemPrompt",
             Self::MissingHistoricalToolDefinitions => "missingHistoricalToolDefinitions",
             Self::UnrecordedHarnessCalls => "unrecordedHarnessCalls",
+            Self::UnrenderedAttachments => "unrenderedAttachments",
+            Self::UnrecordedRounds => "unrecordedRounds",
             Self::UnsupportedContent => "unsupportedContent",
         }
     }

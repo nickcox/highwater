@@ -2,3 +2,5 @@
 {"kind":2,"k":["requests"],"v":[{"requestId":"request_w1","timestamp":1790200001000,"agent":{"extensionId":{"value":"GitHub.copilot-chat"},"extensionVersion":"0.41.2"},"modelId":"copilot/gpt-4.1","message":{"text":"What does git rebase --onto do?","parts":[]},"response":[],"modelState":{"value":0}}]}
 {"kind":2,"k":["requests",0,"response"],"v":[{"value":"It moves commits onto a new base."}]}
 {"kind":1,"k":["requests",0,"result"],"v":{"timings":{"firstProgress":400,"totalElapsed":900},"metadata":{}}}
+{"kind":2,"k":["requests"],"v":[{"requestId":"request_w2","timestamp":1790200005000,"agent":{"extensionId":{"value":"GitHub.copilot-chat"},"extensionVersion":"0.41.2"},"modelId":"copilot/gpt-4.1","message":{"text":"And --root?","parts":[]},"response":[{"kind":"mcpServersStarting"}],"modelState":{"value":0}}]}
+{"kind":1,"k":["requests",1,"result"],"v":{"errorDetails":{"code":"failed","message":"The request failed."},"timings":{"firstProgress":0,"totalElapsed":300},"metadata":{}}}

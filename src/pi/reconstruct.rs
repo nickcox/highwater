@@ -749,6 +749,7 @@ fn parse_usage(value: Option<&Value>) -> Result<ReportedUsage, SourceError> {
     Ok(ReportedUsage {
         placeholder: None,
         input: parse_safe_u64(usage.get("input"), "usage.input")?,
+        input_total: None,
         output,
         recorded_output: output,
         // Pi's normalized usage output already includes reasoning; keep the

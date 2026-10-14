@@ -29,6 +29,8 @@ export const reconstructionLimitLabels: Record<string, string> = {
     'A compaction does not record which recent messages it kept; only its summary is carried forward.',
   unrenderedAttachments:
     'Some context the harness added was recorded without its text, so its size is unknown.',
+  unrecordedRounds:
+    "A request that was stopped or interrupted recorded its model calls as one, so its calls' context and output are not split.",
   repairedCompactionLink:
     'A compaction marker named a later record as its predecessor; the conversation was continued from the record before the marker.',
 };

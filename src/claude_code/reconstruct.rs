@@ -842,6 +842,7 @@ fn reported_usage(usage: Option<&Value>) -> Result<ReportedUsage, SourceError> {
     Ok(ReportedUsage {
         placeholder: None,
         input: counter(field(&["input_tokens"]), "usage.input_tokens")?,
+        input_total: None,
         output,
         recorded_output: output,
         output_reasoning_relationship: OutputReasoningRelationship::IncludesReasoning,
