@@ -62,7 +62,10 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   await expect(coverage).toContainText("The harness's own model calls");
   await expect(coverage).toContainText('Some compaction records have no request usage');
   await expect(page.locator('.cost-metric')).toContainText('Cost');
-  await expect(page.locator('.cost-metric')).not.toContainText('covered by a subscription');
+  // No billed/subscription split under the tile; its note explains how the cost is worked out.
+  await expect(page.locator('.cost-metric .metric-note')).not.toContainText([
+    'covered by a subscription',
+  ]);
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   const river = page.getByRole('application', { name: 'Context River' });
   await river
@@ -84,7 +87,10 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   await expect(page.locator('#session-details')).toContainText(
     "includes subagents and Claude Code's own calls, which are not in this transcript",
   );
-  await expect(page.locator('#session-details')).toContainText('None: Claude Code records no cost');
+  await expect(page.locator('#session-details')).toContainText('Not recorded');
+  await expect(page.locator('#recorded-cost-note')).toContainText(
+    'Claude Code records token usage but no cost for each call',
+  );
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(harness).toBeVisible();

@@ -51,7 +51,8 @@ describe('SessionSummary', () => {
       props: { indexed: indexTestAnalysis(testAnalysis()) },
     });
     const cost = container.querySelectorAll('.primary-metrics > div')[3];
-    expect(cost).toHaveTextContent(/Cost\s*≈ \D*0\.06\s*3 calls/);
+    expect(cost.querySelector('b')).toHaveTextContent(/^≈ \D*0\.06$/);
+    expect(cost.querySelector('.metric-note')).toHaveTextContent(/^3 calls/);
     expect(cost).toHaveTextContent('1 call without a price');
     expect(cost).not.toHaveTextContent('API-equivalent');
   });
@@ -71,14 +72,19 @@ describe('SessionSummary', () => {
       props: { indexed: indexTestAnalysis(analysis) },
     });
     const cost = container.querySelectorAll('.primary-metrics > div')[3];
-    expect(cost).toHaveTextContent(/Cost\s*≈ \D*1\.55–\D*1\.80\s*3 calls/);
+    expect(cost.querySelector('b')).toHaveTextContent(/^≈ \D*1\.55–\D*1\.80$/);
+    expect(cost.querySelector('.metric-note')).toHaveTextContent(/^3 calls/);
     expect(cost).toHaveTextContent(
       /≈ \D*0\.05 billed per token · ≈ \D*1\.50–\D*1\.75 covered by a subscription/,
     );
     expect(cost).toHaveTextContent('1 failed attempt not counted');
+    // How the cost is worked out, and where the prices came from, are in the tile's note.
+    expect(container.querySelector('#session-cost-note')).toHaveTextContent(
+      'Prices from models.dev',
+    );
     const details = container.querySelector('details.session-details')!;
-    expect(details).toHaveTextContent('API-equivalent cost of subscription calls (USD)');
-    expect(details).toHaveTextContent('Price data');
+    expect(details).not.toHaveTextContent('API-equivalent cost of subscription calls');
+    expect(details).not.toHaveTextContent('Price data');
   });
 
   it('shows an unknown cost when no call has one', () => {
@@ -100,6 +106,8 @@ describe('SessionSummary', () => {
       explanationCodes: ['missingHistoricalSystemPrompt', 'unrecordedHarnessCalls'],
     };
     analysis.session.harnessSessionCost = { totalUsd: 2.28, sinceMs: Date.UTC(2026, 9, 10, 6, 3) };
+    // Claude Code records no cost for any call.
+    analysis.session.reportedCostTotal = null;
     const { container } = render(SessionSummary, {
       props: { indexed: indexTestAnalysis(analysis) },
     });
@@ -111,7 +119,12 @@ describe('SessionSummary', () => {
     expect(row).toHaveTextContent(
       /Since .* · includes subagents and Claude Code's own calls, which are not in this transcript/,
     );
-    expect(container).toHaveTextContent('None: Claude Code records no cost');
+    const recorded = [...container.querySelectorAll('.session-details dl > div')].find((element) =>
+      element.textContent?.includes('Recorded by Claude Code'),
+    );
+    expect(recorded).toHaveTextContent('Not recorded');
+    expect(recorded).toHaveTextContent('Claude Code records token usage but no cost for each call');
+    expect(container.querySelector('.session-details')).not.toHaveTextContent('Billed cost');
   });
 
   it('has no own-total row when the harness recorded none', () => {

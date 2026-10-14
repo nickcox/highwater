@@ -54,7 +54,7 @@ const COST_BASIS_COPY: Record<EconomicsCostBasis, CostBasisCopy> = {
 const CLAUDE_CODE_COPY: CostBasisCopy = {
   ...COST_BASIS_COPY.unknown,
   basisLabel: 'None: Claude Code records no cost',
-  note: 'Claude Code records token usage but no cost for each call. The billed and API-equivalent costs are calculated from the price table.',
+  note: 'Claude Code records token usage but no cost for each call, so costs are calculated from the price table.',
   trackCaveat: 'no recorded cost',
 };
 

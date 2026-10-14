@@ -73,8 +73,21 @@
     </div>
     <div class="cost-metric">
       {#if cost}
-        <span>{cost.label}</span>
-        <b title={cost.title}>{cost.value}</b>
+        <span
+          >{cost.label}<InfoPopover id="session-cost-note" label="How the cost is worked out"
+            >{cost.title}
+            <span class="price-source"
+              >Prices from models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
+                0,
+                10,
+              )}){#if priceData.amendmentsImportedFrom}, with corrections from model-prices {priceData.amendmentsImportedFrom.slice(
+                  0,
+                  7,
+                )}{/if}.</span
+            ></InfoPopover
+          ></span
+        >
+        <b>{cost.value}</b>
         <small class="metric-note">{cost.note}{costCoverage ? ` · ${costCoverage}` : ''}</small>
         {#if cost.split}<small class="metric-note">{cost.split}</small>{/if}
       {:else}
@@ -150,26 +163,27 @@
               <dt>Compactions</dt>
               <dd>{formatInteger(analysis.compactions.length)}</dd>
             </div>
+            {#if session.source !== 'claude-code'}
+              <div>
+                <dt>Billed cost (USD)</dt>
+                <dd>
+                  {costSummary.billed.calls > 0
+                    ? formatCostSubtotal(costSummary.billed, true)
+                    : 'None'}
+                </dd>
+              </div>
+            {/if}
             <div>
-              <dt>Billed cost (USD)</dt>
+              <dt>
+                Recorded by {harnessName(session.source)} (USD)<InfoPopover
+                  id="recorded-cost-note"
+                  label="About the recorded cost">{costCopy.note}</InfoPopover
+                >
+              </dt>
               <dd>
-                {costSummary.billed.calls > 0
-                  ? formatCostSubtotal(costSummary.billed, true)
-                  : 'None'}
-              </dd>
-            </div>
-            <div>
-              <dt>API-equivalent cost of subscription calls (USD)</dt>
-              <dd>
-                {costSummary.apiEquivalent.calls > 0
-                  ? formatCostSubtotal(costSummary.apiEquivalent, true)
-                  : 'None'}
-              </dd>
-            </div>
-            <div>
-              <dt>Recorded by {harnessName(session.source)} (USD)</dt>
-              <dd>
-                {formatCost(session.reportedCostTotal)}
+                {#if session.reportedCostTotal === null}Not recorded{:else}{formatCost(
+                    session.reportedCostTotal,
+                  )}{/if}
                 {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}
               </dd>
             </div>
@@ -184,22 +198,6 @@
                 </dd>
               </div>
             {/if}
-            <div>
-              <dt>Price data</dt>
-              <dd>
-                models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
-                  0,
-                  10,
-                )}){#if priceData.amendmentsImportedFrom}, corrections from model-prices {priceData.amendmentsImportedFrom.slice(
-                    0,
-                    7,
-                  )}{/if}
-              </dd>
-            </div>
-            <div>
-              <dt>Recorded cost basis</dt>
-              <dd>{costCopy.basisLabel}</dd>
-            </div>
           </dl>
         </section>
         <section>
@@ -401,6 +399,11 @@
   }
   .estimate-level.rough {
     color: var(--error);
+  }
+  .price-source {
+    display: block;
+    margin-top: 6px;
+    color: var(--secondary);
   }
   .estimate-lead {
     margin: 0;
