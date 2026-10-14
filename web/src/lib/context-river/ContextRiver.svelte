@@ -1882,12 +1882,9 @@
   }
   .economics-readout {
     min-height: 28px;
-    margin-top: 8px;
-    padding: 5px 8px;
-    border-top: 1px solid #293752;
-    background: #101a2d;
-    color: #d6e0f2;
-    font-size: 11px;
+    padding: 0.45rem 0 0 var(--plot-left);
+    color: #aab4c7;
+    font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
   }

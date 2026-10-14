@@ -836,8 +836,8 @@
     pointer-events: all;
   }
   .track-event-lane > rect {
-    fill: #101b2e;
-    stroke: #2b3b5c;
+    fill: none;
+    stroke: none;
     pointer-events: none;
   }
   .track-event-trigger {

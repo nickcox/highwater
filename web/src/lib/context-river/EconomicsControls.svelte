@@ -217,11 +217,11 @@
     width: 100%;
     gap: 6px;
     margin: 0 0 8px;
-    padding: 8px 10px;
+    padding: 8px 0;
     border: 0;
     border-top: 1px solid var(--separator);
     border-radius: 0;
-    background: var(--plot);
+    background: var(--surface);
   }
   .economics-track-controls {
     display: flex;

@@ -114,15 +114,23 @@
     margin: 0;
   }
   .inspector-empty-prompt {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 0;
     padding: 0;
+    background: transparent;
   }
   .inspector-empty-prompt .panel-head {
     display: none;
   }
   .inspector-empty-prompt p {
-    display: inline;
-    margin: 0 12px 0 0;
+    margin: 0;
+    color: var(--secondary);
     font-size: 12px;
+  }
+  .inspector-empty-prompt p + p::before {
+    content: '·';
+    margin: 0 10px;
   }
   .panel-close {
     flex-shrink: 0;
