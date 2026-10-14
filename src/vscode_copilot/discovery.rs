@@ -1,5 +1,5 @@
 //! Finds Copilot Chat session files under a VS Code user data folder and reads the few
-//! fields the catalogue shows. Section 4 of plans/vscode-copilot-implementation-plan.md
+//! fields the catalogue shows. Section 4 of plans/archive/vscode-copilot-implementation-plan.md
 //! describes the layout.
 
 use super::change_log;

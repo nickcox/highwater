@@ -1,4 +1,4 @@
-//! Read-only VS Code Copilot Chat sessions. See plans/vscode-copilot-implementation-plan.md.
+//! Read-only VS Code Copilot Chat sessions. See plans/archive/vscode-copilot-implementation-plan.md.
 
 mod change_log;
 pub(crate) mod discovery;

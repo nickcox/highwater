@@ -1,5 +1,5 @@
 //! Turns a replayed session into model calls and context items. Section 5 of
-//! plans/vscode-copilot-implementation-plan.md describes the rules.
+//! plans/archive/vscode-copilot-implementation-plan.md describes the rules.
 
 use super::{
     traces::{TraceCall, Traces},
