@@ -824,7 +824,10 @@
           <div>
             <h2>{explorationTitle}</h2>
             {#if visualizationView === 'river'}
-              <ChartHelp isVisible={visualizationView === 'river'} />
+              <ChartHelp
+                isVisible={visualizationView === 'river'}
+                source={indexed.analysis.session.source}
+              />
             {/if}
           </div>
           <div class="panel-actions">

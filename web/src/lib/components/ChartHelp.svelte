@@ -1,6 +1,8 @@
 <script lang="ts">
   import { afterUpdate, onMount } from 'svelte';
   export let isVisible = true;
+  /** The session's source; the System and tools section is about Pi sessions only. */
+  export let source: string;
   $: if (!isVisible) close(false);
 
   let container: HTMLDivElement | null = null;
@@ -95,13 +97,15 @@
       <li>Use Find in lifespans from Composition to open and focus a selected item's row.</li>
       <li>Escape closes this help first, then clears the selected item, the pin, and Fit all.</li>
     </ul>
-    <h4>System and tools</h4>
-    <p>
-      Recorded Pi instructions and tool declarations are replayed into per-call revisions. Their
-      token sizes estimate logical context, not exact provider wire framing. Older logs may lack
-      this material; missing does not mean zero. Provider-reported input and cost remain independent
-      totals.
-    </p>
+    {#if source === 'pi'}
+      <h4>System and tools</h4>
+      <p>
+        Recorded Pi instructions and tool declarations are replayed into per-call revisions. Their
+        token sizes estimate logical context, not exact provider wire framing. Older logs may lack
+        this material; missing does not mean zero. Provider-reported input and cost remain
+        independent totals.
+      </p>
+    {/if}
     <h4>Read the scale</h4>
     <p>
       Session scale keeps ribbon heights comparable across calls. Visible calls mode rescales to

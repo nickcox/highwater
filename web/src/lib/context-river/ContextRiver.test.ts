@@ -293,7 +293,10 @@ describe('ContextRiver continuous viewport integration', () => {
     const legend = view.getByRole('group', { name: 'Input reference legend' });
     expect(legend).toHaveTextContent('Unreconciled input');
     expect(legend).toHaveTextContent('Call 1');
-    expect(legend.querySelector('button')).toBeNull();
+    // The legend's only control is the note explaining unreconciled input.
+    expect(
+      [...legend.querySelectorAll('button')].map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['About unreconciled input']);
     const overlay = view.getByTestId('reported-input-overlay');
     expect(overlay).toHaveAttribute('aria-hidden', 'true');
     expect(overlay.querySelector('[role="button"], [tabindex]')).toBeNull();

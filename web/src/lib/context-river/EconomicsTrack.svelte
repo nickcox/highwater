@@ -597,9 +597,6 @@
     {/each}
     <g class="track-event-header" aria-label="Economics event annotations">
       <text x={margin.left + 4} y={eventHeaderTop + 12}>Events</text>
-      <text x={margin.left + 56} y={eventHeaderTop + 12}>
-        Numbers count events; activate for details
-      </text>
     </g>
     <g class="track-event-lane" aria-label="Economics event lane">
       <rect

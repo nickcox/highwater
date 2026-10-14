@@ -1,5 +1,6 @@
 <script lang="ts">
   import EventGlyph from './EventGlyph.svelte';
+  import InfoPopover from '../components/InfoPopover.svelte';
   import type {
     CacheViewMode,
     EconomicsTrackMode,
@@ -12,7 +13,6 @@
   export let cacheView: CacheViewMode;
   export let cachePresentation: ReturnType<typeof projectCachePresentation>;
   export let costCopy: ReturnType<typeof describeCostBasis>;
-  export let usageMappingLabel: string;
   /** Some calls are covered by a subscription and drawn as API-equivalent costs. */
   export let hasApiEquivalentCost = false;
   export let onModeChange: (mode: EconomicsTrackMode) => void;
@@ -20,25 +20,6 @@
   /** Bound by the River, which returns focus here and checks focus containment. */
   export let headerElement: HTMLDivElement | undefined = undefined;
   export let triggerElement: HTMLButtonElement | undefined = undefined;
-
-  function cacheAvailabilityLabel(category: (typeof cachePresentation.categories)[number]): string {
-    switch (category.availability) {
-      case 'available':
-        return `available for ${category.completeCalls} of ${category.applicableCalls} applicable calls`;
-      case 'measuredZero':
-        return `0 in this session (${category.completeCalls} applicable calls covered)`;
-      case 'partial':
-        return `partial coverage (${category.completeCalls} of ${category.applicableCalls} calls complete)`;
-      case 'missing':
-        return 'missing; no numeric zero is inferred';
-      case 'notReported':
-        return 'not separately reported by this API';
-      case 'notRetained':
-        return 'not retained by the source';
-      default:
-        return 'unsupported policy';
-    }
-  }
 </script>
 
 <!-- Stops pointer and click events reaching the River's drag-to-zoom gestures;
@@ -96,14 +77,17 @@
               class:active={cacheView === 'share'}
               aria-pressed={cacheView === 'share'}
               onclick={() => onCacheViewChange('share')}>Share (%)</button
+            ><InfoPopover id="cache-share-note" label="About Share (%)"
+              >Shows cache reads, cache writes and fresh input as shares of each call's input
+              tokens. Calls with missing, partial or zero input are marked, not drawn as zero.</InfoPopover
             >
           </div>
         {/if}
         <span class="track-title">
           {mode === 'cache'
             ? cacheView === 'share'
-              ? `Cache share per call · ${usageMappingLabel} prompt-token denominator · fixed 0–100% axis`
-              : `Prompt tokens per call · ${usageMappingLabel} · session-wide scale`
+              ? "Cache share per call · share of each call's input · fixed 0–100% axis"
+              : 'Prompt tokens per call · session-wide scale'
             : mode === 'cost'
               ? 'Cost per call · USD · session-wide scale · recorded or estimated, not invoices'
               : 'Economics off · details remain available in the inspector'}
@@ -142,9 +126,9 @@
           </div>
         {/if}
       </div>
-      <!-- One disclosure for the event and data-quality key and how this mode's values are measured. -->
+      <!-- What the event symbols and data-quality marks mean, and in Cost mode, the cost marks. -->
       <details class="economics-legend">
-        <summary class="disclosure">Key and data availability</summary>
+        <summary class="disclosure">Key</summary>
         <div class="track-legend-group" aria-label="Events">
           <span class="legend-group-title">Events</span>
           <div class="track-legend">
@@ -163,34 +147,11 @@
             <span><i class="swatch zero"></i>Measured zero</span>
           </div>
         </div>
-        {#if mode === 'cache'}
+        {#if mode === 'cost'}
           <p class="availability-summary">
-            <b>Data availability.</b>
-            {cachePresentation.summary}
-          </p>
-          <p class="availability-summary">
-            Fresh / uncached input uses each policy's exact label below.
-          </p>
-          <ul class="availability-list">
-            {#each cachePresentation.categories as category (category.kind)}
-              <li>
-                <b>{category.label}</b>: {cacheAvailabilityLabel(category)}{category.note
-                  ? ` · ${category.note}`
-                  : ''}
-              </li>
-            {/each}
-            {#each cachePresentation.notes as note (note)}<li>{note}</li>{/each}
-          </ul>
-          <p class="availability-summary">
-            Share (%) divides each applicable bucket by that call's audited positive prompt-token
-            denominator. Missing, partial, unsupported, and zero-prompt calls remain distinct.
-          </p>
-        {:else}
-          <p class="availability-summary">
-            <b>Data availability.</b>
-            Billed calls show the cost the harness recorded, or an estimate at the provider's rate when
-            it recorded none. Subscription calls show what they would have cost at the lab's API rate;
-            that is not a charge. A shaded bar marks a range. {costCopy.note}
+            Billed calls show the cost the harness recorded, or an estimate at the provider's rate
+            when it recorded none. Subscription calls show what they would have cost at the lab's
+            API rate; that is not a charge. A shaded bar marks a range. {costCopy.note}
             Unavailable values are not zero.
           </p>
         {/if}
@@ -312,13 +273,6 @@
   }
   .availability-summary {
     margin: 6px 0;
-    line-height: 1.4;
-  }
-  .availability-list {
-    max-width: 100%;
-    margin: 6px 0;
-    padding-left: 18px;
-    color: #cbd5e7;
     line-height: 1.4;
   }
   .track-title {

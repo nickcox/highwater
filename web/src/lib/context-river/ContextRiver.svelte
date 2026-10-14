@@ -7,6 +7,7 @@
   import { afterUpdate, beforeUpdate, onMount } from 'svelte';
   import type { IndexedAnalysis, ContextItemKind } from '../types';
   import { displayItemLabel } from '../item-label';
+  import InfoPopover from '../components/InfoPopover.svelte';
   import {
     anchorForCall as callAnchor,
     anchorForCallRange as rangeAnchor,
@@ -36,7 +37,7 @@
   import { clientXToViewBox, nearestCallIndex } from './hit-testing';
   import { nonOverlappingCallLabelPositions } from './axis-labels';
   import { chartUnitLabel } from './format';
-  import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
+  import { describeCostBasis } from '../cost-basis';
   import { layoutCallColumns, layoutContextRiver } from './layout';
   import { inputComparisons, inputScaleColumns, layoutInputReferences } from './reported-input';
   import { projectCallColumns, projectRiverHorizontally } from './horizontal-projection';
@@ -157,7 +158,6 @@
     indexed.analysis.economics.costBasis,
     indexed.analysis.session.source,
   );
-  $: usageMappingLabel = usageNormalizationLabel(indexed.analysis.session.source);
   let economicsReadout = '';
   let economicsEventBreakdown: EconomicsEventBreakdown | null = null;
   let groupBreakdown: {
@@ -1693,17 +1693,20 @@
                 .filter(Boolean))] as kind}
             <span><i style={`background:${itemTypeColor(kind!)}`}></i>{groupLabel(kind!)}</span>
           {/each}
-          <small>Colors identify content types, not cache status.</small>
         </div>
       {/if}
       {#if inputComparison.size > 0}
         <div class="input-reference-legend" role="group" aria-label="Input reference legend">
           <span><i class="input-reference-key"></i>Reported input</span>
-          {#if hasInputGap}<span><i class="input-gap-key"></i>Unreconciled input</span>{/if}
-          <small
-            >Reported input minus estimated reconstructed content; may include framing or estimation
-            differences. Not recovered items or cost attribution.</small
-          >
+          {#if hasInputGap}<span
+              ><i class="input-gap-key"></i>Unreconciled input<InfoPopover
+                id="unreconciled-input-note"
+                label="About unreconciled input"
+                >The reported input minus the content estimated in the River. It can include request
+                framing and estimation differences. It is not lost content, and it is not attributed
+                to cost.</InfoPopover
+              ></span
+            >{/if}
           {#if activeInputComparison}
             <span class="input-comparison-readout"
               >Call {activeInputComparison.callIndex}: reconstructed {formatVerticalTick(
@@ -1728,7 +1731,6 @@
         cacheView={cacheViewMode}
         {cachePresentation}
         {costCopy}
-        {usageMappingLabel}
         hasApiEquivalentCost={indexed.analysis.session.costSummary.apiEquivalent.calls > 0}
         onModeChange={setEconomicsTrackMode}
         onCacheViewChange={setCacheView}
@@ -1848,9 +1850,6 @@
     height: 10px;
     border-radius: 2px;
     border: 1px solid rgb(255 255 255 / 45%);
-  }
-  .group-type-legend small {
-    color: #91a4c4;
   }
   .group-hover-card {
     position: absolute;
@@ -2056,9 +2055,6 @@
   .input-gap-key {
     background: repeating-linear-gradient(135deg, transparent 0 4px, #aab4c775 4px 5px);
     border: 1px solid #8793aa55;
-  }
-  .input-reference-legend small {
-    flex-basis: 100%;
   }
   .input-comparison-readout {
     flex-basis: 100%;

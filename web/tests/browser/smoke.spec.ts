@@ -1815,8 +1815,8 @@ test('cache and cost tracks share the river axis and expose a ratio change', asy
   const track = page.locator('.economics-track-svg');
   await expect(track).toBeVisible();
   await expect(page.locator('.plot-background')).toHaveAttribute('height', '410');
-  await page.getByText('Key and data availability', { exact: true }).click();
-  await expect(page.getByText('Fresh / uncached input')).toBeVisible();
+  await page.getByText('Key', { exact: true }).click();
+  await expect(page.getByText('Measured zero', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Cache', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -1963,11 +1963,11 @@ test('cache share and grouped River views preserve exact identities', async ({ p
   const pinnedCacheMark = page.locator('#economics-call-1');
   await pinnedCacheMark.click();
   await expect(pinnedCacheMark).toHaveAttribute('aria-current', 'true');
-  await cacheView.getByRole('button', { name: 'Share (%)' }).click();
+  await cacheView.getByRole('button', { name: 'Share (%)', exact: true }).click();
   await expect(page.locator('.economics-readout')).toContainText(
     'Source-normalized denominator of 1,000 prompt tokens',
   );
-  await expect(cacheView.getByRole('button', { name: 'Share (%)' })).toHaveAttribute(
+  await expect(cacheView.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
