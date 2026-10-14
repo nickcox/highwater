@@ -1,4 +1,5 @@
-import type { IndexedAnalysis } from './types';
+import type { IndexedAnalysis, SessionAnalysis } from './types';
+import { describeTokenDiagnostic } from './diagnostics';
 import { summarizeInputComparisons } from './context-river/reported-input';
 import { reconstructionLimitLabels } from './reconstruction';
 import { formatInteger, formatMetric, formatPercent } from './context-river/format';
@@ -53,6 +54,33 @@ function gapEvidence(indexed: IndexedAnalysis): { share: number; lead: string } 
   };
 }
 
+/** Call explanations that apply to every call: they describe the session, so the estimate-quality
+ * note gives them once and each call's inspector leaves them out. */
+export function sessionWideExplanationCodes(analysis: SessionAnalysis): Set<string> {
+  const [first, ...rest] = analysis.modelCalls;
+  if (!first || rest.length === 0) return new Set();
+  return new Set(
+    first.tokenAnalysis.explanationCodes.filter((code) =>
+      rest.every((call) => call.tokenAnalysis.explanationCodes.includes(code)),
+    ),
+  );
+}
+
+/** Session-wide explanations another reason in the note already covers. */
+function coveredElsewhere(code: string, analysis: SessionAnalysis): boolean {
+  if (code === 'heuristicTokenizer' || code === 'estimatedProviderSerialization') return true;
+  if (code === 'knownFramingOverheadAvailable') return true;
+  if (code === 'missingSystemPrompt' || code === 'missingToolDefinitions') {
+    return (
+      analysis.contextItems.some((item) => item.kind === 'unrecordedContext') ||
+      (analysis.reconstruction?.explanationCodes ?? []).some((limit) =>
+        limit.startsWith('missingHistorical'),
+      )
+    );
+  }
+  return false;
+}
+
 export function estimateSummary(indexed: IndexedAnalysis): EstimateSummary {
   const { analysis } = indexed;
   const { tokenAnalysis } = analysis;
@@ -90,6 +118,12 @@ export function estimateSummary(indexed: IndexedAnalysis): EstimateSummary {
   for (const method of methods) {
     const reason = METHOD_REASONS[method];
     if (reason) reasons.push(reason);
+  }
+  for (const code of sessionWideExplanationCodes(analysis)) {
+    const description = describeTokenDiagnostic(code);
+    if (description && !coveredElsewhere(code, analysis)) {
+      reasons.push(`${description.title}. ${description.impact}`);
+    }
   }
 
   const evidence = gapEvidence(indexed);

@@ -27,10 +27,9 @@ describe('CallDetails transition metrics', () => {
     call.tokenAnalysis.metricsIncludePartialEstimates = true;
     render(CallDetails, { props: { call, indexed, pinned: true } });
     expect(screen.getByText('Retained tokens').nextElementSibling).toHaveTextContent('≈ 40');
-    expect(screen.getByText('Calculated churn').nextElementSibling).toHaveTextContent('≈ 25%');
-    expect(screen.getByText('Estimate basis').nextElementSibling).toHaveTextContent(
-      'partial token estimates',
-    );
+    // Churn and reuse were ratios of the token counts above, and ≈ already marks the estimates.
+    expect(screen.queryByText('Calculated churn')).toBeNull();
+    expect(screen.queryByText('Estimate basis')).toBeNull();
   });
 
   it('leaves complete-estimate metrics and unknown values unmarked', () => {
@@ -40,7 +39,6 @@ describe('CallDetails transition metrics', () => {
     call.tokenAnalysis.churn = null;
     render(CallDetails, { props: { call, indexed, pinned: true } });
     expect(screen.getByText('Retained tokens').nextElementSibling).toHaveTextContent(/^40$/);
-    expect(screen.getByText('Calculated churn').nextElementSibling).toHaveTextContent('Unknown');
     expect(screen.queryByText('Estimate basis')).toBeNull();
   });
 });
@@ -153,6 +151,15 @@ describe('CallDetails change lists', () => {
       'Unavailable',
     );
     expect(container.querySelector('.essential-metrics')).not.toHaveTextContent('0 tok/s');
+  });
+
+  it('shows one Not recorded timing row for Claude Code, which never records timing', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    indexed.analysis.session.source = 'claude-code';
+    const call = indexed.analysis.modelCalls[0];
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.getByText('Timing').nextElementSibling).toHaveTextContent('Not recorded');
+    expect(screen.queryByText('Response time (approx.)')).toBeNull();
   });
 
   it('renders tool metadata as noninteractive text with an explicit failure label', () => {

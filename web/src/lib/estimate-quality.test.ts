@@ -51,6 +51,20 @@ describe('estimate summary', () => {
     expect(reasons.join(' ')).not.toMatch(/partial-token-coverage|apiSerializationEstimate/);
   });
 
+  it('gives explanations that apply to every call once, unless another reason covers them', () => {
+    const value = reconciled(0.01);
+    for (const call of value.analysis.modelCalls) {
+      call.tokenAnalysis.explanationCodes = ['providerUsageIncomplete', 'heuristicTokenizer'];
+    }
+    value.analysis.modelCalls[0].tokenAnalysis.explanationCodes.push('unsupportedImage');
+    const { reasons } = estimateSummary(value);
+    expect(
+      reasons.filter((reason) => reason.startsWith('Provider usage is incomplete')),
+    ).toHaveLength(1);
+    expect(reasons.join(' ')).not.toContain('A character heuristic was used');
+    expect(reasons.join(' ')).not.toContain('Image content');
+  });
+
   it('says plainly when token sizes are unavailable', () => {
     const value = indexed();
     value.analysis.displayWeightUnit = 'unavailable';

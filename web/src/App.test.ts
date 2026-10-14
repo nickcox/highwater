@@ -619,7 +619,7 @@ describe('Context River interactions', () => {
 
     const callDetails = container.querySelector('.call-details')!;
     expect(callDetails.querySelectorAll('.essential-metrics > div')).toHaveLength(6);
-    expect(callDetails.textContent).toContain('Context changes · 2 added / 0 dropped');
+    expect(callDetails.textContent).toContain('Context changes · 2 added / 0 retained / 0 dropped');
     expect(
       callDetails.querySelector('.usage-breakdown')?.querySelector('summary'),
     ).toHaveTextContent('Usage and economics');
@@ -633,9 +633,13 @@ describe('Context River interactions', () => {
       'Input (raw normalized bucket)',
     );
     await fireEvent.click(
-      screen.getByText('Token estimates and diagnostics', { selector: '.call-details summary' }),
+      screen.getByText('Token estimates', { selector: '.call-details summary' }),
     );
-    expect(callDetails.querySelector('.token-diagnostics')).toHaveTextContent(
+    // It applies to every call, so the estimate-quality note gives it once instead.
+    expect(callDetails.querySelector('.token-diagnostics')).not.toHaveTextContent(
+      'Provider usage is incomplete',
+    );
+    expect(container.querySelector('#estimate-quality-note')).toHaveTextContent(
       'Provider usage is incomplete',
     );
 

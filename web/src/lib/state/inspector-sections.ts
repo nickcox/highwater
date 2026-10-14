@@ -8,6 +8,7 @@ export function inspectorSections() {
     identifiers: false,
     changes: false,
     usage: false,
+    estimator: false,
   };
 }
 export type InspectorSections = ReturnType<typeof inspectorSections>;

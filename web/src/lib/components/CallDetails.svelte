@@ -14,6 +14,7 @@
 
 <script lang="ts">
   import { claudeEstimateNote } from '../token-estimate';
+  import { sessionWideExplanationCodes } from '../estimate-quality';
   import type { IndexedAnalysis, ModelCall } from '../types';
   import { displayItemLabel } from '../item-label';
   import { describeTokenDiagnostic } from '../diagnostics';
@@ -73,6 +74,13 @@
   })();
   $: recordedMetrics = call ? recordedResponseMetrics(call.usage) : [];
   $: explanationCodes = call?.tokenAnalysis.explanationCodes ?? [];
+  // Explanations that apply to every call describe the session, and the estimate-quality note
+  // already gives them; each call lists only its own.
+  $: sessionWideCodes = sessionWideExplanationCodes(indexed.analysis);
+  $: callExplanationCodes = explanationCodes.filter((code) => !sessionWideCodes.has(code));
+  // Claude Code never records when a request started, so its calls show one "Not recorded" row.
+  $: timingRecorded = indexed.analysis.session.source !== 'claude-code';
+
   $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
   $: costCopy = describeCostBasis(
     indexed.analysis.economics.costBasis,
@@ -84,9 +92,6 @@
   $: costRecorded = costAssessment
     ? recordedByHarnessLine(costAssessment, indexed.analysis.session.source)
     : null;
-  $: usageMappingLabel = isPiSource(indexed.analysis.session.source)
-    ? 'audited Pi provider/API policy'
-    : 'audited provider/API policy';
   $: tokenProfile = call?.tokenizationProfileId
     ? (indexed.analysis.tokenAnalysis.profiles.find(
         (profile) => profile.id === call?.tokenizationProfileId,
@@ -253,37 +258,54 @@
           ><small>{costKindLabel(call.costAssessment, indexed.analysis.session.source)}</small>
         </dd>
       </div>
-      <div>
-        <dt>Provider usage</dt>
-        <dd>
-          {call.usage.placeholder
-            ? 'Unavailable'
-            : call.reportedUsageCompleteness}{#if call.economics.usageCompleteness !== call.reportedUsageCompleteness}<small
-              >Audited policy: {call.economics.usageCompleteness}</small
-            >{/if}
-        </dd>
-      </div>
-      <div>
-        <dt>Response time (approx.)</dt>
-        <dd title={timingText} aria-describedby={`${contributionId}-timing`}>
-          {responseDuration(call.timing.durationMs)}
-        </dd>
-      </div>
-      <div>
-        <dt>Effective output rate</dt>
-        <dd title={timingText} aria-describedby={`${contributionId}-timing`}>
-          {effectiveOutputRate(call.timing.effectiveOutputTokensPerSecond)}
-        </dd>
-      </div>
+      <!-- Only worth showing when the call's usage is not complete. -->
+      {#if call.usage.placeholder || call.reportedUsageCompleteness !== 'complete' || call.economics.usageCompleteness !== call.reportedUsageCompleteness}
+        <div>
+          <dt>Provider usage</dt>
+          <dd>
+            {call.usage.placeholder
+              ? 'Unavailable'
+              : call.reportedUsageCompleteness}{#if call.economics.usageCompleteness !== call.reportedUsageCompleteness}<small
+                >Audited policy: {call.economics.usageCompleteness}</small
+              >{/if}
+          </dd>
+        </div>
+      {/if}
+      {#if timingRecorded}
+        <div>
+          <dt>Response time (approx.)</dt>
+          <dd title={timingText} aria-describedby={`${contributionId}-timing`}>
+            {responseDuration(call.timing.durationMs)}
+          </dd>
+        </div>
+        <div>
+          <dt>Effective output rate</dt>
+          <dd title={timingText} aria-describedby={`${contributionId}-timing`}>
+            {effectiveOutputRate(call.timing.effectiveOutputTokensPerSecond)}
+          </dd>
+        </div>
+      {:else}
+        <div>
+          <dt>Timing</dt>
+          <dd>
+            Not recorded<InfoPopover
+              id={`${contributionId}-timing`}
+              label="Why timing is not recorded">{timingText}</InfoPopover
+            >
+          </dd>
+        </div>
+      {/if}
     </dl>
-    <span class="timing-explanation" id={`${contributionId}-timing`}>{timingText}</span>
+    {#if timingRecorded}<span class="timing-explanation" id={`${contributionId}-timing`}
+        >{timingText}</span
+      >{/if}
 
     {#if call.addedItemIds.length > 0 || call.droppedItemIds.length > 0}
       <details use:rememberSection={{ state: sections, key: 'changes' }}>
         <summary
           >Context changes · {formatInteger(call.transitionItemCounts.added)} added / {formatInteger(
-            call.transitionItemCounts.dropped,
-          )} dropped</summary
+            call.transitionItemCounts.retained,
+          )} retained / {formatInteger(call.transitionItemCounts.dropped)} dropped</summary
         >
         <div
           class="change-lists"
@@ -339,8 +361,8 @@
     {:else}
       <p>
         Context changes · {formatInteger(call.transitionItemCounts.added)} added / {formatInteger(
-          call.transitionItemCounts.dropped,
-        )} dropped
+          call.transitionItemCounts.retained,
+        )} retained / {formatInteger(call.transitionItemCounts.dropped)} dropped
       </p>
     {/if}
     {#if compaction}<p>
@@ -386,14 +408,11 @@
           {/each}
         </dl>
       {/if}
-      <p class="economics-note">
-        Token buckets follow the {usageMappingLabel} when supported; normalized zeros may reflect adapter
-        defaults. {costCopy.note} Cache write 1h is retained source detail and is not added to aggregate
-        cache-write totals.
-        {#if call.provider === 'github-copilot'}
+      {#if call.provider === 'github-copilot'}
+        <p class="economics-note">
           These dollar figures do not measure Copilot subscription charges or premium requests.
-        {/if}
-      </p>
+        </p>
+      {/if}
       <dl class="detail-rows">
         <div>
           <dt>{inputBucketLabel(call.economics.policyId)}</dt>
@@ -408,26 +427,6 @@
           <dd>{cacheWriteValue()}</dd>
         </div>
         <div>
-          <dt>Cache write 1h (source detail)</dt>
-          <dd>{formatMetric(call.usage.cacheWrite1h)}</dd>
-        </div>
-        <div>
-          <dt>Output accounting</dt>
-          <dd>{outputAccountingLabel(call.usage.outputReasoningRelationship)}</dd>
-        </div>
-        <div>
-          <dt>Completion total (including reasoning)</dt>
-          <dd>{formatMetric(call.reportedCompletionTokens)}</dd>
-        </div>
-        <div>
-          <dt>Audited usage completeness</dt>
-          <dd>{call.economics.usageCompleteness}</dd>
-        </div>
-        <div>
-          <dt>Audited prompt total</dt>
-          <dd>{formatMetric(call.economics.promptTokens)}</dd>
-        </div>
-        <div>
           <dt>Cache-read share</dt>
           <dd>{ratioValue(call.economics.cacheReadRatio)}</dd>
         </div>
@@ -439,54 +438,41 @@
           <dt>{inputShareLabel(call.economics.policyId)}</dt>
           <dd>{freshRatioValue()}</dd>
         </div>
-        <div>
-          <dt>{costCopy.label} component completeness</dt>
-          <dd>{call.economics.costCompleteness}</dd>
-        </div>
-        <div>
-          <dt>{costCopy.promptLabel}</dt>
-          <dd>{formatCost(call.economics.piPromptCost)}</dd>
-        </div>
-        <div>
-          <dt>Reported total tokens</dt>
-          <dd>{formatMetric(call.reportedTotalTokens)}</dd>
-        </div>
-        <div>
-          <dt>Cumulative prompt</dt>
-          <dd>{formatMetric(call.cumulativeReportedPromptTokens)}</dd>
-        </div>
-        <div>
-          <dt>Cumulative completion (including reasoning)</dt>
-          <dd>{formatMetric(call.cumulativeReportedCompletionTokens)}</dd>
-        </div>
-        <div>
-          <dt>Cumulative reasoning</dt>
-          <dd>{formatMetric(call.cumulativeReportedReasoningTokens)}</dd>
-        </div>
-        <div>
-          <dt>Cumulative usage completeness</dt>
-          <dd>{call.cumulativeReportedUsageCompleteness}</dd>
-        </div>
-        <div>
-          <dt>{costCopy.componentPrefix} input cost</dt>
-          <dd>{formatCost(call.cost?.input)}</dd>
-        </div>
-        <div>
-          <dt>{costCopy.componentPrefix} output cost</dt>
-          <dd>{formatCost(call.cost?.output)}</dd>
-        </div>
-        <div>
-          <dt>{costCopy.componentPrefix} cache-read cost</dt>
-          <dd>{formatCost(call.cost?.cacheRead)}</dd>
-        </div>
-        <div>
-          <dt>{costCopy.componentPrefix} cache-write cost</dt>
-          <dd>{formatCost(call.cost?.cacheWrite)}</dd>
-        </div>
-        <div>
-          <dt>{costCopy.totalLabel}</dt>
-          <dd>{formatCost(call.cost?.total)}</dd>
-        </div>
+        <!-- Claude Code records no cost, so these rows would only ever say Unknown. -->
+        {#if indexed.analysis.session.source !== 'claude-code'}
+          <div>
+            <dt>{costCopy.label} component completeness</dt>
+            <dd>{call.economics.costCompleteness}</dd>
+          </div>
+          <div>
+            <dt>{costCopy.promptLabel}</dt>
+            <dd>{formatCost(call.economics.piPromptCost)}</dd>
+          </div>
+          <div>
+            <dt>Reported total tokens</dt>
+            <dd>{formatMetric(call.reportedTotalTokens)}</dd>
+          </div>
+          <div>
+            <dt>{costCopy.componentPrefix} input cost</dt>
+            <dd>{formatCost(call.cost?.input)}</dd>
+          </div>
+          <div>
+            <dt>{costCopy.componentPrefix} output cost</dt>
+            <dd>{formatCost(call.cost?.output)}</dd>
+          </div>
+          <div>
+            <dt>{costCopy.componentPrefix} cache-read cost</dt>
+            <dd>{formatCost(call.cost?.cacheRead)}</dd>
+          </div>
+          <div>
+            <dt>{costCopy.componentPrefix} cache-write cost</dt>
+            <dd>{formatCost(call.cost?.cacheWrite)}</dd>
+          </div>
+          <div>
+            <dt>{costCopy.totalLabel}</dt>
+            <dd>{formatCost(call.cost?.total)}</dd>
+          </div>
+        {/if}
       </dl>
       {#if call.economics.cacheRatioDiscontinuity}
         {@const change = call.economics.cacheRatioDiscontinuity}
@@ -531,7 +517,7 @@
       class="token-diagnostics"
       use:rememberSection={{ state: sections, key: 'diagnostics' }}
     >
-      <summary>Token estimates and diagnostics</summary>
+      <summary>Token estimates</summary>
       <dl class="detail-rows">
         <div>
           <dt>Visible context</dt>
@@ -567,6 +553,74 @@
           </div>
         {/if}
         <div>
+          <dt>Added tokens</dt>
+          <dd>{approximate(call.tokenAnalysis.addedTokens, formatMetric, partialMetrics)}</dd>
+        </div>
+        <div>
+          <dt>Retained tokens</dt>
+          <dd>{approximate(call.tokenAnalysis.retainedTokens, formatMetric, partialMetrics)}</dd>
+        </div>
+        <div>
+          <dt>Dropped tokens</dt>
+          <dd>{approximate(call.tokenAnalysis.droppedTokens, formatMetric, partialMetrics)}</dd>
+        </div>
+        <div>
+          <dt>Oldest / median live age</dt>
+          <dd>
+            {formatMetric(call.tokenAnalysis.age.oldestLiveItemAgeCalls)} /
+            {formatMetric(call.tokenAnalysis.age.medianLiveItemAgeCalls)} calls
+          </dd>
+        </div>
+      </dl>
+      {#if callExplanationCodes.length > 0}
+        <h4>Diagnostic explanations</h4>
+        <ul class="diagnostics">
+          {#each callExplanationCodes as code (code)}
+            {@const description = describeTokenDiagnostic(code)}
+            <li>
+              {#if description}<b>{description.title}</b> — {description.impact}
+              {:else}<b>Unrecognized diagnostic</b> — see the raw code in Technical identifiers.{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </details>
+
+    <!-- How this call's figures were worked out, for checking the estimator. -->
+    <details class="call-diagnostics" use:rememberSection={{ state: sections, key: 'estimator' }}>
+      <summary>Diagnostics</summary>
+      <dl class="detail-rows">
+        {#if !call.usage.placeholder}
+          <div>
+            <dt>Cache write 1h (source detail)</dt>
+            <dd>{formatMetric(call.usage.cacheWrite1h)}</dd>
+          </div>
+          <div>
+            <dt>Output accounting</dt>
+            <dd>{outputAccountingLabel(call.usage.outputReasoningRelationship)}</dd>
+          </div>
+          <div>
+            <dt>Completion total (including reasoning)</dt>
+            <dd>{formatMetric(call.reportedCompletionTokens)}</dd>
+          </div>
+        {/if}
+        <div>
+          <dt>Cumulative prompt</dt>
+          <dd>{formatMetric(call.cumulativeReportedPromptTokens)}</dd>
+        </div>
+        <div>
+          <dt>Cumulative completion (including reasoning)</dt>
+          <dd>{formatMetric(call.cumulativeReportedCompletionTokens)}</dd>
+        </div>
+        <div>
+          <dt>Cumulative reasoning</dt>
+          <dd>{formatMetric(call.cumulativeReportedReasoningTokens)}</dd>
+        </div>
+        <div>
+          <dt>Cumulative usage completeness</dt>
+          <dd>{call.cumulativeReportedUsageCompleteness}</dd>
+        </div>
+        <div>
           <dt>Estimate coverage</dt>
           <dd>
             {coverageLabel(
@@ -599,41 +653,6 @@
           </dd>
         </div>
         <div>
-          <dt>Added tokens</dt>
-          <dd>{approximate(call.tokenAnalysis.addedTokens, formatMetric, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Retained tokens</dt>
-          <dd>{approximate(call.tokenAnalysis.retainedTokens, formatMetric, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Dropped tokens</dt>
-          <dd>{approximate(call.tokenAnalysis.droppedTokens, formatMetric, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Calculated churn</dt>
-          <dd>{approximate(call.tokenAnalysis.churn, formatPercent, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Calculated reuse</dt>
-          <dd>{approximate(call.tokenAnalysis.reuse, formatPercent, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Addition share</dt>
-          <dd>{approximate(call.tokenAnalysis.additionShare, formatPercent, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Removal share</dt>
-          <dd>{approximate(call.tokenAnalysis.removalShare, formatPercent, partialMetrics)}</dd>
-        </div>
-        <div>
-          <dt>Oldest / median live age</dt>
-          <dd>
-            {formatMetric(call.tokenAnalysis.age.oldestLiveItemAgeCalls)} /
-            {formatMetric(call.tokenAnalysis.age.medianLiveItemAgeCalls)} calls
-          </dd>
-        </div>
-        <div>
           <dt>Token-weighted mean age</dt>
           <dd>
             {approximate(
@@ -643,12 +662,6 @@
             )} calls
           </dd>
         </div>
-        {#if call.tokenAnalysis.metricsIncludePartialEstimates}
-          <div>
-            <dt>Estimate basis</dt>
-            <dd>≈ values include items with partial token estimates, such as system prompts</dd>
-          </div>
-        {/if}
         <div>
           <dt>Items aged ≥5 / ≥10 / ≥20 calls</dt>
           <dd>
@@ -657,27 +670,7 @@
             {formatInteger(call.tokenAnalysis.age.itemsAtLeast20CallsOld)}
           </dd>
         </div>
-        <div>
-          <dt>Transition counts</dt>
-          <dd>
-            {formatInteger(call.transitionItemCounts.added)} added ·
-            {formatInteger(call.transitionItemCounts.retained)} retained ·
-            {formatInteger(call.transitionItemCounts.dropped)} dropped
-          </dd>
-        </div>
       </dl>
-      {#if explanationCodes.length > 0}
-        <h4>Diagnostic explanations</h4>
-        <ul class="diagnostics">
-          {#each explanationCodes as code (code)}
-            {@const description = describeTokenDiagnostic(code)}
-            <li>
-              {#if description}<b>{description.title}</b> — {description.impact}
-              {:else}<b>Unrecognized diagnostic</b> — see the raw code in Technical identifiers.{/if}
-            </li>
-          {/each}
-        </ul>
-      {/if}
     </details>
 
     <details
