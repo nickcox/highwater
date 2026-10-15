@@ -970,9 +970,14 @@
     });
   }
 
-  /** Consume one Escape stage without clearing the shared investigation. */
+  /** Consume one Escape stage without clearing the shared investigation: an open event
+   * breakdown closes first, then the economics track. */
   export function dismissEconomics(): boolean {
     if (!isVisible || economicsTrackMode === 'off') return false;
+    if (economicsEventBreakdown) {
+      closeEconomicsBreakdown();
+      return true;
+    }
     setEconomicsTrackMode('off');
     economicsTrigger?.focus({ preventScroll: true });
     return true;

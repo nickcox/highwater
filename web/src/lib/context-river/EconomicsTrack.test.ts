@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { costAssessmentOf, testAnalysis } from './test-data';
@@ -41,6 +41,55 @@ function renderCostTrack(values: Array<number | null>) {
   return view.container;
 }
 
+function cacheTrackProps() {
+  const analysis = testAnalysis();
+  analysis.modelCalls.forEach((call) => {
+    call.provider = 'anthropic';
+    call.api = 'anthropic-messages';
+    call.usage = { ...call.usage, input: 50, cacheRead: 50, cacheWrite: 0 };
+    call.economics = {
+      ...call.economics,
+      policyId: 'anthropic-messages-cache-v1',
+      usageCompleteness: 'complete',
+      costCompleteness: 'complete',
+      promptTokens: 100,
+      cacheReadRatio: 0.5,
+      cacheWriteStatus: 'reported',
+      cacheWriteRatio: 0,
+      freshRatio: 0.5,
+      piPromptCost: 0,
+    };
+  });
+  analysis.economics = {
+    ...analysis.economics,
+    supportedPolicyIds: ['anthropic-messages-cache-v1'],
+    usageCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
+    costCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
+    cacheReadEligibleCalls: 4,
+    cacheReadPromptTokens: 400,
+    cacheReadTokens: 200,
+    cacheReadRatio: 0.5,
+  };
+  const props = {
+    indexed: indexTestAnalysis(analysis),
+    columns: analysis.modelCalls.map((modelCall, index) => ({
+      callIndex: modelCall.index,
+      x: 80 + index * 100,
+      totalDisplayWeight: 1,
+    })),
+    width: 600,
+    mode: 'cache' as const,
+    cacheView: 'tokens' as const,
+    pinnedCallIndex: 1,
+    hoveredCallIndex: null,
+    onPinCall: () => {},
+    onHoverCall: () => {},
+    onMarkClick: () => {},
+    onReadoutChange: vi.fn(),
+  };
+  return props;
+}
+
 describe('EconomicsTrack cost scaling', () => {
   it.each([
     ['sub-dollar values', [0.03, 0.01, null, 0]],
@@ -63,58 +112,24 @@ describe('EconomicsTrack cost scaling', () => {
   });
 
   it('refreshes the pinned readout when switching from tokens to share', async () => {
-    const analysis = testAnalysis();
-    analysis.modelCalls.forEach((call) => {
-      call.provider = 'anthropic';
-      call.api = 'anthropic-messages';
-      call.usage = { ...call.usage, input: 50, cacheRead: 50, cacheWrite: 0 };
-      call.economics = {
-        ...call.economics,
-        policyId: 'anthropic-messages-cache-v1',
-        usageCompleteness: 'complete',
-        costCompleteness: 'complete',
-        promptTokens: 100,
-        cacheReadRatio: 0.5,
-        cacheWriteStatus: 'reported',
-        cacheWriteRatio: 0,
-        freshRatio: 0.5,
-        piPromptCost: 0,
-      };
-    });
-    analysis.economics = {
-      ...analysis.economics,
-      supportedPolicyIds: ['anthropic-messages-cache-v1'],
-      usageCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
-      costCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
-      cacheReadEligibleCalls: 4,
-      cacheReadPromptTokens: 400,
-      cacheReadTokens: 200,
-      cacheReadRatio: 0.5,
-    };
-    const onReadoutChange = vi.fn();
-    const props = {
-      indexed: indexTestAnalysis(analysis),
-      columns: analysis.modelCalls.map((modelCall, index) => ({
-        callIndex: modelCall.index,
-        x: 80 + index * 100,
-        totalDisplayWeight: 1,
-      })),
-      width: 600,
-      mode: 'cache' as const,
-      cacheView: 'tokens' as const,
-      pinnedCallIndex: 1,
-      hoveredCallIndex: null,
-      onPinCall: () => {},
-      onHoverCall: () => {},
-      onMarkClick: () => {},
-      onReadoutChange,
-    };
+    const props = cacheTrackProps();
     const view = render(EconomicsTrack, { props });
     await view.rerender({ ...props, cacheView: 'share' });
+    const onReadoutChange = props.onReadoutChange;
     expect(onReadoutChange).toHaveBeenLastCalledWith(
       expect.stringContaining('Source-normalized denominator of 100 prompt tokens'),
     );
     expect(onReadoutChange).toHaveBeenLastCalledWith(expect.stringContaining('50.0%'));
+  });
+
+  it('labels only the newly pinned cache bar as pinned', async () => {
+    const props = cacheTrackProps();
+    const view = render(EconomicsTrack, { props });
+    await view.rerender({ pinnedCallIndex: 2 });
+    const label = (callIndex: number) =>
+      view.container.querySelector(`#economics-call-${callIndex}`)?.getAttribute('aria-label');
+    expect(label(2)).toContain('· pinned');
+    expect(label(1)).not.toContain('· pinned');
   });
 
   it('clusters adjacent events in a separate lane without pinning on open', async () => {
@@ -227,7 +242,7 @@ describe('EconomicsTrack cost scaling', () => {
       ]),
     );
     expect(onPinCall).not.toHaveBeenCalled();
-    await fireEvent.keyDown(document, { key: 'Escape' });
-    expect(cluster).toHaveFocus();
+    view.component.closeEventBreakdown();
+    await waitFor(() => expect(cluster).toHaveFocus());
   });
 });

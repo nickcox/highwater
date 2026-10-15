@@ -750,6 +750,24 @@ describe('Context River interactions', () => {
     );
   });
 
+  it('closes an open economics event breakdown on Escape before closing the track', async () => {
+    modifyAnalysis = withCacheEconomics;
+    await renderLoaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cache & cost' }));
+    await waitFor(() => expect(document.querySelector('.track-event-trigger')).not.toBeNull());
+    await fireEvent.click(document.querySelector('.track-event-trigger')!);
+    const breakdown = () => screen.queryByRole('dialog', { name: 'Economics event breakdown' });
+    await waitFor(() => expect(breakdown()).not.toBeNull());
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(breakdown()).toBeNull());
+    expect(document.querySelector('.economics-track-svg')).not.toBeNull();
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(document.querySelector('.economics-track-svg')).toBeNull());
+  });
+
   it('selects the same item from a lifespan segment', async () => {
     await renderLoaded();
     await expandLifespans();

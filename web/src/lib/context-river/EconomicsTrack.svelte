@@ -50,7 +50,10 @@
     point: CacheTrackPoint;
     x: number;
     segments: CacheSegmentGeometry[];
-    ariaLabel: string;
+    /** The label after "Call N"; the template inserts " · pinned" when it applies. */
+    labelDetail: string;
+    /** Bars with usage data say when they are the pinned call. */
+    showsPin: boolean;
   }
 
   interface CostMark {
@@ -138,17 +141,24 @@
     value,
     y: margin.top + innerHeight * (1 - value / domainMaximum),
   }));
-  $: cacheBars =
-    cacheProjection && cacheView
-      ? cacheProjection.points.flatMap((point) => {
-          const x = columnsByCall.get(point.callIndex)?.x;
-          return x === undefined ? [] : [layoutCacheBar(point, x)];
-        })
-      : [];
+  // Legacy `$:` statements re-run only when a variable named in them changes, so every value
+  // the layout functions read is passed to them.
+  $: cacheBars = cacheProjection
+    ? layoutCacheBars(cacheProjection, columnsByCall, {
+        cacheView,
+        domainMaximum,
+        baseline,
+        innerHeight,
+        targetChangesByCall,
+        usageMappingLabel,
+      })
+    : [];
   $: costMarks = costProjection
-    ? costProjection.points.flatMap((point) => {
-        const x = columnsByCall.get(point.callIndex)?.x;
-        return x === undefined ? [] : [layoutCostMark(point, x)];
+    ? layoutCostMarks(costProjection, columnsByCall, {
+        domainMaximum,
+        baseline,
+        innerHeight,
+        targetChangesByCall,
       })
     : [];
   $: trackEvents = layoutTrackEvents(
@@ -367,13 +377,6 @@
     }
   }
 
-  function handleWindowKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && openEventClusterId !== null) {
-      event.preventDefault();
-      closeEventBreakdown();
-    }
-  }
-
   function callReadout(
     callIndex: number,
     mode: Exclude<EconomicsTrackMode, 'off'>,
@@ -422,7 +425,47 @@
       : `Call ${callIndex} · ${costKindLabel(call.costAssessment, indexed.analysis.session.source)} cost ${formatAssessedCost(call.costAssessment)} USD`;
   }
 
-  function layoutCacheBar(point: CacheTrackPoint, x: number): CacheBar {
+  interface BarScale {
+    domainMaximum: number;
+    baseline: number;
+    innerHeight: number;
+    targetChangesByCall: ReadonlyMap<number, TrackBoundaryMarker>;
+  }
+
+  function layoutCacheBars(
+    projection: EconomicsTrackProjection<CacheTrackPoint>,
+    columnsByCall: ReadonlyMap<number, CallColumn>,
+    options: BarScale & { cacheView: CacheViewMode; usageMappingLabel: string },
+  ): CacheBar[] {
+    return projection.points.flatMap((point) => {
+      const x = columnsByCall.get(point.callIndex)?.x;
+      return x === undefined ? [] : [layoutCacheBar(point, x, options)];
+    });
+  }
+
+  function layoutCostMarks(
+    projection: EconomicsTrackProjection<CostTrackPoint>,
+    columnsByCall: ReadonlyMap<number, CallColumn>,
+    scale: BarScale,
+  ): CostMark[] {
+    return projection.points.flatMap((point) => {
+      const x = columnsByCall.get(point.callIndex)?.x;
+      return x === undefined ? [] : [layoutCostMark(point, x, scale)];
+    });
+  }
+
+  function layoutCacheBar(
+    point: CacheTrackPoint,
+    x: number,
+    {
+      cacheView,
+      domainMaximum,
+      baseline,
+      innerHeight,
+      targetChangesByCall,
+      usageMappingLabel,
+    }: BarScale & { cacheView: CacheViewMode; usageMappingLabel: string },
+  ): CacheBar {
     let nextY = baseline;
     const sourceSegments: Array<CacheTrackPoint['segments'][number] | CacheShareSegment> =
       cacheView === 'share' ? point.shareSegments : point.segments;
@@ -459,19 +502,29 @@
     const changeLabel = change
       ? ` · Cache-read share ${change.direction === 'drop' ? 'dropped' : 'rose'} from ${ratioPercent(change.previousRatio)} on call ${change.previousCallIndex} to ${ratioPercent(change.currentRatio)} (${(change.delta * 100).toFixed(1)} percentage points, ${change.magnitude})`
       : '';
-    const pinnedLabel =
-      pinnedCallIndex === point.callIndex && hoveredCallIndex !== point.callIndex
-        ? ' · pinned'
-        : '';
     const viewLabel = cacheView === 'share' ? ` · ${share} · ${denominator}` : '';
-    const ariaLabel =
-      point.status === 'complete' || point.status === 'zero'
-        ? `Call ${point.callIndex}${pinnedLabel} · prompt ${formatInteger(point.promptTokens ?? 0)} tokens · ${buckets}${viewLabel} · cache-read share ${ratio} ${denominator}${point.note ? ` · ${point.note}` : ''}${targetLabel}${changeLabel}`
-        : `Call ${point.callIndex} · ${point.note}`;
-    return { point, x, segments, ariaLabel };
+    const showsPin = point.status === 'complete' || point.status === 'zero';
+    const labelDetail = showsPin
+      ? ` · prompt ${formatInteger(point.promptTokens ?? 0)} tokens · ${buckets}${viewLabel} · cache-read share ${ratio} ${denominator}${point.note ? ` · ${point.note}` : ''}${targetLabel}${changeLabel}`
+      : ` · ${point.note}`;
+    return { point, x, segments, labelDetail, showsPin };
   }
 
-  function layoutCostMark(point: CostTrackPoint, x: number): CostMark {
+  function cacheBarLabel(
+    bar: CacheBar,
+    pinnedCallIndex: number | null,
+    hoveredCallIndex: number | null,
+  ): string {
+    const callIndex = bar.point.callIndex;
+    const pinned = bar.showsPin && pinnedCallIndex === callIndex && hoveredCallIndex !== callIndex;
+    return `Call ${callIndex}${pinned ? ' · pinned' : ''}${bar.labelDetail}`;
+  }
+
+  function layoutCostMark(
+    point: CostTrackPoint,
+    x: number,
+    { domainMaximum, baseline, innerHeight, targetChangesByCall }: BarScale,
+  ): CostMark {
     const yOf = (value: number | null) =>
       value === null ? baseline : baseline - (value / domainMaximum) * innerHeight;
     const y = yOf(point.total);
@@ -530,8 +583,6 @@
 
   $: activeCallIndex = pinnedCallIndex ?? indexed.analysis.modelCalls[0]?.index ?? null;
 </script>
-
-<svelte:window onkeydown={handleWindowKeydown} />
 
 <div
   class="track-shell"
@@ -676,7 +727,7 @@
           class:hovered={hoveredCallIndex === bar.point.callIndex}
           role="button"
           tabindex={activeCallIndex === bar.point.callIndex ? 0 : -1}
-          aria-label={bar.ariaLabel}
+          aria-label={cacheBarLabel(bar, pinnedCallIndex, hoveredCallIndex)}
           aria-current={pinnedCallIndex === bar.point.callIndex ? 'true' : undefined}
           onpointerenter={() => onHoverCall(bar.point.callIndex)}
           onpointerleave={() => onHoverCall(null)}
@@ -684,7 +735,7 @@
           onkeydown={(event) => handleMarkKeydown(event, bar.point.callIndex)}
           onclick={(event) => onMarkClick(event, bar.point.callIndex)}
         >
-          <title>{bar.ariaLabel}</title>
+          <title>{cacheBarLabel(bar, pinnedCallIndex, hoveredCallIndex)}</title>
           {#if bar.point.status === 'complete'}
             {#each bar.segments as segment, position (`${segment.kind}-${position}`)}
               {#if segment.height > 0}<rect
