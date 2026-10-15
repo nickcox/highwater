@@ -2097,7 +2097,7 @@ test('wheel, injected pinch and lost capture preserve item selection and the pin
       clientY: bounds.top + 90,
       button: 0,
     };
-    element.dispatchEvent(new PointerEvent('pointerdown', options));
+    element.querySelector('.river-plot')!.dispatchEvent(new PointerEvent('pointerdown', options));
     window.dispatchEvent(new PointerEvent('pointermove', { ...options, clientX: x + 30 }));
   });
   await expect(page.locator('.zoom-selection')).toBeVisible();
@@ -2112,12 +2112,16 @@ test('wheel, injected pinch and lost capture preserve item selection and the pin
     const bounds = element.getBoundingClientRect();
     const x = bounds.left + bounds.width / 2;
     const options = { bubbles: true, pointerType: 'touch', clientY: bounds.top + 90, button: 0 };
-    element.dispatchEvent(
-      new PointerEvent('pointerdown', { ...options, pointerId: 91, clientX: x - 30 }),
-    );
-    element.dispatchEvent(
-      new PointerEvent('pointerdown', { ...options, pointerId: 92, clientX: x + 30 }),
-    );
+    element
+      .querySelector('.river-plot')!
+      .dispatchEvent(
+        new PointerEvent('pointerdown', { ...options, pointerId: 91, clientX: x - 30 }),
+      );
+    element
+      .querySelector('.river-plot')!
+      .dispatchEvent(
+        new PointerEvent('pointerdown', { ...options, pointerId: 92, clientX: x + 30 }),
+      );
     window.dispatchEvent(
       new PointerEvent('pointermove', { ...options, pointerId: 92, clientX: x + 70 }),
     );

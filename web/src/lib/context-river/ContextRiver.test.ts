@@ -33,6 +33,12 @@ const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.protot
 const rectDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'getBoundingClientRect');
 let riverClientWidth = 300;
 
+/** The chart's SVG, where pointer input lands in a browser. The River ignores presses, clicks and
+ * hovers that start elsewhere in its container, such as on the legends below the chart. */
+function chart(host: Element): Element {
+  return host.querySelector('.river-plot')!;
+}
+
 async function firePointer(
   target: Element,
   type: string,
@@ -713,7 +719,7 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(host.scrollLeft).toBeGreaterThan(0);
 
     const beforePan = host.scrollLeft;
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 4,
       pointerType: 'mouse',
       button: 0,
@@ -721,7 +727,7 @@ describe('ContextRiver continuous viewport integration', () => {
       clientX: 200,
       clientY: 200,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 4,
       pointerType: 'mouse',
       button: 0,
@@ -729,7 +735,7 @@ describe('ContextRiver continuous viewport integration', () => {
       clientY: 200,
     });
     expect(host.scrollLeft).toBeGreaterThan(beforePan);
-    await firePointer(host, 'pointerup', {
+    await firePointer(chart(host), 'pointerup', {
       pointerId: 4,
       pointerType: 'mouse',
       button: 0,
@@ -920,7 +926,7 @@ describe('ContextRiver continuous viewport integration', () => {
       clientX: 80,
       clientY: 200,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 1,
       pointerType: 'mouse',
       clientX: 220,
@@ -961,21 +967,21 @@ describe('ContextRiver continuous viewport integration', () => {
     const selectStart = new Event('selectstart', { bubbles: true, cancelable: true });
     host.dispatchEvent(selectStart);
     expect(selectStart.defaultPrevented).toBe(true);
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 6,
       pointerType: 'mouse',
       button: 0,
       clientX: 70,
       clientY: 45,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 6,
       pointerType: 'mouse',
       clientX: 220,
       clientY: 45,
     });
     expect(view.container.querySelector('.zoom-selection')).toBeInTheDocument();
-    await firePointer(host, 'pointerup', {
+    await firePointer(chart(host), 'pointerup', {
       pointerId: 6,
       pointerType: 'mouse',
       button: 0,
@@ -1120,25 +1126,25 @@ describe('ContextRiver continuous viewport integration', () => {
         expect.objectContaining({ isFitAll: true }),
       ),
     );
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 3,
       pointerType: 'mouse',
       clientX: 50,
       clientY: 200,
     });
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 1,
       pointerType: 'touch',
       clientX: 100,
       clientY: 200,
     });
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 2,
       pointerType: 'touch',
       clientX: 200,
       clientY: 200,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 2,
       pointerType: 'touch',
       clientX: 250,
@@ -1153,13 +1159,13 @@ describe('ContextRiver continuous viewport integration', () => {
       Math.pow(1.5, 1.7),
       12,
     );
-    await firePointer(host, 'pointerup', {
+    await firePointer(chart(host), 'pointerup', {
       pointerId: 2,
       pointerType: 'touch',
       clientX: 250,
       clientY: 200,
     });
-    await firePointer(host, 'pointerup', {
+    await firePointer(chart(host), 'pointerup', {
       pointerId: 1,
       pointerType: 'touch',
       clientX: 100,
@@ -1259,6 +1265,42 @@ describe('ContextRiver continuous viewport integration', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('leaves the legends below the chart out of call hover, selection and drag gestures', async () => {
+    const data = structuredClone(testAnalysis());
+    for (const call of data.modelCalls) {
+      call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 1000;
+      call.reportedUsageCompleteness = 'complete';
+    }
+    const handlers = callbacks();
+    const view = render(ContextRiver, {
+      props: { indexed: indexTestAnalysis(data), ...resetInteraction(), ...handlers },
+    });
+    await waitFor(() =>
+      expect(handlers.onViewportChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ready: true }),
+      ),
+    );
+    const info = view.getByRole('button', { name: 'About unreconciled input' });
+    const pointer = { pointerId: 1, pointerType: 'mouse', clientX: 150, clientY: 520 };
+    await firePointer(info, 'pointermove', pointer);
+    await firePointer(info, 'pointerdown', pointer);
+    await firePointer(info, 'pointerup', pointer);
+    await fireEvent.click(info, { clientX: 150 });
+
+    expect(handlers.onHoverCall).not.toHaveBeenCalledWith(expect.any(Number));
+    expect(handlers.onEmptyClick).not.toHaveBeenCalled();
+    expect(handlers.onPinCall).not.toHaveBeenCalled();
+    expect(view.container.querySelector('.zoom-selection')).toBeNull();
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+
+    // The same input on the chart still hovers and pins the call under the pointer.
+    const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
+    await firePointer(chart(host), 'pointermove', pointer);
+    expect(handlers.onHoverCall).toHaveBeenLastCalledWith(expect.any(Number));
+    await fireEvent.click(chart(host), { clientX: 150 });
+    expect(handlers.onEmptyClick).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps call targets and individual ribbons interactive at Fit all', async () => {
     const indexed = indexTestAnalysis(testAnalysis());
     const handlers = callbacks();
@@ -1314,21 +1356,21 @@ describe('ContextRiver continuous viewport integration', () => {
     const beforePan = host.scrollLeft;
     const panFromX = beforePan > 0 ? 100 : 200;
     const panToX = beforePan > 0 ? 200 : 100;
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 71,
       pointerType: 'mouse',
       button: 0,
       clientX: panFromX,
       clientY: 200,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 71,
       pointerType: 'mouse',
       clientX: panToX,
       clientY: 200,
     });
     expect(host.scrollLeft).not.toBe(beforePan);
-    await firePointer(host, 'pointerup', {
+    await firePointer(chart(host), 'pointerup', {
       pointerId: 71,
       pointerType: 'mouse',
       clientX: panToX,
@@ -1337,21 +1379,21 @@ describe('ContextRiver continuous viewport integration', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, code: 'Space', key: ' ' }));
 
     const afterPan = host.scrollLeft;
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 72,
       pointerType: 'mouse',
       button: 0,
       clientX: 100,
       clientY: 100,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 72,
       pointerType: 'mouse',
       clientX: 100,
       clientY: 140,
     });
     expect(host.scrollLeft).toBe(afterPan);
-    await firePointer(host, 'pointerup', {
+    await firePointer(chart(host), 'pointerup', {
       pointerId: 72,
       pointerType: 'mouse',
       clientX: 100,
@@ -1374,21 +1416,21 @@ describe('ContextRiver continuous viewport integration', () => {
         ),
       );
 
-      await firePointer(host, 'pointerdown', {
+      await firePointer(chart(host), 'pointerdown', {
         pointerId: 31,
         pointerType: 'mouse',
         button: 0,
         clientX: 80,
         clientY: 45,
       });
-      await firePointer(host, 'pointermove', {
+      await firePointer(chart(host), 'pointermove', {
         pointerId: 31,
         pointerType: 'mouse',
         clientX: 220,
         clientY: 45,
       });
       expect(view.container.querySelector('.zoom-selection')).toBeInTheDocument();
-      await firePointer(host, cancelEvent, {
+      await firePointer(chart(host), cancelEvent, {
         pointerId: 31,
         pointerType: 'mouse',
         clientX: 220,
@@ -1399,20 +1441,20 @@ describe('ContextRiver continuous viewport integration', () => {
         expect.objectContaining({ isFitAll: true }),
       );
 
-      await firePointer(host, 'pointerdown', {
+      await firePointer(chart(host), 'pointerdown', {
         pointerId: 32,
         pointerType: 'mouse',
         button: 0,
         clientX: 80,
         clientY: 45,
       });
-      await firePointer(host, 'pointermove', {
+      await firePointer(chart(host), 'pointermove', {
         pointerId: 32,
         pointerType: 'mouse',
         clientX: 220,
         clientY: 45,
       });
-      await firePointer(host, 'pointerup', {
+      await firePointer(chart(host), 'pointerup', {
         pointerId: 32,
         pointerType: 'mouse',
         clientX: 220,
@@ -1439,7 +1481,7 @@ describe('ContextRiver continuous viewport integration', () => {
       ),
     );
 
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 41,
       pointerType: 'mouse',
       button: 0,
@@ -1478,7 +1520,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const beforePan = host.scrollLeft;
     const panFromX = beforePan > 0 ? 100 : 200;
     const panToX = beforePan > 0 ? 200 : 100;
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 42,
       pointerType: 'mouse',
       button: 0,
@@ -1486,7 +1528,7 @@ describe('ContextRiver continuous viewport integration', () => {
       clientX: panFromX,
       clientY: 200,
     });
-    await firePointer(host, 'pointermove', {
+    await firePointer(chart(host), 'pointermove', {
       pointerId: 42,
       pointerType: 'mouse',
       clientX: panToX,
@@ -1516,7 +1558,7 @@ describe('ContextRiver continuous viewport integration', () => {
         expect.objectContaining({ ready: true }),
       ),
     );
-    await firePointer(host, 'pointerdown', {
+    await firePointer(chart(host), 'pointerdown', {
       pointerId: 51,
       pointerType: 'mouse',
       button: 0,

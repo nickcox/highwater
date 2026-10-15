@@ -514,7 +514,9 @@ describe('Context River interactions', () => {
   });
   it('uses chart hover only for the crosshair and pins a call on click', async () => {
     await renderLoaded();
-    const chart = screen.getByRole('application', { name: 'Context River' });
+    const chart = screen
+      .getByRole('application', { name: 'Context River' })
+      .querySelector('.river-plot')!;
     chart.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 300 }));
     expect(screen.queryByText(/^Pinned call \d+$/)).not.toBeInTheDocument();
     expect(screen.getByText('Select a call to inspect usage.')).toBeInTheDocument();

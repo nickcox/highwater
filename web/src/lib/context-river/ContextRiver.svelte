@@ -162,6 +162,7 @@
 
   let host: HTMLDivElement;
   let svg: SVGSVGElement;
+  let canvas: HTMLDivElement | undefined;
   const initialWidth = 960;
   let observedWidth = $state(initialWidth);
   let hasObservedWidth = $state(false);
@@ -1030,7 +1031,14 @@
     }
   }
 
+  /** Hovering a call, clicking empty space and dragging belong to the chart itself. The legends,
+   * the Cache & cost controls and the economics track below it handle their own pointer input. */
+  function inChart(event: Event): boolean {
+    return event.target instanceof Node && canvas !== undefined && canvas.contains(event.target);
+  }
+
   function handlePointerDown(event: PointerEvent): void {
+    if (!inChart(event)) return;
     const input = pointerInput(event);
     const points = pointersAfterDown(gestureState.pointers, input);
     const center = pointerCenter(points);
@@ -1085,7 +1093,7 @@
   }
 
   function pointerMove(event: PointerEvent): void {
-    onHoverCall(pointerCall(event));
+    if (inChart(event)) onHoverCall(pointerCall(event));
   }
 
   function setEconomicsTrackMode(mode: EconomicsTrackMode): void {
@@ -1234,6 +1242,7 @@
 
   function backgroundClick(event: MouseEvent): void {
     if (consumeSuppressedClick(event)) return;
+    if (!inChart(event)) return;
     const callIndex = pointerCall(event as PointerEvent);
     if (callIndex !== null) onEmptyClick(callIndex);
   }
@@ -1478,7 +1487,15 @@
           ? 'Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths.'
           : ''}</span
       >
-      <div class="river-canvas" style:width={`${width}px`}>
+      <!-- Leaving the chart only clears the hover crosshair; keyboard users work with the River
+           container above. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="river-canvas"
+        bind:this={canvas}
+        style:width={`${width}px`}
+        onpointerleave={() => onHoverCall(null)}
+      >
         <svg bind:this={svg} class="river-plot" viewBox={`0 0 ${width} ${height}`} {width} {height}>
           <defs>
             {#if hasInputGap}
