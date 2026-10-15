@@ -7,6 +7,7 @@ import type {
   TokenizationMethod,
 } from './types';
 import { displayItemLabel } from './item-label';
+import { kindGroupLabel } from './kind-labels';
 import { describeTokenDiagnostic } from './diagnostics';
 
 export const COMPOSITION_KIND_ORDER: readonly ContextItemKind[] = [
@@ -22,20 +23,6 @@ export const COMPOSITION_KIND_ORDER: readonly ContextItemKind[] = [
   'unrecordedContext',
   'other',
 ];
-
-const KIND_LABELS: Readonly<Record<ContextItemKind, string>> = {
-  system: 'System',
-  toolDefinition: 'Tool definitions',
-  userMessage: 'User messages',
-  assistantMessage: 'Assistant messages',
-  toolResult: 'Tool results',
-  compactionSummary: 'Compaction summaries',
-  customMessage: 'Custom messages',
-  branchSummary: 'Branch summaries',
-  thinking: 'Thinking',
-  unrecordedContext: 'Unrecorded request context',
-  other: 'Other context',
-};
 
 export type CompositionScope = 'atCall' | 'cumulative';
 
@@ -184,7 +171,9 @@ export function rankCompositionItems(items: readonly CallCompositionItem[]): Cal
 function groupsFor(items: CallCompositionItem[]): CallCompositionGroup[] {
   return COMPOSITION_KIND_ORDER.flatMap((kind) => {
     const groupItems = rankCompositionItems(items.filter((item) => item.kind === kind));
-    return groupItems.length === 0 ? [] : [{ kind, label: KIND_LABELS[kind], items: groupItems }];
+    return groupItems.length === 0
+      ? []
+      : [{ kind, label: kindGroupLabel(kind), items: groupItems }];
   });
 }
 
@@ -220,7 +209,7 @@ function makeItem({
   return {
     id: item.id,
     kind: item.kind,
-    kindLabel: KIND_LABELS[item.kind],
+    kindLabel: kindGroupLabel(item.kind),
     label: displayItemLabel(item),
     sourceOrder,
     tokens,

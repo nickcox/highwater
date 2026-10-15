@@ -931,7 +931,7 @@ test('recorded Pi system and tools are visible at call 1 and survive revision an
   await page.getByRole('button', { name: 'Item types', exact: true }).click();
   await expect(page.getByRole('button', { name: /Item type System/ }).first()).toBeVisible();
   await expect(page.getByRole('group', { name: 'Item type legend' })).toContainText(
-    'Tool Definition',
+    'Tool definitions',
   );
   await page.getByRole('button', { name: 'Items', exact: true }).click();
   await page.getByRole('tab', { name: 'Composition' }).click();

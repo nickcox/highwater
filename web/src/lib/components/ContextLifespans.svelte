@@ -2,6 +2,7 @@
   import { onDestroy, tick } from 'svelte';
   import type { ContextItem, ContextItemKind, IndexedAnalysis, PresenceRange } from '../types';
   import { conciseLifespanLabels, displayItemLabel } from '../item-label';
+  import { kindLabel } from '../kind-labels';
   import { itemColor } from '../context-river/colors';
   import {
     callAxisTicks,
@@ -28,19 +29,6 @@
     'unrecordedContext',
     'userMessage',
   ];
-  const KIND_LABELS: Record<ContextItemKind, string> = {
-    assistantMessage: 'Assistant message',
-    branchSummary: 'Branch summary',
-    compactionSummary: 'Compaction summary',
-    customMessage: 'Custom message',
-    other: 'Other',
-    system: 'System',
-    thinking: 'Thinking',
-    toolDefinition: 'Tool definition',
-    toolResult: 'Tool result',
-    unrecordedContext: 'Unrecorded request context',
-    userMessage: 'User message',
-  };
   const SEARCH_LIMIT = 120;
   // Rendering every row of a long session adds tens of thousands of elements;
   // show matching rows a page at a time.
@@ -260,10 +248,6 @@
       (total, version) => total + version.tokenTurnsCoverage.totalCalls,
       0,
     );
-  }
-
-  function kindLabel(kind: ContextItemKind): string {
-    return KIND_LABELS[kind];
   }
 
   function isCompactedEnd(itemId: string, range: PresenceRange): boolean {

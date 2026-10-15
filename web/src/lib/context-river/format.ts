@@ -49,6 +49,11 @@ export function formatPercent(value: number | null | undefined): string {
     : `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
 }
 
+/** A ratio as a percentage with one decimal place, for example 0.125 as "12.5%". */
+export function formatRatioPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 export function formatWeight(value: number, unit: string): string {
   const label =
     unit === 'calculatedTokens'

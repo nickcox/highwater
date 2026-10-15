@@ -187,7 +187,7 @@ describe('ItemDetails versions', () => {
   it('lists tool definition versions without describing the change', () => {
     const indexed = indexTestAnalysis(versionScenario());
     render(ItemDetails, { props: { item: indexed.itemById.get('web1')!, indexed } });
-    expect(screen.getByText('Tool Definition · version 1 of 2')).toBeInTheDocument();
+    expect(screen.getByText('Tool definition · version 1 of 2')).toBeInTheDocument();
     expect(screen.queryByText(/^Call \d+:/)).toBeNull();
   });
 });

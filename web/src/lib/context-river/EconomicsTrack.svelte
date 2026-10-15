@@ -2,7 +2,7 @@
   import { afterUpdate, onDestroy } from 'svelte';
   import { createOverlayFocus } from './overlay-focus';
   import type { IndexedAnalysis } from '../types';
-  import { formatCost, formatCostTick, formatInteger, formatPercent } from './format';
+  import { formatCostTick, formatInteger, formatPercent, formatRatioPercent } from './format';
   import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
   import { costKindLabel, formatAssessedCost } from '../cost-assessment';
   import { formatVerticalTick, verticalScaleTicks } from './vertical-scale';
@@ -10,6 +10,7 @@
   import EventGlyph from './EventGlyph.svelte';
   import { clusterEconomicsEvents, type EconomicsEventCluster } from './event-clustering';
   import {
+    cacheShareChangeLabel,
     projectCacheTrack,
     projectCostTrack,
     type CacheShareSegment,
@@ -317,7 +318,7 @@
           x,
           direction: change.direction,
           magnitude: change.magnitude,
-          label: `Cache-read share ${change.direction === 'drop' ? 'dropped' : 'rose'} from ${ratioPercent(change.previousRatio)} on call ${change.previousCallIndex} to ${ratioPercent(change.currentRatio)} on call ${point.callIndex}`,
+          label: cacheShareChangeLabel(change, point.callIndex),
         });
       }
     }
@@ -396,14 +397,8 @@
         .join(' · ');
       const share =
         point.shareStatus === 'complete'
-          ? `${point.shareSegments
-              .map((segment) => `${segment.label} ${ratioPercent(segment.percentage / 100)}`)
-              .join(
-                ' · ',
-              )} · ${usageMappingLabel} denominator of ${formatInteger(point.shareDenominator ?? 0)} prompt tokens`
-          : point.shareStatus === 'zeroPrompt'
-            ? 'share undefined: zero prompt tokens'
-            : 'share unavailable: incomplete or unsupported usage';
+          ? `${cacheShareText(point)} · ${usageMappingLabel} denominator of ${formatInteger(point.shareDenominator ?? 0)} prompt tokens`
+          : cacheShareText(point);
       const promptTokens = call.economics.promptTokens;
       const ratio = call.economics.cacheReadRatio;
       const ratioLabel =
@@ -411,7 +406,7 @@
           ? 'cache-read share unavailable; prompt-token denominator is zero or unavailable'
           : ratio === null
             ? `cache-read share unavailable of ${formatInteger(promptTokens)} prompt tokens`
-            : `cache-read share ${ratioPercent(ratio)} of ${formatInteger(promptTokens)} prompt tokens`;
+            : `cache-read share ${formatRatioPercent(ratio)} of ${formatInteger(promptTokens)} prompt tokens`;
       const costLabel =
         call.costAssessment.amount === null
           ? ''
@@ -483,14 +478,7 @@
     const buckets = point.segments
       .map((segment) => `${segment.label} ${formatInteger(segment.value)}`)
       .join(' · ');
-    const share =
-      point.shareStatus === 'complete'
-        ? point.shareSegments
-            .map((segment) => `${segment.label} ${ratioPercent(segment.percentage / 100)}`)
-            .join(' · ')
-        : point.shareStatus === 'zeroPrompt'
-          ? 'share undefined: zero prompt tokens'
-          : 'share unavailable: incomplete or unsupported usage';
+    const share = cacheShareText(point);
     const ratio = call ? formatPercent(call.economics.cacheReadRatio) : 'Unknown';
     const denominator =
       call?.economics.promptTokens === null || call?.economics.promptTokens === undefined
@@ -500,7 +488,7 @@
     const targetChange = targetChangesByCall.get(point.callIndex)?.label;
     const targetLabel = targetChange ? ` · ${targetChange}.` : '';
     const changeLabel = change
-      ? ` · Cache-read share ${change.direction === 'drop' ? 'dropped' : 'rose'} from ${ratioPercent(change.previousRatio)} on call ${change.previousCallIndex} to ${ratioPercent(change.currentRatio)} (${(change.delta * 100).toFixed(1)} percentage points, ${change.magnitude})`
+      ? ` · ${cacheShareChangeLabel(change, point.callIndex)} (${(change.delta * 100).toFixed(1)} percentage points, ${change.magnitude})`
       : '';
     const viewLabel = cacheView === 'share' ? ` · ${share} · ${denominator}` : '';
     const showsPin = point.status === 'complete' || point.status === 'zero';
@@ -551,8 +539,16 @@
     return formatCostTick(value);
   }
 
-  function ratioPercent(value: number): string {
-    return `${(value * 100).toFixed(1)}%`;
+  /** Each cache bucket's share of the prompt, or why the shares are unavailable. */
+  function cacheShareText(point: CacheTrackPoint): string {
+    if (point.shareStatus === 'complete') {
+      return point.shareSegments
+        .map((segment) => `${segment.label} ${formatRatioPercent(segment.percentage / 100)}`)
+        .join(' · ');
+    }
+    return point.shareStatus === 'zeroPrompt'
+      ? 'share undefined: zero prompt tokens'
+      : 'share unavailable: incomplete or unsupported usage';
   }
 
   function focusCall(index: number): void {

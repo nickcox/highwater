@@ -13,7 +13,7 @@
 </script>
 
 <script lang="ts">
-  import { claudeEstimateNote } from '../token-estimate';
+  import { claudeEstimateNote, estimateMethodLabel } from '../token-estimate';
   import { sessionWideExplanationCodes } from '../estimate-quality';
   import type { IndexedAnalysis, ModelCall } from '../types';
   import { displayItemLabel } from '../item-label';
@@ -32,6 +32,7 @@
   import CopyButton from './CopyButton.svelte';
   import ItemContribution from './ItemContribution.svelte';
   import { callInputComparison } from '../context-river/reported-input';
+  import { cacheShareChangeLabel } from '../context-river/economics-track';
   import { itemContributions } from './item-contribution';
   import { responseDuration, effectiveOutputRate, timingExplanation } from './call-timing';
   import InfoPopover from './InfoPopover.svelte';
@@ -120,21 +121,6 @@
     return displayItemLabel(indexed.itemById.get(id), id);
   }
 
-  function methodLabel(method: string): string {
-    switch (method) {
-      case 'modelTokenizer':
-        return 'Model tokenizer';
-      case 'apiSerializationEstimate':
-        return 'Estimated API serialization';
-      case 'characterHeuristic':
-        return 'Character heuristic';
-      case 'reportedUsage':
-        return 'From reported usage';
-      default:
-        return 'Unavailable estimate method';
-    }
-  }
-
   function inputBucketLabel(policyId: string | null): string {
     if (
       policyId === 'anthropic-messages-cache-v1' ||
@@ -206,10 +192,6 @@
     }
     if (call.economics.cacheWriteStatus === 'unsupported') return 'Unsupported policy';
     return ratioValue(call.economics.cacheWriteRatio);
-  }
-
-  function discontinuityPercent(value: number): string {
-    return `${(value * 100).toFixed(1)}%`;
   }
 
   function freshRatioValue(): string {
@@ -487,12 +469,7 @@
       {#if call.economics.cacheRatioDiscontinuity}
         {@const change = call.economics.cacheRatioDiscontinuity}
         <div class="ratio-discontinuity" role="note">
-          <b
-            >Cache-read share {change.direction === 'drop' ? 'dropped' : 'rose'} from {discontinuityPercent(
-              change.previousRatio,
-            )} on call {change.previousCallIndex} to {discontinuityPercent(change.currentRatio)} on call
-            {call.index}</b
-          >
+          <b>{cacheShareChangeLabel(change, call.index)}</b>
           <p>
             Adjacent-call change: {formatInteger(change.previousPromptTokens)} to
             {formatInteger(change.currentPromptTokens)} prompt tokens; change of
@@ -651,7 +628,9 @@
           <dt>Model / tokenizer</dt>
           <dd>
             {#if tokenProfile}
-              {tokenProfile.provider} / {tokenProfile.model} · {methodLabel(tokenProfile.method)}
+              {tokenProfile.provider} / {tokenProfile.model} · {estimateMethodLabel(
+                tokenProfile.method,
+              )}
               {#if claudeEstimateNote(tokenProfile)}<small class="metric-note"
                   >{claudeEstimateNote(tokenProfile)}</small
                 >{/if}

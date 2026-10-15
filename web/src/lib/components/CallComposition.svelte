@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { estimateMethodLabel } from '../token-estimate';
   import InfoPopover from './InfoPopover.svelte';
   import { onMount, tick } from 'svelte';
   import type { IndexedAnalysis } from '../types';
@@ -124,19 +125,9 @@
     return `composition-tile-clip-${scope}-${pinnedCallIndex ?? 'whole'}-${index}`;
   }
 
-  function methodLabel(method: CallCompositionItem['estimateMethod']): string {
-    switch (method) {
-      case 'modelTokenizer':
-        return 'Model tokenizer';
-      case 'apiSerializationEstimate':
-        return 'Estimated API serialization';
-      case 'characterHeuristic':
-        return 'Character heuristic';
-      case 'reportedUsage':
-        return 'From reported usage';
-      default:
-        return 'Mixed or unavailable estimate method';
-    }
+  /** An item's method is null when its contributions used several methods. */
+  function methodLabel(method: string | null): string {
+    return estimateMethodLabel(method, 'Mixed or unavailable estimate method');
   }
 
   function itemOptionLabel(item: CallCompositionItem): string {

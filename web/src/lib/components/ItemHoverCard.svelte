@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ContextItem, IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
+  import { kindLabel } from '../kind-labels';
   import { coverageLabel, exposureLabel, formatWeight } from '../context-river/format';
   import { presenceCount, tokenTurnExposure } from '../context-river/lifespans';
 
@@ -19,7 +20,7 @@
 
 {#if item}
   <section class="item-hover-card" aria-label={`Context item ${displayItemLabel(item)}`}>
-    <header><span>{item.kind}</span><strong>{displayItemLabel(item)}</strong></header>
+    <header><span>{kindLabel(item.kind)}</span><strong>{displayItemLabel(item)}</strong></header>
     {#if item.preview?.text}<p class="content-preview">{item.preview.text}</p>{/if}
     {#if item.preview?.truncated}<p class="preview-note">Preview truncated</p>{/if}
     <dl>

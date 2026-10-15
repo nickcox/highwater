@@ -1,8 +1,9 @@
 <script lang="ts">
   import InfoPopover from './InfoPopover.svelte';
-  import { claudeEstimateNote } from '../token-estimate';
+  import { claudeEstimateNote, estimateMethodLabel } from '../token-estimate';
   import type { ContextItem, IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
+  import { kindLabel } from '../kind-labels';
   import { systemPromptChange, versionChain } from '../item-versions';
   import { presenceCount } from '../context-river/lifespans';
   import { describeTokenDiagnostic } from '../diagnostics';
@@ -81,27 +82,6 @@
     return displayItemLabel(indexed.itemById.get(id), id);
   }
 
-  function kindLabel(kind: ContextItem['kind']): string {
-    return kind
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .replace(/^\w/, (first) => first.toUpperCase());
-  }
-
-  function methodLabel(method: ContextItem['tokenEstimates'][number]['method']): string {
-    switch (method) {
-      case 'modelTokenizer':
-        return 'Model tokenizer';
-      case 'apiSerializationEstimate':
-        return 'Estimated API serialization';
-      case 'characterHeuristic':
-        return 'Character heuristic';
-      case 'reportedUsage':
-        return 'From reported usage';
-      default:
-        return 'Unavailable estimate method';
-    }
-  }
-
   /** The version's size at the first call it appears in. */
   function versionTokens(other: ContextItem): number | null {
     const profileId = indexed.callByIndex.get(other.firstModelCall)?.tokenizationProfileId ?? '';
@@ -168,7 +148,7 @@
     {#if selectedEstimate && (selectedEstimate.coverage !== 'complete' || selectedEstimate.method === 'characterHeuristic')}<p
         class="presence-note"
       >
-        Estimate: {selectedEstimate.coverage} · {methodLabel(selectedEstimate.method)}
+        Estimate: {selectedEstimate.coverage} · {estimateMethodLabel(selectedEstimate.method)}
       </p>{/if}
     <details use:rememberSection={{ state: sections, key: 'preview' }}>
       <summary>Content preview</summary>
@@ -326,8 +306,8 @@
           <dd>
             {#if selectedCall && selectedEstimate}
               {selectedProfile
-                ? `${selectedProfile.provider} / ${selectedProfile.model} · ${methodLabel(selectedEstimate.method)}`
-                : methodLabel(selectedEstimate.method)} · call {selectedCall.index}
+                ? `${selectedProfile.provider} / ${selectedProfile.model} · ${estimateMethodLabel(selectedEstimate.method)}`
+                : estimateMethodLabel(selectedEstimate.method)} · call {selectedCall.index}
               {#if claudeEstimateNote(selectedProfile)}<small class="metric-note"
                   >{claudeEstimateNote(selectedProfile)}</small
                 >{/if}

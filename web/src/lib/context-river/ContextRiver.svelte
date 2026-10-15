@@ -7,6 +7,7 @@
   import { afterUpdate, beforeUpdate, onMount } from 'svelte';
   import type { IndexedAnalysis, ContextItemKind } from '../types';
   import { displayItemLabel } from '../item-label';
+  import { kindGroupLabel } from '../kind-labels';
   import InfoPopover from '../components/InfoPopover.svelte';
   import {
     anchorForCall as callAnchor,
@@ -161,7 +162,7 @@
   let economicsReadout = '';
   let economicsEventBreakdown: EconomicsEventBreakdown | null = null;
   let groupBreakdown: {
-    kind: string;
+    kind: ContextItemKind;
     memberIds: string[];
     callIndex: number | null;
     anchor: { x: number; y: number };
@@ -1001,12 +1002,8 @@
     else zoomToCallRange(start, end);
   }
 
-  function groupLabel(kind: string): string {
-    return kind.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase());
-  }
-
   function showGroupBreakdown(
-    kind: string,
+    kind: ContextItemKind,
     memberIds: string[],
     callIndex: number | null,
     returnElement: HTMLElement | SVGElement | null = null,
@@ -1123,7 +1120,7 @@
     if (firstCall !== undefined && indexed.callByIndex.has(firstCall)) onPinCall(firstCall);
   }
 
-  function activateGroup(event: MouseEvent, kind: string, memberIds: string[]): void {
+  function activateGroup(event: MouseEvent, kind: ContextItemKind, memberIds: string[]): void {
     if (consumeSuppressedClick(event)) return;
     event.stopPropagation();
     const callIndex = pointerCallAtX(event.clientX, true);
@@ -1142,7 +1139,7 @@
 
   function activateGroupFromKeyboard(
     event: KeyboardEvent,
-    kind: string,
+    kind: ContextItemKind,
     memberIds: string[],
   ): void {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -1266,11 +1263,6 @@
             point.x <= bounds.right,
         ),
     );
-  }
-
-  function connectorVisible(from: string): boolean {
-    const focusedItemId = selectedItemId ?? hoveredItemId;
-    return focusedItemId !== null && from === focusedItemId;
   }
 </script>
 
@@ -1491,7 +1483,7 @@
                 ? itemTypeColor(ribbon.groupKind)
                 : ribbonItemColor(ribbon.itemId)}
               {@const ribbonLabel = isGroup
-                ? `Item type ${groupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
+                ? `Item type ${kindGroupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
                 : itemAccessibleLabel(ribbon.itemId)}
               <g
                 class="ribbon-group"
@@ -1618,11 +1610,11 @@
             {#each focusedConnectors as { connector, index } (connector.key)}
               <path
                 class="compaction-merge-emphasis"
-                class:emphasized={connectorVisible(connector.fromItemId)}
+                class:emphasized={connector.fromItemId === focusedItemId}
                 d={connector.mergePath}
                 fill={`url(#${mergeId}-${index})`}
               />
-              {#if connectorVisible(connector.fromItemId)}
+              {#if connector.fromItemId === focusedItemId}
                 <path
                   class="lineage-connector visible"
                   vector-effect="non-scaling-stroke"
@@ -1697,7 +1689,7 @@
           style:top={`${hoveredGroup.y}px`}
           style:--group-color={itemTypeColor(hoveredGroup.kind)}
         >
-          <strong>{groupLabel(hoveredGroup.kind)}</strong>
+          <strong>{kindGroupLabel(hoveredGroup.kind)}</strong>
           <span
             >{formatVerticalTick(hoveredGroup.total)}
             {verticalAxisUnit} at call {hoveredGroup.callIndex ?? '—'}</span
@@ -1711,7 +1703,7 @@
           {#each [...new Set(river.ribbons
                 .map((ribbon) => ribbon.groupKind)
                 .filter(Boolean))] as kind}
-            <span><i style={`background:${itemTypeColor(kind!)}`}></i>{groupLabel(kind!)}</span>
+            <span><i style={`background:${itemTypeColor(kind!)}`}></i>{kindGroupLabel(kind!)}</span>
           {/each}
         </div>
       {/if}
@@ -1776,7 +1768,7 @@
   </div>
   {#if groupBreakdown}
     <GroupBreakdown
-      label={groupLabel(groupBreakdown.kind)}
+      label={kindGroupLabel(groupBreakdown.kind)}
       anchor={groupBreakdown.anchor}
       memberLabels={groupMemberLabels}
       memberCount={groupBreakdown.memberIds.length}

@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import copilotExport from '../../../../fixtures/analysis/copilot-economics.json';
 import { costAssessmentOf, testAnalysis } from './test-data';
-import {
-  projectCachePresentation,
-  projectCacheTrack,
-  projectCostTrack,
-  hasNumericCacheData,
-} from './economics-track';
+import { projectCachePresentation, projectCacheTrack, projectCostTrack } from './economics-track';
 import type { SessionAnalysis, WireSessionAnalysis } from '../types';
 import { indexAnalysis } from '../analysis';
 
@@ -102,7 +97,6 @@ describe('economics track projections', () => {
     expect(projection.points[2].note).toContain('may include writes');
     expect(projection.points[3]).toMatchObject({ status: 'partial', segments: [] });
     expect(projection.points[4]).toMatchObject({ status: 'unsupported', segments: [] });
-    expect(hasNumericCacheData(analysis)).toBe(true);
   });
 
   it('labels the audited Chat Completions input as uncached without inventing writes', () => {

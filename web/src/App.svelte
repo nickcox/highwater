@@ -101,7 +101,7 @@
   let viewDetailsRequestId = 0;
   let findInLifespansRequest: { requestId: number; itemId: string } | null = null;
   let findRequestId = 0;
-  let viewportStatus: RiverViewportStatus = {
+  const initialViewportStatus = (): RiverViewportStatus => ({
     ready: false,
     isFitAll: true,
     zoomFactor: 1,
@@ -111,7 +111,8 @@
     firstVisibleCallIndex: null,
     lastVisibleCallIndex: null,
     hasOverflow: false,
-  };
+  });
+  let viewportStatus = initialViewportStatus();
   let hoveredItemPoint: { x: number; y: number } | null = null;
   let riverSelectionVisibility: { itemId: string; visible: boolean } | null = null;
   let hoverCardHost: HTMLDivElement | null = null;
@@ -436,17 +437,7 @@
   }
 
   function resetViewportStatus(): void {
-    viewportStatus = {
-      ready: false,
-      isFitAll: true,
-      zoomFactor: 1,
-      canZoomIn: false,
-      canZoomOut: false,
-      totalCallCount: 0,
-      firstVisibleCallIndex: null,
-      lastVisibleCallIndex: null,
-      hasOverflow: false,
-    };
+    viewportStatus = initialViewportStatus();
   }
 
   function hoverCall(index: number | null): void {
@@ -574,14 +565,6 @@
   function stepToCall(callIndex: number): void {
     pinCall(callIndex);
     navigationCommand = { id: ++navigationCommandId, kind: 'ensure-call', callIndex };
-  }
-
-  function jumpToCall(callIndex: number): void {
-    stepToCall(callIndex);
-  }
-
-  function jumpToLatest(): void {
-    navigate('latest');
   }
 
   function handleVisualizationTabKeydown(event: KeyboardEvent): void {
@@ -898,8 +881,7 @@
                 {callIndices}
                 pinnedCallIndex={interaction.pinnedCallIndex}
                 onSelectCall={stepToCall}
-                onJumpToCall={jumpToCall}
-                onLatest={jumpToLatest}
+                onLatest={() => navigate('latest')}
                 onFitAll={() => navigate('fit')}
                 onZoomIn={() => navigate('zoom-in')}
                 onZoomOut={() => navigate('zoom-out')}

@@ -1,6 +1,7 @@
 import type { CacheRatioDiscontinuity, CostKind, ModelCall, SessionAnalysis } from '../types';
 import { isPiSource } from '../cost-basis';
 import { ECONOMICS_POLICIES, type EconomicsCacheCategory } from '../economics-policy';
+import { formatRatioPercent } from './format';
 
 export type EconomicsTrackMode = 'cache' | 'cost' | 'off';
 export type CacheViewMode = 'tokens' | 'share';
@@ -131,14 +132,9 @@ const CATEGORY_ORDER: CacheSegmentKind[] = [
   'nonRead',
 ];
 
-export function hasNumericCacheData(analysis: SessionAnalysis): boolean {
-  return analysis.modelCalls.some(
-    (call) =>
-      call.economics.policyId !== null &&
-      POLICY_CATEGORIES[call.economics.policyId] !== undefined &&
-      call.economics.usageCompleteness === 'complete' &&
-      call.economics.promptTokens !== null,
-  );
+/** For example "Cache-read share dropped from 50.0% on call 1 to 0.0% on call 2". */
+export function cacheShareChangeLabel(change: CacheRatioDiscontinuity, callIndex: number): string {
+  return `Cache-read share ${change.direction === 'drop' ? 'dropped' : 'rose'} from ${formatRatioPercent(change.previousRatio)} on call ${change.previousCallIndex} to ${formatRatioPercent(change.currentRatio)} on call ${callIndex}`;
 }
 
 export function projectCacheTrack(analysis: SessionAnalysis): CacheTrackProjection {
