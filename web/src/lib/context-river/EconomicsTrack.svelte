@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { afterUpdate, onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { createOverlayFocus } from './overlay-focus';
   import type { IndexedAnalysis } from '../types';
   import { formatCostTick, formatInteger, formatPercent, formatRatioPercent } from './format';
-  import { describeCostBasis, usageNormalizationLabel } from '../cost-basis';
+  import { usageNormalizationLabel } from '../cost-basis';
   import { costKindLabel, formatAssessedCost } from '../cost-assessment';
   import { formatVerticalTick, verticalScaleTicks } from './vertical-scale';
   import type { CallColumn } from './types';
@@ -22,21 +22,36 @@
     type EconomicsEventBreakdown,
   } from './economics-track';
 
-  export let indexed: IndexedAnalysis;
+  let {
+    indexed,
+    columns,
+    width,
+    mode,
+    cacheView = 'tokens',
+    pinnedCallIndex,
+    hoveredCallIndex,
+    onPinCall,
+    onHoverCall,
+    onMarkClick,
+    onReadoutChange = () => {},
+    onEventBreakdownChange = () => {},
+  }: {
+    indexed: IndexedAnalysis;
+    columns: readonly CallColumn[];
+    width: number;
+    mode: Exclude<EconomicsTrackMode, 'off'>;
+    cacheView?: CacheViewMode;
+    pinnedCallIndex: number | null;
+    hoveredCallIndex: number | null;
+    onPinCall: (index: number) => void;
+    onHoverCall: (index: number | null) => void;
+    onMarkClick: (event: MouseEvent, index: number) => void;
+    onReadoutChange?: (readout: string) => void;
+    onEventBreakdownChange?: (breakdown: EconomicsEventBreakdown | null) => void;
+  } = $props();
   const eventFocus = createOverlayFocus();
-  $: eventFocus.observeIdentity(indexed);
+  $effect.pre(() => eventFocus.observeIdentity(indexed));
   onDestroy(() => eventFocus.dispose());
-  export let columns: readonly CallColumn[];
-  export let width: number;
-  export let mode: Exclude<EconomicsTrackMode, 'off'>;
-  export let cacheView: CacheViewMode = 'tokens';
-  export let pinnedCallIndex: number | null;
-  export let hoveredCallIndex: number | null;
-  export let onPinCall: (index: number) => void;
-  export let onHoverCall: (index: number | null) => void;
-  export let onMarkClick: (event: MouseEvent, index: number) => void;
-  export let onReadoutChange: (readout: string) => void = () => {};
-  export let onEventBreakdownChange: (breakdown: EconomicsEventBreakdown | null) => void = () => {};
 
   interface CacheSegmentGeometry {
     kind: CacheTrackPoint['segments'][number]['kind'];
@@ -85,114 +100,122 @@
   type TrackEventCluster = EconomicsEventCluster<TrackEvent>;
 
   // The event lane below the bars is one marker row high (46px).
-  $: trackHeight = mode === 'cost' ? 190 : 262;
-  $: eventHeaderTop = mode === 'cost' ? 116 : 188;
+  let trackHeight = $derived(mode === 'cost' ? 190 : 262);
+  let eventHeaderTop = $derived(mode === 'cost' ? 116 : 188);
   const eventHeaderHeight = 16;
-  $: eventLaneTop = eventHeaderTop + eventHeaderHeight + 2;
-  $: eventLaneHeight = Math.max(44, trackHeight - eventLaneTop - 10);
-  $: eventMarkerY = eventLaneTop + eventLaneHeight / 2;
+  let eventLaneTop = $derived(eventHeaderTop + eventHeaderHeight + 2);
+  let eventLaneHeight = $derived(Math.max(44, trackHeight - eventLaneTop - 10));
+  let eventMarkerY = $derived(eventLaneTop + eventLaneHeight / 2);
   const eventMarkerHeight = 22;
   const eventCollisionGap = 6;
   const margin = { top: 14, right: 24, bottom: 62, left: 42 };
-  $: baseline = mode === 'cache' ? 180 : 108;
-  $: innerHeight = baseline - margin.top;
-  let activeCallIndex: number | null = null;
-  let openEventClusterId: string | null = null;
+  let baseline = $derived(mode === 'cache' ? 180 : 108);
+  let innerHeight = $derived(baseline - margin.top);
+  let openEventClusterId: string | null = $state(null);
   let lastPublishedReadout = '';
   let lastPublishedEventBreakdownSignature = '';
 
-  $: costCopy = describeCostBasis(
-    indexed.analysis.economics.costBasis,
-    indexed.analysis.session.source,
+  let usageMappingLabel = $derived(usageNormalizationLabel(indexed.analysis.session.source));
+  let cacheProjection = $derived(mode === 'cache' ? projectCacheTrack(indexed.analysis) : null);
+  let costProjection = $derived(mode === 'cost' ? projectCostTrack(indexed.analysis) : null);
+  let cachePointsByCall = $derived(
+    new Map(cacheProjection?.points.map((point) => [point.callIndex, point]) ?? []),
   );
-  $: usageMappingLabel = usageNormalizationLabel(indexed.analysis.session.source);
-  $: cacheProjection = mode === 'cache' ? projectCacheTrack(indexed.analysis) : null;
-  $: costProjection = mode === 'cost' ? projectCostTrack(indexed.analysis) : null;
-  $: cachePointsByCall = new Map(
-    cacheProjection?.points.map((point) => [point.callIndex, point]) ?? [],
-  );
-  $: costPointsByCall = new Map(
-    costProjection?.points.map((point) => [point.callIndex, point]) ?? [],
-  );
-  $: maximum = cacheProjection?.maximum ?? costProjection?.maximum ?? 0;
-  $: domainMaximum =
+  let maximum = $derived(cacheProjection?.maximum ?? costProjection?.maximum ?? 0);
+  let domainMaximum = $derived(
     mode === 'cost'
       ? maximum > 0
         ? maximum
         : 1
       : cacheView === 'share'
         ? 100
-        : Math.max(1, maximum);
-  $: columnsByCall = new Map(columns.map((column) => [column.callIndex, column]));
-  $: compactionMarkers = layoutCompactionMarkers(indexed.analysis.compactions, columns, width);
-  $: targetChanges = layoutTargetChanges(indexed.analysis.modelCalls, columns);
-  $: targetChangesByCall = new Map(targetChanges.map((marker) => [marker.callIndex, marker]));
-  $: minimumSpacing =
+        : Math.max(1, maximum),
+  );
+  let columnsByCall = $derived(new Map(columns.map((column) => [column.callIndex, column])));
+  let compactionMarkers = $derived(
+    layoutCompactionMarkers(indexed.analysis.compactions, columns, width),
+  );
+  let targetChanges = $derived(layoutTargetChanges(indexed.analysis.modelCalls, columns));
+  let targetChangesByCall = $derived(
+    new Map(targetChanges.map((marker) => [marker.callIndex, marker])),
+  );
+  let minimumSpacing = $derived(
     columns.length < 2
       ? 14
       : columns.reduce(
           (minimum, column, position) =>
             position === 0 ? minimum : Math.min(minimum, column.x - columns[position - 1].x),
           Number.POSITIVE_INFINITY,
-        );
-  $: barWidth = Math.max(1.5, Math.min(12, minimumSpacing * 0.68));
-  // The track is short, so round ticks need a larger gap from the maximum.
-  $: ticks = verticalScaleTicks(mode === 'cache' && cacheView === 'share' ? 100 : maximum, 3, 0.25);
-  $: tickData = ticks.map((value) => ({
-    value,
-    y: margin.top + innerHeight * (1 - value / domainMaximum),
-  }));
-  // Legacy `$:` statements re-run only when a variable named in them changes, so every value
-  // the layout functions read is passed to them.
-  $: cacheBars = cacheProjection
-    ? layoutCacheBars(cacheProjection, columnsByCall, {
-        cacheView,
-        domainMaximum,
-        baseline,
-        innerHeight,
-        targetChangesByCall,
-        usageMappingLabel,
-      })
-    : [];
-  $: costMarks = costProjection
-    ? layoutCostMarks(costProjection, columnsByCall, {
-        domainMaximum,
-        baseline,
-        innerHeight,
-        targetChangesByCall,
-      })
-    : [];
-  $: trackEvents = layoutTrackEvents(
-    compactionMarkers,
-    targetChanges,
-    cacheProjection,
-    columnsByCall,
+        ),
   );
-  $: eventClusters = clusterEconomicsEvents(trackEvents, {
-    chartWidth: width,
-    left: margin.left,
-    right: margin.right,
-    markerSize: eventMarkerHeight,
-    collisionGap: eventCollisionGap,
-  });
-  $: openEventCluster = eventClusters.find((cluster) => cluster.id === openEventClusterId) ?? null;
-  $: if (openEventCluster) {
-    const signature = JSON.stringify({
-      id: openEventCluster.id,
-      x: openEventCluster.x,
-      events: openEventCluster.events.map((event) => ({
-        id: event.id,
-        kind: event.kind,
-        callIndex: event.callIndex,
-        x: event.x,
-        label: event.label,
-        direction: event.direction,
-        magnitude: event.magnitude,
-      })),
-    });
-    if (signature !== lastPublishedEventBreakdownSignature) {
+  let barWidth = $derived(Math.max(1.5, Math.min(12, minimumSpacing * 0.68)));
+  // The track is short, so round ticks need a larger gap from the maximum.
+  let ticks = $derived(
+    verticalScaleTicks(mode === 'cache' && cacheView === 'share' ? 100 : maximum, 3, 0.25),
+  );
+  let tickData = $derived(
+    ticks.map((value) => ({
+      value,
+      y: margin.top + innerHeight * (1 - value / domainMaximum),
+    })),
+  );
+  let cacheBars = $derived(
+    cacheProjection
+      ? layoutCacheBars(cacheProjection, columnsByCall, {
+          cacheView,
+          domainMaximum,
+          baseline,
+          innerHeight,
+          targetChangesByCall,
+          usageMappingLabel,
+        })
+      : [],
+  );
+  let costMarks = $derived(
+    costProjection
+      ? layoutCostMarks(costProjection, columnsByCall, {
+          domainMaximum,
+          baseline,
+          innerHeight,
+          targetChangesByCall,
+        })
+      : [],
+  );
+  let trackEvents = $derived(
+    layoutTrackEvents(compactionMarkers, targetChanges, cacheProjection, columnsByCall),
+  );
+  let eventClusters = $derived(
+    clusterEconomicsEvents(trackEvents, {
+      chartWidth: width,
+      left: margin.left,
+      right: margin.right,
+      markerSize: eventMarkerHeight,
+      collisionGap: eventCollisionGap,
+    }),
+  );
+  let openEventCluster = $derived(
+    eventClusters.find((cluster) => cluster.id === openEventClusterId) ?? null,
+  );
+  // The parent is told about the open breakdown only when its content changes, since the
+  // clusters are rebuilt whenever the columns move.
+  $effect.pre(() => {
+    if (openEventCluster) {
+      const signature = JSON.stringify({
+        id: openEventCluster.id,
+        x: openEventCluster.x,
+        events: openEventCluster.events.map((event) => ({
+          id: event.id,
+          kind: event.kind,
+          callIndex: event.callIndex,
+          x: event.x,
+          label: event.label,
+          direction: event.direction,
+          magnitude: event.magnitude,
+        })),
+      });
+      if (signature === lastPublishedEventBreakdownSignature) return;
       lastPublishedEventBreakdownSignature = signature;
-      onEventBreakdownChange({
+      const breakdown = {
         id: openEventCluster.id,
         events: openEventCluster.events,
         callIndices: [...new Set(openEventCluster.events.map((event) => event.callIndex))].sort(
@@ -202,21 +225,21 @@
         anchorY: eventMarkerY,
         laneTop: eventLaneTop,
         laneHeight: eventLaneHeight,
-      });
+      };
+      untrack(() => onEventBreakdownChange(breakdown));
+    } else if (lastPublishedEventBreakdownSignature !== '') {
+      lastPublishedEventBreakdownSignature = '';
+      untrack(() => onEventBreakdownChange(null));
     }
-  } else if (lastPublishedEventBreakdownSignature !== '') {
-    lastPublishedEventBreakdownSignature = '';
-    onEventBreakdownChange(null);
-  }
-  $: readoutCallIndex = hoveredCallIndex ?? pinnedCallIndex;
-  $: readout =
-    readoutCallIndex === null
-      ? ''
-      : callReadout(readoutCallIndex, mode, cacheView, cacheProjection, costProjection);
-  $: if (readout !== lastPublishedReadout) {
+  });
+  let readoutCallIndex = $derived(hoveredCallIndex ?? pinnedCallIndex);
+  let readout = $derived(readoutCallIndex === null ? '' : callReadout(readoutCallIndex));
+  $effect.pre(() => {
+    if (readout === lastPublishedReadout) return;
     lastPublishedReadout = readout;
-    onReadoutChange(readout);
-  }
+    const published = readout;
+    untrack(() => onReadoutChange(published));
+  });
 
   function layoutCompactionMarkers(
     compactions: IndexedAnalysis['analysis']['compactions'],
@@ -329,7 +352,8 @@
     return `${event.label} · call ${event.callIndex}`;
   }
 
-  afterUpdate(() => {
+  // A cluster that disappears (the columns moved or the analysis changed) closes its breakdown.
+  $effect(() => {
     if (
       openEventClusterId !== null &&
       !eventClusters.some((cluster) => cluster.id === openEventClusterId)
@@ -378,13 +402,7 @@
     }
   }
 
-  function callReadout(
-    callIndex: number,
-    mode: Exclude<EconomicsTrackMode, 'off'>,
-    cacheViewMode: CacheViewMode,
-    cacheProjection: EconomicsTrackProjection<CacheTrackPoint> | null,
-    costProjection: EconomicsTrackProjection<CostTrackPoint> | null,
-  ): string {
+  function callReadout(callIndex: number): string {
     const call = indexed.callByIndex.get(callIndex);
     if (!call) return '';
     if (mode === 'cache') {
@@ -413,7 +431,7 @@
           : ` · ${costKindLabel(call.costAssessment, indexed.analysis.session.source)} cost ${formatAssessedCost(call.costAssessment)} USD`;
       const pinnedLabel =
         pinnedCallIndex === callIndex && hoveredCallIndex !== callIndex ? ' · pinned' : '';
-      return `Call ${callIndex}${pinnedLabel} · ${buckets} · ${mode === 'cache' && cacheViewMode === 'share' ? `${share} · ` : ''}${ratioLabel}${costLabel}`;
+      return `Call ${callIndex}${pinnedLabel} · ${buckets} · ${mode === 'cache' && cacheView === 'share' ? `${share} · ` : ''}${ratioLabel}${costLabel}`;
     }
     return call.costAssessment.amount === null
       ? `Call ${callIndex} · cost unavailable`
@@ -577,7 +595,8 @@
     focusCall(target.index);
   }
 
-  $: activeCallIndex = pinnedCallIndex ?? indexed.analysis.modelCalls[0]?.index ?? null;
+  // The call mark in the Tab order: the pinned call, until arrow keys move it.
+  let activeCallIndex = $derived(pinnedCallIndex ?? indexed.analysis.modelCalls[0]?.index ?? null);
 </script>
 
 <div
