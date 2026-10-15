@@ -71,6 +71,7 @@ impl From<TokenizationArg> for TokenizationPolicy {
 }
 
 #[derive(Parser, Debug)]
+#[command(version, about)]
 pub(crate) struct Args {
     #[arg(long)]
     pub session_root: Option<PathBuf>,
