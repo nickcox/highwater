@@ -4,20 +4,37 @@
   import type { ContextItem, IndexedAnalysis, ModelCall } from '../types';
   import type { inspectorSections } from '../state/inspector-sections';
 
-  export let indexed: IndexedAnalysis;
-  export let pinnedCall: ModelCall | null;
-  export let selectedItem: ContextItem | null;
-  export let callSections: ReturnType<typeof inspectorSections>;
-  export let itemSections: ReturnType<typeof inspectorSections>;
-  export let pinnedCallIndex: number | null;
-  export let hoveredCallIndex: number | null;
-  export let hasCalls: boolean;
-  export let onClosePinnedCall: () => void;
-  export let onCloseItem: () => void;
-  export let onSelectItem: (id: string | null) => void;
-  export let onPinCall: (index: number) => void;
-  export let onInspectCall: (index: number) => void;
-  export let onRevealInRiver: (itemId: string) => void;
+  let {
+    indexed,
+    pinnedCall,
+    selectedItem,
+    callSections,
+    itemSections,
+    pinnedCallIndex,
+    hoveredCallIndex,
+    hasCalls,
+    onClosePinnedCall,
+    onCloseItem,
+    onSelectItem,
+    onPinCall,
+    onInspectCall,
+    onRevealInRiver,
+  }: {
+    indexed: IndexedAnalysis;
+    pinnedCall: ModelCall | null;
+    selectedItem: ContextItem | null;
+    callSections: ReturnType<typeof inspectorSections>;
+    itemSections: ReturnType<typeof inspectorSections>;
+    pinnedCallIndex: number | null;
+    hoveredCallIndex: number | null;
+    hasCalls: boolean;
+    onClosePinnedCall: () => void;
+    onCloseItem: () => void;
+    onSelectItem: (id: string | null) => void;
+    onPinCall: (index: number) => void;
+    onInspectCall: (index: number) => void;
+    onRevealInRiver: (itemId: string) => void;
+  } = $props();
 </script>
 
 {#if !pinnedCall && !selectedItem}

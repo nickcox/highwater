@@ -1,4 +1,4 @@
-<script context="module" lang="ts">
+<script module lang="ts">
   let nextPicker = 0;
 </script>
 
@@ -6,16 +6,22 @@
   import { tick } from 'svelte';
   import type { SessionListItem } from '../api/client';
   import { sessionOptionLabels } from '../session-label';
-  export let sessions: SessionListItem[];
-  export let selectedId: string | null;
-  export let onSelect: (id: string) => void;
+  let {
+    sessions,
+    selectedId,
+    onSelect,
+  }: {
+    sessions: SessionListItem[];
+    selectedId: string | null;
+    onSelect: (id: string) => void;
+  } = $props();
 
   const id = `session-picker-${nextPicker++}`;
-  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' | 'vscode-copilot' = 'all';
+  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' | 'vscode-copilot' = $state('all');
   /** Search text, used only while the list is open. */
-  let query = '';
-  let open = false;
-  let activeIndex = -1;
+  let query = $state('');
+  let open = $state(false);
+  let activeIndex = $state(-1);
   const harnessOf = (session: SessionListItem) =>
     session.harness ??
     (session.id.startsWith('opencode-')
@@ -27,18 +33,24 @@
           : 'pi');
   // Duplicate portable references are ambiguous on the server. Offer one
   // option per reference instead of crashing a keyed list or selecting a DB.
-  $: unique = [...new Map(sessions.map((session) => [session.id, session])).values()];
-  $: labels = sessionOptionLabels(unique, harness === 'all');
-  $: inHarness = unique.filter((session) => harness === 'all' || harnessOf(session) === harness);
-  $: choices = inHarness.filter((session) =>
-    `${session.displayName} ${session.workingDirectory ?? ''}`
-      .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase()),
+  let unique = $derived([...new Map(sessions.map((session) => [session.id, session])).values()]);
+  let labels = $derived(sessionOptionLabels(unique, harness === 'all'));
+  let inHarness = $derived(
+    unique.filter((session) => harness === 'all' || harnessOf(session) === harness),
   );
-  $: selected = unique.find((session) => session.id === selectedId);
-  $: selectedLabel = selected
-    ? `${labels.get(selected.id)}${inHarness.includes(selected) ? '' : ' — outside filters'}`
-    : '';
+  let choices = $derived(
+    inHarness.filter((session) =>
+      `${session.displayName} ${session.workingDirectory ?? ''}`
+        .toLocaleLowerCase()
+        .includes(query.trim().toLocaleLowerCase()),
+    ),
+  );
+  let selected = $derived(unique.find((session) => session.id === selectedId));
+  let selectedLabel = $derived(
+    selected
+      ? `${labels.get(selected.id)}${inHarness.includes(selected) ? '' : ' — outside filters'}`
+      : '',
+  );
   const optionId = (index: number) => `${id}-option-${index}`;
 
   async function showActive(): Promise<void> {

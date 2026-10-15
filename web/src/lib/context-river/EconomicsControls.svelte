@@ -8,23 +8,36 @@
   } from './economics-track';
   import type { describeCostBasis } from '../cost-basis';
 
-  export let mode: EconomicsTrackMode;
-  export let lastMode: 'cache' | 'cost';
-  export let cacheView: CacheViewMode;
-  export let cachePresentation: ReturnType<typeof projectCachePresentation>;
-  export let costCopy: ReturnType<typeof describeCostBasis>;
-  /** Some calls are covered by a subscription and drawn as API-equivalent costs. */
-  export let hasApiEquivalentCost = false;
-  export let onModeChange: (mode: EconomicsTrackMode) => void;
-  export let onCacheViewChange: (view: CacheViewMode) => void;
-  /** Bound by the River, which returns focus here and checks focus containment. */
-  export let headerElement: HTMLDivElement | undefined = undefined;
-  export let triggerElement: HTMLButtonElement | undefined = undefined;
+  let {
+    mode,
+    lastMode,
+    cacheView,
+    cachePresentation,
+    costCopy,
+    hasApiEquivalentCost = false,
+    onModeChange,
+    onCacheViewChange,
+    headerElement = $bindable(),
+    triggerElement = $bindable(),
+  }: {
+    mode: EconomicsTrackMode;
+    lastMode: 'cache' | 'cost';
+    cacheView: CacheViewMode;
+    cachePresentation: ReturnType<typeof projectCachePresentation>;
+    costCopy: ReturnType<typeof describeCostBasis>;
+    /** Some calls are covered by a subscription and drawn as API-equivalent costs. */
+    hasApiEquivalentCost?: boolean;
+    onModeChange: (mode: EconomicsTrackMode) => void;
+    onCacheViewChange: (view: CacheViewMode) => void;
+    /** Bound by the River, which returns focus here and checks focus containment. */
+    headerElement?: HTMLDivElement;
+    triggerElement?: HTMLButtonElement;
+  } = $props();
 </script>
 
 <!-- Stops pointer and click events reaching the River's drag-to-zoom gestures;
      the controls inside are ordinary buttons. -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
 <div
   class="economics-track-header"
   bind:this={headerElement}

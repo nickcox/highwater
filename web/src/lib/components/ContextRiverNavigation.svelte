@@ -3,39 +3,60 @@
   import type { RiverViewportStatus } from '../context-river/viewport';
   import { stepCallTarget } from '../context-river/viewport';
   import RiverCallJump from './RiverCallJump.svelte';
-  export let viewport: RiverViewportStatus;
-  export let callIndices: number[];
-  export let pinnedCallIndex: number | null = null;
-  export let onSelectCall: (index: number) => void = () => {};
-  export let onJumpToCall: (index: number) => void = (index) => onSelectCall(index);
-  let jumpMessage = '';
-  export let onLatest: () => void;
-  export let onFitAll: () => void;
-  export let onZoomIn: () => void;
-  export let onZoomOut: () => void;
-  export let isVisible = true;
-  $: noCalls = callIndices.length === 0;
-  $: previous = viewport.ready ? stepCallTarget(callIndices, pinnedCallIndex, viewport, -1) : null;
-  $: next = viewport.ready ? stepCallTarget(callIndices, pinnedCallIndex, viewport, 1) : null;
+  let {
+    viewport,
+    callIndices,
+    pinnedCallIndex = null,
+    onSelectCall = () => {},
+    onJumpToCall = (index) => onSelectCall(index),
+    onLatest,
+    onFitAll,
+    onZoomIn,
+    onZoomOut,
+    isVisible = true,
+  }: {
+    viewport: RiverViewportStatus;
+    callIndices: number[];
+    pinnedCallIndex?: number | null;
+    onSelectCall?: (index: number) => void;
+    onJumpToCall?: (index: number) => void;
+    onLatest: () => void;
+    onFitAll: () => void;
+    onZoomIn: () => void;
+    onZoomOut: () => void;
+    isVisible?: boolean;
+  } = $props();
+  let jumpMessage = $state('');
+  let noCalls = $derived(callIndices.length === 0);
+  let previous = $derived(
+    viewport.ready ? stepCallTarget(callIndices, pinnedCallIndex, viewport, -1) : null,
+  );
+  let next = $derived(
+    viewport.ready ? stepCallTarget(callIndices, pinnedCallIndex, viewport, 1) : null,
+  );
   let previousButton: HTMLButtonElement;
   let nextButton: HTMLButtonElement;
   // A focused button that becomes disabled leaves focus on the page, where the single-letter
   // h and l shortcuts do nothing. Moving focus to the other step button keeps them working at
   // the first and last calls. The focused button is checked before the buttons update, and the
   // other one is focused after, once it is enabled.
-  $: if (next === null && previous !== null && document.activeElement === nextButton)
-    void tick().then(() => previousButton.focus());
-  $: if (previous === null && next !== null && document.activeElement === previousButton)
-    void tick().then(() => nextButton.focus());
-  $: rangeText = noCalls
-    ? 'No model calls'
-    : !viewport.ready
-      ? 'Measuring chart viewport…'
-      : viewport.firstVisibleCallIndex === null || viewport.lastVisibleCallIndex === null
-        ? `No call markers visible of ${callIndices.length}`
-        : viewport.firstVisibleCallIndex === viewport.lastVisibleCallIndex
-          ? `Call ${viewport.firstVisibleCallIndex} of ${callIndices.length}`
-          : `Calls ${viewport.firstVisibleCallIndex}–${viewport.lastVisibleCallIndex} of ${callIndices.length}`;
+  $effect.pre(() => {
+    if (next === null && previous !== null && document.activeElement === nextButton)
+      void tick().then(() => previousButton.focus());
+    if (previous === null && next !== null && document.activeElement === previousButton)
+      void tick().then(() => nextButton.focus());
+  });
+  let rangeText = $derived(
+    noCalls
+      ? 'No model calls'
+      : !viewport.ready
+        ? 'Measuring chart viewport…'
+        : viewport.firstVisibleCallIndex === null || viewport.lastVisibleCallIndex === null
+          ? `No call markers visible of ${callIndices.length}`
+          : viewport.firstVisibleCallIndex === viewport.lastVisibleCallIndex
+            ? `Call ${viewport.firstVisibleCallIndex} of ${callIndices.length}`
+            : `Calls ${viewport.firstVisibleCallIndex}–${viewport.lastVisibleCallIndex} of ${callIndices.length}`,
+  );
 </script>
 
 <div class="viewport-navigation" role="group" aria-label="Context River navigation">

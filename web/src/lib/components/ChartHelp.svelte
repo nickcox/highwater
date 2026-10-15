@@ -1,15 +1,28 @@
 <script lang="ts">
-  import { afterUpdate, onMount } from 'svelte';
-  export let isVisible = true;
-  /** The session's source; the System and tools section is about Pi sessions only. */
-  export let source: string;
-  $: if (!isVisible) close(false);
+  import { onMount, untrack } from 'svelte';
+  let {
+    isVisible = true,
+    source,
+  }: {
+    isVisible?: boolean;
+    /** The session's source; the System and tools section is about Pi sessions only. */
+    source: string;
+  } = $props();
 
   let container: HTMLDivElement | null = null;
-  let trigger: HTMLButtonElement | null = null;
-  let popover: HTMLDivElement | null = null;
-  let popoverStyle = '';
-  let expanded = false;
+  let trigger: HTMLButtonElement | null = $state(null);
+  let popover: HTMLDivElement | null = $state(null);
+  let popoverStyle = $state('');
+  let expanded = $state(false);
+
+  $effect(() => {
+    if (!isVisible) untrack(() => close(false));
+  });
+  // Place the popover when it opens and when its content changes with the source.
+  $effect(() => {
+    void source;
+    placePopover();
+  });
 
   function placePopover(): void {
     if (!expanded || !trigger || !popover) return;
@@ -53,7 +66,6 @@
     }
   }
 
-  afterUpdate(placePopover);
   onMount(() => {
     container?.addEventListener('keydown', handleKeyDown);
     return () => container?.removeEventListener('keydown', handleKeyDown);
