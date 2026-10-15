@@ -1,12 +1,22 @@
 <script lang="ts">
-  export let kind: 'compaction' | 'targetChange' | 'ratioChange';
-  export let direction: 'rise' | 'drop' | undefined = undefined;
-  export let size = 22;
-  export let label: string | undefined = undefined;
-  /** Chart callers set this so the glyph is positioned in the parent SVG. */
-  export let svg = false;
-  export let x: number | undefined = undefined;
-  export let y: number | undefined = undefined;
+  let {
+    kind,
+    direction = undefined,
+    size = 22,
+    label = undefined,
+    svg = false,
+    x = undefined,
+    y = undefined,
+  }: {
+    kind: 'compaction' | 'targetChange' | 'ratioChange';
+    direction?: 'rise' | 'drop';
+    size?: number;
+    label?: string;
+    /** Chart callers set this so the glyph is positioned in the parent SVG. */
+    svg?: boolean;
+    x?: number;
+    y?: number;
+  } = $props();
 </script>
 
 {#if svg}

@@ -1,17 +1,16 @@
 <script lang="ts">
   // A small "i" button beside a value that opens an explanation next to it. It closes on
   // Escape, on a second click, or on a click anywhere else.
-  import { tick } from 'svelte';
+  import { tick, type Snippet } from 'svelte';
 
-  export let id: string;
-  export let label: string;
+  let { id, label, children }: { id: string; label: string; children?: Snippet } = $props();
 
-  let trigger: HTMLButtonElement | null = null;
-  let popover: HTMLDivElement | null = null;
-  let popoverStyle = '';
-  let expanded = false;
+  let trigger: HTMLButtonElement | null = $state(null);
+  let popover: HTMLDivElement | null = $state(null);
+  let popoverStyle = $state('');
+  let expanded = $state(false);
   // Invisible until placed, so it never shows at the browser's default position.
-  let placed = false;
+  let placed = $state(false);
 
   /** Below the button, or above it when there is no room below, within the window. The
    * width comes from the stylesheet, so the height measured here is the final one. */
@@ -82,7 +81,7 @@
     hidden={!expanded}
     style={popoverStyle}
   >
-    <slot />
+    {@render children?.()}
   </div>
 </span>
 

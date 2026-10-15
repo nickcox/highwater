@@ -1,20 +1,30 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  export let anchor: { x: number; y: number };
-  export let label: string;
-  export let memberLabels: string[];
-  export let memberCount: number;
-  export let callIndex: number | null;
-  export let onClose: () => void;
-  export let onShowItems: () => void;
+  let {
+    anchor,
+    label,
+    memberLabels,
+    memberCount,
+    callIndex,
+    onClose,
+    onShowItems,
+  }: {
+    anchor: { x: number; y: number };
+    label: string;
+    memberLabels: string[];
+    memberCount: number;
+    callIndex: number | null;
+    onClose: () => void;
+    onShowItems: () => void;
+  } = $props();
 
   let element: HTMLDivElement;
-  let panelWidth = 340;
-  let panelHeight = 220;
-  let viewportWidth = 1280;
-  let viewportHeight = 800;
-  $: left = Math.max(8, Math.min(anchor.x + 8, viewportWidth - panelWidth - 8));
-  $: top = Math.max(8, Math.min(anchor.y + 8, viewportHeight - panelHeight - 8));
+  let panelWidth = $state(340);
+  let panelHeight = $state(220);
+  let viewportWidth = $state(1280);
+  let viewportHeight = $state(800);
+  let left = $derived(Math.max(8, Math.min(anchor.x + 8, viewportWidth - panelWidth - 8)));
+  let top = $derived(Math.max(8, Math.min(anchor.y + 8, viewportHeight - panelHeight - 8)));
 
   onMount(() => {
     const measure = () => {

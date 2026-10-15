@@ -1,15 +1,24 @@
 <script lang="ts">
   import { resolveJumpCallIndex } from '../context-river/viewport';
-  export let callIndices: number[];
-  export let ready = false;
-  export let onJumpToCall: (index: number) => void;
-  export let onDone: () => void = () => {};
-  let jumpValue: string | number = '';
-  export let message = '';
-  export let hideMessage = false;
-  $: disabled = !ready || callIndices.length === 0;
-  $: first = callIndices[0] ?? 1;
-  $: last = callIndices[callIndices.length - 1] ?? 1;
+  let {
+    callIndices,
+    ready = false,
+    onJumpToCall,
+    onDone = () => {},
+    message = $bindable(''),
+    hideMessage = false,
+  }: {
+    callIndices: number[];
+    ready?: boolean;
+    onJumpToCall: (index: number) => void;
+    onDone?: () => void;
+    message?: string;
+    hideMessage?: boolean;
+  } = $props();
+  let jumpValue: string | number = $state('');
+  let disabled = $derived(!ready || callIndices.length === 0);
+  let first = $derived(callIndices[0] ?? 1);
+  let last = $derived(callIndices[callIndices.length - 1] ?? 1);
   function cancelEntry(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;
     // Let the input/IME cancel composition without bubbling into workspace dismissal.

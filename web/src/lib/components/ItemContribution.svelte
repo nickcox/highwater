@@ -1,6 +1,8 @@
 <script lang="ts">
-  export let value: { share: number | null; detail: string };
-  export let descriptionId: string;
+  let {
+    value,
+    descriptionId,
+  }: { value: { share: number | null; detail: string }; descriptionId: string } = $props();
 </script>
 
 <span>

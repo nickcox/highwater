@@ -1,13 +1,23 @@
 <script lang="ts">
   import EventGlyph from './EventGlyph.svelte';
   import type { EconomicsEventBreakdown } from './economics-track';
-  export let breakdown: EconomicsEventBreakdown;
-  export let element: HTMLDivElement | null = null;
-  export let positionStyle = '';
-  export let canZoomIn: boolean;
-  export let onClose: () => void;
-  export let onZoom: () => void;
-  export let onInspect: (callIndex: number) => void;
+  let {
+    breakdown,
+    element = $bindable(null),
+    positionStyle = '',
+    canZoomIn,
+    onClose,
+    onZoom,
+    onInspect,
+  }: {
+    breakdown: EconomicsEventBreakdown;
+    element?: HTMLDivElement | null;
+    positionStyle?: string;
+    canZoomIn: boolean;
+    onClose: () => void;
+    onZoom: () => void;
+    onInspect: (callIndex: number) => void;
+  } = $props();
 
   function keydown(event: KeyboardEvent): void {
     if (event.key !== 'Escape') return;

@@ -5,17 +5,19 @@
   import { coverageLabel, exposureLabel, formatWeight } from '../context-river/format';
   import { presenceCount, tokenTurnExposure } from '../context-river/lifespans';
 
-  export let item: ContextItem | null;
-  export let indexed: IndexedAnalysis;
+  let { item, indexed }: { item: ContextItem | null; indexed: IndexedAnalysis } = $props();
 
-  $: sourceCompactions = item ? (indexed.compactionBySourceId.get(item.id) ?? []) : [];
-  $: summaryCompaction = item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null;
-  $: lineageText =
+  let sourceCompactions = $derived(item ? (indexed.compactionBySourceId.get(item.id) ?? []) : []);
+  let summaryCompaction = $derived(
+    item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null,
+  );
+  let lineageText = $derived(
     sourceCompactions.length > 0
       ? `Structurally replaced before call ${sourceCompactions.map((event) => event.beforeModelCall).join(', ')}`
       : summaryCompaction
         ? `Summary of ${summaryCompaction.sourceItemIds.length} structural source items`
-        : null;
+        : null,
+  );
 </script>
 
 {#if item}

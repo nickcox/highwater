@@ -1,8 +1,7 @@
 <script lang="ts">
-  export let value: string;
-  export let label: string;
+  let { value, label }: { value: string; label: string } = $props();
 
-  let status = '';
+  let status = $state('');
 
   async function copyValue(): Promise<void> {
     try {
