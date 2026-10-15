@@ -1880,6 +1880,11 @@
             <span class="input-comparison-readout"
               >Call {pinnedCallIndex ?? hoveredCallIndex}: input comparison unavailable</span
             >
+          {:else}
+            <!-- Always shown, so hovering on and off the chart never moves what is below it. -->
+            <span class="input-comparison-readout"
+              >Hover or pin a call to compare its estimated and reported input.</span
+            >
           {/if}
         </div>
       {/if}

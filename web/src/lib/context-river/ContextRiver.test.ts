@@ -1291,6 +1291,10 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(handlers.onEmptyClick).not.toHaveBeenCalled();
     expect(handlers.onPinCall).not.toHaveBeenCalled();
     expect(view.container.querySelector('.zoom-selection')).toBeNull();
+    // With no call hovered or pinned, the comparison line shows a hint rather than disappearing.
+    expect(view.container.querySelector('.input-comparison-readout')).toHaveTextContent(
+      'Hover or pin a call to compare its estimated and reported input.',
+    );
     expect(info).toHaveAttribute('aria-expanded', 'true');
 
     // The same input on the chart still hovers and pins the call under the pointer.
