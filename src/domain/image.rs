@@ -32,7 +32,7 @@ fn decode_prefix(encoded: &[u8], limit: usize) -> Vec<u8> {
     };
     let end = limit.min(encoded.len()) / 4 * 4;
     let mut out = Vec::with_capacity(end / 4 * 3);
-    for group in encoded[..end].chunks_exact(4) {
+    for group in encoded[..end].as_chunks::<4>().0 {
         let mut accumulator = 0_u32;
         let mut count = 0;
         for byte in group {
