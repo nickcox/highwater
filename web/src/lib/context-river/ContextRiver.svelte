@@ -294,12 +294,8 @@
     verticalScaleMode === 'visible'
       ? visibleStackSample(scaleColumns, visiblePlotLeft, visiblePlotRight)
       : emptyVisibleScaleSample;
-  $: verticalDomainMax =
-    verticalScaleMode === 'visible'
-      ? visibleScaleSample.maxWeight
-      : inputComparison.size > 0
-        ? sessionVerticalMaximum
-        : undefined;
+  // The ribbons are always laid out at the session scale, so panning never rebuilds them.
+  // "Visible calls" stretches the drawing vertically about the plot's bottom edge instead.
   $: canonicalRiver = layoutContextRiver(
     indexed,
     {
@@ -307,13 +303,26 @@
       height,
       margin,
       minimumVisibleThickness: 1,
-      verticalDomainMax,
+      verticalDomainMax: inputComparison.size > 0 ? sessionVerticalMaximum : undefined,
       groupByKind: riverDisplayMode === 'itemTypes',
     },
     canonicalColumns,
   );
   $: horizontalProjection = projectRiverHorizontally(canonicalRiver, geometryWidth, width, margin);
   $: river = horizontalProjection.layout;
+  $: layoutVerticalDomain = Math.max(
+    1,
+    inputComparison.size > 0 ? sessionVerticalMaximum : canonicalRiver.maxTotalDisplayWeight,
+  );
+  $: verticalStretch =
+    verticalScaleMode === 'visible'
+      ? layoutVerticalDomain / Math.max(1, visibleScaleSample.maxWeight)
+      : 1;
+  $: verticalOffset = (height - margin.bottom) * (1 - verticalStretch);
+  $: ribbonTransform =
+    verticalStretch === 1
+      ? horizontalProjection.transform
+      : `${horizontalProjection.transform} matrix(1 0 0 ${verticalStretch} 0 ${verticalOffset})`;
   $: cachePresentation = projectCachePresentation(indexed.analysis);
   $: verticalAxisMaximum =
     verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : sessionVerticalMaximum;
@@ -357,7 +366,9 @@
   let rovingRibbonKey: string | null = null;
   $: ribbonByKey = new Map(river.ribbons.map((ribbon) => [ribbon.key, ribbon]));
   $: segmentsByItemId = river.ribbons.reduce((map, ribbon) => {
-    map.set(ribbon.itemId, [...(map.get(ribbon.itemId) ?? []), ribbon]);
+    const segments = map.get(ribbon.itemId);
+    if (segments) segments.push(ribbon);
+    else map.set(ribbon.itemId, [ribbon]);
     return map;
   }, new Map<string, ContextRiverLayout['ribbons']>());
   $: tabStopRibbonKey =
@@ -493,13 +504,22 @@
     }
   });
 
+  // Scroll events can arrive several times a frame; their work reads layout, so it runs at most
+  // once per frame.
+  let scrollFrame: number | null = null;
+  function scheduleScrollWork(): void {
+    if (scrollFrame !== null) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = null;
+      syncScaleViewportMetrics();
+      publishViewport();
+      refreshEconomicsOverlay();
+    });
+  }
+
   onMount(() => {
     const disposeDom = installRiverDom(host, {
-      onScroll: () => {
-        syncScaleViewportMetrics();
-        publishViewport();
-        refreshEconomicsOverlay();
-      },
+      onScroll: scheduleScrollWork,
       onDocumentScroll: refreshEconomicsOverlay,
       onWheel: (event) => {
         if (!(event.metaKey || event.ctrlKey) || callCount < 2) return;
@@ -542,6 +562,7 @@
       economicsInspectFocus.dispose();
       cancelAllGestureState();
       if (clickSuppressionTimer !== null) window.clearTimeout(clickSuppressionTimer);
+      if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
       disposeDom();
     };
   });
@@ -597,7 +618,8 @@
     const clientWidth = measuredClientWidth();
     const scrollWidth = measuredScrollWidth();
     const ready = hasObservedWidth || clientWidth > 0;
-    const contentOffsetX = chartContentOffsetX();
+    // Every caller has just measured the offset in syncScaleViewportMetrics.
+    const contentOffsetX = measuredChartOffsetX;
     const range = ready
       ? visibleCallRange(viewportColumns, host.scrollLeft, clientWidth, contentOffsetX)
       : { firstVisibleCallIndex: null, lastVisibleCallIndex: null };
@@ -1074,8 +1096,10 @@
   }
 
   function refreshEconomicsOverlay(): void {
+    // Only an open breakdown is positioned against the page, so other scrolls need no update.
+    if (!economicsEventBreakdown) return;
     economicsOverlayRevision += 1;
-    if (economicsEventBreakdown && host && !economicsAnchorVisible(host, economicsEventBreakdown))
+    if (host && !economicsAnchorVisible(host, economicsEventBreakdown))
       closeEconomicsBreakdown(false);
   }
 
@@ -1235,6 +1259,11 @@
     }
   }
 
+  /** Thinner than a pixel as drawn, after the "Visible calls" stretch. */
+  function isSubpixel(ribbon: ContextRiverLayout['ribbons'][number]): boolean {
+    return ribbon.thinnest * verticalStretch < 1;
+  }
+
   /** Versions of a system prompt or tool definition share the first version's colour. */
   function ribbonItemColor(id: string): string {
     return itemColor(indexed.versionByItemId.get(id)?.firstId ?? id);
@@ -1381,13 +1410,13 @@
                   height={river.innerHeight}
                   fill="white"
                 />
-                <g transform={horizontalProjection.transform}>
+                <g transform={ribbonTransform}>
                   {#each river.ribbons as ribbon (ribbon.key)}
                     <path
                       d={ribbon.path}
                       fill="black"
-                      stroke={ribbon.isSubpixel ? 'black' : 'none'}
-                      stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+                      stroke={isSubpixel(ribbon) ? 'black' : 'none'}
+                      stroke-width={isSubpixel(ribbon) ? 1.25 : 0}
                       vector-effect="non-scaling-stroke"
                     />
                   {/each}
@@ -1415,7 +1444,7 @@
               width="8"
               height="8"
               patternUnits="userSpaceOnUse"
-              patternTransform={`matrix(${1 / (horizontalProjection.scale || 1)} 0 0 1 ${-horizontalProjection.offset / (horizontalProjection.scale || 1)} 0) rotate(35)`}
+              patternTransform={`matrix(${1 / (horizontalProjection.scale || 1)} 0 0 ${1 / verticalStretch} ${-horizontalProjection.offset / (horizontalProjection.scale || 1)} ${-verticalOffset / verticalStretch}) rotate(35)`}
             >
               <rect width="8" height="8" fill="#46516a" />
               <path d="M0 0V8" stroke="#8793aa" stroke-width="2" opacity=".65" />
@@ -1467,7 +1496,7 @@
             </g>
           {/each}
 
-          <g transform={horizontalProjection.transform} data-testid="river-ribbon-geometry">
+          <g transform={ribbonTransform} data-testid="river-ribbon-geometry">
             {#each river.lineageConnectors as connector, i (connector.key)}
               <path
                 class="compaction-merge"
@@ -1494,13 +1523,13 @@
                 <path
                   class="ribbon"
                   vector-effect="non-scaling-stroke"
-                  class:subpixel={ribbon.isSubpixel}
+                  class:subpixel={isSubpixel(ribbon)}
                   d={ribbon.path}
                   fill={indexed.analysis.displayWeightUnit === 'unavailable'
                     ? 'url(#unknown-geometry)'
                     : ribbonColor}
-                  stroke={ribbon.isSubpixel ? ribbonColor : 'none'}
-                  stroke-width={ribbon.isSubpixel ? 1.25 : 0}
+                  stroke={isSubpixel(ribbon) ? ribbonColor : 'none'}
+                  stroke-width={isSubpixel(ribbon) ? 1.25 : 0}
                 />
                 <path
                   class="ribbon-hit"
@@ -1606,7 +1635,7 @@
               </g>
             {/if}
           {/each}
-          <g aria-hidden="true" transform={horizontalProjection.transform}>
+          <g aria-hidden="true" transform={ribbonTransform}>
             {#each focusedConnectors as { connector, index } (connector.key)}
               <path
                 class="compaction-merge-emphasis"

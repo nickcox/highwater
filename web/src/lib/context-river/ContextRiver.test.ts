@@ -356,6 +356,8 @@ describe('ContextRiver continuous viewport integration', () => {
     const host = view.container.querySelector('.river-scroll') as HTMLDivElement;
     host.scrollLeft = 50;
     await fireEvent.scroll(host);
+    // Scroll work runs in the next animation frame.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(geometry.mock.calls.length - beforePan).toBe(0);
     await view.rerender({ isVisible: false });
     await view.rerender({ selectedItemId: null, hoveredCallIndex: null });
@@ -384,7 +386,7 @@ describe('ContextRiver continuous viewport integration', () => {
     geometry.mockRestore();
   });
 
-  it('still rebuilds stacks for analysis, grouping and visible-scale domain changes', async () => {
+  it('rebuilds stacks for analysis and grouping changes but not for the visible-calls scale', async () => {
     const geometry = vi.spyOn(layout, 'layoutContextRiver');
     const view = render(ContextRiver, {
       props: { indexed: longAnalysis(160), ...resetInteraction(), ...callbacks() },
@@ -397,8 +399,7 @@ describe('ContextRiver continuous viewport integration', () => {
     previous = geometry.mock.calls.length;
     settings.river.verticalScale = 'visible';
     await view.rerender({ preferences: structuredClone(settings) });
-    expect(geometry.mock.calls.length).toBeGreaterThan(previous);
-    previous = geometry.mock.calls.length;
+    expect(geometry.mock.calls.length).toBe(previous);
     await view.rerender({ indexed: longAnalysis(161) });
     expect(geometry.mock.calls.length).toBeGreaterThan(previous);
     geometry.mockRestore();
@@ -1199,6 +1200,8 @@ describe('ContextRiver continuous viewport integration', () => {
     const sessionPath = view.container
       .querySelector('.ribbon-hit[aria-label="retained tail"]')
       ?.getAttribute('d');
+    const ribbonGroup = view.container.querySelector('[data-testid="river-ribbon-geometry"]')!;
+    const sessionTransform = ribbonGroup.getAttribute('transform');
     const scrollBeforeScaleChange = host.scrollLeft;
     await view.getByRole('button', { name: 'Visible calls' }).click();
     await waitFor(() =>
@@ -1208,9 +1211,15 @@ describe('ContextRiver continuous viewport integration', () => {
       ),
     );
     expect(view.getByRole('img', { name: /visible call markers/ })).toBeInTheDocument();
+    // The paths stay at the session scale; the group is stretched vertically instead.
     expect(
       view.container.querySelector('.ribbon-hit[aria-label="retained tail"]')?.getAttribute('d'),
-    ).not.toBe(sessionPath);
+    ).toBe(sessionPath);
+    expect(ribbonGroup.getAttribute('transform')).toMatch(
+      new RegExp(
+        `^${sessionTransform!.replace(/[()]/g, '\\$&')} matrix\\(1 0 0 [\\d.]+ 0 -[\\d.]+\\)$`,
+      ),
+    );
     expect(host.scrollLeft).toBe(scrollBeforeScaleChange);
     expect(handlers.onSelectItem).not.toHaveBeenCalled();
 
@@ -1218,6 +1227,7 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(
       view.container.querySelector('.ribbon-hit[aria-label="retained tail"]')?.getAttribute('d'),
     ).toBe(sessionPath);
+    expect(ribbonGroup.getAttribute('transform')).toBe(sessionTransform);
     expect(host.scrollLeft).toBe(scrollBeforeScaleChange);
   });
 

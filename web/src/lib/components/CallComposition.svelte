@@ -347,6 +347,7 @@
   {:else if !projection}
     <div class="empty-state"><p>Preparing composition…</p></div>
   {:else}
+    {@const status = compositionStatus()}
     {#if endpointNotice && scope === 'cumulative' && pinnedCallIndex === null}
       <p class="endpoint-status" role="status">{endpointNotice}</p>
     {/if}
@@ -432,7 +433,7 @@
         )} have unavailable semantic coverage.
       </p>
     </details>
-    {#if compositionStatus()}<p class="coverage-status" role="status">{compositionStatus()}</p>{/if}
+    {#if status}<p class="coverage-status" role="status">{status}</p>{/if}
     {#if projection.allMeasuredZero}
       <p class="coverage-status">
         All numeric item estimates are zero; no equal-area rectangles are substituted.

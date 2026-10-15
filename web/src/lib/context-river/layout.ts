@@ -118,6 +118,13 @@ export function layoutCallColumns(
   }));
 }
 
+function thinnestThickness(points: readonly RibbonPoint[]): number {
+  return points.reduce(
+    (thinnest, point) => (point.y1 > point.y0 ? Math.min(thinnest, point.y1 - point.y0) : thinnest),
+    Number.POSITIVE_INFINITY,
+  );
+}
+
 export function layoutContextRiver(
   indexed: IndexedAnalysis,
   options: RiverLayoutOptions,
@@ -261,9 +268,8 @@ export function layoutContextRiver(
         });
         if (points.length === 0) continue;
         const paddedPoints = padSingleton(points, step, options);
-        const isSubpixel = paddedPoints.some(
-          (point) => point.y1 > point.y0 && point.y1 - point.y0 < options.minimumVisibleThickness,
-        );
+        const thinnest = thinnestThickness(paddedPoints);
+        const isSubpixel = thinnest < options.minimumVisibleThickness;
         const path = pathFor(paddedPoints, false);
         ribbons.push({
           key: `kind:${kind}:${rangeIndex}`,
@@ -278,6 +284,7 @@ export function layoutContextRiver(
           path,
           hitPath: path,
           isSubpixel,
+          thinnest,
         });
       }
     }
@@ -358,9 +365,8 @@ export function layoutContextRiver(
           points.length === 1 && mergeTarget
             ? [padSingleton(points, step, options)[0], points[0]]
             : padSingleton(points, step, options);
-        const isSubpixel = points.some(
-          (point) => point.y1 > point.y0 && point.y1 - point.y0 < options.minimumVisibleThickness,
-        );
+        const thinnest = thinnestThickness(points);
+        const isSubpixel = thinnest < options.minimumVisibleThickness;
         const path = pathFor(points, touchesCompaction);
         ribbons.push({
           key: `${item.id}:${rangeIndex}`,
@@ -372,6 +378,7 @@ export function layoutContextRiver(
           path,
           hitPath: path,
           isSubpixel,
+          thinnest,
           linear: touchesCompaction,
         });
       }

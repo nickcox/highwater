@@ -12,6 +12,7 @@ const segment = (itemId: string, callIndices: number[], xs: number[]): RibbonSeg
   path: '',
   hitPath: '',
   isSubpixel: false,
+  thinnest: 10,
 });
 
 describe('selection reveal geometry', () => {

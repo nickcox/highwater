@@ -38,6 +38,9 @@ export interface RibbonSegment {
   path: string;
   hitPath: string;
   isSubpixel: boolean;
+  /** The ribbon's smallest non-zero height in layout units, or Infinity when it has none. A
+   * scaled drawing uses it to decide whether the ribbon is thinner than a pixel. */
+  thinnest: number;
   linear?: boolean;
   /** Present only for the optional Item types presentation. */
   groupKind?: import('../types').ContextItemKind;

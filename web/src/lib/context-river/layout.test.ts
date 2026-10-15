@@ -58,6 +58,30 @@ describe('layoutContextRiver', () => {
     expect(localPoint.y1).not.toBe(sessionPoint.y1);
   });
 
+  it('matches a smaller Y domain when the session layout is stretched about the plot bottom', () => {
+    // ContextRiver draws "Visible calls" this way instead of laying the River out again.
+    const indexed = indexTestAnalysis(testAnalysis());
+    const sessionScale = layoutContextRiver(indexed, options);
+    const visibleDomain = 45;
+    const localScale = layoutContextRiver(
+      indexed,
+      { ...options, verticalDomainMax: visibleDomain },
+      sessionScale.columns,
+    );
+    const stretch = sessionScale.maxTotalDisplayWeight / visibleDomain;
+    const bottom = options.height - options.margin.bottom;
+    const stretched = (y: number) => bottom - (bottom - y) * stretch;
+    for (const [index, ribbon] of sessionScale.ribbons.entries()) {
+      const local = localScale.ribbons[index];
+      expect(local.key).toBe(ribbon.key);
+      for (const [position, point] of ribbon.points.entries()) {
+        expect(stretched(point.y0)).toBeCloseTo(local.points[position].y0, 9);
+        expect(stretched(point.y1)).toBeCloseTo(local.points[position].y1, 9);
+      }
+      expect(ribbon.thinnest * stretch).toBeCloseTo(local.thinnest, 9);
+    }
+  });
+
   it('gives one-call ranges visible geometry', () => {
     const layout = layoutContextRiver(indexTestAnalysis(testAnalysis()), options);
     const segment = layout.ribbons.find(
