@@ -10,5 +10,5 @@ The first release.
 - Context lifespans, searchable and filterable.
 - Cache and cost track, with each call's recorded cost, an estimate from bundled models.dev price data, or an API-equivalent cost for calls covered by a subscription.
 - Live updates while a session is being written, and shareable view links.
-- Prebuilt binaries for macOS, Linux and Windows, or install with Nix or Cargo; `highwater --version` prints the version.
 - Local token counting with OpenAI tokenizers, reconstructed Claude tokenizers and a character estimate.
+- Prebuilt binaries for macOS, Linux and Windows, and installs with Nix or Cargo.

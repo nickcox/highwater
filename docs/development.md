@@ -42,7 +42,7 @@ The integrated browser checks run the real server with its embedded frontend. Ea
 
 ## Releases
 
-`.github/workflows/release.yml` builds release archives for macOS, Linux and Windows. Pushing a tag such as `v0.1.0` checks that the tag matches the version in `Cargo.toml`, builds and packages each binary with the README, licence and changelog, and creates a draft GitHub release with the archives and a `SHA256SUMS` file; write its notes and publish it by hand. Running the workflow by hand from the Actions tab builds the archives without creating a release.
+`.github/workflows/release.yml` builds release archives for macOS, Linux and Windows. Pushing a tag such as `v0.1.0` checks that the tag matches the version in `Cargo.toml`, builds and packages each binary with the README, licence and changelog, and creates a draft GitHub release with the archives and a `SHA256SUMS` file. Write the release notes and publish it by hand. Running the workflow by hand from the Actions tab builds the archives without creating a release.
 
 ## Price data
 

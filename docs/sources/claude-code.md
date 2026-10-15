@@ -68,7 +68,7 @@ Every analysis has `reconstruction: {status: "partial"}`, because the transcript
 
 ## Usage, cost and timing
 
-| Normalized field | Claude Code field |
+| Normalised field | Claude Code field |
 | --- | --- |
 | `input` | `input_tokens` (uncached input only) |
 | `cache_read` | `cache_read_input_tokens` |

@@ -35,7 +35,7 @@ Records keep the fields Claude Code writes (`parentUuid`, `isSidechain`, `cwd`, 
 
 ## Expected results
 
-`expected/<name>.json` holds the results for one fixture. They were written by hand from the plan's rules, before any code that produces them, and are not generated from the fixtures.
+`expected/<name>.json` holds the results for one fixture. They were written by hand from the rules in [docs/sources/claude-code.md](../../docs/sources/claude-code.md), before any code that produces them, and are not generated from the fixtures.
 
 | Field | Meaning |
 | --- | --- |

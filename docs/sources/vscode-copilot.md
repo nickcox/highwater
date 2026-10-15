@@ -87,11 +87,11 @@ While a request's trace records exist, they are matched to its rounds by `respon
 
 ## Coverage
 
-Always partial: Copilot's own model calls (titles, progress messages, tool grouping) are not recorded. Without trace records, the system prompt and tool definitions are not recorded either. `unrenderedAttachments` marks a request recorded without the message as sent.
+Every analysis is partial, because Copilot's own model calls (titles, progress messages, tool grouping) are not recorded. Without trace records, the system prompt and tool definitions are not recorded either. `unrenderedAttachments` marks a request recorded without the message as sent.
 
 ## Cost and cache figures
 
-Copilot records what it charged, in credits: per traced call (`copilot_usage_nano_aiu`) and per request in the session file (`copilotCredits`, the sum of its calls'). A credit's dollar value is not recorded; at $0.01 a credit, the value assumed here, Claude calls' credits equal their price at the `github-copilot` rates exactly, and GPT calls' were 1–25% above. A traced call's credits, or a single-call request's, are its recorded cost; since `github-copilot` is billed per token from June 2026, that is the call's cost. Other calls are priced from the price table. The session's credits are Copilot's own total (`session.harnessSessionCost`), shown in Session details when it differs from the recorded call costs, which happens when some calls' trace records are gone.
+Copilot records what it charged, in credits: per traced call (`copilot_usage_nano_aiu`) and per request in the session file (`copilotCredits`, the sum of its calls'). A credit's dollar value is not recorded. Highwater assumes $0.01 a credit; at that value, Claude calls' credits equal their price at the `github-copilot` rates exactly, and GPT calls' credits were 1–25% above it. Because `github-copilot` bills per token from June 2026, a traced call's credits, or a single-call request's, are its recorded cost. Other calls are priced from the price table. The session's credits are Copilot's own total (`session.harnessSessionCost`), shown in Session details when it differs from the recorded call costs, which happens when some calls' trace records are gone.
 
 Cache figures are usage-only, as for Claude Code. Claude calls use the `github-copilot-messages-cache-v1` policy and GPT calls `github-copilot-responses-cache-v1`; calls with no recorded API are unsupported.
 

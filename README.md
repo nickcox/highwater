@@ -23,7 +23,7 @@ nix profile install github:nickcox/highwater
 nix run github:nickcox/highwater
 ```
 
-With Cargo, which needs Rust 1.88 or newer. The built interface is included in the repository, so Node is not needed:
+With Cargo (Rust 1.88 or newer). The built interface is included in the repository, so Node is not needed:
 
 ```bash
 cargo install --git https://github.com/nickcox/highwater --locked
@@ -46,7 +46,7 @@ Then open the URL it prints. Without options, Highwater finds sessions in each t
 
 An option replaces that source's default. `--session-root` on its own reads only Pi sessions; add the other options to include them too. Other options: `--port` (default 43123) and `--tokenization auto|strict|heuristic|off`.
 
-The server binds only to `127.0.0.1` and rejects requests that address it by any other name, so other web pages cannot read session data through it.
+Highwater rejects requests addressed to any name other than `127.0.0.1` or `localhost`, so other web pages cannot read session data through it.
 
 ## How accurate it is
 
