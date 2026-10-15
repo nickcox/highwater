@@ -1,7 +1,7 @@
 <script lang="ts">
   import { estimateMethodLabel } from '../token-estimate';
   import InfoPopover from './InfoPopover.svelte';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import type { IndexedAnalysis } from '../types';
   import { itemColor, itemTextColor } from '../context-river/colors';
   import { formatMetric, formatPercent } from '../context-river/format';
@@ -15,79 +15,111 @@
     type CompositionScope,
   } from '../composition';
 
-  export let indexed: IndexedAnalysis;
-  export let pinnedCallIndex: number | null = null;
-  export let selectedItemId: string | null = null;
-  export let isVisible = false;
-  export let scope: CompositionScope = 'cumulative';
-  export let endpointNotice = '';
-  export let onScopeChange: ((scope: CompositionScope) => void) | null = null;
-  export let onPinCall: (index: number) => void;
-  export let onUnpinCall: () => void = () => {};
-  export let onSelectItem: (id: string) => void;
-  export let onRevealInRiver: (id: string) => void = () => {};
-  export let onViewDetails: () => void = () => {};
-  export let onFindInLifespans: (id: string) => void = () => {};
+  let {
+    indexed,
+    pinnedCallIndex = null,
+    selectedItemId = null,
+    isVisible = false,
+    scope = 'cumulative',
+    endpointNotice = '',
+    onScopeChange = null,
+    onPinCall,
+    onUnpinCall = () => {},
+    onSelectItem,
+    onRevealInRiver = () => {},
+    onViewDetails = () => {},
+    onFindInLifespans = () => {},
+  }: {
+    indexed: IndexedAnalysis;
+    pinnedCallIndex?: number | null;
+    selectedItemId?: string | null;
+    isVisible?: boolean;
+    scope?: CompositionScope;
+    endpointNotice?: string;
+    onScopeChange?: ((scope: CompositionScope) => void) | null;
+    onPinCall: (index: number) => void;
+    onUnpinCall?: () => void;
+    onSelectItem: (id: string) => void;
+    onRevealInRiver?: (id: string) => void;
+    onViewDetails?: () => void;
+    onFindInLifespans?: (id: string) => void;
+  } = $props();
 
-  let host: HTMLElement;
-  let listElement: HTMLDivElement | null = null;
-  let helpDisclosure: HTMLDetailsElement | null = null;
-  let width = 800;
-  let height = 360;
-  let preferredPresentation: 'treemap' | 'list' = 'treemap';
-  let activeItemId: string | null = null;
-  let lastVisibility = false;
+  let host: HTMLElement | undefined = $state();
+  let listElement: HTMLDivElement | null = $state(null);
+  let helpDisclosure: HTMLDetailsElement | null = $state(null);
+  let width = $state(800);
+  const height = 360;
+  let preferredPresentation: 'treemap' | 'list' = $state('treemap');
+  let activeItemId: string | null = $state(null);
   const projectionCache = createCompositionProjectionCache();
 
-  $: calls = indexed.analysis.modelCalls;
-  $: callPosition =
-    pinnedCallIndex === null ? -1 : calls.findIndex((call) => call.index === pinnedCallIndex);
-  $: call = callPosition < 0 ? null : calls[callPosition];
-  $: previousCall = callPosition > 0 ? calls[callPosition - 1] : null;
-  $: nextCall =
-    callPosition >= 0 && callPosition < calls.length - 1 ? calls[callPosition + 1] : null;
-  $: projection = isVisible ? projectionCache.get(indexed, scope, pinnedCallIndex) : null;
-  $: rankedItems = projection ? rankCompositionItems(projection.items) : [];
-  $: hasPositiveEstimate =
-    projection !== null && projection.hasPositiveWeights && !projection.totalOverflow;
-  $: treemap =
+  let calls = $derived(indexed.analysis.modelCalls);
+  let callPosition = $derived(
+    pinnedCallIndex === null ? -1 : calls.findIndex((call) => call.index === pinnedCallIndex),
+  );
+  let call = $derived(callPosition < 0 ? null : calls[callPosition]);
+  let previousCall = $derived(callPosition > 0 ? calls[callPosition - 1] : null);
+  let nextCall = $derived(
+    callPosition >= 0 && callPosition < calls.length - 1 ? calls[callPosition + 1] : null,
+  );
+  let projection = $derived(
+    isVisible ? projectionCache.get(indexed, scope, pinnedCallIndex) : null,
+  );
+  let rankedItems = $derived(projection ? rankCompositionItems(projection.items) : []);
+  let hasPositiveEstimate = $derived(
+    projection !== null && projection.hasPositiveWeights && !projection.totalOverflow,
+  );
+  let treemap = $derived(
     projection && hasPositiveEstimate
       ? layoutCompositionTreemap(projection, width, height)
-      : { width, height, rectangles: [], groups: [] };
-  $: visibleItemIds = new Set(treemap.rectangles.map(({ item }) => item.id));
-  $: positiveAreaAvailable = hasPositiveEstimate && treemap.rectangles.length > 0;
-  $: effectivePresentation = positiveAreaAvailable ? preferredPresentation : 'list';
-  $: navigationItems =
+      : { width, height, rectangles: [], groups: [] },
+  );
+  let visibleItemIds = $derived(new Set(treemap.rectangles.map(({ item }) => item.id)));
+  let positiveAreaAvailable = $derived(hasPositiveEstimate && treemap.rectangles.length > 0);
+  let effectivePresentation = $derived(positiveAreaAvailable ? preferredPresentation : 'list');
+  let navigationItems = $derived(
     effectivePresentation === 'treemap'
       ? rankedItems.filter((item) => visibleItemIds.has(item.id))
-      : rankedItems;
-  $: if (navigationItems.length > 0 && !navigationItems.some((item) => item.id === activeItemId)) {
-    activeItemId = navigationItems[0].id;
-  }
-  $: activeItemIndex = navigationItems.findIndex((item) => item.id === activeItemId);
-  $: activeRankedIndex = rankedItems.findIndex((item) => item.id === activeItemId);
-  $: activeOptionId = activeRankedIndex < 0 ? undefined : optionId(activeRankedIndex);
-  $: selectedItem = selectedItemId ? (indexed.itemById.get(selectedItemId) ?? null) : null;
-  $: scopedSelectedItem = projection?.items.find((item) => item.id === selectedItemId) ?? null;
-  $: selectedItemPresent = selectedItem !== null && selectedItem.presence.length > 0;
-  $: profileDescriptions = (projection?.profileIds ?? []).map((profileId) => {
-    const profile = indexed.analysis.tokenAnalysis.profiles.find(
-      (candidate) => candidate.id === profileId,
-    );
-    return {
-      id: profileId,
-      description: profile
-        ? `${profile.provider} / ${profile.model} · ${methodLabel(profile.method)}`
-        : 'Tokenization profile unavailable',
-    };
+      : rankedItems,
+  );
+  // Keep the active option on an item that is listed.
+  $effect.pre(() => {
+    if (navigationItems.length > 0 && !navigationItems.some((item) => item.id === activeItemId)) {
+      activeItemId = navigationItems[0].id;
+    }
   });
-  $: methodDescription =
+  let activeItemIndex = $derived(navigationItems.findIndex((item) => item.id === activeItemId));
+  let activeRankedIndex = $derived(rankedItems.findIndex((item) => item.id === activeItemId));
+  let activeOptionId = $derived(activeRankedIndex < 0 ? undefined : optionId(activeRankedIndex));
+  let selectedItem = $derived(
+    selectedItemId ? (indexed.itemById.get(selectedItemId) ?? null) : null,
+  );
+  let scopedSelectedItem = $derived(
+    projection?.items.find((item) => item.id === selectedItemId) ?? null,
+  );
+  let selectedItemPresent = $derived(selectedItem !== null && selectedItem.presence.length > 0);
+  let profileDescriptions = $derived(
+    (projection?.profileIds ?? []).map((profileId) => {
+      const profile = indexed.analysis.tokenAnalysis.profiles.find(
+        (candidate) => candidate.id === profileId,
+      );
+      return {
+        id: profileId,
+        description: profile
+          ? `${profile.provider} / ${profile.model} · ${methodLabel(profile.method)}`
+          : 'Tokenization profile unavailable',
+      };
+    }),
+  );
+  let methodDescription = $derived(
     profileDescriptions.length === 0
       ? 'Token estimate method unavailable'
       : profileDescriptions.length === 1
         ? profileDescriptions[0].description
-        : `Mixed profiles across ${formatMetric(profileDescriptions.length)} call profiles`;
-  $: scopeHeading =
+        : `Mixed profiles across ${formatMetric(profileDescriptions.length)} call profiles`,
+  );
+  let scopeHeading = $derived(
     scope === 'atCall'
       ? call
         ? `Context composition · Call ${call.index}`
@@ -96,26 +128,34 @@
         ? 'Cumulative context usage · Whole session'
         : pinnedCallIndex === null
           ? 'Cumulative context usage · Whole session'
-          : `Cumulative context usage · Calls ${projection.scopeStartCallIndex}–${projection.scopeEndCallIndex}`;
-  $: projectionDescription =
+          : `Cumulative context usage · Calls ${projection.scopeStartCallIndex}–${projection.scopeEndCallIndex}`,
+  );
+  let projectionDescription = $derived(
     scope === 'atCall'
       ? `${formatMetric(projection?.items.length ?? 0)} present items`
-      : `${formatMetric(projection?.scopeCallCount ?? 0)} model calls included`;
-  $: unitLabel = scope === 'atCall' ? 'Estimated tokens' : 'Estimated token-turns';
-  $: projectionItemsLabel = scope === 'atCall' ? 'estimated item tokens' : 'estimated token-turns';
-  $: coverageIsPartial =
+      : `${formatMetric(projection?.scopeCallCount ?? 0)} model calls included`,
+  );
+  let unitLabel = $derived(scope === 'atCall' ? 'Estimated tokens' : 'Estimated token-turns');
+  let projectionItemsLabel = $derived(
+    scope === 'atCall' ? 'estimated item tokens' : 'estimated token-turns',
+  );
+  let coverageIsPartial = $derived(
     (projection?.missingItemCallCount ?? 0) > 0 ||
-    (projection?.partialItemCallCount ?? 0) > 0 ||
-    (projection?.unavailableCoverageItemCallCount ?? 0) > 0;
-  $: numericAppearanceCount = projection?.numericItemCallCount ?? 0;
-  $: totalAppearanceCount = projection?.totalItemCallCount ?? 0;
-  $: zeroItemCount = projection?.items.filter((item) => item.tokens === 0).length ?? 0;
-  $: unavailableItemCount =
-    projection?.items.filter((item) => item.tokens === null && !item.overflowed).length ?? 0;
-  $: overflowItemCount = projection?.items.filter((item) => item.overflowed).length ?? 0;
-  $: positiveItemCount = projection?.items.filter((item) => (item.tokens ?? 0) > 0).length ?? 0;
-  $: renderedPositiveItemCount = treemap.rectangles.length;
-  $: tinyPositiveItemCount = Math.max(0, positiveItemCount - renderedPositiveItemCount);
+      (projection?.partialItemCallCount ?? 0) > 0 ||
+      (projection?.unavailableCoverageItemCallCount ?? 0) > 0,
+  );
+  let numericAppearanceCount = $derived(projection?.numericItemCallCount ?? 0);
+  let totalAppearanceCount = $derived(projection?.totalItemCallCount ?? 0);
+  let zeroItemCount = $derived(projection?.items.filter((item) => item.tokens === 0).length ?? 0);
+  let unavailableItemCount = $derived(
+    projection?.items.filter((item) => item.tokens === null && !item.overflowed).length ?? 0,
+  );
+  let overflowItemCount = $derived(projection?.items.filter((item) => item.overflowed).length ?? 0);
+  let positiveItemCount = $derived(
+    projection?.items.filter((item) => (item.tokens ?? 0) > 0).length ?? 0,
+  );
+  let renderedPositiveItemCount = $derived(treemap.rectangles.length);
+  let tinyPositiveItemCount = $derived(Math.max(0, positiveItemCount - renderedPositiveItemCount));
 
   function optionId(index: number): string {
     return `composition-option-${scope}-${pinnedCallIndex ?? 'whole'}-${index}`;
@@ -279,10 +319,10 @@
     if (nextWidth > 0 && Math.abs(nextWidth - width) > 0.5) width = nextWidth;
   }
 
-  $: if (lastVisibility !== isVisible) {
-    lastVisibility = isVisible;
-    if (isVisible) measure();
-  }
+  // The width cannot be measured while the tab is hidden, so measure when it is shown.
+  $effect(() => {
+    if (isVisible) untrack(measure);
+  });
 
   onMount(() => {
     measure();
@@ -293,7 +333,7 @@
             const nextWidth = entries[0]?.contentRect.width;
             if (isVisible && nextWidth && Math.abs(nextWidth - width) > 0.5) width = nextWidth;
           });
-    observer?.observe(host);
+    if (host) observer?.observe(host);
     window.addEventListener('resize', measure);
     return () => {
       observer?.disconnect();
