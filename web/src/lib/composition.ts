@@ -7,7 +7,7 @@ import type {
   TokenizationMethod,
 } from './types';
 import { displayItemLabel } from './item-label';
-import { kindGroupLabel } from './kind-labels';
+import { kindGroupLabel, kindLabel } from './kind-labels';
 import { describeTokenDiagnostic } from './diagnostics';
 
 export const COMPOSITION_KIND_ORDER: readonly ContextItemKind[] = [
@@ -209,7 +209,7 @@ function makeItem({
   return {
     id: item.id,
     kind: item.kind,
-    kindLabel: kindGroupLabel(item.kind),
+    kindLabel: kindLabel(item.kind),
     label: displayItemLabel(item),
     sourceOrder,
     tokens,

@@ -23,14 +23,14 @@ const scenarios: SessionScenario[] = [
 // commit message.
 const scenarioDigests: Record<SessionScenario, string> = {
   empty: '4a62f4ecec6cf35274692dad6a11bd3ded90aa17c1c0acda63795260f52e451f',
-  singleCall: '8396d765157552ad09f348f5903654d667236239ea1d8beb38cc0fcf38455ab1',
-  longSession: '4472061e2c1818a477e3683b5df899836a62b8b62a9129cb8201f668189dbc3c',
-  partialGeometry: 'b6367fe1b8dd8b56cac74c891208ab4a7a7b8a90c90dff6711d1eb823ff691db',
-  unavailableGeometry: '2f59fa719389fd05b312f31772eb86eaf74f87568b0ce7c7f7b6d048d1412dac',
-  terminalCompaction: 'd7488a3aee7b5ff139abfff2fa1ac1ec9b23b052dc760811c90c46bec146a692',
+  singleCall: '344b1c967153320275e9d59a24fb06c47adf24c84c916e3c4e2614b6db3a11fb',
+  longSession: '89aa807c3243dfbbfb0cb410881cf9578cfd3441de5fdd45e6eebc8d16f2b31b',
+  partialGeometry: 'f2e59b9cd75ce4c90ad3cb38189d2cc948338cb7e8ae09b7316d5bca4ccf8580',
+  unavailableGeometry: 'ab8bce720bb986231644f963193f8eb3ec080c1f2d18c007c752e37f587145e7',
+  terminalCompaction: '818be6fc750677356c461564a16153cb73214b21a59158742f5df4e9a183ca61',
   terminalSummaryOnly: '10ff0a3d9da1125693b4dbf77110c36b8cc6b9202beab5b66ae514aae393a384',
-  labelStress: 'fd165f697289d1c588eb8c07124450307a7bcd32757f7dca3556bd8b46869460',
-  multipleToolsMissingMetadata: '0d1e13af4092305e3c9735b92380c82d4496226395a73445da4961e55cad2c2b',
+  labelStress: '61edcc4a4687f45c674940f37612771a9fc5a95466bcf8544e5ed8f421f52e66',
+  multipleToolsMissingMetadata: '4557c27463e2815538e5c6bf0830b9cbc66296180f95b1ba05314330a5e4e552',
 };
 
 const fixtures = [
@@ -42,12 +42,12 @@ const fixtures = [
   {
     name: 'composition220',
     input: compositionScenario(220),
-    expected: 'e1f3a1abbe70ba8479879cd6cfcbd2b1f9146252caea9789897c62ed849b322d',
+    expected: '720c426334debb0e7d4282435ca0d1606aea0050f6d2684d2d8c23d31b01a671',
   },
   {
     name: 'composition220Zero',
     input: compositionScenario(220, true),
-    expected: 'e1f56e85a85405c078cd617207c5977be00f536f4ad7c77dd9c5dd6ec9e3cbb1',
+    expected: '9b13b954d714526738b32bcc2393a77e54152e232f347a82499e5ceba37283fb',
   },
 ];
 
