@@ -6,6 +6,8 @@ Rust **1.88 or newer**, Node **24 LTS or newer**, npm, Bash, Python 3 and curl.
 
 `Cargo.toml` declares the Rust minimum, and it is tested with 1.88.0: the locked dependencies include `ruzstd`, which needs 1.87, and the pinned `tiktoken` 4.1.2 uses let-chains, which need 1.88. A dependency change must keep this minimum, or raise it and test the new one; the Rust edition alone does not guarantee it.
 
+With Nix, `nix develop` opens a shell with Rust, Node 24, Python 3 and curl, and `nix build` builds the package from `flake.nix` and runs the Rust tests.
+
 ## Building
 
 Build the frontend before the Rust binary, because `rust-embed` packs the current `web/dist/` files into the executable. `web/dist/` is committed so that a fresh clone can build the binary without Node; rebuild and commit it whenever the frontend changes.
@@ -22,7 +24,7 @@ rustup toolchain install 1.88.0 --profile minimal --component rustfmt --componen
 RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
 
-`.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full` on Node 24, on GitHub Actions. Every check also runs locally.
+`.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full` on Node 24, on GitHub Actions. It also builds the Nix package on Linux and macOS. Every check also runs locally.
 
 **Contract check.** `check-contract.sh` runs a test-only Rust exporter that uses the production parser, analyser and serialiser, then passes its 127 fresh outputs to the frontend's production `indexAnalysis` validator. The cases cover every tokenization policy, profile IDs, exposure and economics coverage, summaries at the end of a session, per-call timing and its sources, the largest safe numbers, and totals that exceed them. Controlled estimates go through the same production stages without needing huge test inputs, and invalid inputs must be rejected in Rust before they are exported. The temporary export folder is always removed, and the contract tests fail, rather than skip, when the exports are missing. They have their own Vitest config, so the normal frontend tests never depend on generated files.
 

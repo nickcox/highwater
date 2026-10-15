@@ -13,12 +13,18 @@ Everything runs locally. Highwater serves its interface on `127.0.0.1`, reads se
 
 ## Install
 
-Highwater needs Rust 1.88 or newer. The built interface is included in the repository, so Node is not needed to install it.
+With Nix (flakes enabled):
 
 ```bash
-git clone https://github.com/nickcox/highwater.git
-cd highwater
-cargo install --path . --locked
+nix profile install github:nickcox/highwater
+# or run it once without installing:
+nix run github:nickcox/highwater
+```
+
+With Cargo, which needs Rust 1.88 or newer. The built interface is included in the repository, so Node is not needed:
+
+```bash
+cargo install --git https://github.com/nickcox/highwater --locked
 ```
 
 ## Run
