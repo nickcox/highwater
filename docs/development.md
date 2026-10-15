@@ -17,6 +17,7 @@ Build the frontend before the Rust binary, because `rust-embed` packs the curren
 ```bash
 scripts/check.sh          # locked installs, Rust and frontend checks, live contract, embedded release build
 scripts/check.sh --full   # also Chromium, mocked and integrated (debug and release) browser checks, large benchmark
+scripts/check.sh --full --skip-rust-checks   # as CI runs it: leaves out rustfmt, clippy and the Rust tests
 
 # Optional focused checks:
 scripts/check-contract.sh
@@ -24,7 +25,7 @@ rustup toolchain install 1.88.0 --profile minimal --component rustfmt --componen
 RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
 
-`.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full` on Node 24, on GitHub Actions. It also runs the Rust tests on macOS and Windows, and builds the Nix package on Linux and macOS. Every check also runs locally.
+`.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full --skip-rust-checks` on Node 24, on GitHub Actions. It also runs the Rust tests on macOS and Windows, and builds the Nix package on Linux and macOS. Every check also runs locally.
 
 **Contract check.** `check-contract.sh` runs a test-only Rust exporter that uses the production parser, analyser and serialiser, then passes its 127 fresh outputs to the frontend's production `indexAnalysis` validator. The cases cover every tokenization policy, profile IDs, exposure and economics coverage, summaries at the end of a session, per-call timing and its sources, the largest safe numbers, and totals that exceed them. Controlled estimates go through the same production stages without needing huge test inputs, and invalid inputs must be rejected in Rust before they are exported. The temporary export folder is always removed, and the contract tests fail, rather than skip, when the exports are missing. They have their own Vitest config, so the normal frontend tests never depend on generated files.
 

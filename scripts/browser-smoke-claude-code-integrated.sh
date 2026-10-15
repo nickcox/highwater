@@ -14,7 +14,11 @@ TEMP="$(cd "$TEMP" && pwd -P)"
 mkdir -p "$TEMP/pi"
 python3 "$ROOT/scripts/generate-benchmark-session.py" --case small --output "$TEMP/pi/synthetic.jsonl"
 cp -R "$ROOT/fixtures/claude-code/projects" "$TEMP/projects"
-npm --prefix "$ROOT/web" run build
+# check.sh builds the frontend once and sets HIGHWATER_FRONTEND_BUILT, so the checks it runs do not
+# rebuild it; a rebuild rewrites web/dist, which makes Cargo rebuild the binary that embeds it.
+if [[ "${HIGHWATER_FRONTEND_BUILT:-}" != 1 ]]; then
+  npm --prefix "$ROOT/web" run build
+fi
 PROFILE="${HIGHWATER_BROWSER_BUILD_PROFILE:-debug}"
 case "$PROFILE" in
   debug) cargo build --manifest-path "$ROOT/Cargo.toml" --quiet ;;
