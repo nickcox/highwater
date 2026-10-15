@@ -173,8 +173,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: #9eabc0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     min-width: 0;
   }
   select,
@@ -185,7 +185,7 @@
     height: 36px;
     padding: 7px 32px 7px 9px;
     border: 1px solid var(--control-border);
-    border-radius: 7px;
+    border-radius: var(--control-radius);
     background-color: var(--surface);
     color: var(--text);
     font: inherit;
@@ -202,11 +202,6 @@
   input::placeholder {
     color: var(--secondary);
   }
-  select:focus-visible,
-  input:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
-  }
   ul {
     position: absolute;
     top: 100%;
@@ -219,15 +214,15 @@
     overflow-y: auto;
     list-style: none;
     border: 1px solid var(--control-border);
-    border-radius: 7px;
+    border-radius: var(--control-radius);
     background: var(--surface);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
   }
   li {
     padding: 6px 8px;
-    border-radius: 5px;
+    border-radius: var(--control-radius);
     color: var(--text);
-    font-size: 13px;
+    font-size: var(--text-md);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -244,7 +239,7 @@
   p {
     grid-column: 1 / -1;
     margin: 0;
-    color: #9eabc0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
 </style>

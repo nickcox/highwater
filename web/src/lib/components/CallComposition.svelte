@@ -728,8 +728,8 @@
   }
   .scope-controls button[aria-pressed='true'],
   .presentation-controls button[aria-pressed='true'] {
-    border-color: #829fd2;
-    background: #26385d;
+    border-color: var(--accent);
+    background: var(--action);
     color: #fff;
   }
   .composition-header {
@@ -738,22 +738,22 @@
   }
   .endpoint-status {
     margin: 6px 0;
-    color: #ffd28d;
-    font-size: 12px;
+    color: var(--warning);
+    font-size: var(--text-sm);
   }
   .scope-title {
     min-width: 0;
   }
   h3 {
     margin: 0;
-    color: #f4f6fb;
-    font-size: 15px;
+    color: var(--text-strong);
+    font-size: var(--text-lg);
   }
   .composition-header p,
   .empty-state p {
     margin: 3px 0 0;
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     overflow-wrap: anywhere;
   }
   .endpoint-actions {
@@ -763,28 +763,28 @@
     display: flex;
     flex-wrap: wrap;
     gap: 5px 14px;
-    color: #d5deed;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
   }
   .composition-totals strong {
-    color: #f2f5fb;
+    color: var(--text-strong);
   }
   .coverage-headline,
   .coverage-status,
   .omission-note {
     margin: 6px 0;
-    color: #ffcf87;
-    font-size: 12px;
+    color: var(--warning);
+    font-size: var(--text-sm);
   }
   .coverage-headline {
-    color: #e5ecfa;
+    color: var(--text-strong);
     font-weight: 650;
   }
   .coverage-details {
     margin: 6px 0;
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
   .coverage-details p {
     max-width: 75ch;
@@ -793,23 +793,18 @@
   .omission-note button {
     margin-left: 7px;
     padding: 3px 7px;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .composition-help,
   .reconciliation {
     margin: 8px 0;
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
   summary {
     width: fit-content;
-    color: #c8d5ed;
+    color: var(--text);
     cursor: pointer;
-  }
-  summary:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 3px;
-    border-radius: 2px;
   }
   .help-content {
     max-width: 75ch;
@@ -833,21 +828,21 @@
     margin: 7px 0 0;
   }
   dt {
-    color: #8996ad;
+    color: var(--muted);
     font-size: 10px;
   }
   dd {
     margin: 2px 0 0;
-    color: #e1e7f2;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
   }
   .treemap-frame {
     width: 100%;
     overflow: auto;
-    border: 1px solid #34415f;
-    border-radius: 8px;
+    border: 1px solid var(--separator);
+    border-radius: var(--radius);
     background: var(--plot);
   }
   .composition-treemap {
@@ -855,20 +850,15 @@
     max-width: 100%;
     background: var(--plot);
   }
-  .composition-treemap:focus-visible,
-  .composition-list:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
-  }
   .kind-group rect {
     fill: none;
-    stroke: #d1daeb;
+    stroke: var(--text);
     stroke-opacity: 0.52;
     stroke-width: 1;
     pointer-events: none;
   }
   .kind-group text {
-    fill: #f4f6fb;
+    fill: var(--text-strong);
     font-size: 9px;
     font-weight: 600;
     pointer-events: none;
@@ -881,7 +871,7 @@
     stroke-width: 1;
   }
   .composition-treemap:focus g[role='option'].active rect {
-    stroke: #9fc0ff;
+    stroke: var(--accent);
     stroke-width: 2;
   }
   .composition-treemap g[role='option'].selected rect {
@@ -889,7 +879,7 @@
     stroke-width: 2;
   }
   .composition-treemap g[role='option'] rect.partial {
-    stroke: #ffcb74;
+    stroke: var(--warning);
     stroke-dasharray: 3 2;
   }
   .composition-treemap g[role='option'] text {
@@ -898,7 +888,7 @@
     pointer-events: none;
   }
   .composition-treemap g[role='option'] text.tile-value {
-    fill: #e0e8f5;
+    fill: var(--text);
     font-size: 9px;
   }
   .composition-list {
@@ -907,8 +897,8 @@
     max-height: 390px;
     overflow: auto;
     padding: 3px;
-    border: 1px solid #34415f;
-    border-radius: 8px;
+    border: 1px solid var(--separator);
+    border-radius: var(--radius);
     background: var(--plot);
     overscroll-behavior: contain;
   }
@@ -920,24 +910,24 @@
     min-width: 0;
     padding: 7px;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: var(--control-radius);
     cursor: pointer;
   }
   .composition-list:focus .composition-row.active {
-    border-color: #9fc0ff;
-    background: #1a2741;
+    border-color: var(--accent);
+    background: var(--surface-raised);
   }
   .composition-row.selected {
     border-color: #fff;
     background: var(--action);
   }
   .composition-row.unavailable {
-    color: #aebbd0;
+    color: var(--secondary);
   }
   .kind-mark {
     width: 9px;
     height: 9px;
-    border-radius: 2px;
+    border-radius: var(--radius-small);
   }
   .row-label,
   .row-measures {
@@ -947,12 +937,12 @@
   }
   .row-label b {
     overflow-wrap: anywhere;
-    color: #e7edf8;
-    font-size: 12px;
+    color: var(--text-strong);
+    font-size: var(--text-sm);
   }
   .row-label small,
   .row-measures small {
-    color: #9aa8bf;
+    color: var(--secondary);
     font-size: 10px;
     overflow-wrap: anywhere;
   }
@@ -962,7 +952,7 @@
   }
   .row-measures b {
     color: #fff;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .selected-composition-item {
     display: flex;
@@ -973,9 +963,9 @@
     min-height: 46px;
     margin-top: 9px;
     padding: 7px 9px;
-    border: 1px solid #34415f;
-    border-radius: 7px;
-    background: #0b1223;
+    border: 1px solid var(--separator);
+    border-radius: var(--control-radius);
+    background: var(--plot);
   }
   .selected-summary-copy {
     display: grid;
@@ -988,13 +978,13 @@
     overflow-wrap: anywhere;
   }
   .selected-summary-copy strong {
-    color: #f1f4fa;
-    font-size: 12px;
+    color: var(--text-strong);
+    font-size: var(--text-sm);
   }
   .selected-summary-copy span,
   .selected-summary-copy small {
-    color: #aebbd0;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: var(--text-xs);
   }
   .selected-item-actions {
     display: flex;
@@ -1003,13 +993,13 @@
   }
   .selected-item-actions button {
     padding: 5px 7px;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .empty-state {
     padding: 12px;
-    border: 1px solid #293651;
-    border-radius: 8px;
-    background: #0b1223;
+    border: 1px solid var(--separator);
+    border-radius: var(--radius);
+    background: var(--plot);
   }
   @media (max-width: 650px) {
     .reconciliation dl {

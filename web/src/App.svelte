@@ -1015,41 +1015,6 @@
 </main>
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-  :global(html) {
-    color-scheme: dark;
-  }
-  :global(body) {
-    margin: 0;
-    background: var(--page);
-    color: var(--text);
-    font:
-      14px/1.45 Inter,
-      ui-sans-serif,
-      system-ui,
-      sans-serif;
-  }
-  :global(button),
-  :global(select) {
-    background: var(--surface);
-    border: 1px solid var(--control-border);
-    color: var(--text);
-    border-radius: 7px;
-    padding: 7px 9px;
-  }
-  :global(button) {
-    cursor: pointer;
-  }
-  :global(button:hover) {
-    background: #1a2541;
-  }
-  :global(button:focus-visible),
-  :global(select:focus-visible) {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
-  }
   main {
     max-width: 1500px;
     min-width: 0;
@@ -1073,7 +1038,7 @@
     letter-spacing: -0.03em;
   }
   .titlebar p {
-    color: #96a2b8;
+    color: var(--secondary);
     margin: 4px 0 0;
   }
   .status-row {
@@ -1092,13 +1057,13 @@
     flex: none;
     min-height: 0;
     padding: 2px 9px;
-    font-size: 12px;
+    font-size: var(--text-sm);
     line-height: 1.4;
   }
   .live-status {
     max-width: 640px;
     overflow: hidden;
-    font-size: 12px;
+    font-size: var(--text-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1128,7 +1093,7 @@
     gap: 8px 12px;
   }
   h2 {
-    font-size: 15px;
+    font-size: var(--text-lg);
     margin: 0;
   }
   .view-link-fallback {
@@ -1148,19 +1113,15 @@
   .mobile-view-details {
     display: none;
     padding: 7px 9px;
-    border: 1px solid #34415f;
-    border-radius: 7px;
-    background: #151e35;
-    color: #e2e8f3;
+    border: 1px solid var(--separator);
+    border-radius: var(--control-radius);
+    background: var(--surface);
+    color: var(--text);
     text-decoration: none;
     white-space: nowrap;
   }
   .mobile-view-details:hover {
-    background: #1a2541;
-  }
-  .mobile-view-details:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
+    background: var(--surface-raised);
   }
   #inspector {
     scroll-margin-top: 16px;
@@ -1200,7 +1161,7 @@
     display: flex;
     gap: 6px;
     margin: 0 0 10px;
-    border-bottom: 1px solid #293651;
+    border-bottom: 1px solid var(--separator);
   }
   .visualization-tabs button {
     background: transparent;
@@ -1221,19 +1182,19 @@
   }
   .no-model-calls {
     padding: 12px;
-    border: 1px solid #293651;
-    border-radius: 8px;
-    background: #0b1223;
+    border: 1px solid var(--separator);
+    border-radius: var(--radius);
+    background: var(--plot);
   }
   .no-model-calls h3 {
     margin: 0;
-    color: #f4f6fb;
+    color: var(--text-strong);
     font-size: 14px;
   }
   .no-model-calls p {
     margin: 4px 0 0;
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
   .inspector-column {
     display: grid;
@@ -1248,7 +1209,7 @@
     min-width: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-color: #506385 #10172a;
+    scrollbar-color: var(--control-border) var(--plot);
     scrollbar-width: thin;
   }
   .lifespan-panel {
@@ -1265,7 +1226,7 @@
     min-height: 360px;
     margin: 0;
     padding: 24px;
-    color: #bdc7d8;
+    color: var(--text);
   }
   .selection-location-note {
     display: flex;
@@ -1273,8 +1234,8 @@
     align-items: center;
     gap: 8px;
     margin-top: 10px;
-    color: #bdc7d8;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   .item-hover-position {
     position: fixed;
@@ -1284,27 +1245,27 @@
   .state {
     margin-top: 24px;
     padding: 24px;
-    border-radius: 12px;
-    background: #11182c;
-    border: 1px solid #26324f;
+    border-radius: var(--radius);
+    background: var(--plot);
+    border: 1px solid var(--separator);
   }
   .state h2 {
     font-size: 18px;
   }
   .state.error {
-    border-color: #7d493f;
-    color: #ffc3b3;
+    border-color: var(--error-border);
+    color: var(--error);
   }
   .refresh-warning {
     margin-top: 14px;
     padding: 10px 14px;
-    border: 1px solid #7d6840;
-    border-radius: 8px;
-    background: #2a2415;
-    color: #f2d28b;
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius);
+    background: var(--warning-surface);
+    color: var(--warning);
   }
   code {
-    color: #a8bce0;
+    color: var(--secondary);
   }
   @media (max-width: 1050px) {
     .mobile-view-details {

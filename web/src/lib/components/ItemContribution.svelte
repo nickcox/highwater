@@ -20,7 +20,7 @@
     height: 3px;
     margin-top: 6px;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: var(--radius-small);
     background: var(--separator);
   }
   .fill {
@@ -33,7 +33,7 @@
     display: block;
     margin-top: 5px;
     color: var(--secondary);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: normal;
   }
   .detail {

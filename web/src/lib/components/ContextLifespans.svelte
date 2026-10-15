@@ -596,8 +596,8 @@
     width: 9px;
     height: 9px;
     margin: 4px 0 0 2px;
-    border-right: 2px solid #c9d7ef;
-    border-bottom: 2px solid #c9d7ef;
+    border-right: 2px solid var(--text);
+    border-bottom: 2px solid var(--text);
     transform: rotate(-45deg);
     transition: transform 120ms ease;
   }
@@ -609,20 +609,16 @@
     min-width: 0;
     gap: 2px;
   }
-  .lifespan-header:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
-  }
   .lifespan-content {
     min-width: 0;
   }
   h2 {
-    font-size: 15px;
+    font-size: var(--text-lg);
     margin: 0;
     color: #fff;
   }
   .result-count {
-    color: #8f9cb2;
+    color: var(--secondary);
     white-space: nowrap;
   }
   .lifespan-content {
@@ -653,7 +649,7 @@
     display: grid;
     gap: 3px;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .search-field {
     grid-template-columns: 1fr;
@@ -664,11 +660,11 @@
     width: 100%;
     background-color: var(--plot);
     border: 1px solid var(--control-border);
-    border-radius: 6px;
-    color: #eef2f8;
+    border-radius: var(--control-radius);
+    color: var(--text-strong);
     padding: 7px 8px;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .browse-controls select {
     padding-right: 32px;
@@ -687,11 +683,11 @@
     gap: var(--space-3);
     margin-top: var(--space-3);
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .empty-state {
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     margin: 7px 0;
   }
   .lifespan-scope-status {
@@ -701,15 +697,15 @@
     gap: 7px 12px;
     margin: 6px 0;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .lifespan-scope-status strong {
-    color: #d9e1ef;
+    color: var(--text);
   }
   .lifespan-scope-status button,
   .find-status button {
     padding: 4px 7px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .find-status button {
     margin-left: 7px;
@@ -720,7 +716,7 @@
     gap: 6px 16px;
     margin: 7px 0;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .lifespan-legend span {
     display: inline-flex;
@@ -738,11 +734,11 @@
   }
   .legend-pin {
     width: 0 !important;
-    border-left: 2px solid #f5f7ff;
+    border-left: 2px solid var(--text-strong);
   }
   .legend-compaction {
     height: 0 !important;
-    border-top: 1px dashed #ffb14e;
+    border-top: 1px dashed var(--compaction);
   }
   .axis-row,
   .row {
@@ -754,7 +750,7 @@
   .axis-row {
     min-height: 24px;
     margin: 4px 0 2px;
-    color: #8f9cb2;
+    color: var(--secondary);
     font-size: 10px;
   }
   .axis-title {
@@ -764,14 +760,14 @@
     height: 22px;
     position: relative;
     min-width: 0;
-    border-bottom: 1px solid #34415f;
+    border-bottom: 1px solid var(--separator);
   }
   .axis-tick {
     position: absolute;
     bottom: 2px;
     transform: translateX(-50%);
     padding: 0 2px;
-    background: #0f1629;
+    background: var(--plot);
     font-variant-numeric: tabular-nums;
   }
   .axis-tick.first {
@@ -788,7 +784,7 @@
     position: absolute;
     z-index: 3;
     height: 100%;
-    border-left: 2px solid #f5f7ff;
+    border-left: 2px solid var(--text-strong);
     pointer-events: none;
   }
   .axis-pin-marker,
@@ -801,7 +797,7 @@
     left: 2px;
     padding: 0 2px;
     color: #fff;
-    background: #0f1629;
+    background: var(--plot);
     font-size: 9px;
     white-space: nowrap;
   }
@@ -810,7 +806,7 @@
     position: absolute;
     z-index: 2;
     height: 100%;
-    border-left: 1px dashed #ffb14e;
+    border-left: 1px dashed var(--compaction);
     pointer-events: none;
   }
   .axis-boundary {
@@ -823,15 +819,15 @@
   .row {
     scroll-margin-block: 54px;
     padding: 7px 3px;
-    border-top: 1px solid #202b44;
+    border-top: 1px solid var(--chart-guide);
     transition: opacity 120ms ease;
   }
   .row.selected {
-    background: #16213a;
+    background: var(--selected-surface);
     box-shadow: inset 3px 0 #fff;
   }
   .row:focus-visible {
-    outline: 2px solid #9fc0ff;
+    outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
   .row.selected .segment {
@@ -848,7 +844,7 @@
     flex: 0 0 9px;
     width: 9px;
     height: 9px;
-    border-radius: 2px;
+    border-radius: var(--radius-small);
   }
   .label-copy {
     display: grid;
@@ -859,7 +855,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #c9d2e1;
+    color: var(--text);
     text-align: left;
   }
   .item-label {
@@ -876,12 +872,12 @@
     text-decoration: underline;
   }
   .item-label:focus-visible {
-    outline: 2px solid #9fc0ff;
+    outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
   .label-copy small {
     overflow: hidden;
-    color: #8996ad;
+    color: var(--muted);
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 10px;
@@ -891,7 +887,7 @@
     position: relative;
     min-width: 0;
     background: var(--plot);
-    border-radius: 5px;
+    border-radius: var(--control-radius);
     overflow: hidden;
   }
   .segment {
@@ -939,13 +935,13 @@
   }
   .meta {
     text-align: right;
-    color: #8f9cb2;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     white-space: nowrap;
   }
   .meta small {
     display: block;
-    color: #6f7d95;
+    color: var(--muted);
     font-size: 10px;
   }
   @container lifespans (max-width: 900px) {

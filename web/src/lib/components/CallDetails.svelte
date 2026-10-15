@@ -737,7 +737,7 @@
 
 <style>
   .call-details {
-    color: #c3ccdc;
+    color: var(--text);
     min-width: 0;
     max-width: 100%;
   }
@@ -761,15 +761,15 @@
   header h3 {
     margin: 0;
     color: var(--text);
-    font-size: 15px;
+    font-size: var(--text-lg);
   }
   header h3:focus {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
   header span {
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     overflow-wrap: anywhere;
   }
   header .retry-note {
@@ -801,17 +801,17 @@
   }
   dt {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   dd {
     margin: 1px 0 0;
-    color: #eef2f8;
+    color: var(--text-strong);
     overflow-wrap: anywhere;
   }
   dd small {
     display: block;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .change-lists {
     display: grid;
@@ -843,16 +843,11 @@
   .change-baseline {
     margin: 0 0 6px;
     color: var(--secondary);
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   summary {
-    color: #c8d5ed;
+    color: var(--text);
     cursor: pointer;
-  }
-  summary:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 3px;
-    border-radius: 2px;
   }
   .tool-summary {
     margin-top: 10px;
@@ -865,12 +860,12 @@
   }
   .tool-chip {
     display: inline;
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     cursor: default;
   }
   .tool-chip.failed {
-    color: #ffc0ae;
+    color: var(--error);
   }
   .detail-rows,
   .technical-values {
@@ -878,8 +873,8 @@
   }
   .economics-note,
   .economics-explanations {
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     line-height: 1.4;
   }
   .economics-note {
@@ -890,18 +885,18 @@
     padding: 8px 10px;
     border-left: 3px solid #ffbd64;
     border-radius: 4px;
-    background: #1b1c2a;
-    color: #e4e8f1;
-    font-size: 12px;
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   .ratio-discontinuity p {
     margin: 4px 0 7px;
-    color: #bac5d8;
+    color: var(--text);
   }
   h4 {
     margin: 11px 0 4px;
-    color: #c8d5ed;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   ul {
     margin: 4px 0 0;
@@ -909,7 +904,7 @@
     overflow-wrap: anywhere;
   }
   .diagnostics {
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .identifier-list {
     display: grid;
@@ -925,7 +920,7 @@
     margin-top: 5px;
   }
   code {
-    color: #9fb2d5;
+    color: var(--secondary);
     overflow-wrap: anywhere;
     user-select: all;
   }
@@ -934,7 +929,7 @@
     overflow-wrap: anywhere;
   }
   .error-mark {
-    color: #ff9f7a;
+    color: var(--error);
     margin-left: 6px;
   }
   @media (max-width: 520px) {

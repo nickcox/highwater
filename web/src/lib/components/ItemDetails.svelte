@@ -419,7 +419,7 @@
 
 <style>
   .item-details {
-    color: #bdc7d8;
+    color: var(--text);
     min-width: 0;
   }
   .item-identity {
@@ -440,48 +440,43 @@
   }
   .item-identity span {
     display: inline-block;
-    color: #b8c7e3;
-    border: 1px solid #3a496a;
+    color: var(--text);
+    border: 1px solid var(--separator);
     border-radius: 999px;
     padding: 2px 7px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   h3 {
     color: #fff;
-    font-size: 15px;
+    font-size: var(--text-lg);
     margin: 0 0 6px;
     overflow-wrap: anywhere;
   }
   h3:focus {
-    outline: 2px solid #9fc0ff;
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
   h4 {
     margin: 11px 0 4px;
-    color: #c8d5ed;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   .content-preview {
-    color: #c3ccdc;
+    color: var(--text);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
   .preview-note,
   .presence-note {
-    color: #9caac0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
   details {
     margin-top: 10px;
   }
   summary {
-    color: #c8d5ed;
+    color: var(--text);
     cursor: pointer;
-  }
-  summary:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 3px;
-    border-radius: 2px;
   }
   .preview-toggle {
     display: block;
@@ -489,7 +484,7 @@
     margin: 7px 0 0 auto;
     min-height: 28px;
     padding: 4px 8px;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--secondary);
     background: transparent;
     border: 1px solid transparent;
@@ -498,14 +493,10 @@
     text-decoration: underline;
     background: var(--plot);
   }
-  .preview-toggle:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
   .preview-details pre {
-    color: #e1e7f2;
+    color: var(--text);
     background: var(--plot);
-    border-radius: 6px;
+    border-radius: var(--control-radius);
     margin: 7px 0 0;
     padding: 8px;
     white-space: pre-wrap;
@@ -521,18 +512,18 @@
   }
   dt {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   dd {
     margin: 1px 0 0;
     overflow-wrap: anywhere;
-    color: #e2e8f3;
+    color: var(--text);
   }
   .essential-metrics dd small {
     display: block;
     margin-top: 2px;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .versions {
     display: grid;
@@ -540,7 +531,7 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .versions li {
     display: grid;
@@ -551,7 +542,7 @@
     font-weight: 600;
   }
   .versions small {
-    color: #8f9cb2;
+    color: var(--secondary);
     overflow-wrap: anywhere;
   }
   .lineage-actions {
@@ -567,7 +558,7 @@
   }
   .relations span {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .relations button {
     max-width: 100%;
@@ -580,7 +571,7 @@
     margin: 4px 0 0;
     padding-left: 18px;
     overflow-wrap: anywhere;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .identifier-list {
     display: grid;
@@ -593,7 +584,7 @@
     gap: 4px;
   }
   code {
-    color: #9fb2d5;
+    color: var(--secondary);
     overflow-wrap: anywhere;
     user-select: all;
   }

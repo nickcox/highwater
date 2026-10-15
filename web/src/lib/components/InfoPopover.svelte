@@ -98,9 +98,9 @@
     height: 16px;
     margin-left: 5px;
     padding: 0;
-    border: 1px solid #52678c;
+    border: 1px solid var(--control-border);
     border-radius: 50%;
-    color: #aebbd0;
+    color: var(--secondary);
     background: transparent;
     font:
       italic 600 10px/1 Georgia,
@@ -110,11 +110,7 @@
   .info-trigger:hover,
   .info-trigger[aria-expanded='true'] {
     color: var(--text);
-    background: #1b2942;
-  }
-  .info-trigger:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
+    background: var(--surface-raised);
   }
   .info-popover {
     position: fixed;
@@ -124,12 +120,12 @@
     box-sizing: border-box;
     width: min(320px, calc(100vw - 24px));
     padding: 10px 12px;
-    border: 1px solid #465574;
-    border-radius: 8px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
     background: var(--surface);
-    color: #d5deed;
+    color: var(--text);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-    font-size: 12px;
+    font-size: var(--text-sm);
     font-weight: normal;
     text-align: left;
     white-space: normal;

@@ -73,7 +73,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   input {
     width: 64px;
@@ -82,6 +82,6 @@
   }
   p {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
 </style>

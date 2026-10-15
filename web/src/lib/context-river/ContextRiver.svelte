@@ -1296,32 +1296,28 @@
 </script>
 
 <div class="vertical-scale-controls">
-  <div class="scale-toggle" role="group" aria-label="Vertical scale">
-    <span class="scale-label">Vertical scale</span>
+  <div class="toggle-group" role="group" aria-label="Vertical scale">
+    <span class="toggle-label">Vertical scale</span>
     <button
       type="button"
-      class:active={verticalScaleMode === 'session'}
       aria-pressed={verticalScaleMode === 'session'}
       onclick={() => setScale('session')}>Session scale</button
     >
     <button
       type="button"
-      class:active={verticalScaleMode === 'visible'}
       aria-pressed={verticalScaleMode === 'visible'}
       onclick={() => setScale('visible')}>Visible calls</button
     >
   </div>
-  <div class="scale-toggle" role="group" aria-label="River display">
-    <span class="scale-label">Display</span>
+  <div class="toggle-group" role="group" aria-label="River display">
+    <span class="toggle-label">Display</span>
     <button
       type="button"
-      class:active={riverDisplayMode === 'items'}
       aria-pressed={riverDisplayMode === 'items'}
       onclick={() => setDisplay('items')}>Items</button
     >
     <button
       type="button"
-      class:active={riverDisplayMode === 'itemTypes'}
       aria-pressed={riverDisplayMode === 'itemTypes'}
       onclick={() => setDisplay('itemTypes')}>Item types</button
     >
@@ -1831,38 +1827,8 @@
     align-items: center;
     gap: 8px 16px;
     margin: 6px 0 10px;
-    color: #b8c4d9;
-    font-size: 0.8rem;
-  }
-  .scale-toggle {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 5px;
-  }
-  .scale-label {
-    margin-right: 3px;
-    color: #e0e8f6;
-    font-weight: 650;
-  }
-  .scale-toggle button {
-    min-height: 30px;
-    padding: 4px 9px;
-    border: 1px solid #34435e;
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
-  .scale-toggle button.active {
-    border-color: var(--accent);
-    background: var(--action);
-    color: #fff;
-  }
-  .scale-toggle button:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
+    color: var(--secondary);
+    font-size: var(--text-md);
   }
   .chart-frame {
     position: relative;
@@ -1875,11 +1841,11 @@
     gap: 5px 12px;
     /* Legends start where the plot does, under the first call. */
     margin: 6px 0 0 var(--plot-left);
-    color: #c4d0e4;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   .group-type-legend strong {
-    color: #edf2fb;
+    color: var(--text-strong);
   }
   .group-type-legend span {
     display: inline-flex;
@@ -1889,7 +1855,7 @@
   .group-type-legend i {
     width: 10px;
     height: 10px;
-    border-radius: 2px;
+    border-radius: var(--radius-small);
     border: 1px solid rgb(255 255 255 / 45%);
   }
   .group-hover-card {
@@ -1900,12 +1866,12 @@
     width: max-content;
     max-width: 240px;
     padding: 6px 9px;
-    border: 1px solid #34435e;
+    border: 1px solid var(--separator);
     border-left: 3px solid var(--group-color);
-    border-radius: 6px;
-    background: #10192d;
-    color: #c4d0e4;
-    font-size: 12px;
+    border-radius: var(--control-radius);
+    background: var(--plot);
+    color: var(--text);
+    font-size: var(--text-sm);
     box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
     pointer-events: none;
     transform: translate(14px, 14px);
@@ -1914,7 +1880,7 @@
     transform: translate(calc(-100% - 14px), 14px);
   }
   .group-hover-card strong {
-    color: #edf2fb;
+    color: var(--text-strong);
   }
   .chart-plot {
     position: relative;
@@ -1924,18 +1890,16 @@
   .economics-readout {
     min-height: 28px;
     padding: 0.45rem 0 0 var(--plot-left);
-    color: #aab4c7;
-    font-size: 0.75rem;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
   }
   .vertical-axis-overlay {
     position: absolute;
     z-index: 2;
-    top: 36px;
     left: 0;
-    width: 42px;
-    height: 410px;
+    width: var(--plot-left);
     border-right: 1px solid var(--control-border);
     background: var(--plot);
     pointer-events: none;
@@ -1943,7 +1907,7 @@
   .vertical-axis-tick {
     position: absolute;
     right: 5px;
-    color: #c0cbe0;
+    color: var(--text);
     font-size: 10px;
     line-height: 1;
     white-space: nowrap;
@@ -1959,56 +1923,45 @@
     overflow-x: auto;
     max-width: 100%;
     overscroll-behavior-x: contain;
-    scrollbar-color: #506385 #10172a;
+    scrollbar-color: var(--control-border) var(--plot);
     scrollbar-width: thin;
     outline: none;
     user-select: none;
     -webkit-user-select: none;
   }
   .river-scroll:focus-visible {
-    outline: 2px solid #9fc0ff;
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
   .river-scroll::-webkit-scrollbar {
     height: 9px;
   }
   .river-scroll::-webkit-scrollbar-track {
-    background: #10172a;
-    border-radius: 6px;
+    background: var(--plot);
+    border-radius: var(--control-radius);
   }
   .river-scroll::-webkit-scrollbar-thumb {
-    background: #506385;
-    border: 2px solid #10172a;
-    border-radius: 6px;
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+    background: var(--control-border);
+    border: 2px solid var(--plot);
+    border-radius: var(--control-radius);
   }
   svg {
     display: block;
     background: var(--plot);
-    border-radius: 10px;
+    border-radius: var(--radius);
     touch-action: pan-y;
   }
   .plot-background {
     fill: var(--plot);
   }
   .weight-gridline {
-    stroke: #35425b;
+    stroke: var(--separator);
     stroke-width: 0.75;
     opacity: 0.72;
     pointer-events: none;
   }
   .column-guide {
-    stroke: #202c45;
+    stroke: var(--chart-guide);
     stroke-width: 1;
     pointer-events: none;
   }
@@ -2017,14 +1970,14 @@
   }
   .call-target {
     cursor: pointer;
-    color: #95a2ba;
+    color: var(--secondary);
   }
   .call-target rect {
     fill: transparent;
   }
   .call-target text {
     fill: currentColor;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .call-target:hover,
   .call-target:focus-visible,
@@ -2046,12 +1999,12 @@
     pointer-events: none;
   }
   .compaction-marker line {
-    stroke: #ffb14e;
+    stroke: var(--compaction);
     stroke-width: 1.5;
     stroke-dasharray: 6 5;
   }
   .compaction-marker text {
-    fill: #ffca87;
+    fill: var(--compaction-text);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -2061,7 +2014,7 @@
   }
   .reported-input-line {
     fill: none;
-    stroke: #bec8da;
+    stroke: var(--secondary);
     stroke-width: 1.5;
     stroke-dasharray: 5 4;
     pointer-events: none;
@@ -2072,8 +2025,8 @@
     align-items: center;
     gap: 0.35rem 1rem;
     padding: 0.45rem 0 0.45rem var(--plot-left);
-    color: #aab4c7;
-    font-size: 0.75rem;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
   .input-reference-legend span {
     display: inline-flex;
@@ -2087,7 +2040,7 @@
     flex-shrink: 0;
   }
   .input-reference-key {
-    border-top: 2px dashed #bec8da;
+    border-top: 2px dashed var(--secondary);
     margin-top: 8px;
   }
   .input-gap-key {
@@ -2172,7 +2125,7 @@
     opacity: 0.88;
   }
   .crosshair {
-    stroke: #a8bde8;
+    stroke: var(--secondary);
     stroke-width: 1;
     stroke-dasharray: 4 4;
     pointer-events: none;
@@ -2183,8 +2136,8 @@
     pointer-events: none;
   }
   .zoom-selection {
-    fill: rgba(137, 177, 255, 0.2);
-    stroke: #a9c9ff;
+    fill: color-mix(in srgb, var(--accent) 20%, transparent);
+    stroke: var(--accent);
     stroke-width: 1.5;
     stroke-dasharray: 4 3;
     pointer-events: none;

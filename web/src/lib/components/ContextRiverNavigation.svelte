@@ -121,7 +121,7 @@
     min-height: 32px;
   }
   .range {
-    color: #e5ebf7;
+    color: var(--text);
     font-variant-numeric: tabular-nums;
     font-weight: 600;
   }
@@ -139,7 +139,7 @@
     grid-column: 1 / -1;
     margin: 0;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .step-call {
     width: 32px;
@@ -150,8 +150,8 @@
     line-height: 1;
   }
   .zoom-level {
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
   }
   @media (max-width: 760px) {

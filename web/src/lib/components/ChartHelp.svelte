@@ -121,26 +121,21 @@
     align-items: center;
     gap: 6px 12px;
     min-height: 30px;
-    color: #aebbd0;
-    font-size: 12px;
+    color: var(--secondary);
+    font-size: var(--text-sm);
   }
   .help-trigger {
     cursor: pointer;
     padding: 5px 8px;
     white-space: nowrap;
-    border: 1px solid #34415f;
-    border-radius: 6px;
+    border: 1px solid var(--separator);
+    border-radius: var(--control-radius);
     color: var(--text);
     background: var(--surface);
     font: inherit;
   }
   .help-trigger:hover {
-    background: #1b2942;
-  }
-  .help-trigger:focus-visible,
-  button:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
+    background: var(--surface-raised);
   }
   .help-popover {
     position: fixed;
@@ -152,24 +147,24 @@
     overflow: auto;
     overscroll-behavior: contain;
     padding: 14px 16px;
-    border: 1px solid #465574;
-    border-radius: 9px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius);
     background: var(--surface);
-    color: #d5deed;
+    color: var(--text);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-    font-size: 13px;
+    font-size: var(--text-md);
   }
   h3,
   h4 {
     margin: 0 0 6px;
-    color: #f0f3f8;
+    color: var(--text-strong);
   }
   h3 {
-    font-size: 15px;
+    font-size: var(--text-lg);
   }
   h4 {
     margin-top: 12px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   p {
     margin: 5px 0;

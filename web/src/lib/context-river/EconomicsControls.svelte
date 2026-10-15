@@ -46,35 +46,29 @@
   <div id="economics-expanded" hidden={mode === 'off'}>
     {#if mode !== 'off'}
       <div class="economics-track-controls">
-        <div class="scale-toggle" role="group" aria-label="Economics track">
-          <span class="scale-label">Economics</span>
+        <div class="toggle-group" role="group" aria-label="Economics track">
+          <span class="toggle-label">Economics</span>
           <button
             type="button"
-            class:active={mode === 'cache'}
             aria-pressed={mode === 'cache'}
             onclick={() => onModeChange('cache')}>Cache</button
           >
-          <button
-            type="button"
-            class:active={mode === 'cost'}
-            aria-pressed={mode === 'cost'}
-            onclick={() => onModeChange('cost')}>Cost</button
+          <button type="button" aria-pressed={mode === 'cost'} onclick={() => onModeChange('cost')}
+            >Cost</button
           >
           <button type="button" aria-pressed={false} onclick={() => onModeChange('off')}>Off</button
           >
         </div>
         {#if mode === 'cache'}
-          <div class="scale-toggle cache-view-toggle" role="group" aria-label="Cache view">
-            <span class="scale-label">Cache view</span>
+          <div class="toggle-group cache-view-toggle" role="group" aria-label="Cache view">
+            <span class="toggle-label">Cache view</span>
             <button
               type="button"
-              class:active={cacheView === 'tokens'}
               aria-pressed={cacheView === 'tokens'}
               onclick={() => onCacheViewChange('tokens')}>Tokens</button
             >
             <button
               type="button"
-              class:active={cacheView === 'share'}
               aria-pressed={cacheView === 'share'}
               onclick={() => onCacheViewChange('share')}>Share (%)</button
             ><InfoPopover id="cache-share-note" label="About Share (%)"
@@ -173,41 +167,11 @@
     background: transparent;
     color: var(--secondary);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--text-md);
   }
   .economics-disclosure:hover {
     background: transparent;
     color: var(--text);
-  }
-  .scale-toggle {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 5px;
-  }
-  .scale-label {
-    margin-right: 3px;
-    color: #e0e8f6;
-    font-weight: 650;
-  }
-  .scale-toggle button {
-    min-height: 30px;
-    padding: 4px 9px;
-    border: 1px solid #34435e;
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
-  .scale-toggle button.active {
-    border-color: var(--accent);
-    background: var(--action);
-    color: #fff;
-  }
-  .scale-toggle button:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
   }
   .economics-track-header {
     position: sticky;
@@ -228,25 +192,21 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 7px 14px;
-    color: #b8c4d9;
-    font-size: 0.75rem;
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   .economics-legend {
     min-width: 0;
-    color: #b8c4d9;
-    font-size: 0.72rem;
+    color: var(--text);
+    font-size: var(--text-xs);
   }
   .economics-legend[open] {
     padding-top: 2px;
   }
   .economics-legend summary {
     width: fit-content;
-    color: #a9bbda;
+    color: var(--secondary);
     cursor: pointer;
-  }
-  .economics-legend summary:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
   }
   /* Matches the River's legend: 12px text, with each group's title leading its items. */
   .track-legend-groups {
@@ -255,20 +215,20 @@
     align-items: start;
     gap: 8px 18px;
     padding-top: 6px;
-    color: #c4d0e4;
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-sm);
   }
   .essential-legend {
     padding: 2px 0 0;
   }
   .legend-muted,
   .availability-summary {
-    color: #aebbd0;
+    color: var(--secondary);
   }
   .inline-availability {
     align-self: center;
     max-width: 38rem;
-    color: #f0d08d;
+    color: var(--warning);
     line-height: 1.35;
   }
   .availability-summary {
@@ -277,7 +237,7 @@
   }
   .track-title {
     min-width: 0;
-    color: #dce6f7;
+    color: var(--text);
     font-weight: 650;
     overflow-wrap: anywhere;
   }
@@ -289,7 +249,7 @@
     min-width: 0;
   }
   .legend-group-title {
-    color: #edf2fb;
+    color: var(--text-strong);
     font-weight: 650;
   }
   .track-legend {
@@ -309,8 +269,8 @@
     display: inline-block;
     width: 10px;
     height: 10px;
-    border: 1px solid #b8c4d9;
-    border-radius: 2px;
+    border: 1px solid var(--text);
+    border-radius: var(--radius-small);
     flex: 0 0 auto;
   }
   .swatch.read,
@@ -333,7 +293,7 @@
   }
   .swatch.uncertain {
     background: transparent;
-    border-color: #ffcb74;
+    border-color: var(--warning);
     transform: rotate(45deg) scale(0.78);
   }
   .swatch.change-rise,
@@ -343,7 +303,7 @@
     justify-content: center;
     width: 14px;
     border: 0;
-    color: #151d2e;
+    color: var(--page);
     background: #ffbd64;
     font-size: 10px;
     font-style: normal;
@@ -358,8 +318,8 @@
     display: inline-flex;
     width: 16px;
     justify-content: center;
-    border-color: #83abc9;
-    background: #273f56;
+    border-color: var(--accent);
+    background: var(--action);
     color: #fff;
     font-size: 7px;
     font-style: normal;

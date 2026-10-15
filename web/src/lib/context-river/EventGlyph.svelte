@@ -76,17 +76,17 @@
   }
   .glyph-compaction {
     fill: #4b3821;
-    stroke: #ffb14e;
+    stroke: var(--compaction);
     stroke-width: 1.25;
   }
   .glyph-target {
-    fill: #273f56;
+    fill: var(--action);
     stroke: #aad3ef;
     stroke-width: 1.25;
   }
   .glyph-ratio {
     fill: #ffbd64;
-    stroke: #151d2e;
+    stroke: var(--page);
     stroke-width: 1.25;
   }
   .event-glyph-svg.rise .glyph-ratio {

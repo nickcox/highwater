@@ -60,10 +60,10 @@
     min-width: 300px;
     max-width: 360px;
     padding: 10px;
-    color: #c3ccdc;
+    color: var(--text);
     background: var(--surface);
     border: 1px solid var(--control-border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   }
   header {
@@ -74,11 +74,11 @@
   }
   header span {
     width: fit-content;
-    color: #b8c7e3;
-    border: 1px solid #3a496a;
+    color: var(--text);
+    border: 1px solid var(--separator);
     border-radius: 999px;
     padding: 2px 7px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   header strong {
     color: #fff;
@@ -92,16 +92,16 @@
   }
   dl div {
     background: var(--plot);
-    border-radius: 6px;
+    border-radius: var(--control-radius);
     padding: 6px 8px;
   }
   dt {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   dd {
     margin: 1px 0 0;
-    color: #eef2f8;
+    color: var(--text-strong);
   }
   p {
     margin: 9px 0 0;
@@ -110,14 +110,14 @@
     margin: 0 0 9px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    color: #c3ccdc;
+    color: var(--text);
   }
   .preview-note {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .lineage {
-    border-left: 3px dashed #ffb14e;
+    border-left: 3px dashed var(--compaction);
     padding-left: 8px;
     color: #d8c6a8;
   }

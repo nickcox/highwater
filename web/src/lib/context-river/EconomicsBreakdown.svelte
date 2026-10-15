@@ -72,7 +72,7 @@
     color: var(--text);
     background: var(--surface);
     border: 1px solid var(--control-border);
-    border-radius: 7px;
+    border-radius: var(--control-radius);
     box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
   }
   .event-breakdown-header,
@@ -84,11 +84,11 @@
   }
   .event-breakdown-header {
     color: #fff;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .event-breakdown-header button {
     padding: 1px 6px;
-    font-size: 15px;
+    font-size: var(--text-lg);
     line-height: 1.1;
   }
   ul {
@@ -97,7 +97,7 @@
     margin: 7px 0 0;
     padding: 0;
     list-style: none;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   li > span {
     min-width: 0;

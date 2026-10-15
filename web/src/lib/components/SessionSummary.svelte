@@ -367,11 +367,11 @@
   .primary-metrics span {
     display: block;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .primary-metrics b {
     display: block;
-    color: #eef2f8;
+    color: var(--text-strong);
     margin-top: 2px;
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
@@ -379,7 +379,7 @@
   .metric-note {
     display: block;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
     font-weight: normal;
   }
   /* Keep status and trigger inline; the full-width body clears both in either state. */
@@ -397,7 +397,7 @@
     align-items: center;
     margin: 0 16px 0 0;
     color: var(--secondary);
-    font-size: 13px;
+    font-size: var(--text-md);
   }
   .estimate-level.good {
     color: var(--accent);
@@ -425,22 +425,17 @@
   }
   .session-details {
     max-width: 100%;
-    color: #b9c6da;
+    color: var(--text);
   }
   .session-details > summary {
     float: left;
   }
   .profiles {
-    color: #aebbd0;
+    color: var(--secondary);
   }
   summary {
     cursor: pointer;
     width: fit-content;
-  }
-  summary:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 3px;
-    border-radius: 2px;
   }
   .detail-columns {
     clear: both;
@@ -452,16 +447,16 @@
     padding: 12px;
     background: var(--surface);
     border: 1px solid var(--separator);
-    border-radius: 8px;
+    border-radius: var(--radius);
   }
   h3 {
     margin: 0 0 7px;
-    color: #e2e8f3;
-    font-size: 13px;
+    color: var(--text);
+    font-size: var(--text-md);
   }
   h4 {
     margin: 10px 0 4px;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   dl {
     display: grid;
@@ -471,12 +466,12 @@
   }
   dt {
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   dd {
     margin: 1px 0 0;
     overflow-wrap: anywhere;
-    color: #d7e0ef;
+    color: var(--text);
   }
   .diagnostics {
     margin-top: 10px;
@@ -488,12 +483,12 @@
   .profiles {
     margin: 0;
     padding-left: 18px;
-    font-size: 12px;
+    font-size: var(--text-sm);
     overflow-wrap: anywhere;
   }
   code {
     overflow-wrap: anywhere;
-    color: #9fb2d5;
+    color: var(--secondary);
   }
   @media (max-width: 800px) {
     .primary-metrics {

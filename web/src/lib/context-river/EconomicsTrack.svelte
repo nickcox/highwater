@@ -865,18 +865,18 @@
     pointer-events: none;
   }
   .track-gridline {
-    stroke: #35425b;
+    stroke: var(--separator);
     stroke-width: 0.75;
     opacity: 0.7;
     pointer-events: none;
   }
   .track-event-header {
-    fill: #899abd;
-    font-size: 11px;
+    fill: var(--muted);
+    font-size: var(--text-xs);
     pointer-events: none;
   }
   .track-event-header text:first-child {
-    fill: #dce6f7;
+    fill: var(--text);
     font-weight: 750;
   }
   .track-event-lane {
@@ -900,23 +900,23 @@
   }
   .event-count-badge {
     stroke-width: 1.25;
-    fill: #263c67;
-    stroke: #d2e0ff;
+    fill: var(--action);
+    stroke: var(--text);
   }
   .event-count {
     fill: #fff;
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 750;
     pointer-events: none;
   }
   .track-event-trigger:focus-visible .event-hit {
-    fill: #335081;
+    fill: var(--action);
     fill-opacity: 0.35;
     stroke: #fff;
     stroke-width: 2.5;
   }
   .track-y-label {
-    fill: #b8c4d9;
+    fill: var(--text);
     font-size: 9px;
     pointer-events: none;
   }
@@ -943,21 +943,21 @@
   }
   .economics-mark.zero .zero-mark {
     fill: var(--plot);
-    stroke: #d7e1f3;
+    stroke: var(--text);
     stroke-width: 1.5;
   }
   .uncertain-mark {
-    fill: #1b2437;
-    stroke: #ffcb74;
+    fill: var(--surface-raised);
+    stroke: var(--warning);
     stroke-width: 1.5;
   }
   .economics-mark.partial .uncertain-mark {
-    fill: #1b2437;
-    stroke: #ffcb74;
+    fill: var(--surface-raised);
+    stroke: var(--warning);
   }
   .economics-mark.unsupported .uncertain-mark {
-    fill: #2a1c22;
-    stroke: #e1978b;
+    fill: var(--error-surface);
+    stroke: var(--error);
     stroke-dasharray: 2 1;
   }
   .missing-mark {
@@ -971,7 +971,7 @@
     stroke-width: 1.5;
   }
   .cost-stem.partial {
-    stroke: #ffcb74;
+    stroke: var(--warning);
     stroke-dasharray: 3 2;
   }
   .cost-dot {
@@ -980,7 +980,7 @@
     stroke-width: 1;
   }
   .cost-dot.partial {
-    stroke: #ffcb74;
+    stroke: var(--warning);
     stroke-width: 2;
   }
   .cost-zero {
@@ -989,7 +989,7 @@
     stroke-width: 1.5;
   }
   .cost-zero.partial {
-    stroke: #ffcb74;
+    stroke: var(--warning);
     stroke-dasharray: 2 1;
   }
   /* API-equivalent costs are not charges: hollow marks in a separate colour. */
@@ -1020,7 +1020,7 @@
     pointer-events: none;
   }
   .track-hover {
-    stroke: #a8bde8;
+    stroke: var(--secondary);
     stroke-width: 1;
     stroke-dasharray: 3 3;
     pointer-events: none;

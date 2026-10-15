@@ -33,21 +33,17 @@
     min-width: 0;
   }
   button {
-    background: #151e35;
-    border: 1px solid #34415f;
-    border-radius: 6px;
-    color: #e2e8f3;
+    background: var(--surface);
+    border: 1px solid var(--separator);
+    border-radius: var(--control-radius);
+    color: var(--text);
     cursor: pointer;
     padding: 3px 7px;
     font: inherit;
-    font-size: 11px;
-  }
-  button:focus-visible {
-    outline: 2px solid #9fc0ff;
-    outline-offset: 2px;
+    font-size: var(--text-xs);
   }
   .copy-status {
-    color: #9fb2d5;
-    font-size: 11px;
+    color: var(--secondary);
+    font-size: var(--text-xs);
   }
 </style>

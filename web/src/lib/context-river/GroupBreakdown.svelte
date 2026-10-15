@@ -105,7 +105,7 @@
     color: var(--text);
     background: var(--surface);
     border: 1px solid var(--control-border);
-    border-radius: 7px;
+    border-radius: var(--control-radius);
     box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
   }
   .event-breakdown-header {
@@ -114,24 +114,24 @@
     justify-content: space-between;
     gap: 8px;
     color: #fff;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .event-breakdown-header button {
     padding: 1px 6px;
-    font-size: 15px;
+    font-size: var(--text-lg);
     line-height: 1.1;
   }
   p {
     margin: 7px 0;
-    color: #bac5d8;
-    font-size: 11px;
+    color: var(--text);
+    font-size: var(--text-xs);
   }
   ul {
     max-height: 150px;
     overflow: auto;
     margin: 7px 0;
     padding-left: 18px;
-    color: #d7e0ef;
-    font-size: 11px;
+    color: var(--text);
+    font-size: var(--text-xs);
   }
 </style>

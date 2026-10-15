@@ -105,12 +105,12 @@
     min-width: 0;
   }
   .panel-head p {
-    color: #96a2b8;
+    color: var(--secondary);
     margin: 4px 0 0;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   h2 {
-    font-size: 15px;
+    font-size: var(--text-lg);
     margin: 0;
   }
   .inspector-empty-prompt {
@@ -126,7 +126,7 @@
   .inspector-empty-prompt p {
     margin: 0;
     color: var(--secondary);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .inspector-empty-prompt p + p::before {
     content: '·';
@@ -141,12 +141,12 @@
   .inspector-secondary-prompt {
     margin: 0;
     padding: 9px 11px;
-    border: 1px solid #293651;
-    border-radius: 8px;
-    background: #10172a;
-    font-size: 12px;
+    border: 1px solid var(--separator);
+    border-radius: var(--radius);
+    background: var(--plot);
+    font-size: var(--text-sm);
   }
   .muted {
-    color: #8f9cb2;
+    color: var(--secondary);
   }
 </style>
