@@ -212,7 +212,7 @@ async fn run_with_watcher(
     args: Args,
     start_watcher: WatcherStarter,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+    let home = std::env::home_dir().unwrap_or_default();
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
