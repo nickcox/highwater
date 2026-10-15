@@ -1,8 +1,19 @@
 # Price data
 
-TokenPlume uses this data to estimate the cost of model calls whose harness did not record one, and to give an API-equivalent cost for calls covered by a subscription. The design is in [plans/cost-estimates-implementation-plan.md](../../plans/archive/cost-estimates-implementation-plan.md).
+TokenPlume uses this data to estimate the cost of model calls whose harness did not record one, and to give an API-equivalent cost for calls covered by a subscription. How each call's cost is worked out is in [data semantics](../../docs/data-semantics.md#cost-assessment).
 
 TokenPlume embeds only `prices.json` and never downloads prices while running.
+
+## Why costs are assessed
+
+The cost a harness records is often missing or misleading on its own:
+
+- **OpenCode with a ChatGPT login records $0**, because OpenCode removes the price for that login ("the subscription covers usage"), although models.dev lists those models at API prices.
+- **GitHub Copilot changed billing on 1 June 2026.** Before then it charged per request and models.dev listed its models at $0; from then it charges credits at each model's API rates.
+- **Pi records an API-equivalent cost for subscriptions without saying so**, because it prices its `openai-codex` (ChatGPT plan) provider at OpenAI's API rates.
+- **Claude Code records no cost per call**, and a recorded $0 cannot be told apart from a free call using the call record alone.
+
+So each call is classified by its billing mode first (`billing-modes.toml`), then given a recorded, free, estimated, API-equivalent or unknown cost, and billed and API-equivalent totals are never added together. The table keeps every models.dev provider, because OpenCode can record any of them: about 2.9 MB uncompressed (330 KB with gzip). Prices are updated by hand. Time-of-day pricing is not modelled; no supported harness's sessions use a provider that has it.
 
 ## Files
 

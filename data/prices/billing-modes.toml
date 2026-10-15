@@ -36,10 +36,9 @@ source = "https://the-decoder.com/github-copilot-switches-to-token-based-billing
 
 # Claude Code transcripts do not record whether a session used a Claude subscription or an
 # API key. Subscription pricing shows API-equivalent cost, which is true either way, because
-# Anthropic's API rate is also the price an API key pays. `--claude-billing api` treats the
-# calls as billed per token instead.
+# Anthropic's API rate is also the price an API key pays.
 [[mode]]
 harness = "claude-code"
 provider = "anthropic"
 billing = "subscription"
-source = "Claude Code transcripts do not record the billing mode; see plans/archive/claude-code-implementation-plan.md section 7"
+source = "Claude Code transcripts do not record the billing mode; see docs/sources/claude-code.md"

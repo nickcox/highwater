@@ -1,4 +1,4 @@
-//! Read-only Claude Code CLI transcripts. See plans/archive/claude-code-implementation-plan.md.
+//! Read-only Claude Code CLI transcripts. See docs/sources/claude-code.md.
 
 mod branch;
 pub(crate) mod discovery;

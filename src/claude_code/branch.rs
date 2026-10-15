@@ -1,6 +1,5 @@
-//! Active branch selection. The rules are in section 5 of
-//! plans/archive/claude-code-implementation-plan.md; they are kept in this one module so
-//! a later way of showing several branches can replace it.
+//! Active branch selection. The rules are in docs/sources/claude-code.md, "Active branch";
+//! they are kept in this one module so a later way of showing several branches can replace it.
 
 use super::records::Record;
 use crate::domain::SourceError;

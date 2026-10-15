@@ -1,6 +1,5 @@
 //! Turns the active branch into normalized model calls, context items and
-//! compactions. Sections 5 to 7 of plans/archive/claude-code-implementation-plan.md
-//! describe the rules.
+//! compactions. docs/sources/claude-code.md describes the rules.
 
 use super::{records::Record, Limitation};
 use crate::{

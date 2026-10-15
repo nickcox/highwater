@@ -1,5 +1,5 @@
 //! Reads one session's records from Copilot's trace database, read-only. See
-//! plans/archive/vscode-copilot-analysis-notes.md, "Trace database".
+//! docs/sources/vscode-copilot.md, "Trace database".
 
 use crate::domain::MAX_SAFE_JSON_INTEGER;
 use rusqlite::{limits::Limit, Connection, OpenFlags};

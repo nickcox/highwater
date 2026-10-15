@@ -1,6 +1,6 @@
 //! A Copilot Chat session file is a log of changes to one JSON value, one change per
 //! line. Replaying the lines in order gives the session. See
-//! plans/archive/vscode-copilot-analysis-notes.md, "Session file format".
+//! docs/sources/vscode-copilot.md, "Session file format".
 
 use crate::domain::SourceError;
 use serde_json::Value;

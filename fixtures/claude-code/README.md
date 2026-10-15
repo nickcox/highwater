@@ -1,6 +1,6 @@
 # Claude Code fixtures
 
-Synthetic Claude Code transcripts and the results TokenPlume is expected to produce from them. They contain no real session content. The rules they test are in the [implementation plan](../../plans/archive/claude-code-implementation-plan.md) and the evidence for those rules is in the [analysis notes](../../plans/archive/claude-code-analysis-notes.md).
+Synthetic Claude Code transcripts and the results TokenPlume is expected to produce from them. They contain no real session content. The rules they test are in [docs/sources/claude-code.md](../../docs/sources/claude-code.md).
 
 ## Layout
 
