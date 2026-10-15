@@ -1,35 +1,19 @@
 <script lang="ts">
-  import { afterUpdate, beforeUpdate, onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import {
     readPresentationPreferences,
     writePresentationPreferences,
     type PresentationPreferences,
   } from './lib/state/presentation-preferences';
   import { inspectorSections } from './lib/state/inspector-sections';
-  let presentation = readPresentationPreferences();
-  let itemSections = inspectorSections();
-  let callSections = inspectorSections();
+  const storedPresentation = readPresentationPreferences();
+  let itemSections = $state.raw(inspectorSections());
+  let callSections = $state.raw(inspectorSections());
   function updatePresentation(next: PresentationPreferences): void {
     presentation = next;
     writePresentationPreferences(next);
   }
   let previousFocus: Element | null = null;
-  beforeUpdate(() => {
-    previousFocus = document.activeElement;
-  });
-  afterUpdate(() => {
-    if (
-      previousFocus &&
-      !previousFocus.isConnected &&
-      (document.activeElement === document.body || !document.activeElement?.isConnected)
-    ) {
-      const target =
-        document.getElementById('selected-item-summary') ??
-        document.getElementById('pinned-call-summary') ??
-        document.getElementById(visualizationView === 'river' ? 'river-tab' : 'composition-tab');
-      target?.focus({ preventScroll: true });
-    }
-  });
   import CallComposition from './lib/components/CallComposition.svelte';
   import ContextRiverNavigation from './lib/components/ContextRiverNavigation.svelte';
   import ContextLifespans from './lib/components/ContextLifespans.svelte';
@@ -64,42 +48,42 @@
 
   const initialLink = parseViewLink(
     typeof window === 'undefined' ? '' : window.location.hash,
-    presentation.river.display,
+    storedPresentation.river.display,
   );
   // Resolve grouping before the first geometry build; URL state wins over storage.
-  presentation = {
-    ...presentation,
+  let presentation = $state.raw<PresentationPreferences>({
+    ...storedPresentation,
     river: {
-      ...presentation.river,
-      display: initialLink.state?.display ?? presentation.river.display,
+      ...storedPresentation.river,
+      display: initialLink.state?.display ?? storedPresentation.river.display,
     },
-  };
-  let pendingViewLink: ViewLinkState | null = initialLink.state;
-  let viewLinkNotice = initialLink.notice;
-  let copyLinkNotice = '';
-  let fallbackViewUrl = '';
-  let fallbackLinkInput: HTMLInputElement;
-  let urlMounted = false;
+  });
+  let pendingViewLink = $state.raw<ViewLinkState | null>(initialLink.state);
+  let viewLinkNotice = $state(initialLink.notice);
+  let copyLinkNotice = $state('');
+  let fallbackViewUrl = $state('');
+  let fallbackLinkInput = $state<HTMLInputElement>();
+  let urlMounted = $state(false);
   let lastReadHash = typeof window === 'undefined' ? '' : window.location.hash;
   let lastUrlSignature = '';
   let replaceNextUrl = false;
-  let settledUrlCommandId = 0;
-  let urlNavigationRevision = 0;
+  let settledUrlCommandId = $state(0);
+  let urlNavigationRevision = $state(0);
   let rangeUrlTimer: number | null = null;
   let scheduledRangeUrl: { hash: string; signature: string } | null = null;
   let viewRestoreQueued = false;
-  let urlViewportOverride: { range: ViewLinkState['range'] } | null = null;
+  let urlViewportOverride = $state.raw<{ range: ViewLinkState['range'] } | null>(null);
 
-  let interaction: InteractionState = resetInteraction();
+  let interaction = $state.raw<InteractionState>(resetInteraction());
   let appRoot: HTMLElement;
-  let visualizationView: 'river' | 'composition' = 'river';
-  let compositionScope: 'atCall' | 'cumulative' = 'cumulative';
-  let compositionEndpointNotice = '';
-  let navigationCommand: RiverNavigationCommand | null = null;
-  let riverComponent: { dismissEconomics: () => boolean } | null = null;
+  let visualizationView = $state<'river' | 'composition'>('river');
+  let compositionScope = $state<'atCall' | 'cumulative'>('cumulative');
+  let compositionEndpointNotice = $state('');
+  let navigationCommand = $state.raw<RiverNavigationCommand | null>(null);
+  let riverComponent = $state<{ dismissEconomics: () => boolean } | null>(null);
   let navigationCommandId = 0;
   let viewDetailsRequestId = 0;
-  let findInLifespansRequest: { requestId: number; itemId: string } | null = null;
+  let findInLifespansRequest = $state.raw<{ requestId: number; itemId: string } | null>(null);
   let findRequestId = 0;
   const initialViewportStatus = (): RiverViewportStatus => ({
     ready: false,
@@ -112,11 +96,11 @@
     lastVisibleCallIndex: null,
     hasOverflow: false,
   });
-  let viewportStatus = initialViewportStatus();
-  let hoveredItemPoint: { x: number; y: number } | null = null;
-  let riverSelectionVisibility: { itemId: string; visible: boolean } | null = null;
-  let hoverCardHost: HTMLDivElement | null = null;
-  let hoverCardPosition: { left: number; top: number } | null = null;
+  let viewportStatus = $state.raw(initialViewportStatus());
+  let hoveredItemPoint = $state.raw<{ x: number; y: number } | null>(null);
+  let riverSelectionVisibility = $state.raw<{ itemId: string; visible: boolean } | null>(null);
+  let hoverCardHost = $state<HTMLDivElement | null>(null);
+  let hoverCardPosition = $state.raw<{ left: number; top: number } | null>(null);
 
   const sessionController = createSessionController({
     initialSessionId: initialLink.state?.session,
@@ -166,14 +150,12 @@
       settledUrlCommandId = 0;
     },
   });
-  // Analysis identity is an explicit reactive boundary: request/status publications
-  // must not invalidate geometry and projections when the analysis is unchanged.
-  let indexed: IndexedAnalysis | null = null;
-  $: if (indexed !== $sessionController.indexed) indexed = $sessionController.indexed;
+  // Analysis identity is a reactive boundary: a derived value notifies only when it changes, so
+  // request and status publications do not invalidate geometry and projections.
+  let indexed: IndexedAnalysis | null = $derived($sessionController.indexed);
   // A newly selected session's River mounts a frame after its summary, so the summary is shown
   // while the River, the slowest part to build, is laid out.
-  let riverSessionId: string | null = null;
-  $: if (indexed) deferRiver($sessionController.selectedSessionId);
+  let riverSessionId = $state<string | null>(null);
   function deferRiver(sessionId: string | null): void {
     if (sessionId === riverSessionId) return;
     requestAnimationFrame(() =>
@@ -184,67 +166,125 @@
       }),
     );
   }
-  $: pinnedCall =
+  let pinnedCall = $derived(
     interaction.pinnedCallIndex === null
       ? null
-      : (indexed?.callByIndex.get(interaction.pinnedCallIndex) ?? null);
-  $: selectedItem = interaction.selectedItemId
-    ? (indexed?.itemById.get(interaction.selectedItemId) ?? null)
-    : null;
-  $: selectedItemOutsideRiver =
-    selectedItem !== null &&
-    selectedItem.presence.length > 0 &&
-    riverSelectionVisibility?.itemId === selectedItem.id &&
-    !riverSelectionVisibility.visible;
-  $: hoveredItem = interaction.hoveredItemId
-    ? (indexed?.itemById.get(interaction.hoveredItemId) ?? null)
-    : null;
-  $: callIndices = indexed?.analysis.modelCalls.map((call) => call.index) ?? [];
-  $: selectedSessionListing = $sessionController.sessions.find(
-    (session) => session.id === $sessionController.selectedSessionId,
+      : (indexed?.callByIndex.get(interaction.pinnedCallIndex) ?? null),
   );
-  $: selectedSessionDetail = selectedSessionListing
-    ? sessionDetailLine(selectedSessionListing)
-    : '';
-  $: explorationTitle = visualizationView === 'river' ? 'Context River' : 'Composition';
-  $: if (
-    indexed?.analysis.modelCalls.length === 0 &&
-    (navigationCommand !== null ||
-      viewportStatus.ready ||
-      !viewportStatus.isFitAll ||
-      viewportStatus.totalCallCount !== 0)
-  ) {
-    navigationCommand = null;
-    resetViewportStatus();
-  }
+  let selectedItem = $derived(
+    interaction.selectedItemId ? (indexed?.itemById.get(interaction.selectedItemId) ?? null) : null,
+  );
+  let selectedItemOutsideRiver = $derived(
+    selectedItem !== null &&
+      selectedItem.presence.length > 0 &&
+      riverSelectionVisibility?.itemId === selectedItem.id &&
+      !riverSelectionVisibility.visible,
+  );
+  let hoveredItem = $derived(
+    interaction.hoveredItemId ? (indexed?.itemById.get(interaction.hoveredItemId) ?? null) : null,
+  );
+  let callIndices = $derived(indexed?.analysis.modelCalls.map((call) => call.index) ?? []);
+  let selectedSessionListing = $derived(
+    $sessionController.sessions.find(
+      (session) => session.id === $sessionController.selectedSessionId,
+    ),
+  );
+  let selectedSessionDetail = $derived(
+    selectedSessionListing ? sessionDetailLine(selectedSessionListing) : '',
+  );
+  let explorationTitle = $derived(visualizationView === 'river' ? 'Context River' : 'Composition');
 
-  $: linkedView = $sessionController.selectedSessionId
-    ? ({
-        session: $sessionController.selectedSessionId,
-        view: visualizationView,
-        display: presentation.river.display,
-        scope: compositionScope,
-        pin: interaction.pinnedCallIndex,
-        item: interaction.selectedItemId,
-        range: urlViewportOverride
-          ? urlViewportOverride.range
-          : viewLinkRange(viewportStatus, callIndices),
-      } satisfies ViewLinkState)
-    : null;
-  $: linkedSignature = linkedView ? viewLinkSignature(linkedView, urlNavigationRevision) : '';
-  $: if (urlMounted && pendingViewLink && !$sessionController.loading) queueViewRestore();
-  $: if (
-    urlMounted &&
-    linkedView &&
-    indexed &&
-    !pendingViewLink &&
-    !$sessionController.loading &&
-    (visualizationView === 'composition' ||
-      callIndices.length === 0 ||
-      (viewportStatus.ready &&
-        (!navigationCommand || settledUrlCommandId === navigationCommand.id)))
-  )
-    syncViewUrl(linkedView, linkedSignature);
+  let linkedView = $derived(
+    $sessionController.selectedSessionId
+      ? ({
+          session: $sessionController.selectedSessionId,
+          view: visualizationView,
+          display: presentation.river.display,
+          scope: compositionScope,
+          pin: interaction.pinnedCallIndex,
+          item: interaction.selectedItemId,
+          range: urlViewportOverride
+            ? urlViewportOverride.range
+            : viewLinkRange(viewportStatus, callIndices),
+        } satisfies ViewLinkState)
+      : null,
+  );
+  let linkedSignature = $derived(
+    linkedView ? viewLinkSignature(linkedView, urlNavigationRevision) : '',
+  );
+
+  // Effects come after every state and derived declaration: a pre-update effect runs as soon as
+  // it is declared.
+  $effect.pre(() => {
+    if (indexed) {
+      const sessionId = $sessionController.selectedSessionId;
+      untrack(() => deferRiver(sessionId));
+    }
+  });
+  // A session without model calls has no River to navigate.
+  $effect.pre(() => {
+    if (
+      indexed?.analysis.modelCalls.length === 0 &&
+      (navigationCommand !== null ||
+        viewportStatus.ready ||
+        !viewportStatus.isFitAll ||
+        viewportStatus.totalCallCount !== 0)
+    ) {
+      navigationCommand = null;
+      resetViewportStatus();
+    }
+  });
+  $effect.pre(() => {
+    if (urlMounted && pendingViewLink && !$sessionController.loading) untrack(queueViewRestore);
+  });
+  $effect.pre(() => {
+    if (
+      urlMounted &&
+      linkedView &&
+      indexed &&
+      !pendingViewLink &&
+      !$sessionController.loading &&
+      (visualizationView === 'composition' ||
+        callIndices.length === 0 ||
+        (viewportStatus.ready &&
+          (!navigationCommand || settledUrlCommandId === navigationCommand.id)))
+    ) {
+      const view = linkedView;
+      const signature = linkedSignature;
+      untrack(() => syncViewUrl(view, signature));
+    }
+  });
+  // When an update removes the focused element (for example a closed inspector panel), focus
+  // moves to the nearest summary heading or the view tab, not the page. The values read first are
+  // the state that can remove focused content.
+  $effect.pre(() => {
+    void [interaction, visualizationView, indexed, pinnedCall, selectedItem, riverSessionId];
+    void $sessionController;
+    previousFocus = document.activeElement;
+  });
+  $effect(() => {
+    void [interaction, visualizationView, indexed, pinnedCall, selectedItem, riverSessionId];
+    void $sessionController;
+    untrack(restoreLostFocus);
+  });
+  function restoreLostFocus(): void {
+    if (
+      previousFocus &&
+      !previousFocus.isConnected &&
+      (document.activeElement === document.body || !document.activeElement?.isConnected)
+    ) {
+      const target =
+        document.getElementById('selected-item-summary') ??
+        document.getElementById('pinned-call-summary') ??
+        document.getElementById(visualizationView === 'river' ? 'river-tab' : 'composition-tab');
+      target?.focus({ preventScroll: true });
+    }
+  }
+  // The hover card is placed after it renders, when it can be measured.
+  $effect(() => {
+    void [hoveredItemPoint, hoveredItem, hoverCardHost];
+    untrack(placeHoverCard);
+  });
 
   onMount(() => {
     urlMounted = true;
@@ -623,8 +663,6 @@
       hoverCardPosition = next;
     }
   }
-
-  afterUpdate(placeHoverCard);
 
   function selectItem(id: string | null): void {
     if (navigationCommand?.kind === 'reveal-item' && navigationCommand.itemId !== id) {
