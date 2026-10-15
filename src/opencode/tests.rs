@@ -426,6 +426,8 @@ fn database_replacement_is_seen_on_the_next_read() {
         .execute("UPDATE session SET title = 'Replacement'", [])
         .expect("replacement data");
     drop(replacement.writer);
+    // Windows cannot replace a file that is open.
+    drop(fixture.writer);
     std::fs::rename(&replacement.path, &fixture.path).expect("replace database");
     let next = load_session(&fixture.path, "ses_example", None).expect("replacement database");
     assert_ne!(before, next.revision);

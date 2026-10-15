@@ -21,11 +21,14 @@ fn expected(name: &str) -> Value {
 }
 
 fn relative(root: &Path, file: &TranscriptFile) -> String {
+    // Fixture names use `/` on every platform.
     file.path
         .strip_prefix(root)
         .expect("inside root")
-        .to_string_lossy()
-        .into_owned()
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn strings(value: &Value) -> Vec<String> {
