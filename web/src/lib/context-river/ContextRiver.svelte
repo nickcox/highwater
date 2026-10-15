@@ -1,10 +1,10 @@
-<script context="module" lang="ts">
+<script module lang="ts">
   let nextMergeId = 0;
 </script>
 
 <script lang="ts">
   const mergeId = `compaction-merge-${nextMergeId++}`;
-  import { afterUpdate, beforeUpdate, onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import type { IndexedAnalysis, ContextItemKind } from '../types';
   import { displayItemLabel } from '../item-label';
   import { kindGroupLabel } from '../kind-labels';
@@ -72,38 +72,54 @@
     type ViewportCallPosition,
   } from './viewport';
 
-  export let indexed: IndexedAnalysis;
-  export let pinnedCallIndex: number | null = null;
-  export let hoveredCallIndex: number | null = null;
-  export let selectedItemId: string | null = null;
-  export let hoveredItemId: string | null = null;
-  export let navigationCommand: RiverNavigationCommand | null = null;
-  export let isVisible = true;
-  export let onViewportChange: (status: RiverViewportStatus) => void = () => {};
-  export let onNavigationSettled: (id: number) => void = () => {};
   let lastSettledCommandId = 0;
-  export let onSelectionVisibility: (
-    status: { itemId: string; visible: boolean } | null,
-  ) => void = () => {};
-  export let onHoverCall: (index: number | null) => void;
-  export let onPinCall: (index: number) => void;
-  export let onHoverItem: (id: string | null, event?: PointerEvent) => void;
-  export let onSelectItem: (id: string) => void;
-  export let onEmptyClick: (index: number) => void;
-  export let onEscape: () => void;
-  export let preferences: PresentationPreferences = defaultPresentationPreferences();
-  export let onPreferencesChange: (value: PresentationPreferences) => void = () => {};
   import {
     defaultPresentationPreferences,
     type PresentationPreferences,
   } from '../state/presentation-preferences';
+
+  let {
+    indexed,
+    pinnedCallIndex = null,
+    hoveredCallIndex = null,
+    selectedItemId = null,
+    hoveredItemId = null,
+    navigationCommand = null,
+    isVisible = true,
+    onViewportChange = () => {},
+    onNavigationSettled = () => {},
+    onSelectionVisibility = () => {},
+    onHoverCall,
+    onPinCall,
+    onHoverItem,
+    onSelectItem,
+    onEmptyClick,
+    onEscape,
+    preferences = defaultPresentationPreferences(),
+    onPreferencesChange = () => {},
+  }: {
+    indexed: IndexedAnalysis;
+    pinnedCallIndex?: number | null;
+    hoveredCallIndex?: number | null;
+    selectedItemId?: string | null;
+    hoveredItemId?: string | null;
+    navigationCommand?: RiverNavigationCommand | null;
+    isVisible?: boolean;
+    onViewportChange?: (status: RiverViewportStatus) => void;
+    onNavigationSettled?: (id: number) => void;
+    onSelectionVisibility?: (status: { itemId: string; visible: boolean } | null) => void;
+    onHoverCall: (index: number | null) => void;
+    onPinCall: (index: number) => void;
+    onHoverItem: (id: string | null, event?: PointerEvent) => void;
+    onSelectItem: (id: string) => void;
+    onEmptyClick: (index: number) => void;
+    onEscape: () => void;
+    preferences?: PresentationPreferences;
+    onPreferencesChange?: (value: PresentationPreferences) => void;
+  } = $props();
   let appliedPreferences: PresentationPreferences | null = null;
-  let economicsTrigger: HTMLButtonElement;
-  let economicsHeader: HTMLDivElement;
-  $: if (preferences !== appliedPreferences) {
-    appliedPreferences = preferences;
-    applyPreferences(preferences);
-  }
+  let economicsTrigger = $state<HTMLButtonElement | undefined>();
+  let economicsHeader = $state<HTMLDivElement | undefined>();
 
   function changePreferences(next: PresentationPreferences): void {
     preferences = next;
@@ -146,40 +162,30 @@
 
   let host: HTMLDivElement;
   let svg: SVGSVGElement;
-  let observedWidth = 960;
-  let hasObservedWidth = false;
-  let viewportScrollLeft = 0;
-  let selectionViewportScrollLeft = 0;
-  let measuredChartOffsetX = 0;
-  let verticalScaleMode: VerticalScaleMode = 'session';
-  let riverDisplayMode: RiverDisplayMode = 'items';
-  let cacheViewMode: CacheViewMode = 'tokens';
-  let economicsTrackMode: EconomicsTrackMode = 'off';
-  $: costCopy = describeCostBasis(
-    indexed.analysis.economics.costBasis,
-    indexed.analysis.session.source,
-  );
-  let economicsReadout = '';
-  let economicsEventBreakdown: EconomicsEventBreakdown | null = null;
-  let groupBreakdown: {
+  const initialWidth = 960;
+  let observedWidth = $state(initialWidth);
+  let hasObservedWidth = $state(false);
+  let viewportScrollLeft = $state(0);
+  let selectionViewportScrollLeft = $state(0);
+  let measuredChartOffsetX = $state(0);
+  let verticalScaleMode = $state<VerticalScaleMode>('session');
+  let riverDisplayMode = $state<RiverDisplayMode>('items');
+  let cacheViewMode = $state<CacheViewMode>('tokens');
+  let economicsTrackMode = $state<EconomicsTrackMode>('off');
+  let economicsReadout = $state('');
+  let economicsEventBreakdown = $state<EconomicsEventBreakdown | null>(null);
+  let groupBreakdown = $state.raw<{
     kind: ContextItemKind;
     memberIds: string[];
     callIndex: number | null;
     anchor: { x: number; y: number };
-  } | null = null;
+  } | null>(null);
   let groupBreakdownReturnElement: HTMLElement | SVGElement | null = null;
   const groupFocus = createOverlayFocus();
   const economicsInspectFocus = createOverlayFocus();
-  $: groupFocus.observeIdentity(indexed);
-  $: economicsInspectFocus.observeIdentity(indexed);
-  $: groupMemberLabels = groupBreakdown
-    ? groupBreakdown.memberIds
-        .slice(0, 12)
-        .map((id) => displayItemLabel(indexed.itemById.get(id), id))
-    : [];
   /** The item type under the pointer, shown in a card beside it. `x` and `y` are relative to
    * the chart; `flip` puts the card on the pointer's left near the right edge. */
-  let hoveredGroup: {
+  let hoveredGroup = $state.raw<{
     kind: ContextItemKind;
     total: number;
     callIndex: number | null;
@@ -187,26 +193,26 @@
     x: number;
     y: number;
     flip: boolean;
-  } | null = null;
+  } | null>(null);
   let chartPlot: HTMLDivElement;
-  let economicsBreakdownElement: HTMLDivElement | null = null;
-  let economicsBreakdownStyle = '';
-  let economicsOverlayRevision = 0;
-  let economicsTrackComponent: { closeEventBreakdown: (returnFocus?: boolean) => void } | null =
-    null;
+  let economicsBreakdownStyle = $state('');
+  let economicsBreakdownElement = $state<HTMLDivElement | null>(null);
+  let economicsTrackComponent = $state<{
+    closeEventBreakdown: (returnFocus?: boolean) => void;
+  } | null>(null);
   /** Null means Fit all; otherwise this is the CSS-pixel distance between adjacent calls. */
-  let callSpacing: number | null = null;
+  let callSpacing = $state<number | null>(null);
   // Keep an explicit range fitted through responsive reflow; other navigation clears it.
-  let requestedRange: RequestedRange | null = null;
-  let pendingRangeResize: RequestedRange | null = null;
+  let requestedRange = $state<RequestedRange | null>(null);
+  let pendingRangeResize = $state<RequestedRange | null>(null);
   let lastPositionSignature = '';
-  let lastObservedWidth = observedWidth;
+  let lastObservedWidth = initialWidth;
   let lastCommandId: number | null = null;
   let lastPublishedStatus = '';
   let lastSelectionVisibilityKey = '';
   let lastColumns: ViewportCallPosition[] = [];
-  let pendingAdjustment: ViewportAdjustment | null = null;
-  let dragSelection: { startClientX: number; currentClientX: number } | null = null;
+  let pendingAdjustment = $state<ViewportAdjustment | null>(null);
+  let dragSelection = $state.raw<{ startClientX: number; currentClientX: number } | null>(null);
   let gestureState = emptyGestureState();
   let clickSuppressionTimer: number | null = null;
   let spaceHeld = false;
@@ -228,36 +234,86 @@
     usesInterpolatedEdge: false,
   };
 
-  $: positionSignature = JSON.stringify(
-    indexed.analysis.modelCalls.map((call) => [call.index, call.sourceRecordId]),
+  function visibilityChanged(): void {
+    if (!isVisible) {
+      groupFocus.cancel();
+      economicsInspectFocus.cancel();
+      cancelAllGestureState();
+      onHoverCall(null);
+      onHoverItem(null);
+      if (economicsEventBreakdown) closeEconomicsBreakdown(false);
+    } else if (host && host.clientWidth > 0) {
+      observedWidth = host.clientWidth;
+      hasObservedWidth = true;
+      syncScaleViewportMetrics();
+    }
+  }
+  // One ribbon and one call label are in the Tab order; arrow keys move within
+  // them. Other ribbons and labels stay focusable by pointer and script.
+  let rovingRibbonKey = $state<string | null>(null);
+  let costCopy = $derived(
+    describeCostBasis(indexed.analysis.economics.costBasis, indexed.analysis.session.source),
   );
-  $: callCount = indexed.analysis.modelCalls.length;
-  $: fitInnerWidth = Math.max(1, observedWidth - margin.left - margin.right);
-  $: fitCallSpacing = callCount > 1 ? fitInnerWidth / (callCount - 1) : 0;
-  $: effectiveCallSpacing = Math.max(callSpacing ?? fitCallSpacing, fitCallSpacing);
-  $: width =
+  let groupMemberLabels = $derived(
+    groupBreakdown
+      ? groupBreakdown.memberIds
+          .slice(0, 12)
+          .map((id) => displayItemLabel(indexed.itemById.get(id), id))
+      : [],
+  );
+  let positionSignature = $derived(
+    JSON.stringify(indexed.analysis.modelCalls.map((call) => [call.index, call.sourceRecordId])),
+  );
+  let callCount = $derived(indexed.analysis.modelCalls.length);
+  let fitInnerWidth = $derived(Math.max(1, observedWidth - margin.left - margin.right));
+  let fitCallSpacing = $derived(callCount > 1 ? fitInnerWidth / (callCount - 1) : 0);
+  let effectiveCallSpacing = $derived(Math.max(callSpacing ?? fitCallSpacing, fitCallSpacing));
+  let width = $derived(
     callCount > 1 && callSpacing !== null
       ? Math.max(observedWidth, margin.left + margin.right + (callCount - 1) * callSpacing)
-      : Math.max(1, observedWidth);
-  $: canonicalColumns = layoutCallColumns(indexed, geometryWidth, margin);
-  $: inputComparison = inputComparisons(indexed, canonicalColumns);
-  $: inputColumns = inputScaleColumns(canonicalColumns, inputComparison);
-  $: sessionVerticalMaximum = Math.max(
-    0,
-    ...inputColumns.map((column) => column.totalDisplayWeight),
+      : Math.max(1, observedWidth),
   );
-  $: scaleColumns = projectCallColumns(inputColumns, geometryWidth, width, margin);
-  $: visiblePlotLeft = Math.max(margin.left, viewportScrollLeft - measuredChartOffsetX);
-  $: visiblePlotRight = Math.min(
-    width - margin.right,
-    viewportScrollLeft - measuredChartOffsetX + observedWidth,
+  let canonicalColumns = $derived(layoutCallColumns(indexed, geometryWidth, margin));
+  let inputComparison = $derived(inputComparisons(indexed, canonicalColumns));
+  let inputColumns = $derived(inputScaleColumns(canonicalColumns, inputComparison));
+  let sessionVerticalMaximum = $derived(
+    Math.max(0, ...inputColumns.map((column) => column.totalDisplayWeight)),
   );
-  $: selectionPlotLeft = Math.max(margin.left, selectionViewportScrollLeft - measuredChartOffsetX);
-  $: selectionPlotRight = Math.min(
-    width - margin.right,
-    selectionViewportScrollLeft - measuredChartOffsetX + observedWidth,
+  let scaleColumns = $derived(projectCallColumns(inputColumns, geometryWidth, width, margin));
+  let visiblePlotLeft = $derived(Math.max(margin.left, viewportScrollLeft - measuredChartOffsetX));
+  let visiblePlotRight = $derived(
+    Math.min(width - margin.right, viewportScrollLeft - measuredChartOffsetX + observedWidth),
   );
-  $: selectionVisibility =
+  let selectionPlotLeft = $derived(
+    Math.max(margin.left, selectionViewportScrollLeft - measuredChartOffsetX),
+  );
+  let selectionPlotRight = $derived(
+    Math.min(
+      width - margin.right,
+      selectionViewportScrollLeft - measuredChartOffsetX + observedWidth,
+    ),
+  );
+  // The ribbons are always laid out at the session scale, so panning never rebuilds them.
+  // "Visible calls" stretches the drawing vertically about the plot's bottom edge instead.
+  let canonicalRiver = $derived(
+    layoutContextRiver(
+      indexed,
+      {
+        width: geometryWidth,
+        height,
+        margin,
+        minimumVisibleThickness: 1,
+        verticalDomainMax: inputComparison.size > 0 ? sessionVerticalMaximum : undefined,
+        groupByKind: riverDisplayMode === 'itemTypes',
+      },
+      canonicalColumns,
+    ),
+  );
+  let horizontalProjection = $derived(
+    projectRiverHorizontally(canonicalRiver, geometryWidth, width, margin),
+  );
+  let river = $derived(horizontalProjection.layout);
+  let selectionVisibility = $derived(
     selectedItemId === null || !hasObservedWidth || !isVisible
       ? null
       : {
@@ -269,120 +325,114 @@
               (selectionPlotRight - horizontalProjection.offset) /
               (horizontalProjection.scale || 1),
           }),
-        };
-  $: selectionVisibilityKey = JSON.stringify(selectionVisibility);
-  $: if (selectionVisibilityKey !== lastSelectionVisibilityKey) {
-    lastSelectionVisibilityKey = selectionVisibilityKey;
-    onSelectionVisibility(selectionVisibility);
-  }
-  $: if (lastVisibility !== isVisible) {
-    lastVisibility = isVisible;
-    if (!isVisible) {
-      groupFocus.cancel();
-      economicsInspectFocus.cancel();
-      cancelAllGestureState();
-      onHoverCall(null);
-      onHoverItem(null);
-      if (economicsEventBreakdown) closeEconomicsBreakdown(false);
-    } else if (host?.clientWidth > 0) {
-      observedWidth = host.clientWidth;
-      hasObservedWidth = true;
-      syncScaleViewportMetrics();
-    }
-  }
-  $: visibleScaleSample =
+        },
+  );
+  let selectionVisibilityKey = $derived(JSON.stringify(selectionVisibility));
+  let visibleScaleSample = $derived(
     verticalScaleMode === 'visible'
       ? visibleStackSample(scaleColumns, visiblePlotLeft, visiblePlotRight)
-      : emptyVisibleScaleSample;
-  // The ribbons are always laid out at the session scale, so panning never rebuilds them.
-  // "Visible calls" stretches the drawing vertically about the plot's bottom edge instead.
-  $: canonicalRiver = layoutContextRiver(
-    indexed,
-    {
-      width: geometryWidth,
-      height,
-      margin,
-      minimumVisibleThickness: 1,
-      verticalDomainMax: inputComparison.size > 0 ? sessionVerticalMaximum : undefined,
-      groupByKind: riverDisplayMode === 'itemTypes',
-    },
-    canonicalColumns,
+      : emptyVisibleScaleSample,
   );
-  $: horizontalProjection = projectRiverHorizontally(canonicalRiver, geometryWidth, width, margin);
-  $: river = horizontalProjection.layout;
-  $: layoutVerticalDomain = Math.max(
-    1,
-    inputComparison.size > 0 ? sessionVerticalMaximum : canonicalRiver.maxTotalDisplayWeight,
+  let layoutVerticalDomain = $derived(
+    Math.max(
+      1,
+      inputComparison.size > 0 ? sessionVerticalMaximum : canonicalRiver.maxTotalDisplayWeight,
+    ),
   );
-  $: verticalStretch =
+  let verticalStretch = $derived(
     verticalScaleMode === 'visible'
       ? layoutVerticalDomain / Math.max(1, visibleScaleSample.maxWeight)
-      : 1;
-  $: verticalOffset = (height - margin.bottom) * (1 - verticalStretch);
-  $: ribbonTransform =
+      : 1,
+  );
+  let verticalOffset = $derived((height - margin.bottom) * (1 - verticalStretch));
+  let ribbonTransform = $derived(
     verticalStretch === 1
       ? horizontalProjection.transform
-      : `${horizontalProjection.transform} matrix(1 0 0 ${verticalStretch} 0 ${verticalOffset})`;
-  $: cachePresentation = projectCachePresentation(indexed.analysis);
-  $: verticalAxisMaximum =
-    verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : sessionVerticalMaximum;
-  $: verticalAxisDomain = Math.max(1, verticalAxisMaximum);
-  $: inputReferences = layoutInputReferences(
-    river.columns,
-    inputComparison,
-    { width, height, margin, minimumVisibleThickness: 1 },
-    verticalAxisDomain,
+      : `${horizontalProjection.transform} matrix(1 0 0 ${verticalStretch} 0 ${verticalOffset})`,
   );
-  $: hasInputGap = [...inputComparison.values()].some((comparison) => comparison.gap > 0);
-  $: activeInputComparison = inputComparison.get(pinnedCallIndex ?? hoveredCallIndex ?? -1);
-  $: verticalAxisTicks = verticalScaleTicks(verticalAxisMaximum);
-  $: verticalAxisTickData = verticalAxisTicks.map((value, position) => ({
-    value,
-    position,
-    y: margin.top + river.innerHeight * (1 - value / verticalAxisDomain),
-    percent: Math.max(0, Math.min(100, 100 * (1 - value / verticalAxisDomain))),
-  }));
-  $: verticalAxisUnit =
+  let cachePresentation = $derived(projectCachePresentation(indexed.analysis));
+  let verticalAxisMaximum = $derived(
+    verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : sessionVerticalMaximum,
+  );
+  let verticalAxisDomain = $derived(Math.max(1, verticalAxisMaximum));
+  let inputReferences = $derived(
+    layoutInputReferences(
+      river.columns,
+      inputComparison,
+      { width, height, margin, minimumVisibleThickness: 1 },
+      verticalAxisDomain,
+    ),
+  );
+  let hasInputGap = $derived(
+    [...inputComparison.values()].some((comparison) => comparison.gap > 0),
+  );
+  let activeInputComparison = $derived(
+    inputComparison.get(pinnedCallIndex ?? hoveredCallIndex ?? -1),
+  );
+  let verticalAxisTicks = $derived(verticalScaleTicks(verticalAxisMaximum));
+  let verticalAxisTickData = $derived(
+    verticalAxisTicks.map((value, position) => ({
+      value,
+      position,
+      y: margin.top + river.innerHeight * (1 - value / verticalAxisDomain),
+      percent: Math.max(0, Math.min(100, 100 * (1 - value / verticalAxisDomain))),
+    })),
+  );
+  let verticalAxisUnit = $derived(
     indexed.analysis.displayWeightUnit === 'unavailable'
       ? 'structural placeholder stack weight (token geometry unavailable)'
-      : chartUnitLabel(indexed.analysis.displayWeightUnit);
-  $: verticalAxisDescription =
+      : chartUnitLabel(indexed.analysis.displayWeightUnit),
+  );
+  let verticalAxisDescription = $derived(
     verticalScaleMode === 'session'
       ? `Session-wide scale in ${verticalAxisUnit}. Ribbon heights remain comparable across the session.`
-      : `${visibleScaleSample.visibleCallCount} visible call markers in ${verticalAxisUnit}. Viewport edges are interpolated where needed; ribbon heights change as you pan or zoom.`;
-  $: verticalAxisAccessibleLabel = `Vertical axis. ${verticalAxisDescription} Tick values: ${verticalAxisTicks.map(formatVerticalTick).join(', ')}.`;
-  $: columnByCall = new Map(river.columns.map((column) => [column.callIndex, column]));
-  // Individual-item ribbons only; grouped Item types bands have no item emphasis.
-  $: ribbonByItemId = new Map(
-    river.ribbons
-      .filter((ribbon) => ribbon.groupKind === undefined)
-      .map((ribbon) => [ribbon.itemId, ribbon]),
+      : `${visibleScaleSample.visibleCallCount} visible call markers in ${verticalAxisUnit}. Viewport edges are interpolated where needed; ribbon heights change as you pan or zoom.`,
   );
-  $: hoveredRibbon = hoveredItemId === null ? null : (ribbonByItemId.get(hoveredItemId) ?? null);
-  $: selectedRibbon = selectedItemId === null ? null : (ribbonByItemId.get(selectedItemId) ?? null);
-  $: focusedItemId = selectedItemId ?? hoveredItemId;
-  // One ribbon and one call label are in the Tab order; arrow keys move within
-  // them. Other ribbons and labels stay focusable by pointer and script.
-  let rovingRibbonKey: string | null = null;
-  $: ribbonByKey = new Map(river.ribbons.map((ribbon) => [ribbon.key, ribbon]));
-  $: segmentsByItemId = river.ribbons.reduce((map, ribbon) => {
-    const segments = map.get(ribbon.itemId);
-    if (segments) segments.push(ribbon);
-    else map.set(ribbon.itemId, [ribbon]);
-    return map;
-  }, new Map<string, ContextRiverLayout['ribbons']>());
-  $: tabStopRibbonKey =
+  let verticalAxisAccessibleLabel = $derived(
+    `Vertical axis. ${verticalAxisDescription} Tick values: ${verticalAxisTicks.map(formatVerticalTick).join(', ')}.`,
+  );
+  let columnByCall = $derived(new Map(river.columns.map((column) => [column.callIndex, column])));
+  // Individual-item ribbons only; grouped Item types bands have no item emphasis.
+  let ribbonByItemId = $derived(
+    new Map(
+      river.ribbons
+        .filter((ribbon) => ribbon.groupKind === undefined)
+        .map((ribbon) => [ribbon.itemId, ribbon]),
+    ),
+  );
+  let hoveredRibbon = $derived(
+    hoveredItemId === null ? null : (ribbonByItemId.get(hoveredItemId) ?? null),
+  );
+  let selectedRibbon = $derived(
+    selectedItemId === null ? null : (ribbonByItemId.get(selectedItemId) ?? null),
+  );
+  let focusedItemId = $derived(selectedItemId ?? hoveredItemId);
+  let ribbonByKey = $derived(new Map(river.ribbons.map((ribbon) => [ribbon.key, ribbon])));
+  let segmentsByItemId = $derived(
+    river.ribbons.reduce((map, ribbon) => {
+      const segments = map.get(ribbon.itemId);
+      if (segments) segments.push(ribbon);
+      else map.set(ribbon.itemId, [ribbon]);
+      return map;
+    }, new Map<string, ContextRiverLayout['ribbons']>()),
+  );
+  let tabStopRibbonKey = $derived(
     rovingRibbonKey !== null && ribbonByKey.has(rovingRibbonKey)
       ? rovingRibbonKey
-      : (selectedRibbon?.key ?? river.ribbons[0]?.key ?? null);
-  $: labelledCallIndexes = [...callLabelPositions].map(
-    (position) => river.columns[position]?.callIndex,
+      : (selectedRibbon?.key ?? river.ribbons[0]?.key ?? null),
   );
-  $: tabStopCallIndex =
+  let callLabelPositions = $derived(
+    nonOverlappingCallLabelPositions(river.columns, condensedTargetSpacing, pinnedCallIndex),
+  );
+  let labelledCallIndexes = $derived(
+    [...callLabelPositions].map((position) => river.columns[position]?.callIndex),
+  );
+  let tabStopCallIndex = $derived(
     pinnedCallIndex !== null && labelledCallIndexes.includes(pinnedCallIndex)
       ? pinnedCallIndex
-      : (labelledCallIndexes[0] ?? null);
-  $: focusedConnectors =
+      : (labelledCallIndexes[0] ?? null),
+  );
+  let focusedConnectors = $derived(
     focusedItemId === null
       ? []
       : river.lineageConnectors
@@ -390,13 +440,16 @@
           .filter(
             ({ connector }) =>
               connector.fromItemId === focusedItemId || connector.toItemId === focusedItemId,
-          );
-  $: viewportColumns = river.columns.map((column) => ({
-    callIndex: column.callIndex,
-    x: column.x,
-    sourceRecordId: indexed.callByIndex.get(column.callIndex)?.sourceRecordId ?? null,
-  }));
-  $: minimumColumnSpacing =
+          ),
+  );
+  let viewportColumns = $derived(
+    river.columns.map((column) => ({
+      callIndex: column.callIndex,
+      x: column.x,
+      sourceRecordId: indexed.callByIndex.get(column.callIndex)?.sourceRecordId ?? null,
+    })),
+  );
+  let minimumColumnSpacing = $derived(
     viewportColumns.length < 2
       ? Number.POSITIVE_INFINITY
       : viewportColumns.reduce(
@@ -405,37 +458,90 @@
               ? minimum
               : Math.min(minimum, column.x - viewportColumns[position - 1].x),
           Number.POSITIVE_INFINITY,
-        );
-  $: callTargetStride =
+        ),
+  );
+  let callTargetStride = $derived(
     minimumColumnSpacing < condensedTargetSpacing
       ? Math.ceil(condensedTargetSpacing / Math.max(1, minimumColumnSpacing))
-      : 1;
-  $: callLabelPositions = nonOverlappingCallLabelPositions(
-    river.columns,
-    condensedTargetSpacing,
-    pinnedCallIndex,
+      : 1,
   );
   // Guides do not follow the pin, so pinning never repaints the ribbon layer.
-  $: guidePositions = nonOverlappingCallLabelPositions(river.columns, condensedTargetSpacing, null);
-  $: zoomFactor = fitCallSpacing > 0 ? Math.max(1, effectiveCallSpacing / fitCallSpacing) : 1;
-  $: isFitAll = callSpacing === null || width <= observedWidth + 1;
-  $: maximumCallSpacing = fitCallSpacing * Math.min(maxZoomFactor, Math.max(1, callCount - 1));
-  $: canZoomIn = callCount > 1 && effectiveCallSpacing < maximumCallSpacing - 0.5;
-  $: canZoomOut = callCount > 1 && !isFitAll && zoomFactor > 1.01;
-  $: selectionRect = dragSelection
-    ? {
-        x: Math.min(viewBoxX(dragSelection.startClientX), viewBoxX(dragSelection.currentClientX)),
-        width: Math.abs(
-          viewBoxX(dragSelection.currentClientX) - viewBoxX(dragSelection.startClientX),
-        ),
-      }
-    : null;
-  $: economicsBreakdownStyle = positionEconomicsBreakdown(economicsOverlayRevision);
+  let guidePositions = $derived(
+    nonOverlappingCallLabelPositions(river.columns, condensedTargetSpacing, null),
+  );
+  let zoomFactor = $derived(
+    fitCallSpacing > 0 ? Math.max(1, effectiveCallSpacing / fitCallSpacing) : 1,
+  );
+  let isFitAll = $derived(callSpacing === null || width <= observedWidth + 1);
+  let maximumCallSpacing = $derived(
+    fitCallSpacing * Math.min(maxZoomFactor, Math.max(1, callCount - 1)),
+  );
+  let canZoomIn = $derived(callCount > 1 && effectiveCallSpacing < maximumCallSpacing - 0.5);
+  let canZoomOut = $derived(callCount > 1 && !isFitAll && zoomFactor > 1.01);
+  let selectionRect = $derived(
+    dragSelection
+      ? {
+          x: Math.min(viewBoxX(dragSelection.startClientX), viewBoxX(dragSelection.currentClientX)),
+          width: Math.abs(
+            viewBoxX(dragSelection.currentClientX) - viewBoxX(dragSelection.startClientX),
+          ),
+        }
+      : null,
+  );
+  // Effects come after every state and derived declaration: a pre-update effect runs as soon
+  // as it is declared.
+  $effect.pre(() => {
+    const next = preferences;
+    if (next === appliedPreferences) return;
+    appliedPreferences = next;
+    untrack(() => applyPreferences(next));
+  });
+  $effect.pre(() => groupFocus.observeIdentity(indexed));
+  $effect.pre(() => economicsInspectFocus.observeIdentity(indexed));
+  $effect.pre(() => {
+    if (selectionVisibilityKey === lastSelectionVisibilityKey) return;
+    lastSelectionVisibilityKey = selectionVisibilityKey;
+    const status = selectionVisibility;
+    untrack(() => onSelectionVisibility(status));
+  });
+  $effect.pre(() => {
+    if (lastVisibility === isVisible) return;
+    lastVisibility = isVisible;
+    untrack(visibilityChanged);
+  });
 
-  beforeUpdate(() => {
+  // Before the DOM takes new call positions or a new width, remember which call is in view so
+  // the view can be moved back to it afterwards. The values read first are the ones that move
+  // the columns; the rest is read without tracking.
+  $effect.pre(() => {
+    void [positionSignature, observedWidth, callSpacing, requestedRange];
+    untrack(captureAnchorBeforeUpdate);
+  });
+
+  // After the DOM update: apply pending scroll adjustments and navigation, then publish the
+  // viewport. The values read first are everything that can move the chart or is waiting for it.
+  $effect(() => {
+    void [
+      navigationCommand,
+      isVisible,
+      width,
+      river,
+      positionSignature,
+      observedWidth,
+      hasObservedWidth,
+      callSpacing,
+      pendingAdjustment,
+      pendingRangeResize,
+      economicsEventBreakdown,
+      economicsBreakdownElement,
+    ];
+    untrack(settleAfterUpdate);
+  });
+
+  function captureAnchorBeforeUpdate(): void {
     if (!host) return;
     if (requestedRange && callSpacing !== null && observedWidth !== lastObservedWidth) {
-      // Defer until afterUpdate so the new anchor is applied against the resized SVG geometry.
+      // Defer until after the update so the new anchor is applied against the resized SVG geometry.
       pendingRangeResize = requestedRange;
       return;
     }
@@ -459,9 +565,9 @@
             );
       if (anchor) pendingAdjustment = { kind: 'anchor', anchor };
     }
-  });
+  }
 
-  afterUpdate(() => {
+  function settleAfterUpdate(): void {
     if (!host) return;
     if (groupBreakdownReturnElement && !groupBreakdownReturnElement.isConnected)
       groupBreakdownReturnElement = null;
@@ -499,10 +605,10 @@
     lastColumns = viewportColumns;
     publishViewport();
     if (economicsEventBreakdown && economicsBreakdownElement) {
-      const nextStyle = positionEconomicsBreakdown(economicsOverlayRevision);
+      const nextStyle = positionEconomicsBreakdown();
       if (nextStyle !== economicsBreakdownStyle) economicsBreakdownStyle = nextStyle;
     }
-  });
+  }
 
   // Scroll events can arrive several times a frame; their work reads layout, so it runs at most
   // once per frame.
@@ -1098,12 +1204,12 @@
   function refreshEconomicsOverlay(): void {
     // Only an open breakdown is positioned against the page, so other scrolls need no update.
     if (!economicsEventBreakdown) return;
-    economicsOverlayRevision += 1;
+    economicsBreakdownStyle = positionEconomicsBreakdown();
     if (host && !economicsAnchorVisible(host, economicsEventBreakdown))
       closeEconomicsBreakdown(false);
   }
 
-  function positionEconomicsBreakdown(_revision: number): string {
+  function positionEconomicsBreakdown(): string {
     return host ? positionOverlay(host, economicsBreakdownElement, economicsEventBreakdown) : '';
   }
 
@@ -1340,7 +1446,7 @@
         >
       {/each}
     </div>
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_click_events_have_key_events a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events, a11y_no_noninteractive_tabindex -->
     <div
       class="river-scroll"
       bind:this={host}
