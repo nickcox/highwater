@@ -1,4 +1,4 @@
-# TokenPlume development
+# Highwater development
 
 ## Requirements
 
@@ -28,9 +28,9 @@ RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 
 **Formatting.** Prettier is configured in `web/.prettierrc.json` for Svelte and TypeScript source, tests and the root TypeScript configs, leaving out the generated `web/dist/`. Run `npm --prefix web run format` to apply it and `npm --prefix web run format:check` to check it.
 
-**Browser tests.** The browser tests use Playwright with Chromium and mocked API responses. Install the browser once with `npm --prefix web run test:browser:install`. To save desktop and narrow screenshots outside the repository, set `TOKENPLUME_BASELINE_SCREENSHOTS=/tmp/tokenplume-browser-baseline` when running `npm --prefix web run test:browser`.
+**Browser tests.** The browser tests use Playwright with Chromium and mocked API responses. Install the browser once with `npm --prefix web run test:browser:install`. To save desktop and narrow screenshots outside the repository, set `HIGHWATER_BASELINE_SCREENSHOTS=/tmp/highwater-browser-baseline` when running `npm --prefix web run test:browser`.
 
-The integrated browser checks run the real server with its embedded frontend. Each uses the debug binary by default, or the release binary when `TOKENPLUME_BROWSER_BUILD_PROFILE=release` is set:
+The integrated browser checks run the real server with its embedded frontend. Each uses the debug binary by default, or the release binary when `HIGHWATER_BROWSER_BUILD_PROFILE=release` is set:
 
 - `scripts/browser-smoke-integrated.sh` uses a generated synthetic Pi session, and also checks its cache track and Composition at a pinned call.
 - `scripts/browser-smoke-opencode-integrated.sh` generates a separate SQLite database and Pi session, and checks mixed discovery, filtering, OpenCode coverage and cost labels, view links, Composition, refresh after a WAL write, and the narrow layout.

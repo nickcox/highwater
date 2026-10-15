@@ -3,7 +3,7 @@ import { chooseSession } from './session-picker';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const projects = process.env.TOKENPLUME_CLAUDE_CODE_FIXTURE;
+const projects = process.env.HIGHWATER_CLAUDE_CODE_FIXTURE;
 
 interface Listed {
   id: string;

@@ -4,6 +4,8 @@ const TIKTOKEN_VERSION: &str = "tiktoken-4.1.2";
 // Anthropic publishes no tokenizer for Claude 3 or later. Claude estimates come from the port
 // of ctok in `claude/`, a reconstruction of each tokenizer generation from count_tokens
 // measurements, at the ctok commit named here.
+// This and the other "tokenplume" strings below keep the project's earlier name: they are
+// hashed into profile IDs, so changing them would change every ID.
 const CTOK_VERSION: &str = "ctok-8c43ffd+tokenplume-port-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

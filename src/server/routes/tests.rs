@@ -91,12 +91,12 @@ async fn catalogue_etags_track_generation_and_revision_while_availability_header
     let headers = conditional(&format!("\"other\", {original_etag}"));
     let response =
         list_response(&snapshot, LiveAvailability::Active, &HeaderMap::new()).expect("list");
-    assert_eq!(response.headers()["X-TokenPlume-Catalog-Revision"], "4");
+    assert_eq!(response.headers()["X-Highwater-Catalog-Revision"], "4");
     assert_eq!(body(response).await, b"{\"sessions\":[]}".as_slice());
     let response = list_response(&snapshot, LiveAvailability::Degraded, &headers)
         .expect("conditional degraded list");
     assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
-    assert_eq!(response.headers()["X-TokenPlume-Live-Updates"], "degraded");
+    assert_eq!(response.headers()["X-Highwater-Live-Updates"], "degraded");
     assert!(body(response).await.is_empty());
     snapshot.revision += 1;
     let response =

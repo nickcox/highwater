@@ -1,8 +1,8 @@
 # Price data
 
-TokenPlume uses this data to estimate the cost of model calls whose harness did not record one, and to give an API-equivalent cost for calls covered by a subscription. How each call's cost is worked out is in [data semantics](../../docs/data-semantics.md#cost-assessment).
+Highwater uses this data to estimate the cost of model calls whose harness did not record one, and to give an API-equivalent cost for calls covered by a subscription. How each call's cost is worked out is in [data semantics](../../docs/data-semantics.md#cost-assessment).
 
-TokenPlume embeds only `prices.json` and never downloads prices while running.
+Highwater embeds only `prices.json` and never downloads prices while running.
 
 ## Why costs are assessed
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure TokenPlume's Claude token estimates against the usage the provider reported.
+"""Measure Highwater's Claude token estimates against the usage the provider reported.
 
 Runs the ignored Rust test `export_claude_usage_steps` on this machine's Claude Code and Pi
 sessions. Between two consecutive calls to the same Claude model where the second only adds
@@ -93,7 +93,7 @@ def main():
         export = pathlib.Path(directory) / 'steps.jsonl'
         result = subprocess.run(
             ['cargo', 'test', '--release', '--quiet', 'export_claude_usage_steps', '--', '--ignored'],
-            cwd=ROOT, env={**os.environ, 'TOKENPLUME_USAGE_EXPORT': str(export)},
+            cwd=ROOT, env={**os.environ, 'HIGHWATER_USAGE_EXPORT': str(export)},
             stdout=subprocess.DEVNULL)
         if result.returncode != 0 or not export.exists():
             sys.exit('The export test failed.')

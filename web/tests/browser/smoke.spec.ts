@@ -9,7 +9,7 @@ import { timingExplanation } from '../../src/lib/components/call-timing';
 import { compositionScenario } from '../../src/lib/testing/composition-scenarios';
 import { sessionScenario } from '../../src/lib/testing/session-scenarios';
 
-const integrated = process.env.TOKENPLUME_BROWSER_INTEGRATED === '1';
+const integrated = process.env.HIGHWATER_BROWSER_INTEGRATED === '1';
 const generation = '0123456789abcdef0123456789abcdef';
 const failedUsageExport = JSON.parse(
   readFileSync(new URL('../../../fixtures/analysis/failed-usage.json', import.meta.url), 'utf8'),
@@ -360,9 +360,9 @@ async function mockApi(
       contentType: 'application/json',
       headers: {
         etag: '"catalog-v0"',
-        'X-TokenPlume-Server-Generation': generation,
-        'X-TokenPlume-Catalog-Revision': '0',
-        'X-TokenPlume-Live-Updates': 'active',
+        'X-Highwater-Server-Generation': generation,
+        'X-Highwater-Catalog-Revision': '0',
+        'X-Highwater-Live-Updates': 'active',
       },
       body: JSON.stringify({
         sessions: [
@@ -370,7 +370,7 @@ async function mockApi(
             id: 'browser-smoke',
             fileName: 'browser-smoke.jsonl',
             displayName: 'Sanitized browser smoke fixture',
-            workingDirectory: '/tmp/tokenplume-browser-smoke',
+            workingDirectory: '/tmp/highwater-browser-smoke',
             startedAt: null,
             byteSize: 1,
             modifiedAt: null,
@@ -391,7 +391,7 @@ async function mockApi(
 }
 
 async function assertLoaded(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'TokenPlume' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Highwater' })).toBeVisible();
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
     'data-session-id',
@@ -532,7 +532,7 @@ test('mocked app loads a session, selects an item, and navigates the chart', asy
   await assertLoaded(page);
   await expect(page.getByTestId('live-status')).toHaveText('Live updates: live');
 
-  const screenshotDirectory = process.env.TOKENPLUME_BASELINE_SCREENSHOTS;
+  const screenshotDirectory = process.env.HIGHWATER_BASELINE_SCREENSHOTS;
   if (screenshotDirectory) {
     for (const width of [1440, 1280, 1100]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 900 });
@@ -2180,7 +2180,7 @@ test('vertical scale controls explain local ribbon heights and keep the axis anc
     expect(tickPositions[index]!.y).toBeLessThan(tickPositions[index - 1]!.y);
     expect(tickPositions[index - 1]!.y - tickPositions[index]!.y).toBeGreaterThan(12);
   }
-  const scaleScreenshotDirectory = process.env.TOKENPLUME_SCALE_SCREENSHOTS;
+  const scaleScreenshotDirectory = process.env.HIGHWATER_SCALE_SCREENSHOTS;
   if (scaleScreenshotDirectory) {
     await captureBaselineState(page, scaleScreenshotDirectory, 'visible-scale-long-session');
   }
@@ -2698,7 +2698,7 @@ test('dense economics annotations fit their lane and keep the readout in flow', 
   const timings: Record<string, number> = {};
   const record = (stage: string) => {
     timings[stage] = Date.now() - started;
-    if (process.env.TOKENPLUME_PROFILE_BROWSER) console.log(stage, timings[stage]);
+    if (process.env.HIGHWATER_PROFILE_BROWSER) console.log(stage, timings[stage]);
   };
   await mockApi(page, denseEconomicsScenario());
   record('fixture prepared');
@@ -2708,7 +2708,7 @@ test('dense economics annotations fit their lane and keep the readout in flow', 
   await expandEconomics(page);
   record('economics expanded');
   const layoutCount = await page.evaluate(
-    () => performance.getEntriesByName('tokenplume-layout-river').length,
+    () => performance.getEntriesByName('highwater-layout-river').length,
   );
   const canonicalPath = await page.locator('.ribbon-hit').first().getAttribute('d');
   await page.locator('.ribbon-hit').first().click();
@@ -2717,7 +2717,7 @@ test('dense economics annotations fit their lane and keep the readout in flow', 
     .poll(() => page.getByTestId('river-host').evaluate((node) => node.clientWidth))
     .toBeLessThan(1100);
   expect(
-    await page.evaluate(() => performance.getEntriesByName('tokenplume-layout-river').length),
+    await page.evaluate(() => performance.getEntriesByName('highwater-layout-river').length),
   ).toBe(layoutCount);
   expect(await page.locator('.ribbon-hit').first().getAttribute('d')).toBe(canonicalPath);
   record('inspector occupied');
@@ -2834,7 +2834,7 @@ test('terminal summaries without calls remain selectable from the lifespan list'
   test.skip(integrated, 'This regression uses a deterministic terminal-summary fixture.');
   await mockApi(page, sessionScenario('terminalSummaryOnly'));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'TokenPlume' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Highwater' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No model calls' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Context lifespans · 1 item' })).toBeVisible();
   await expect(page.getByRole('application', { name: 'Context River' })).toHaveCount(0);
@@ -2850,8 +2850,8 @@ test('terminal summaries without calls remain selectable from the lifespan list'
 });
 
 test('capture partial-estimate baseline screenshot', async ({ page }) => {
-  const directory = process.env.TOKENPLUME_BASELINE_SCREENSHOTS;
-  test.skip(integrated || !directory, 'Set TOKENPLUME_BASELINE_SCREENSHOTS to capture baselines.');
+  const directory = process.env.HIGHWATER_BASELINE_SCREENSHOTS;
+  test.skip(integrated || !directory, 'Set HIGHWATER_BASELINE_SCREENSHOTS to capture baselines.');
   await mockApi(page, sessionScenario('partialGeometry'));
   await page.goto('/');
   await assertLoaded(page);
@@ -2861,8 +2861,8 @@ test('capture partial-estimate baseline screenshot', async ({ page }) => {
 });
 
 test('capture unavailable-geometry baseline screenshot', async ({ page }) => {
-  const directory = process.env.TOKENPLUME_BASELINE_SCREENSHOTS;
-  test.skip(integrated || !directory, 'Set TOKENPLUME_BASELINE_SCREENSHOTS to capture baselines.');
+  const directory = process.env.HIGHWATER_BASELINE_SCREENSHOTS;
+  test.skip(integrated || !directory, 'Set HIGHWATER_BASELINE_SCREENSHOTS to capture baselines.');
   await mockApi(page, sessionScenario('unavailableGeometry'));
   await page.goto('/');
   await assertLoaded(page);
@@ -2997,7 +2997,7 @@ test('retired Compact preference is ignored without losing scale, grouping or ec
     economics: { expanded: true, lastMode: 'cost', cacheView: 'share' },
   });
   await page.addInitScript(
-    (value) => localStorage.setItem('tokenplume.presentation.v1', value),
+    (value) => localStorage.setItem('highwater.presentation.v1', value),
     legacy,
   );
   await mockApi(page, economicsScenario());
@@ -3013,15 +3013,13 @@ test('retired Compact preference is ignored without losing scale, grouping or ec
     'aria-pressed',
     'true',
   );
-  expect(await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1'))).toBe(
-    legacy,
-  );
+  expect(await page.evaluate(() => localStorage.getItem('highwater.presentation.v1'))).toBe(legacy);
   await expect(page.getByRole('group', { name: 'River layout' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Compact River', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Balanced', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Items', exact: true }).click();
   const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!),
+    JSON.parse(localStorage.getItem('highwater.presentation.v1')!),
   );
   expect(stored.river).toEqual({ verticalScale: 'visible', display: 'items' });
   expect(stored.economics).toEqual({ expanded: true, lastMode: 'cost', cacheView: 'share' });
@@ -3137,7 +3135,7 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
     'false',
   );
   await expect(page.locator('.economics-track-svg')).toHaveCount(0);
-  expect(await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('highwater.presentation.v1'))).toBeNull();
   const emptyWidth = (await host.boundingBox())!.width;
   await page.getByRole('button', { name: 'bash: npm test', exact: true }).click();
   await page.getByRole('button', { name: 'Pin model call 1', exact: true }).click();
@@ -3193,13 +3191,13 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
   await expect(page.locator('#selected-item-summary')).toBeVisible();
   expect(
-    await page.evaluate(() => localStorage.getItem('tokenplume.presentation.v1')),
+    await page.evaluate(() => localStorage.getItem('highwater.presentation.v1')),
   ).not.toContain('browser-smoke');
   await expect(
     page.getByRole('button', { name: 'Reset view preferences', exact: true }),
   ).toHaveCount(0);
   const economicsBefore = await page.evaluate(
-    () => JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).economics,
+    () => JSON.parse(localStorage.getItem('highwater.presentation.v1')!).economics,
   );
   await page.getByRole('button', { name: 'Session scale', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Session scale', exact: true })).toHaveAttribute(
@@ -3209,7 +3207,7 @@ test('quiet defaults, explicit preferences, staged Escape and inspector remount 
   await expect(page.locator('.economics-track-svg')).toHaveCount(1);
   expect(
     await page.evaluate(
-      () => JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).economics,
+      () => JSON.parse(localStorage.getItem('highwater.presentation.v1')!).economics,
     ),
   ).toEqual(economicsBefore);
   await expect(page.locator('#pinned-call-summary')).toHaveText('Pinned call 1');
@@ -3234,10 +3232,10 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
     );
     if (width === 1440)
       expect((await page.locator('.river-scroll .river-plot').boundingBox())!.y).toBeLessThan(400);
-    if (process.env.TOKENPLUME_CALM_SCREENSHOTS)
+    if (process.env.HIGHWATER_CALM_SCREENSHOTS)
       await captureBaselineState(
         page,
-        process.env.TOKENPLUME_CALM_SCREENSHOTS,
+        process.env.HIGHWATER_CALM_SCREENSHOTS,
         `${width}-empty-inspector`,
       );
   }
@@ -3258,7 +3256,7 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
   await expect(inspectFirst).toBeVisible();
   await inspectFirst.click();
   await expect(inspectFirst).toHaveCount(0);
-  const output = process.env.TOKENPLUME_CALM_SCREENSHOTS;
+  const output = process.env.HIGHWATER_CALM_SCREENSHOTS;
   if (output) await captureBaselineState(page, output, 'desktop-selected-pinned');
   await expandEconomics(page);
   const plotBackground = await page

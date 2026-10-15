@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const database = process.env.TOKENPLUME_OPENCODE_FIXTURE;
+const database = process.env.HIGHWATER_OPENCODE_FIXTURE;
 
 async function checkDirectoryReplacement(page: import('@playwright/test').Page) {
   test.skip(!database, 'Synthetic embedded-server fixture only.');

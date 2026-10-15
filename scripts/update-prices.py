@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build TokenPlume's price table from models.dev history and amendments.
+"""Build Highwater's price table from models.dev history and amendments.
 
-TokenPlume embeds data/prices/prices.json and never downloads prices at runtime.
+Highwater embeds data/prices/prices.json and never downloads prices at runtime.
 This script produces that file offline, from checkouts that are already downloaded:
 
-    # Convert wakamex/model-prices' corrections into TokenPlume's amendment format.
+    # Convert wakamex/model-prices' corrections into Highwater's amendment format.
     python3 scripts/update-prices.py import-amendments --model-prices ../model-prices
 
     # Replay models.dev's git history, apply every amendment, write prices.json.

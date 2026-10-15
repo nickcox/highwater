@@ -36,9 +36,9 @@ describe('fetchSessions', () => {
             status: 200,
             headers: {
               etag: '"catalog-v4"',
-              'X-TokenPlume-Server-Generation': '0123456789abcdef0123456789abcdef',
-              'X-TokenPlume-Catalog-Revision': '18446744073709551615',
-              'X-TokenPlume-Live-Updates': 'active',
+              'X-Highwater-Server-Generation': '0123456789abcdef0123456789abcdef',
+              'X-Highwater-Catalog-Revision': '18446744073709551615',
+              'X-Highwater-Live-Updates': 'active',
             },
           }),
       ),

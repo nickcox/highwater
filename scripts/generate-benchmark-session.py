@@ -62,7 +62,7 @@ def generate(case: str) -> list[dict[str, object]]:
             "version": 3,
             "id": f"benchmark-{case}",
             "timestamp": "2026-01-01T00:00:00Z",
-            "cwd": "/tmp/tokenplume-generated",
+            "cwd": "/tmp/highwater-generated",
         }
     ]
     parent: str | None = None

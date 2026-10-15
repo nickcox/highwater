@@ -11,7 +11,7 @@ export interface PresentationPreferences {
   };
 }
 
-export const PRESENTATION_KEY = 'tokenplume.presentation.v1';
+export const PRESENTATION_KEY = 'highwater.presentation.v1';
 export function defaultPresentationPreferences(): PresentationPreferences {
   return {
     version: 1,

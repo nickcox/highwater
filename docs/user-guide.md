@@ -1,14 +1,14 @@
-# TokenPlume user guide
+# Highwater user guide
 
 How to open sessions and read the Context River, Composition and lifespans views. For what the numbers mean and where they come from, see [data semantics](data-semantics.md).
 
 ## Opening a session
 
-Open the URL TokenPlume prints when it starts. The server listens only on `127.0.0.1` and never changes session files. It also rejects any request whose `Host` (or `Origin`, when present) is not `127.0.0.1` or `localhost` on its own port, so a web page cannot use DNS rebinding to read your sessions.
+Open the URL Highwater prints when it starts. The server listens only on `127.0.0.1` and never changes session files. It also rejects any request whose `Host` (or `Origin`, when present) is not `127.0.0.1` or `localhost` on its own port, so a web page cannot use DNS rebinding to read your sessions.
 
 The picker has a **Harness** list (All harnesses, Pi, OpenCode, Claude Code, VS Code Copilot) and a **Session** field showing the open session. Click or type in the field to open the session list; typing filters it by title or working directory. ↑/↓ and Enter choose a session, and Escape closes the list without changing anything. Filtering never switches the open session.
 
-When the list mixes harnesses, each entry names the application that recorded it. An OpenCode child session or a Claude Code subagent is listed as its own session, labelled **child session** (followed by the subagent's type for Claude Code), and its context is not merged into the parent's. If the same native session ID appears in two OpenCode databases, TokenPlume refuses to open it rather than pick one copy.
+When the list mixes harnesses, each entry names the application that recorded it. An OpenCode child session or a Claude Code subagent is listed as its own session, labelled **child session** (followed by the subagent's type for Claude Code), and its context is not merged into the parent's. If the same native session ID appears in two OpenCode databases, Highwater refuses to open it rather than pick one copy.
 
 Going back to a session you viewed recently shows the analysis the browser kept, then checks with the server in the background whether it has changed. If that check fails, the kept view stays and a warning appears.
 
@@ -44,7 +44,7 @@ Each band is a context item, drawn at its estimated size at every model call it 
 
 **Reported input.** Where the provider recorded each call's input, a dashed **Reported input** line shows it, and hatched **Unreconciled input** fills the gap between the stacked estimates and that line. Both appear in either display mode and either scale. The line breaks where a call has no comparable figure, and estimates above the reported input are never shrunk to fit. The gap is an approximate difference, not missing items, and it does not change item counts, lifetimes, token-turns, Composition or costs.
 
-**Versions.** A request carries one system prompt and one definition per tool, so when a new one replaces the previous one, TokenPlume shows them as versions of one item. Versions share a colour and a place in the stack, and each version's band runs into the next. A white mark shows where the system prompt changes; tool definitions are too thin to mark.
+**Versions.** A request carries one system prompt and one definition per tool, so when a new one replaces the previous one, Highwater shows them as versions of one item. Versions share a colour and a place in the stack, and each version's band runs into the next. A white mark shows where the system prompt changes; tool definitions are too thin to mark.
 
 **Compaction.** In **Items** view, faint colour-blended flows join the items a compaction summarised to the summary's band, and retained items carry on unchanged. The flows show that those items were replaced by a lossy summary. They do not show how many of the summary's tokens came from each source. Hovering or selecting a source highlights its flow, and selecting the summary lightly highlights all of its incoming flows. **Item types** view does not draw flows, and a summary from the end of a session, with no call after it, has no band.
 
@@ -91,7 +91,7 @@ The item inspector shows "version N of M" for a versioned item and lists every v
 - the approximate visible call range;
 - the pinned call and the selected item.
 
-Reloading the page, or going Back or Forward, restores the view. If something in a link no longer exists, TokenPlume says so instead of selecting something else, and it refuses a session reference that matches more than one session.
+Reloading the page, or going Back or Forward, restores the view. If something in a link no longer exists, Highwater says so instead of selecting something else, and it refuses a session reference that matches more than one session.
 
 Panning and zooming update the current history entry; other navigation can add entries. A link carries opaque identifiers, not session content or local paths, and does not give anyone access to the session. A display mode in the link overrides your saved one; without one, your saved preference applies (Items by default). Opening a link does not change your saved preferences. If the browser blocks the clipboard, the link appears in a field you can copy by hand. Copied links leave out URL credentials and unused query parameters.
 

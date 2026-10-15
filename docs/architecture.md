@@ -1,6 +1,6 @@
-# TokenPlume architecture
+# Highwater architecture
 
-TokenPlume is a Rust server with an embedded Svelte frontend.
+Highwater is a Rust server with an embedded Svelte frontend.
 
 ## Rust server
 
@@ -25,3 +25,5 @@ The server reads session files, rebuilds each model call's context, counts token
 `GET /api/sessions` returns the current catalogue, with its generation, revision, availability and ETag in headers. `GET /api/events` sends Server-Sent Events that carry no session content and only say that something changed; the browser then fetches the catalogue again rather than treating the events as a log.
 
 Discovery is local and keeps working over plain HTTP when Server-Sent Events or file watching are unavailable. If a readable session folder cannot be watched, the server starts in a degraded mode and refreshes the catalogue, within limits, when requests arrive. OpenCode databases are also polled every two seconds, which also catches a watched folder being replaced. A source that fails briefly recovers after its next successful scan without affecting watchers that work. A watcher that is lost stays marked as degraded until the server restarts, while polling and request-driven refreshes carry on.
+
+Highwater was called TokenPlume while it was developed. Hash derivation keys and tokenization profile strings still contain that name, because session references and profile IDs are hashed from them; changing them would change every reference and ID.

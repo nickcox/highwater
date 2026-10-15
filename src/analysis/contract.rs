@@ -718,7 +718,7 @@ fn export_live_contract() {
         cases.push((name.into(), analysis));
     }
 
-    let export = std::env::var_os("TOKENPLUME_CONTRACT_DIR").map(PathBuf::from);
+    let export = std::env::var_os("HIGHWATER_CONTRACT_DIR").map(PathBuf::from);
     if let Some(directory) = &export {
         assert!(
             directory.is_absolute() && directory.is_dir(),

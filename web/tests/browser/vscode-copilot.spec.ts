@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { chooseSession } from './session-picker';
 
-const userFolder = process.env.TOKENPLUME_VSCODE_COPILOT_FIXTURE;
+const userFolder = process.env.HIGHWATER_VSCODE_COPILOT_FIXTURE;
 
 interface Listed {
   id: string;

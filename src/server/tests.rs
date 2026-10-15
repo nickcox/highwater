@@ -455,7 +455,7 @@ async fn injected_watcher_failure_keeps_degraded_http_usable() {
         .await
         .expect("degraded sessions response");
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()["X-TokenPlume-Live-Updates"], "degraded");
+    assert_eq!(response.headers()["X-Highwater-Live-Updates"], "degraded");
     responder.await.expect("degraded responder");
 }
 
@@ -637,8 +637,8 @@ async fn list_response_has_generation_scoped_headers_and_etag() {
         .await
         .expect("list response");
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()["X-TokenPlume-Catalog-Revision"], "0");
-    assert_eq!(response.headers()["X-TokenPlume-Live-Updates"], "active");
+    assert_eq!(response.headers()["X-Highwater-Catalog-Revision"], "0");
+    assert_eq!(response.headers()["X-Highwater-Live-Updates"], "active");
     let etag = response.headers()[header::ETAG].clone();
     let mut conditional = axum::http::Request::builder()
         .uri("/api/sessions")
@@ -655,7 +655,7 @@ async fn list_response_has_generation_scoped_headers_and_etag() {
     assert!(not_modified.headers().contains_key(header::ETAG));
     assert!(not_modified
         .headers()
-        .contains_key("X-TokenPlume-Server-Generation"));
+        .contains_key("X-Highwater-Server-Generation"));
 }
 
 #[tokio::test]

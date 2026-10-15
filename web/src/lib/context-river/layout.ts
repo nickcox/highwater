@@ -131,7 +131,7 @@ export function layoutContextRiver(
   precomputedColumns?: readonly CallColumn[],
 ): ContextRiverLayout {
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
-    performance.mark('tokenplume-layout-start');
+    performance.mark('highwater-layout-start');
   }
   const { analysis, itemById } = indexed;
   const innerWidth = Math.max(0, options.width - options.margin.left - options.margin.right);
@@ -433,12 +433,8 @@ export function layoutContextRiver(
       });
 
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
-    performance.mark('tokenplume-layout-end');
-    performance.measure(
-      'tokenplume-layout-river',
-      'tokenplume-layout-start',
-      'tokenplume-layout-end',
-    );
+    performance.mark('highwater-layout-end');
+    performance.measure('highwater-layout-river', 'highwater-layout-start', 'highwater-layout-end');
   }
   return {
     chartUnit: analysis.displayWeightUnit,

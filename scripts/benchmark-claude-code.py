@@ -92,9 +92,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--calls', type=int, default=700)
     parser.add_argument('--characters', type=int, default=7000)
-    parser.add_argument('--binary', default=str(ROOT / 'target/release/tokenplume'))
+    parser.add_argument('--binary', default=str(ROOT / 'target/release/highwater'))
     arguments = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix='tokenplume-claude-code-benchmark-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='highwater-claude-code-benchmark-') as temporary:
         temporary = pathlib.Path(temporary)
         project = temporary / 'projects' / '-synthetic-benchmark'
         project.mkdir(parents=True)

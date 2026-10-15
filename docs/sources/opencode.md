@@ -1,10 +1,10 @@
 # OpenCode sessions
 
-How TokenPlume reads [OpenCode](https://github.com/anomalyco/opencode) sessions. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
+How Highwater reads [OpenCode](https://github.com/anomalyco/opencode) sessions. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
 
 ## Where sessions are
 
-OpenCode keeps sessions in SQLite databases, `opencode.db` and `opencode-stable.db`, under `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`), each with `-wal` and `-shm` files. Without source options, TokenPlume reads those that exist. `--opencode-db` (repeatable) replaces the default list, and `--session-root` on its own turns it off. If a database given with `--opencode-db` is missing, TokenPlume does not start.
+OpenCode keeps sessions in SQLite databases, `opencode.db` and `opencode-stable.db`, under `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`), each with `-wal` and `-shm` files. Without source options, Highwater reads those that exist. `--opencode-db` (repeatable) replaces the default list, and `--session-root` on its own turns it off. If a database given with `--opencode-db` is missing, Highwater does not start.
 
 Databases are opened read-only, never migrated or opened with a writable fallback. No credentials or account tables are queried, and referenced files and URLs are never fetched. An OpenCode session with no assistant message has nothing to chart and is not listed, though it is still validated. References are `opencode-…`, a hash of the native session ID, and contain no database path. The same native ID in two databases is ambiguous, and a request for it is rejected rather than choosing one copy.
 
@@ -12,11 +12,11 @@ Databases are opened read-only, never migrated or opened with a writable fallbac
 
 - **Legacy layout:** `session`, `message` and `part` tables. Message and part `data` columns are JSON; IDs and parent and session relationships are columns. Messages are ordered by creation time and ID, and parts by ID. Part types include `text`, `reasoning`, `tool` (one mutable state object holding both the call and its result), `file`, `compaction`, `step-start`, `step-finish` and `patch`.
 - **Modern layout:** `session_v2` and `session_message`, ordered by their native `seq`.
-- Databases differ in columns between versions, so TokenPlume reads only the columns it needs and checks which exist, rather than depending on a migration number.
+- Databases differ in columns between versions, so Highwater reads only the columns it needs and checks which exist, rather than depending on a migration number.
 
 ## Reading sessions
 
-- **Layouts.** TokenPlume reads the legacy `session`, `message` and `part` tables and the modern `session_v2` and `session_message` tables, including databases with only the modern ones. Modern records are read in their own `seq` order. When a database has both layouts, each session is read from one of them, never a mix of the two. The experimental context and input tables are not supported.
+- **Layouts.** Highwater reads the legacy `session`, `message` and `part` tables and the modern `session_v2` and `session_message` tables, including databases with only the modern ones. Modern records are read in their own `seq` order. When a database has both layouts, each session is read from one of them, never a mix of the two. The experimental context and input tables are not supported.
 - **Duplicate sessions.** When both layouts hold the same session, a legacy row that is strictly newer wins; otherwise the modern one does. If the modern session has no messages, the legacy one is used only when their timestamps are equal and it has messages. A newer, empty modern session never brings back older legacy content. This is a rule based on recency, not proof of which version OpenCode last wrote.
 - **Legacy sessions.** A tool part holds both the call and its result. When OpenCode prunes an old tool result, calls before and after the pruning see different versions of it.
 - **Modern sessions.** Reasoning and tool calls inside messages, assistant records that carry only usage, recorded system prompt updates and injected context are all read. A completed compaction replaces the history with the recorded summary and the recent exchange OpenCode saved with it. A failed or still-running compaction leaves the history as it was. A compaction at the very end of a session, or one replaced by a later one, is shown but appears in no call's context.
@@ -28,7 +28,7 @@ Every OpenCode analysis is marked partial, and the **Estimates** note above Sess
 
 ## Usage and cost
 
-OpenCode records optional token counters and a total cost for each call, and TokenPlume keeps each as recorded.
+OpenCode records optional token counters and a total cost for each call, and Highwater keeps each as recorded.
 
 Whether a step's output includes its reasoning is decided from the step's stored `total`, which OpenCode takes from the provider and which counts reasoning once. Up to v1.3.x, output included reasoning (total = input + output + cache); from v1.4.0, reasoning is stored separately (total = input + output + reasoning + cache). Modern records have no `total`, so a modern record uses the legacy step-finish copy with the same message ID, when there is one and all its counters match. The database layout and the session's creation version are never used to decide this. When a step's total fits neither rule, or it has none, its output stays unavailable.
 

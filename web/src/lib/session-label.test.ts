@@ -11,9 +11,9 @@ const now = new Date(2026, 9, 11, 12, 0);
 const session = (overrides: Partial<SessionListItem>): SessionListItem => ({
   id: 'pi-one',
   harness: 'pi',
-  displayName: 'TokenPlume · 01a11eea',
+  displayName: 'Highwater · 01a11eea',
   fileName: 'one.jsonl',
-  workingDirectory: '/code/TokenPlume',
+  workingDirectory: '/code/Highwater',
   startedAt: null,
   modifiedAt: null,
   byteSize: null,
@@ -53,7 +53,7 @@ describe('session labels', () => {
       true,
       now,
     );
-    expect(labels.get('pi-a')).toMatch(/^\[Pi\] TokenPlume · 01a11eea · .+ · a\.jsonl$/);
+    expect(labels.get('pi-a')).toMatch(/^\[Pi\] Highwater · 01a11eea · .+ · a\.jsonl$/);
     expect(labels.get('pi-b')).toMatch(/· b\.jsonl$/);
     expect(labels.get('opencode-c')).toBe('[OpenCode] Fix tests · child session');
   });
@@ -63,6 +63,6 @@ describe('session labels', () => {
       session({ startedAt: new Date(2026, 9, 9, 15, 27).toISOString(), byteSize: 2048 }),
       now,
     );
-    expect(line).toMatch(/^Started .+ · 2 KB · \/code\/TokenPlume$/);
+    expect(line).toMatch(/^Started .+ · 2 KB · \/code\/Highwater$/);
   });
 });

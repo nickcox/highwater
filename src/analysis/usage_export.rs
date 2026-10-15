@@ -1,5 +1,5 @@
 //! Writes, for each step between two consecutive Claude calls in the local sessions, the
-//! reported prompt growth and TokenPlume's estimate for each item added. Driven by
+//! reported prompt growth and Highwater's estimate for each item added. Driven by
 //! `scripts/measure-claude-usage.py`; the export holds sizes and item kinds, never content.
 
 use super::*;
@@ -46,8 +46,8 @@ fn is_claude(model: Option<&str>) -> bool {
 #[test]
 #[ignore = "reads local sessions; run through scripts/measure-claude-usage.py"]
 fn export_claude_usage_steps() {
-    let path = std::env::var("TOKENPLUME_USAGE_EXPORT")
-        .expect("TOKENPLUME_USAGE_EXPORT names the output file");
+    let path = std::env::var("HIGHWATER_USAGE_EXPORT")
+        .expect("HIGHWATER_USAGE_EXPORT names the output file");
     let mut output = std::io::BufWriter::new(std::fs::File::create(path).expect("output file"));
     let mut written = 0;
     for (harness, locator) in local_sessions() {

@@ -1,12 +1,12 @@
 # VS Code Copilot Chat sessions
 
-How TokenPlume reads GitHub Copilot Chat sessions from VS Code. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
+How Highwater reads GitHub Copilot Chat sessions from VS Code. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
 
 Copilot Chat's formats are not documented. The rules here come from sessions written by Copilot Chat 0.41 to 0.69 and from the synthetic fixtures in `fixtures/vscode-copilot/`.
 
 ## Where sessions are
 
-Without explicit source flags, TokenPlume reads VS Code's and VS Code Insiders' user data folders for the platform when they exist: `~/Library/Application Support/Code/User` on macOS, `%APPDATA%\Code\User` on Windows and `$XDG_CONFIG_HOME/Code/User` elsewhere (`Code - Insiders` for Insiders). `--vscode-user-dir` (repeatable) replaces those defaults; an explicit `--session-root` on its own turns them off. Session files and the trace database are read locally and never written.
+Without explicit source flags, Highwater reads VS Code's and VS Code Insiders' user data folders for the platform when they exist: `~/Library/Application Support/Code/User` on macOS, `%APPDATA%\Code\User` on Windows and `$XDG_CONFIG_HOME/Code/User` elsewhere (`Code - Insiders` for Insiders). `--vscode-user-dir` (repeatable) replaces those defaults; an explicit `--session-root` on its own turns them off. Session files and the trace database are read locally and never written.
 
 | Store | Path under the user data folder | Used for |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ A session file is a log of changes to one JSON value, one change per line. Repla
 | 2 | Append the items in `v` to the array at path `k`. When `i` is present, first remove the array's items from index `i` onwards. |
 | 3 | Delete the value at path `k`. |
 
-A file whose first line is not `kind` 0, or with a line that cannot be applied, is reported as a structure error. The replayed session has `sessionId`, `creationDate`, an optional `customTitle` and `requests`, one per user request. The fields TokenPlume uses on a request:
+A file whose first line is not `kind` 0, or with a line that cannot be applied, is reported as a structure error. The replayed session has `sessionId`, `creationDate`, an optional `customTitle` and `requests`, one per user request. The fields Highwater uses on a request:
 
 - `requestId`, `timestamp`, `message` (the user's text) and `modelId` (the model the user picked; `copilot/auto` is not a model).
 - `result.metadata`:

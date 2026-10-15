@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Convert ctok's Claude tokenizer vocabularies into the form TokenPlume embeds.
+"""Convert ctok's Claude tokenizer vocabularies into the form Highwater embeds.
 
 ctok (https://github.com/sanderland/ctok, MIT) stores each measured piece with the evidence that
-it is one token. TokenPlume needs only the pieces, so this keeps the pieces in ctok's internal
+it is one token. Highwater needs only the pieces, so this keeps the pieces in ctok's internal
 marker form (parsed with ctok's own parser), the byte-fallback prefixes, the contraction suffixes
 and the family settings, and leaves the evidence upstream at the pinned commit.
 

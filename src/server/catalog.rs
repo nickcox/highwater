@@ -99,6 +99,8 @@ fn session_listing_metadata(path: &Path, file_name: &str) -> std::io::Result<Lis
         .and_then(|value| value.get("id"))
         .and_then(Value::as_str)
         .filter(|id| !id.is_empty());
+    // Derivation keys keep the project's earlier name, TokenPlume; changing them would change
+    // every session reference.
     let mut hasher = blake3::Hasher::new_derive_key("TokenPlume Pi session reference v1");
     if let Some(id) = native_id {
         hasher.update(b"id\0");

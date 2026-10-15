@@ -5,7 +5,7 @@ import { ANALYSIS_SCHEMA_VERSION, indexAnalysis } from '../../src/lib/analysis';
 import { indexTestAnalysis, toWireAnalysis } from '../../src/lib/testing/wire-analysis';
 import type { SessionAnalysis, WireSessionAnalysis } from '../../src/lib/types';
 
-const directory = process.env.TOKENPLUME_CONTRACT_DIR;
+const directory = process.env.HIGHWATER_CONTRACT_DIR;
 if (!directory) throw new Error('Run scripts/check-contract.sh: fresh Rust exports are required.');
 const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8')) as {
   schemaVersion: number;

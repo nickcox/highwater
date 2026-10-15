@@ -45,7 +45,7 @@ def run(binary, full):
     cases = [('small', 8, 256), ('medium', 160, 512)]
     if full:
         cases += [('large', 64, 1024 * 1024), ('uncached', 1600, 16)]
-    with tempfile.TemporaryDirectory(prefix='tokenplume-opencode-benchmark-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='highwater-opencode-benchmark-') as temporary:
         temporary = pathlib.Path(temporary)
         database = temporary / 'synthetic.db'
         connection = sqlite3.connect(database)
@@ -167,6 +167,6 @@ def run(binary, full):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--full', action='store_true', help='include ~128 MiB source and >16 MiB response cases')
-    parser.add_argument('--binary', type=pathlib.Path, default=ROOT / 'target/release/tokenplume')
+    parser.add_argument('--binary', type=pathlib.Path, default=ROOT / 'target/release/highwater')
     arguments = parser.parse_args()
     run(arguments.binary.resolve(), arguments.full)

@@ -1,12 +1,12 @@
 # Claude Code sessions
 
-How TokenPlume reads Claude Code CLI transcripts. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
+How Highwater reads Claude Code CLI transcripts. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
 
 Claude Code is not open source and its transcript format is not documented. The rules here come from transcripts written by versions 2.1.229 and 2.1.287 and from the synthetic fixtures in `fixtures/claude-code/`; other versions may record things differently.
 
 ## Where sessions are
 
-Transcripts are under `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects`), which TokenPlume reads when it exists. `--claude-root` (repeatable) replaces that default, and an explicit `--session-root` on its own turns it off. Transcripts are read locally and never written; `~/.claude.json`, credentials and referenced files are never read.
+Transcripts are under `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects`), which Highwater reads when it exists. `--claude-root` (repeatable) replaces that default, and an explicit `--session-root` on its own turns it off. Transcripts are read locally and never written; `~/.claude.json`, credentials and referenced files are never read.
 
 - A main session is `<project>/<session UUID>.jsonl`. The project directory's name is the working directory with `/` replaced by `-`, but it can be out of date after a `relocated` record, so the working directory comes from the records' `cwd` instead.
 - A subagent is `<project>/<session UUID>/subagents/agent-<agent ID>.jsonl`, with `agent-<agent ID>.meta.json` beside it holding `agentType`, `description` and `toolUseId` (the parent's tool call that started it). A subagent is listed as a child session of its parent, labelled with its type; its context is not merged into the parent's.

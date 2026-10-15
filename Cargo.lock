@@ -443,6 +443,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "highwater"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "blake3",
+ "bytes",
+ "chrono",
+ "clap",
+ "futures-util",
+ "getrandom",
+ "mime_guess",
+ "notify",
+ "percent-encoding",
+ "regex",
+ "rusqlite",
+ "rust-embed",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tiktoken",
+ "tokio",
+ "tower",
+ "unicode-general-category",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "http"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1125,35 +1154,6 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
-
-[[package]]
-name = "tokenplume"
-version = "0.1.0"
-dependencies = [
- "axum",
- "blake3",
- "bytes",
- "chrono",
- "clap",
- "futures-util",
- "getrandom",
- "mime_guess",
- "notify",
- "percent-encoding",
- "regex",
- "rusqlite",
- "rust-embed",
- "rustc-hash",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tiktoken",
- "tokio",
- "tower",
- "unicode-general-category",
- "unicode-normalization",
-]
 
 [[package]]
 name = "tokio"

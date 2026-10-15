@@ -436,7 +436,7 @@ struct TempSession(PathBuf);
 impl TempSession {
     fn new() -> Self {
         let name = format!(
-            "tokenplume-flight-{}-{}.jsonl",
+            "highwater-flight-{}-{}.jsonl",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)

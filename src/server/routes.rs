@@ -58,15 +58,15 @@ fn list_response(
     let mut builder = Response::builder()
         .header(header::ETAG, etag.as_str())
         .header(
-            "X-TokenPlume-Server-Generation",
+            "X-Highwater-Server-Generation",
             snapshot.generation.as_str(),
         )
         .header(
-            "X-TokenPlume-Catalog-Revision",
+            "X-Highwater-Catalog-Revision",
             snapshot.revision.to_string(),
         )
         .header(
-            "X-TokenPlume-Live-Updates",
+            "X-Highwater-Live-Updates",
             match availability {
                 LiveAvailability::Active => "active",
                 LiveAvailability::Degraded => "degraded",

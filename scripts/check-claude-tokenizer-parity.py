@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that TokenPlume's Rust port of ctok counts exactly as Python ctok does.
+"""Check that Highwater's Rust port of ctok counts exactly as Python ctok does.
 
 Counts every text in ctok's test fixtures (Rosetta Code, the Rosetta holdout, MultiPL-E and
 the UDHR translations), a list of edge cases, and optionally a sample of texts from the local
@@ -29,11 +29,11 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PINNED_CTOK = '8c43ffd'
 SAMPLE = ROOT / 'fixtures/tokenization/claude-multipl-e.json'
-# ctok's recorded counts, by fixture key -> (TokenPlume generation, the single-message overhead
+# ctok's recorded counts, by fixture key -> (Highwater generation, the single-message overhead
 # that count_tokens adds, from ctok's pieces metadata and ctok/main.py).
 RECORDED = {'v3': ('v3', 7), 'v4.7': ('v4.7', 11), 'v5': ('v4.8', 6)}
 FIXTURES = ('rosetta', 'rosetta_holdout', 'multipl_e', 'udhr')
-# TokenPlume generation -> the version ctok routes to that family.
+# Highwater generation -> the version ctok routes to that family.
 GENERATIONS = {'v3': '3.0', 'v4.7': '4.7', 'v4.8': '4.8'}
 
 # Short texts that reach the rules a long document rarely isolates: the frame's leading space,
@@ -128,7 +128,7 @@ def main():
     result = subprocess.run(
         ['cargo', 'test', '--release', '--quiet', 'claude_tokenizer_matches_ctok', '--', '--ignored',
          '--nocapture'],
-        cwd=ROOT, env={**os.environ, 'TOKENPLUME_CLAUDE_PARITY_CASES': cases.name})
+        cwd=ROOT, env={**os.environ, 'HIGHWATER_CLAUDE_PARITY_CASES': cases.name})
     os.unlink(cases.name)
     sys.exit(result.returncode)
 

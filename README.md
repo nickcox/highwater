@@ -1,6 +1,6 @@
-# TokenPlume
+# Highwater
 
-TokenPlume shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
+Highwater shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
 
 ![Highwater showing a 1,118-call Claude Code session: the session summary, and the Context River in Item types view as the context grows to 966K tokens, mostly tool results, assistant messages and thinking, before one compaction](docs/images/context-river.png)
 
@@ -9,25 +9,25 @@ TokenPlume shows how a coding agent's context window fills up over a session. It
 - **Context lifespans:** when each item entered and left the context, searchable and filterable.
 - **Cache and cost:** cache reads and writes per call, and each call's cost, recorded or estimated from bundled price data.
 
-Everything runs locally. TokenPlume serves its interface on `127.0.0.1`, reads session files without changing them, and never sends session content anywhere.
+Everything runs locally. Highwater serves its interface on `127.0.0.1`, reads session files without changing them, and never sends session content anywhere.
 
 ## Install
 
-TokenPlume needs Rust 1.88 or newer. The built interface is included in the repository, so Node is not needed to install it.
+Highwater needs Rust 1.88 or newer. The built interface is included in the repository, so Node is not needed to install it.
 
 ```bash
-git clone https://github.com/nickcox/TokenPlume.git
-cd TokenPlume
+git clone https://github.com/nickcox/highwater.git
+cd highwater
 cargo install --path . --locked
 ```
 
 ## Run
 
 ```bash
-tokenplume
+highwater
 ```
 
-Then open the URL it prints. Without options, TokenPlume finds sessions in each tool's default location, when it exists:
+Then open the URL it prints. Without options, Highwater finds sessions in each tool's default location, when it exists:
 
 | Source | Default location | Option |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ The server binds only to `127.0.0.1` and rejects requests that address it by any
 
 ## How accurate it is
 
-Session files record how many input tokens each call used, and some record its cost, but none record how those tokens divide between items. TokenPlume counts each item's tokens locally, with OpenAI's tokenizers, a port of [ctok](https://github.com/sanderland/ctok)'s reconstructed Claude tokenizers, or a character estimate, and compares the total with the input each call reported. The **Estimates** indicator rates how closely they match. Some content is not recorded at all, such as the system prompt in Claude Code; TokenPlume shows that as a separate measured item rather than guessing its contents. [Data semantics](docs/data-semantics.md) explains what is recorded, what is estimated and how missing values are kept apart.
+Session files record how many input tokens each call used, and some record its cost, but none record how those tokens divide between items. Highwater counts each item's tokens locally, with OpenAI's tokenizers, a port of [ctok](https://github.com/sanderland/ctok)'s reconstructed Claude tokenizers, or a character estimate, and compares the total with the input each call reported. The **Estimates** indicator rates how closely they match. Some content is not recorded at all, such as the system prompt in Claude Code; Highwater shows that as a separate measured item rather than guessing its contents. [Data semantics](docs/data-semantics.md) explains what is recorded, what is estimated and how missing values are kept apart.
 
 ## Documentation
 
@@ -53,7 +53,7 @@ Session files record how many input tokens each call used, and some record its c
 
 ## Third-party data
 
-TokenPlume includes data from other projects, each under the MIT licence:
+Highwater includes data from other projects, each under the MIT licence:
 
 - Model prices from [models.dev](https://github.com/sst/models.dev) and corrections from [wakamex/model-prices](https://github.com/wakamex/model-prices): see [data/prices](data/prices/README.md).
 - Claude tokenizer vocabularies from [ctok](https://github.com/sanderland/ctok): see `data/tokenization/LICENSE.ctok`.

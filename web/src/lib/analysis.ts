@@ -162,7 +162,7 @@ function normalizeAnalysis(input: SessionAnalysis): SessionAnalysis {
  */
 export function indexAnalysis(input: WireSessionAnalysis): IndexedAnalysis {
   if (import.meta.env.DEV && typeof performance !== 'undefined')
-    performance.mark('tokenplume-index-start');
+    performance.mark('highwater-index-start');
   if (input.schemaVersion !== ANALYSIS_SCHEMA_VERSION) {
     throw new AnalysisValidationError(`Unsupported analysis schema ${String(input.schemaVersion)}`);
   }
@@ -171,12 +171,8 @@ export function indexAnalysis(input: WireSessionAnalysis): IndexedAnalysis {
   const analysis = normalizeAnalysis(resolved);
   const indexed = validateAndIndexAnalysis(analysis);
   if (import.meta.env.DEV && typeof performance !== 'undefined') {
-    performance.mark('tokenplume-index-end');
-    performance.measure(
-      'tokenplume-index-analysis',
-      'tokenplume-index-start',
-      'tokenplume-index-end',
-    );
+    performance.mark('highwater-index-end');
+    performance.measure('highwater-index-analysis', 'highwater-index-start', 'highwater-index-end');
   }
   return indexed;
 }

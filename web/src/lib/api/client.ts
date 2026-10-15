@@ -50,7 +50,7 @@ function parseListHeaders(response: Response): {
   revision: bigint;
   availability: LiveAvailability;
 } {
-  const generation = response.headers.get('X-TokenPlume-Server-Generation');
+  const generation = response.headers.get('X-Highwater-Server-Generation');
   if (!generation || !GENERATION_PATTERN.test(generation)) {
     throw new ApiError(
       'Server returned an invalid catalogue generation',
@@ -58,7 +58,7 @@ function parseListHeaders(response: Response): {
       'INVALID_CATALOG_HEADERS',
     );
   }
-  const revisionText = response.headers.get('X-TokenPlume-Catalog-Revision');
+  const revisionText = response.headers.get('X-Highwater-Catalog-Revision');
   let revision: bigint;
   try {
     if (!revisionText || !/^\d+$/.test(revisionText)) throw new Error('invalid');
@@ -85,7 +85,7 @@ function parseListHeaders(response: Response): {
       'INVALID_CATALOG_HEADERS',
     );
   }
-  const availability = response.headers.get('X-TokenPlume-Live-Updates');
+  const availability = response.headers.get('X-Highwater-Live-Updates');
   if (availability !== 'active' && availability !== 'degraded') {
     throw new ApiError(
       'Server returned an invalid live-update status',
@@ -104,14 +104,14 @@ function parseListHeaders(response: Response): {
 async function responseJson<T>(response: Response): Promise<T> {
   if (response.ok) {
     if (import.meta.env.DEV && typeof performance !== 'undefined')
-      performance.mark('tokenplume-response-json-start');
+      performance.mark('highwater-response-json-start');
     const value = (await response.json()) as T;
     if (import.meta.env.DEV && typeof performance !== 'undefined') {
-      performance.mark('tokenplume-response-json-end');
+      performance.mark('highwater-response-json-end');
       performance.measure(
-        'tokenplume-response-json-parse',
-        'tokenplume-response-json-start',
-        'tokenplume-response-json-end',
+        'highwater-response-json-parse',
+        'highwater-response-json-start',
+        'highwater-response-json-end',
       );
     }
     return value;
@@ -162,7 +162,7 @@ export async function fetchAnalysis(
     headers,
   });
   if (import.meta.env.DEV && typeof performance !== 'undefined')
-    performance.mark('tokenplume-fetch-response');
+    performance.mark('highwater-fetch-response');
   const responseEtag = response.headers.get('etag');
   if (response.status === 304) return { status: 'notModified', etag: responseEtag };
   return {

@@ -147,9 +147,9 @@ beforeEach(() => {
             headers: {
               'content-type': 'application/json',
               etag: '"catalog-v0"',
-              'X-TokenPlume-Server-Generation': '0123456789abcdef0123456789abcdef',
-              'X-TokenPlume-Catalog-Revision': '0',
-              'X-TokenPlume-Live-Updates': 'active',
+              'X-Highwater-Server-Generation': '0123456789abcdef0123456789abcdef',
+              'X-Highwater-Catalog-Revision': '0',
+              'X-Highwater-Live-Updates': 'active',
             },
           },
         );
@@ -268,9 +268,9 @@ function sessionListResponse(
       headers: {
         'content-type': 'application/json',
         etag: `"catalog-v${revision}"`,
-        'X-TokenPlume-Server-Generation': generation,
-        'X-TokenPlume-Catalog-Revision': String(revision),
-        'X-TokenPlume-Live-Updates': 'active',
+        'X-Highwater-Server-Generation': generation,
+        'X-Highwater-Catalog-Revision': String(revision),
+        'X-Highwater-Live-Updates': 'active',
       },
     },
   );
@@ -294,7 +294,7 @@ describe('view links', () => {
   it('uses the stored grouping when a link has no display parameter', async () => {
     const preferences = defaultPresentationPreferences();
     preferences.river.display = 'itemTypes';
-    localStorage.setItem('tokenplume.presentation.v1', JSON.stringify(preferences));
+    localStorage.setItem('highwater.presentation.v1', JSON.stringify(preferences));
     const writes = vi.spyOn(localStorage, 'setItem');
     window.history.replaceState(null, '', '/#session=one');
     await renderLoaded();
@@ -310,7 +310,7 @@ describe('view links', () => {
   it('restores explicit Items over stored Item types without rewriting the preference', async () => {
     const preferences = defaultPresentationPreferences();
     preferences.river.display = 'itemTypes';
-    localStorage.setItem('tokenplume.presentation.v1', JSON.stringify(preferences));
+    localStorage.setItem('highwater.presentation.v1', JSON.stringify(preferences));
     const writes = vi.spyOn(localStorage, 'setItem');
     window.history.replaceState(null, '', '/#session=one&display=items');
     await renderLoaded();
@@ -318,7 +318,7 @@ describe('view links', () => {
       expect(screen.getByRole('button', { name: 'Items' })).toHaveAttribute('aria-pressed', 'true'),
     );
     expect(writes).not.toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.display).toBe(
+    expect(JSON.parse(localStorage.getItem('highwater.presentation.v1')!).river.display).toBe(
       'itemTypes',
     );
     // A later history target with no display uses storage, not the transient URL override.
@@ -708,7 +708,7 @@ describe('Context River interactions', () => {
     const first = await renderLoaded();
     const second = render(App);
     await within(second.container).findByRole('application', { name: 'Context River' });
-    expect(localStorage.getItem('tokenplume.presentation.v1')).toBeNull();
+    expect(localStorage.getItem('highwater.presentation.v1')).toBeNull();
     expect(within(first.container).queryByRole('group', { name: 'River layout' })).toBeNull();
     await fireEvent.click(within(first.container).getByRole('button', { name: 'Visible calls' }));
     expect(within(first.container).getByRole('button', { name: 'Visible calls' })).toHaveAttribute(
@@ -719,12 +719,12 @@ describe('Context River interactions', () => {
       'aria-pressed',
       'false',
     );
-    expect(
-      JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river.verticalScale,
-    ).toBe('visible');
-    expect(
-      JSON.parse(localStorage.getItem('tokenplume.presentation.v1')!).river,
-    ).not.toHaveProperty('layout');
+    expect(JSON.parse(localStorage.getItem('highwater.presentation.v1')!).river.verticalScale).toBe(
+      'visible',
+    );
+    expect(JSON.parse(localStorage.getItem('highwater.presentation.v1')!).river).not.toHaveProperty(
+      'layout',
+    );
     expect(
       within(first.container).queryByRole('button', { name: 'Reset view preferences' }),
     ).toBeNull();
@@ -908,7 +908,7 @@ describe('Context River interactions', () => {
         if (url === '/api/sessions') {
           const response = sessionListResponse(['one']);
           response.headers.set('etag', `"catalog-v${revision}"`);
-          response.headers.set('X-TokenPlume-Catalog-Revision', String(revision));
+          response.headers.set('X-Highwater-Catalog-Revision', String(revision));
           return Promise.resolve(response);
         }
         analysisRequests += 1;

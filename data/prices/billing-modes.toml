@@ -12,7 +12,7 @@
 #   valid_until     exclusive; omitted means with no end
 #
 # OpenCode's ChatGPT-plan login is recorded under the plain `openai` provider, so it
-# cannot be listed here. TokenPlume treats an OpenCode `openai` call recorded at $0, where
+# cannot be listed here. Highwater treats an OpenCode `openai` call recorded at $0, where
 # models.dev lists a price for that model at that time, as a subscription instead.
 
 [[mode]]

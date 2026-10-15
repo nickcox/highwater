@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const integrated = process.env.TOKENPLUME_BROWSER_INTEGRATED === '1';
-const baseURL = process.env.TOKENPLUME_BROWSER_BASE_URL ?? 'http://127.0.0.1:4173';
+const integrated = process.env.HIGHWATER_BROWSER_INTEGRATED === '1';
+const baseURL = process.env.HIGHWATER_BROWSER_BASE_URL ?? 'http://127.0.0.1:4173';
 
 export default defineConfig({
   testDir: './tests/browser',

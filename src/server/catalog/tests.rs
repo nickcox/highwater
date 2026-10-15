@@ -4,7 +4,7 @@ struct TempRoot(PathBuf);
 impl TempRoot {
     fn new() -> Self {
         let name = format!(
-            "tokenplume-catalog-{}-{}",
+            "highwater-catalog-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(UNIX_EPOCH)

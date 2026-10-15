@@ -589,7 +589,7 @@ fn exclusive_writer_lock_returns_busy_and_recovers() {
 /// Opt-in local acceptance only. Never commits a database or prints identifiers,
 /// paths, transcript text, arguments, results, or account/credential data.
 #[test]
-#[ignore = "requires TOKENPLUME_OPENCODE_DB pointing to a local database"]
+#[ignore = "requires HIGHWATER_OPENCODE_DB pointing to a local database"]
 fn local_database_read_only_inventory() {
     use crate::analysis::{AnalysisConfig, TokenizationPolicy};
     use crate::opencode::{
@@ -597,7 +597,7 @@ fn local_database_read_only_inventory() {
         usage::OutputAccounting,
     };
     let path =
-        PathBuf::from(std::env::var_os("TOKENPLUME_OPENCODE_DB").expect("explicit database path"));
+        PathBuf::from(std::env::var_os("HIGHWATER_OPENCODE_DB").expect("explicit database path"));
     let started = std::time::Instant::now();
     let sessions = discover(&path, None).expect("read-only discovery");
     let discovery_ms = started.elapsed().as_secs_f64() * 1000.0;

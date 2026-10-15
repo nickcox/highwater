@@ -1,6 +1,6 @@
 -- Made-up Copilot trace records. For fixtures/vscode-copilot/User/workspaceStorage/0a1b2c3d/
 -- chatSessions/11111111-agent.jsonl: the two calls of its first request, the tool call between
--- them and a helper call TokenPlume ignores. A Claude call for another session follows. The tables are as Copilot Chat creates them.
+-- them and a helper call Highwater ignores. A Claude call for another session follows. The tables are as Copilot Chat creates them.
 CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
 INSERT INTO schema_version VALUES (1);
 CREATE TABLE spans (

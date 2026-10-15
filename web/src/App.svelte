@@ -763,7 +763,7 @@
 <main bind:this={appRoot}>
   <header class="titlebar">
     <div>
-      <h1>TokenPlume</h1>
+      <h1>Highwater</h1>
       <!-- Refresh sits at the end of the status line, so it does not add a row to the header. -->
       <div class="status-row">
         <p class="live-status">
@@ -820,7 +820,7 @@
     {:else}
       <section class="state">
         <h2>No sessions discovered</h2>
-        <p>Point TokenPlume at a session directory with <code>--session-root</code>.</p>
+        <p>Point Highwater at a session directory with <code>--session-root</code>.</p>
       </section>
     {/if}
   {:else if $sessionController.selectedRemoved}

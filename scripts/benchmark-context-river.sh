@@ -3,8 +3,8 @@
 set -euo pipefail
 
 CASE=${1:-large}
-ROOT=$(mktemp -d "${TMPDIR:-/tmp}/tokenplume-benchmark.XXXXXX")
-PORT=${TOKENPLUME_BENCHMARK_PORT:-$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')}
+ROOT=$(mktemp -d "${TMPDIR:-/tmp}/highwater-benchmark.XXXXXX")
+PORT=${HIGHWATER_BENCHMARK_PORT:-$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')}
 SERVER_LOG="$ROOT/server.log"
 RESPONSE="$ROOT/analysis.json"
 cleanup() {
@@ -28,7 +28,7 @@ for index in range(1, 6):
         shutil.copyfileobj(source, target)
 PY
 cargo build --release >/dev/null
-./target/release/tokenplume --session-root "$ROOT" --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
+./target/release/highwater --session-root "$ROOT" --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 RSS_FILE="$ROOT/peak-rss-kb"
 printf '0\n' >"$RSS_FILE"

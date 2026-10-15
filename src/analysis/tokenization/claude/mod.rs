@@ -30,8 +30,8 @@ mod tests {
     #[test]
     #[ignore = "needs cases written by scripts/check-claude-tokenizer-parity.py"]
     fn claude_tokenizer_matches_ctok() {
-        let path = std::env::var("TOKENPLUME_CLAUDE_PARITY_CASES")
-            .expect("TOKENPLUME_CLAUDE_PARITY_CASES names the cases file");
+        let path = std::env::var("HIGHWATER_CLAUDE_PARITY_CASES")
+            .expect("HIGHWATER_CLAUDE_PARITY_CASES names the cases file");
         let cases = std::fs::read_to_string(path).expect("cases file is readable");
         let (mut checked, mut mismatches) = (0, Vec::new());
         for line in cases.lines() {
