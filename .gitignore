@@ -6,3 +6,7 @@ web/dist/assets/*
 !web/dist/assets/index-*.css
 .playwright/
 .DS_Store
+
+# Local agent tooling
+.agents/
+skills-lock.json
