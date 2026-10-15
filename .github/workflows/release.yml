@@ -1,0 +1,77 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  # A manual run builds the archives without creating a release, to try the builds before tagging.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds use the oldest supported Ubuntu runner, so the binaries need only glibc 2.35.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Check the tag matches the crate version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"; exit 1; }
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          name="highwater-${GITHUB_REF_NAME#v}-${{ matrix.target }}"
+          if [ "$GITHUB_REF_TYPE" != tag ]; then name="highwater-${{ matrix.target }}"; fi
+          mkdir "$name"
+          cp README.md LICENSE CHANGELOG.md "$name/"
+          if [ "${{ runner.os }}" = Windows ]; then
+            cp "target/${{ matrix.target }}/release/highwater.exe" "$name/"
+            7z a "$name.zip" "$name" > /dev/null
+          else
+            cp "target/${{ matrix.target }}/release/highwater" "$name/"
+            tar -czf "$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            highwater-*.tar.gz
+            highwater-*.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: sha256sum highwater-*.tar.gz highwater-*.zip > SHA256SUMS
+      # The release starts as a draft, so its notes can be written before it is published.
+      - run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "Highwater ${GITHUB_REF_NAME#v}" highwater-*.tar.gz highwater-*.zip SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}

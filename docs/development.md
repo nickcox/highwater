@@ -24,7 +24,7 @@ rustup toolchain install 1.88.0 --profile minimal --component rustfmt --componen
 RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
 
-`.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full` on Node 24, on GitHub Actions. It also builds the Nix package on Linux and macOS. Every check also runs locally.
+`.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full` on Node 24, on GitHub Actions. It also runs the Rust tests on macOS and Windows, and builds the Nix package on Linux and macOS. Every check also runs locally.
 
 **Contract check.** `check-contract.sh` runs a test-only Rust exporter that uses the production parser, analyser and serialiser, then passes its 127 fresh outputs to the frontend's production `indexAnalysis` validator. The cases cover every tokenization policy, profile IDs, exposure and economics coverage, summaries at the end of a session, per-call timing and its sources, the largest safe numbers, and totals that exceed them. Controlled estimates go through the same production stages without needing huge test inputs, and invalid inputs must be rejected in Rust before they are exported. The temporary export folder is always removed, and the contract tests fail, rather than skip, when the exports are missing. They have their own Vitest config, so the normal frontend tests never depend on generated files.
 
@@ -38,6 +38,10 @@ The integrated browser checks run the real server with its embedded frontend. Ea
 - `scripts/browser-smoke-opencode-integrated.sh` generates a separate SQLite database and Pi session, and checks mixed discovery, filtering, OpenCode coverage and cost labels, view links, Composition, refresh after a WAL write, and the narrow layout.
 - `scripts/browser-smoke-claude-code-integrated.sh` copies `fixtures/claude-code/projects` to a temporary folder, and checks the Claude Code filter, subagent labels, the coverage notice, API-equivalent cost, the River, Composition, a `304`, the own-total row, a live append and the narrow layout.
 - `scripts/browser-smoke-vscode-copilot-integrated.sh` copies `fixtures/vscode-copilot/User` to a temporary folder, builds its trace database from `fixtures/vscode-copilot/traces.sql`, and checks the VS Code Copilot catalogue and filter, calls with and without trace records (timing, recorded cost, coverage note), a Claude call's cache policy and a `304`.
+
+## Releases
+
+`.github/workflows/release.yml` builds release archives for macOS, Linux and Windows. Pushing a tag such as `v0.1.0` checks that the tag matches the version in `Cargo.toml`, builds and packages each binary with the README, licence and changelog, and creates a draft GitHub release with the archives and a `SHA256SUMS` file; write its notes and publish it by hand. Running the workflow by hand from the Actions tab builds the archives without creating a release.
 
 ## Price data
 

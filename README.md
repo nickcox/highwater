@@ -13,6 +13,8 @@ Everything runs locally. Highwater serves its interface on `127.0.0.1`, reads se
 
 ## Install
 
+Prebuilt binaries for macOS (Apple silicon and Intel), Linux (x86_64 and arm64, glibc 2.35 or newer) and Windows (x86_64) are attached to each [GitHub release](https://github.com/nickcox/highwater/releases). Download the archive for your platform, extract it and put `highwater` (or `highwater.exe`) somewhere on your `PATH`. The macOS binaries are not signed, so if you downloaded the archive with a browser, run `xattr -d com.apple.quarantine highwater` before the first run.
+
 With Nix (flakes enabled):
 
 ```bash
