@@ -54,6 +54,7 @@
         default = {
           type = "app";
           program = pkgs.lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          meta.description = cargoToml.package.description;
         };
       });
 
