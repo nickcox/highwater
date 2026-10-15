@@ -763,7 +763,22 @@
 <main bind:this={appRoot}>
   <header class="titlebar">
     <div>
-      <h1>Highwater</h1>
+      <h1>
+        <svg class="logo" viewBox="6 19 52 36" width="30" height="21" aria-hidden="true">
+          <path d="M8 54 C20 52 30 40 56 30 L56 54 Z" fill="#dab66c" />
+          <path d="M8 54 C22 53 32 46 56 40 L56 54 Z" fill="#64c4af" />
+          <path d="M8 54 C24 54 36 50 56 48 L56 54 Z" fill="#7eafe3" />
+          <path
+            d="M8 22 H56"
+            stroke="#9cd8c5"
+            stroke-opacity="0.75"
+            stroke-width="2.25"
+            stroke-dasharray="3.5 3.5"
+            stroke-linecap="round"
+          />
+        </svg>
+        Highwater
+      </h1>
       <!-- Refresh sits at the end of the status line, so it does not add a row to the header. -->
       <div class="status-row">
         <p class="live-status">
@@ -1072,6 +1087,9 @@
   }
   h1 {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 24px;
     letter-spacing: -0.03em;
   }

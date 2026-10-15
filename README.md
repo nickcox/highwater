@@ -1,4 +1,4 @@
-# Highwater
+# <img src="docs/images/logo.svg" alt="" width="32" height="32"> Highwater
 
 Highwater shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
 
