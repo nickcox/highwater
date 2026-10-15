@@ -1,6 +1,7 @@
 use super::*;
 use serde_json::json;
 use std::io::Cursor;
+use std::path::Path;
 fn session(messages: Vec<Value>) -> NormalizedSession {
     let mut lines = vec![json!({"type":"session","id":"system-test","version":3}).to_string()];
     let mut parent: Option<String> = None;

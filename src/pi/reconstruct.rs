@@ -14,7 +14,6 @@ use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     io::BufRead,
-    path::{Component, Path, PathBuf},
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -430,57 +429,62 @@ fn tool_result_fallback(tool_name: Option<&str>) -> String {
 
 pub(crate) fn display_path_argument(path: &str, working_directory: Option<&str>) -> String {
     // Use lexical components only; historical labels must not depend on the current filesystem.
-    let source_path = Path::new(path);
-    if !source_path.is_absolute() && looks_like_windows_absolute_path(path) {
-        return path.replace('\\', "/");
-    }
-    let Some(working_directory) = working_directory
-        .map(Path::new)
-        .filter(|path| path.is_absolute())
-    else {
-        return path.replace('\\', "/");
+    // Paths are read in the style of the system that recorded the session, not the one running
+    // Highwater, so a session gets the same labels on every platform.
+    let fallback = || path.replace('\\', "/");
+    let Some((root, rest, windows)) = working_directory.and_then(split_root) else {
+        return fallback();
     };
-    let Some(normalized_working_directory) = normalize_lexical_path(working_directory) else {
-        return path.replace('\\', "/");
+    let Some(directory) = normalize_lexical_path(rest, windows, Vec::new()) else {
+        return fallback();
     };
-    let target_path = if source_path.is_absolute() {
-        source_path.to_path_buf()
-    } else {
-        normalized_working_directory.join(source_path)
+    let target = match split_root(path) {
+        Some((target_root, target_rest, target_windows)) if target_root == root => {
+            normalize_lexical_path(target_rest, target_windows, Vec::new())
+        }
+        Some(_) => None,
+        None => normalize_lexical_path(path, windows, directory.clone()),
     };
-    let Some(normalized_target) = normalize_lexical_path(&target_path) else {
-        return path.replace('\\', "/");
-    };
-    let Ok(relative_path) = normalized_target.strip_prefix(&normalized_working_directory) else {
-        return path.replace('\\', "/");
-    };
-    let components = relative_path
-        .components()
-        .filter_map(|component| match component {
-            Component::Normal(component) => Some(component.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    if components.is_empty() {
-        ".".into()
-    } else {
-        components.join("/")
+    match target {
+        Some(target) if target.starts_with(&directory) => {
+            let relative = &target[directory.len()..];
+            if relative.is_empty() {
+                ".".into()
+            } else {
+                relative.join("/")
+            }
+        }
+        _ => fallback(),
     }
 }
 
-fn normalize_lexical_path(path: &Path) -> Option<PathBuf> {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !normalized.pop() {
-                    return None;
-                }
+/// Splits an absolute path into its root, the rest, and whether it is a Windows path.
+/// A Windows drive letter is upper-cased, so `c:\` and `C:\` are the same root.
+fn split_root(path: &str) -> Option<(String, &str, bool)> {
+    if let Some(rest) = path.strip_prefix("\\\\") {
+        Some(("\\\\".into(), rest, true))
+    } else if looks_like_windows_absolute_path(path) {
+        Some((path[..2].to_ascii_uppercase(), &path[3..], true))
+    } else if let Some(rest) = path.strip_prefix('/') {
+        Some(("/".into(), rest, false))
+    } else {
+        None
+    }
+}
+
+fn normalize_lexical_path(
+    path: &str,
+    windows: bool,
+    mut normalized: Vec<String>,
+) -> Option<Vec<String>> {
+    let separators: &[char] = if windows { &['/', '\\'] } else { &['/'] };
+    for segment in path.split(separators) {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                normalized.pop()?;
             }
-            Component::Normal(segment) => normalized.push(segment),
+            segment => normalized.push(segment.to_owned()),
         }
     }
     Some(normalized)
@@ -488,11 +492,10 @@ fn normalize_lexical_path(path: &Path) -> Option<PathBuf> {
 
 fn looks_like_windows_absolute_path(path: &str) -> bool {
     let bytes = path.as_bytes();
-    (bytes.len() >= 3
+    bytes.len() >= 3
         && bytes[0].is_ascii_alphabetic()
         && bytes[1] == b':'
-        && matches!(bytes[2], b'\\' | b'/'))
-        || path.starts_with("\\\\")
+        && matches!(bytes[2], b'\\' | b'/')
 }
 
 fn is_unsafe_label_control(character: char) -> bool {

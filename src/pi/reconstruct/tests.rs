@@ -1,6 +1,7 @@
 use super::*;
 use std::fs::File;
 use std::io::{BufReader, Cursor};
+use std::path::Path;
 
 #[test]
 fn failed_default_usage_is_unavailable_but_retains_raw_placeholders() {
@@ -926,6 +927,41 @@ fn file_labels_are_lexically_relative_only_inside_the_session_directory() {
     assert_eq!(
         display_path_argument(r"C:\outside\secret.txt", cwd),
         "C:/outside/secret.txt"
+    );
+}
+
+#[test]
+fn file_labels_follow_the_recording_systems_path_style_on_every_platform() {
+    let windows = Some(r"C:\Users\dev\project");
+    assert_eq!(
+        display_path_argument(r"C:\Users\dev\project\src\main.rs", windows),
+        "src/main.rs"
+    );
+    assert_eq!(
+        display_path_argument(r"c:/Users/dev/project/src/main.rs", windows),
+        "src/main.rs"
+    );
+    assert_eq!(
+        display_path_argument(r"src\..\src\main.rs", windows),
+        "src/main.rs"
+    );
+    assert_eq!(
+        display_path_argument(r"D:\Users\dev\project\x.rs", windows),
+        "D:/Users/dev/project/x.rs"
+    );
+    assert_eq!(
+        display_path_argument("/Users/dev/project/x.rs", windows),
+        "/Users/dev/project/x.rs"
+    );
+    let unc = Some(r"\\server\share\project");
+    assert_eq!(
+        display_path_argument(r"\\server\share\project\notes.md", unc),
+        "notes.md"
+    );
+    // A backslash is an ordinary character in a Unix file name.
+    assert_eq!(
+        display_path_argument(r"odd\name.txt", Some("/home/dev/project")),
+        r"odd\name.txt"
     );
 }
 
