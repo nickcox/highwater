@@ -18,17 +18,19 @@ const scenarios: SessionScenario[] = [
   'multipleToolsMissingMetadata',
 ];
 
-// Derived from pre-extraction commit 8a0acb2, not regenerated from refactored outputs.
+// Pinned digests of each scenario's indexed analysis and Composition projections, so a change
+// that alters any of them fails here. When one changes on purpose, update it and say why in the
+// commit message.
 const scenarioDigests: Record<SessionScenario, string> = {
-  empty: '35cb7d585d8a81837f27d49879146f670d7bb825120c21cf0705ce623441e8ae',
-  singleCall: '73cd7feb3c55eb945cfefebd65437fdf28cc3d01bbf20bcd68d0c7437d93178e',
-  longSession: '2d62c14b97c92b290c6747a00da6cfa6c40b6ec7ad6c4889f6953e121d008c4c',
-  partialGeometry: 'ad192271ea04631434032a0f910bf23e39922aea0f79c0b2e57ae6407ca2fa69',
-  unavailableGeometry: '76c307d6734a23896a4051c76dfc2dbfeae05efe8b3674fc1f60bad1438c977d',
-  terminalCompaction: 'b1a2775c7afa0236dd7c67ced8ff0992a337a46404c4f0d60cc4df610117e478',
-  terminalSummaryOnly: 'e075fc3a778eea27f26fa196dceff8fffad88cef60ed88fa54ea8de4e07bc6bc',
-  labelStress: '5cc44ef31ee3f0e7804988c3c8840cba270e3a217b8f5a4fc5ba748be3d53741',
-  multipleToolsMissingMetadata: '33a7eb9e26ea86a2d2c80bf03fd02a9c1f2a74ff815622b877da9d185779000b',
+  empty: '4a62f4ecec6cf35274692dad6a11bd3ded90aa17c1c0acda63795260f52e451f',
+  singleCall: '8396d765157552ad09f348f5903654d667236239ea1d8beb38cc0fcf38455ab1',
+  longSession: '4472061e2c1818a477e3683b5df899836a62b8b62a9129cb8201f668189dbc3c',
+  partialGeometry: 'b6367fe1b8dd8b56cac74c891208ab4a7a7b8a90c90dff6711d1eb823ff691db',
+  unavailableGeometry: '2f59fa719389fd05b312f31772eb86eaf74f87568b0ce7c7f7b6d048d1412dac',
+  terminalCompaction: 'd7488a3aee7b5ff139abfff2fa1ac1ec9b23b052dc760811c90c46bec146a692',
+  terminalSummaryOnly: '10ff0a3d9da1125693b4dbf77110c36b8cc6b9202beab5b66ae514aae393a384',
+  labelStress: 'fd165f697289d1c588eb8c07124450307a7bcd32757f7dca3556bd8b46869460',
+  multipleToolsMissingMetadata: '0d1e13af4092305e3c9735b92380c82d4496226395a73445da4961e55cad2c2b',
 };
 
 const fixtures = [
@@ -40,39 +42,18 @@ const fixtures = [
   {
     name: 'composition220',
     input: compositionScenario(220),
-    expected: '8d77d73e487c890691f67751ccf91dab027f899e391bfdf6977010bb500f273d',
+    expected: 'e1f3a1abbe70ba8479879cd6cfcbd2b1f9146252caea9789897c62ed849b322d',
   },
   {
     name: 'composition220Zero',
     input: compositionScenario(220, true),
-    expected: '4e7395b5bbffed9a0e658ffebbf9ac598f1dee58650f1866f7d51863cd0493a2',
+    expected: 'e1f56e85a85405c078cd617207c5977be00f536f4ad7c77dd9c5dd6ec9e3cbb1',
   },
 ];
 
 // Capture values and iteration order of every consumer-facing index, not just the envelope.
 function serialize(value: unknown): string {
-  return JSON.stringify(value, (key, entry) => {
-    // Keep the original analytical/index/projection goldens: timing, the
-    // schema-10 recorded-counter additions, the session subtotal coverage, the
-    // partial-estimate metric flag, the schema-13 cost assessments and the
-    // schema-14 harness session cost have their own live contract tests.
-    if (
-      [
-        'timing',
-        'recordedOutput',
-        'outputReasoningRelationship',
-        'placeholder',
-        'reportedCostCoverage',
-        'reportedUsageCoverage',
-        'metricsIncludePartialEstimates',
-        'costAssessment',
-        'costSummary',
-        'harnessSessionCost',
-        'versionByItemId',
-      ].includes(key)
-    )
-      return undefined;
-    if (key === 'schemaVersion') return 7;
+  return JSON.stringify(value, (_key, entry) => {
     if (entry instanceof Map) return { map: [...entry] };
     if (entry instanceof Set) return { set: [...entry] };
     return entry;
@@ -90,18 +71,10 @@ function updateParityHash(input: SessionAnalysis, hash: Hash): void {
 }
 
 it.each(fixtures)(
-  'preserves pre-extraction indexes and projections: $name',
+  'matches the pinned digest of indexes and projections: $name',
   ({ input, expected }) => {
     const hash = createHash('sha256');
     updateParityHash(input, hash);
     expect(hash.digest('hex')).toBe(expected);
   },
 );
-
-it('preserves the original aggregate scope/coverage digest and fixture order', () => {
-  const hash = createHash('sha256');
-  for (const { input } of fixtures) updateParityHash(input, hash);
-  expect(hash.digest('hex')).toBe(
-    '5e46420e868175dcd6475aae3607140b5ce627f4ef666c4259d092d1bc0325a1',
-  );
-});

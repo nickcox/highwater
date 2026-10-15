@@ -556,7 +556,7 @@ fn load_with_limits(
     let mut connection = open(path, signal.clone())?;
     let tx = connection.transaction()?;
     let layout = validate_layout(&tx)?;
-    let mut hasher = blake3::Hasher::new_derive_key("TokenPlume OpenCode snapshot v2");
+    let mut hasher = blake3::Hasher::new_derive_key("Highwater OpenCode snapshot v1");
     // Layout contributes qualifications even if the selected raw rows haven't
     // changed (e.g. an unused generation is introduced beside a live session).
     field(

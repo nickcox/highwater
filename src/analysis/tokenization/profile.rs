@@ -4,9 +4,7 @@ const TIKTOKEN_VERSION: &str = "tiktoken-4.1.2";
 // Anthropic publishes no tokenizer for Claude 3 or later. Claude estimates come from the port
 // of ctok in `claude/`, a reconstruction of each tokenizer generation from count_tokens
 // measurements, at the ctok commit named here.
-// This and the other "tokenplume" strings below keep the project's earlier name: they are
-// hashed into profile IDs, so changing them would change every ID.
-const CTOK_VERSION: &str = "ctok-8c43ffd+tokenplume-port-v1";
+const CTOK_VERSION: &str = "ctok-8c43ffd+highwater-port-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum TokenizationPolicy {
@@ -118,7 +116,7 @@ pub(crate) struct ProfileKey {
 impl ProfileKey {
     fn digest(&self) -> String {
         let mut hasher = blake3::Hasher::new();
-        hasher.update(b"tokenplume-profile-key-v4\0");
+        hasher.update(b"highwater-profile-key-v1\0");
         hash_optional(&mut hasher, self.provider.as_deref());
         hash_optional(&mut hasher, self.model.as_deref());
         hash_optional(&mut hasher, self.api.as_deref());
@@ -129,7 +127,7 @@ impl ProfileKey {
         hash_string(&mut hasher, &self.implementation);
         hash_string(&mut hasher, &self.rule);
         hasher.update(&self.version.to_le_bytes());
-        format!("profile-v4-{}", hasher.finalize().to_hex())
+        format!("profile-v1-{}", hasher.finalize().to_hex())
     }
 }
 
@@ -325,8 +323,8 @@ fn build_profile(
         TokenizerFamily::ClaudeV3 | TokenizerFamily::ClaudeV4_7 | TokenizerFamily::ClaudeV4_8 => {
             CTOK_VERSION
         }
-        TokenizerFamily::CharacterHeuristic => "tokenplume-character-heuristic-v1",
-        TokenizerFamily::Unavailable => "tokenplume-unavailable-v1",
+        TokenizerFamily::CharacterHeuristic => "highwater-character-heuristic-v1",
+        TokenizerFamily::Unavailable => "highwater-unavailable-v1",
     };
     let framing = if matches!(family, TokenizerFamily::O200k | TokenizerFamily::Cl100k)
         && is_openai_provider(&provider.to_ascii_lowercase())
@@ -346,7 +344,7 @@ fn build_profile(
         framing,
         implementation: implementation.into(),
         rule: rule.into(),
-        version: 4,
+        version: 1,
     };
     let id = key.digest();
     TokenizationProfile {
@@ -508,7 +506,7 @@ mod tests {
                 assert_eq!(auto.family, TokenizerFamily::O200k, "{provider}/{model}");
                 assert_eq!(auto.method, TokenizationMethod::ModelTokenizer);
                 assert_eq!(auto.rule, "assumed-gpt6-o200k-base");
-                assert!(auto.id.starts_with("profile-v4-"));
+                assert!(auto.id.starts_with("profile-v1-"));
                 assert_eq!(
                     resolve_profile(&target, TokenizationPolicy::Strict).family,
                     TokenizerFamily::O200k
@@ -625,7 +623,7 @@ mod tests {
                     assert_eq!(profile.rule, measured(family), "{model}");
                     assert_eq!(profile.method, TokenizationMethod::ApiSerializationEstimate);
                     assert_eq!(profile.framing_overhead(1), None);
-                    assert!(profile.id.starts_with("profile-v4-"));
+                    assert!(profile.id.starts_with("profile-v1-"));
                 }
                 assert_eq!(
                     resolve_profile(&target, TokenizationPolicy::Heuristic).family,

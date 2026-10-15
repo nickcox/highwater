@@ -81,7 +81,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   await chooseSession(page, openCode.id);
   const response = await analysisResponse;
   const analysis = await response.json();
-  expect(analysis.schemaVersion).toBe(16);
+  expect(analysis.schemaVersion).toBe(1);
   expect(analysis.session.source).toBe('opencode');
   expect(analysis.reconstruction.status).toBe('partial');
   await expect(page.locator('.estimate-level')).toBeVisible();

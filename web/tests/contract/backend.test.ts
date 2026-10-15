@@ -205,7 +205,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
     expect(indexed.callByIndex.size).toBe(analysis.modelCalls.length);
     expect(indexed.itemById.size).toBe(analysis.contextItems.length);
     for (const profile of analysis.tokenAnalysis.profiles)
-      expect(profile.id).toMatch(/^profile-v4-[a-f0-9]{64}$/);
+      expect(profile.id).toMatch(/^profile-v1-[a-f0-9]{64}$/);
     for (const item of analysis.contextItems) {
       expect(item).not.toHaveProperty('payload');
       expect(item).not.toHaveProperty('raw');
@@ -355,7 +355,7 @@ describe('live production Rust -> indexAnalysis contract', () => {
 
   it('records Rust-side rejection and current versions instead of sending bad successes to TS', () => {
     expect(manifest.schemaVersion).toBe(ANALYSIS_SCHEMA_VERSION);
-    expect(manifest.outputVersion).toBe(35);
+    expect(manifest.outputVersion).toBe(1);
     expect(manifest.rejections).toEqual([
       { name: 'dangling-normalized-reference', category: 'invalid-session' },
       { name: 'unsafe-normalized-usage', category: 'invalid-session' },

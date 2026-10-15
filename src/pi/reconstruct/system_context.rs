@@ -277,7 +277,7 @@ fn revision_item(
     label: String,
     payload: TokenizationPayload,
 ) -> NormalizedContextItem {
-    let mut identity = blake3::Hasher::new_derive_key("TokenPlume Pi context revision v1");
+    let mut identity = blake3::Hasher::new_derive_key("Highwater Pi context revision v1");
     for part in [session, entry.id.as_str(), role] {
         identity.update(&(part.len() as u64).to_le_bytes());
         identity.update(part.as_bytes());

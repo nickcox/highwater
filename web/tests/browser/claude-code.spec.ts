@@ -53,7 +53,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const response = await analysisResponse;
   expect(response.status()).toBe(200);
   const analysis = await response.json();
-  expect(analysis.schemaVersion).toBe(16);
+  expect(analysis.schemaVersion).toBe(1);
   expect(analysis.session.source).toBe('claude-code');
   expect(analysis.modelCalls).toHaveLength(4);
   expect(analysis.compactions).toHaveLength(1);

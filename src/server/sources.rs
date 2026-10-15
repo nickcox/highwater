@@ -157,8 +157,7 @@ pub(super) fn default_vscode_user_dirs(home: &Path) -> Vec<PathBuf> {
 }
 
 pub(super) fn vscode_copilot_reference(session_id: &str) -> String {
-    let mut hash =
-        blake3::Hasher::new_derive_key("TokenPlume VS Code Copilot session reference v1");
+    let mut hash = blake3::Hasher::new_derive_key("Highwater VS Code Copilot session reference v1");
     hash.update(b"id\0");
     hash.update(session_id.as_bytes());
     format!("vscode-copilot-{}", &hash.finalize().to_hex()[..12])
@@ -238,7 +237,7 @@ impl VsCodeCopilotSource {
 }
 
 pub(super) fn reference(native_id: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("TokenPlume OpenCode session reference v1");
+    let mut hash = blake3::Hasher::new_derive_key("Highwater OpenCode session reference v1");
     hash.update(b"id\0");
     hash.update(native_id.as_bytes());
     format!("opencode-{}", &hash.finalize().to_hex()[..12])
@@ -247,7 +246,7 @@ pub(super) fn reference(native_id: &str) -> String {
 /// Main sessions and subagents get different references, because a subagent's
 /// records carry its parent's session ID.
 pub(super) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("TokenPlume Claude Code session reference v1");
+    let mut hash = blake3::Hasher::new_derive_key("Highwater Claude Code session reference v1");
     hash.update(b"id\0");
     hash.update(session_id.as_bytes());
     if let Some(agent_id) = agent_id {
@@ -260,7 +259,7 @@ pub(super) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) ->
 /// A transcript without a session ID (for example one whose first record is
 /// still being written) is listed under a reference derived from its file name.
 fn claude_code_fallback_reference(file: &TranscriptFile) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("TokenPlume Claude Code session reference v1");
+    let mut hash = blake3::Hasher::new_derive_key("Highwater Claude Code session reference v1");
     hash.update(b"file\0");
     hash.update(file.path.file_name().unwrap_or_default().as_encoded_bytes());
     format!("claude-code-{}", &hash.finalize().to_hex()[..12])

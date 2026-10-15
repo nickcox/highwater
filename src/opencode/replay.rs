@@ -111,7 +111,7 @@ fn instant(value: Option<&Value>) -> Option<i64> {
 }
 
 fn item_id(message: &str, part: Option<&str>, role: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("TokenPlume OpenCode context item v1");
+    let mut hash = blake3::Hasher::new_derive_key("Highwater OpenCode context item v1");
     for value in [message, part.unwrap_or_default(), role] {
         hash.update(&(value.len() as u64).to_le_bytes());
         hash.update(value.as_bytes());

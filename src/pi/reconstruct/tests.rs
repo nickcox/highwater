@@ -215,10 +215,11 @@ fn assistant_wall_clock_instants_are_normalized_independently() {
     assert_eq!(session.model_calls[0].timestamps.recorded_at_ms, None);
 }
 
+/// Pins the normalized form of every Pi fixture, so a change to how Pi sessions are read fails
+/// here. When it changes on purpose, update the digest and say why in the commit message.
 #[test]
 fn normalized_fixture_parity() {
     let mut digest = blake3::Hasher::new();
-    let mut legacy_digest = blake3::Hasher::new();
     for name in [
         "aborted-assistant",
         "branch",
@@ -233,46 +234,11 @@ fn normalized_fixture_parity() {
         "terminal-compaction",
         "tools",
     ] {
-        let session = fixture(name);
-        assert!(session
-            .model_calls
-            .iter()
-            .all(|call| call.reported_usage.placeholder.is_none()));
-        assert!(session.harness_session_cost.is_none());
-        let mut normalized = format!("{session:?}")
-            .replace("placeholder: None, ", "")
-            .replace(", harness_session_cost: None", "")
-            .replace(", thinking_reported: false", "")
-            .replace("input_total: None, ", "")
-            .replace("retried: false, ", "");
-        // Remove only the additive counter metadata to keep the original
-        // replay baseline pinned: no normalized usage or history may change.
-        for call in &session.model_calls {
-            let usage = &call.reported_usage;
-            assert_eq!(usage.recorded_output, usage.output);
-            normalized = normalized.replace(
-                &format!(
-                    "recorded_output: {:?}, output_reasoning_relationship: {:?}, ",
-                    usage.recorded_output, usage.output_reasoning_relationship,
-                ),
-                "",
-            );
-        }
-        digest.update(normalized.as_bytes());
-        legacy_digest.update(
-            normalized
-                .replace("tool_loadout_known: false, ", "")
-                .as_bytes(),
-        );
+        digest.update(format!("{:?}", fixture(name)).as_bytes());
     }
     assert_eq!(
-        legacy_digest.finalize().to_hex().as_str(),
-        "7a6f8e5e21caef161601aba4110f024810988069086eaec2458079f6d15e76a1"
-    );
-    assert_eq!(
         digest.finalize().to_hex().as_str(),
-        // Only the internal loadout-knowledge flag changes these older fixtures.
-        "d7ab15e0f00da6950219c6047bef9e717c92c34d14276bc578ebd757234a741b"
+        "11195ad77b213e53bbebf3eaa662c0bc888588f8171188f7914304fdff2665ee"
     );
 }
 

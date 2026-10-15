@@ -59,8 +59,11 @@ fn transitions_borrow_source_ids_in_context_order() {
     }
 }
 
+/// Pins every Pi fixture's output under each tokenization policy, so a change that alters any
+/// output fails here. When an output changes on purpose, update the digest and say why in the
+/// commit message.
 #[test]
-fn fixture_outputs_preserve_corrected_baseline() {
+fn fixture_outputs_match_pinned_digest() {
     let mut digest = blake3::Hasher::new();
     for fixture in [
         "aborted-assistant",
@@ -153,130 +156,13 @@ fn fixture_outputs_preserve_corrected_baseline() {
                 strip(&timed),
                 "timing changed non-timing fields: {fixture}"
             );
-            // Keep the schema-8 metric baseline pinned. Schema 9 adds optional
-            // reconstruction coverage (absent for Pi), and schema 10 adds two
-            // recorded-counter fields without changing normalized math.
-            let mut baseline = output.clone();
-            baseline.schema_version = 8;
-            // Output 22 reports session subtotals with coverage. Map them back to
-            // the earlier all-or-nothing totals so every other field stays pinned.
-            let calls = &baseline.model_calls;
-            let all_calls = |count: usize| !calls.is_empty() && count == calls.len();
-            let session = &mut baseline.session;
-            if !all_calls(session.reported_usage_coverage.recorded_calls) {
-                session.reported_prompt_tokens = None;
-            }
-            if !calls.iter().all(|call| call.usage.output.is_some()) {
-                session.reported_completion_tokens = None;
-            }
-            if !calls.iter().all(|call| call.usage.reasoning.is_some()) {
-                session.reported_reasoning_tokens = None;
-            }
-            if !all_calls(session.reported_cost_coverage.recorded_calls) {
-                session.reported_cost_total = None;
-            }
-            let mut json = serde_json::to_string(&baseline).expect("JSON");
-            // Schema 12 sends per-call item positions instead of item IDs; restore
-            // the ID lists so the pinned digest still covers the same references.
-            for call in &baseline.model_calls {
-                let ids = |indexes: &[usize]| {
-                    serde_json::to_string(
-                        &indexes
-                            .iter()
-                            .map(|index| baseline.context_items[*index].id.as_str())
-                            .collect::<Vec<_>>(),
-                    )
-                    .expect("IDs")
-                };
-                let positions =
-                    |indexes: &[usize]| serde_json::to_string(indexes).expect("indexes");
-                let current = format!(
-                    "\"contextItemIndexes\":{},\"addedItemIndexes\":{},\"droppedItemIndexes\":{}",
-                    positions(&call.context_item_indexes),
-                    positions(&call.added_item_indexes),
-                    positions(&call.dropped_item_indexes),
-                );
-                let previous = format!(
-                    "\"contextItemIds\":{},\"addedItemIds\":{},\"droppedItemIds\":{}",
-                    ids(&call.context_item_indexes),
-                    ids(&call.added_item_indexes),
-                    ids(&call.dropped_item_indexes),
-                );
-                let at = json.find(&current).expect("call item positions serialized");
-                json.replace_range(at..at + current.len(), &previous);
-            }
-            for (field, coverage) in [
-                (
-                    "reportedCostCoverage",
-                    &baseline.session.reported_cost_coverage,
-                ),
-                (
-                    "reportedUsageCoverage",
-                    &baseline.session.reported_usage_coverage,
-                ),
-            ] {
-                let addition = format!(
-                    "\"{field}\":{},",
-                    serde_json::to_string(coverage).expect("coverage")
-                );
-                assert!(json.contains(&addition), "{field} serialized once");
-                json = json.replacen(&addition, "", 1);
-            }
-            assert!(baseline
-                .model_calls
-                .iter()
-                .all(|call| call.usage.placeholder.is_none()));
-            json = json.replace("\"placeholder\":null,", "");
-            for call in &baseline.model_calls {
-                assert_eq!(call.usage.recorded_output, call.usage.output);
-                // Remove exactly the additive fields in struct serialization
-                // order; strings in previews are JSON-escaped and cannot match.
-                let addition = format!(
-                    "\"recordedOutput\":{},\"outputReasoningRelationship\":{},",
-                    serde_json::to_string(&call.usage.recorded_output).expect("counter"),
-                    serde_json::to_string(&call.usage.output_reasoning_relationship)
-                        .expect("relationship"),
-                );
-                json = json.replace(&addition, "");
-            }
-            // Output 24 adds per-call cost assessments and the session cost summary,
-            // each serialized last in its object.
-            for call in &baseline.model_calls {
-                let addition = format!(
-                    ",\"costAssessment\":{}",
-                    serde_json::to_string(&call.cost_assessment).expect("assessment")
-                );
-                assert!(json.contains(&addition), "cost assessment serialized");
-                json = json.replacen(&addition, "", 1);
-            }
-            let addition = format!(
-                ",\"costSummary\":{}",
-                serde_json::to_string(&baseline.session.cost_summary).expect("summary")
-            );
-            assert!(json.contains(&addition), "cost summary serialized");
-            json = json.replacen(&addition, "", 1);
-            // Output 26 adds the harness's own session total, null for Pi.
-            assert!(baseline.session.harness_session_cost.is_none());
-            let addition = ",\"harnessSessionCost\":null";
-            assert!(json.contains(addition), "harness session cost serialized");
-            json = json.replacen(addition, "", 1);
+            let json = serde_json::to_string(&output).expect("JSON");
             digest.update(&(json.len() as u64).to_le_bytes());
             digest.update(json.as_bytes());
         }
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        // Schema 8 adds per-call wall-clock/timing metadata. Above, all other
-        // fields are identical with and without clocks for every fixture/policy.
-        // Output 23 computes transition and age metrics from partial estimates
-        // too and adds `metricsIncludePartialEstimates`; with those fields
-        // removed, the output hashed identically before and after that change.
-        // Output 27 replaces the character estimate for Claude models with calibrated
-        // o200k counts. Only economics-policies.jsonl has a Claude target
-        // (`claude-test`); comparing main and this change for every Pi fixture, only
-        // that profile and the estimates and metrics derived from it differ.
-        // Output 29 counts Claude models with the ctok port instead; again only the
-        // `claude-test` profile and what derives from it differ from output 28.
-        "20ceadee3d122835433a3033a70b329ea6698d4262f913c4bb61f2f5a859c57a"
+        "6496455a11c608ea8fade50c59356c9f42f01bfa9b60ab85869516fcd3855b80"
     );
 }

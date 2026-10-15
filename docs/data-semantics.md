@@ -43,7 +43,7 @@ Each source has its own reader, described on its own page:
 
 `GET /api/sessions` lists the sessions Highwater found, each with a reference such as `pi-…`, `opencode-…`, `claude-code-…` or `vscode-copilot-…`. `GET /api/sessions/{id}/analysis` returns one session's analysis. The server looks sessions up only by these references: it never accepts a file path or database ID over HTTP, and a reference that matches more than one session is rejected.
 
-The top-level `schemaVersion` is the only version number in the response; the current schema is version 16. Responses have an ETag, and a request with a matching `If-None-Match` gets an empty `304 Not Modified`.
+The top-level `schemaVersion` is the only version number in the response; the current schema is version 1. Responses have an ETag, and a request with a matching `If-None-Match` gets an empty `304 Not Modified`.
 
 The analysis holds labels, structural metadata, short previews of each item's content, and normalised usage and cost. It does not repeat raw session records or provider payloads.
 
@@ -76,7 +76,7 @@ For Pi's built-in APIs that Highwater has checked, a positive interval between t
 
 Integers in the analysis are limited to `Number.MAX_SAFE_INTEGER`, and invalid required values or counts are rejected before a response is sent. A total that would exceed that limit is `null`, never a partial figure.
 
-Three more version numbers identify cached results inside the server and are not part of the response: the output version (35), the tokenization profile version (profile IDs start `profile-v4-`) and the payload fingerprint version (4). Each source identifies a session's content differently:
+Three more version numbers identify cached results inside the server and are not part of the response: the output version (1), the tokenization profile version (profile IDs start `profile-v1-`) and the payload fingerprint version (1). Each source identifies a session's content differently:
 
 - **Pi and Claude Code** files by their size and modification time. A rewrite that keeps both can go unnoticed, and file system races are not completely ruled out. Claude Code transcripts add the file kind (main session or subagent).
 - **OpenCode** sessions by their database, native session ID and a digest of their content, read in one committed transaction.

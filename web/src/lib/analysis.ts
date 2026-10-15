@@ -36,7 +36,7 @@ function normalizedKind(kind: string): ContextItemKind {
   return KNOWN_KINDS.has(kind as ContextItemKind) ? (kind as ContextItemKind) : 'other';
 }
 
-export const ANALYSIS_SCHEMA_VERSION = 16;
+export const ANALYSIS_SCHEMA_VERSION = 1;
 
 /** Replace per-call item positions with the IDs they refer to. The arrays
  * reference the existing `item.id` strings, so this adds no string copies. */

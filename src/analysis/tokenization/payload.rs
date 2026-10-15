@@ -5,7 +5,7 @@ use crate::domain::{
 use blake3::Hasher;
 
 /// Version of the streaming canonical payload encoding used for fingerprints.
-pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 4;
+pub(crate) const PAYLOAD_SCHEMA_VERSION: u32 = 1;
 const PREVIEW_LIMIT: usize = 160;
 const EXPANDED_PREVIEW_LIMIT: usize = 640;
 
@@ -1248,7 +1248,7 @@ mod tests {
     }
 
     #[test]
-    fn encoded_image_field_rename_preserves_the_v4_fingerprint_contract() {
+    fn image_payload_fingerprint_is_pinned() {
         let payload = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {
                 media_type: Some("image/png".into()),
@@ -1256,11 +1256,10 @@ mod tests {
                 dimensions: None,
             })],
         });
-        assert_eq!(PAYLOAD_SCHEMA_VERSION, 4);
-        // Verified against the pre-M8 encoder (legacy `byte_length` field/tag).
+        assert_eq!(PAYLOAD_SCHEMA_VERSION, 1);
         assert_eq!(
             payload_hash(&payload),
-            "10b74ba9ed7fd575f7593af8a2bbd8d97a47a3de1d684977af6a9b1759b2f50e"
+            "0e3b9959d3598e31f129cd82f17113e8b29a9a82c3c65767fec5fb2b663eb6cc"
         );
         let absent = TokenizationPayload::UserMessage(MessageContent {
             parts: vec![ContentPart::Image(ImageDescriptor {
