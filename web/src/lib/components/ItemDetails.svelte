@@ -13,8 +13,6 @@
     rememberSection,
     type InspectorSections,
   } from '../state/inspector-sections';
-  export let sections: InspectorSections = inspectorSections();
-  export let onInspectCall: (index: number) => void = () => {};
   import {
     coverageLabel,
     exposureLabel,
@@ -22,61 +20,96 @@
     formatWeight,
   } from '../context-river/format';
 
-  export let item: ContextItem | null;
-  export let indexed: IndexedAnalysis;
-  export let callIndex: number | null = null;
-  export let pinnedCallIndex: number | null = null;
-  export let onSelectItem: (id: string) => void = () => {};
-  export let onRevealInRiver: (id: string) => void = () => {};
+  let {
+    sections = inspectorSections(),
+    onInspectCall = () => {},
+    item,
+    indexed,
+    callIndex = null,
+    pinnedCallIndex = null,
+    onSelectItem = () => {},
+    onRevealInRiver = () => {},
+  }: {
+    sections?: InspectorSections;
+    onInspectCall?: (index: number) => void;
+    item: ContextItem | null;
+    indexed: IndexedAnalysis;
+    callIndex?: number | null;
+    pinnedCallIndex?: number | null;
+    onSelectItem?: (id: string) => void;
+    onRevealInRiver?: (id: string) => void;
+  } = $props();
 
-  $: sourceCompactions = item ? (indexed.compactionBySourceId.get(item.id) ?? []) : [];
-  $: summaryCompaction = item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null;
-  $: retainedCompactions = item ? (indexed.compactionsByRetainedId.get(item.id) ?? []) : [];
-  $: directPredecessors = item
-    ? (indexed.incomingLineage.get(item.id) ?? []).map((edge) => edge.from)
-    : [];
-  $: directSuccessors = item
-    ? (indexed.outgoingLineage.get(item.id) ?? []).map((edge) => edge.to)
-    : [];
-  $: version = item ? (indexed.versionByItemId.get(item.id) ?? null) : null;
-  $: versions =
-    item && version ? versionChain(indexed.itemById, indexed.versionByItemId, item.id) : [];
-  $: callCount = indexed.analysis.modelCalls.length;
-  $: requestedCall = callIndex === null ? null : (indexed.callByIndex.get(callIndex) ?? null);
-  $: pinnedCall =
-    pinnedCallIndex === null ? null : (indexed.callByIndex.get(pinnedCallIndex) ?? null);
-  $: absentAtPinnedCall =
-    item !== null && pinnedCall !== null && !pinnedCall.contextItemIds.includes(item.id);
-  $: firstIncludedCall = item?.presence.length
-    ? (indexed.callByIndex.get(item.presence[0].startCall) ?? null)
-    : null;
-  $: latestPresentCall =
-    item && item.presence.length > 0 ? (indexed.callByIndex.get(item.lastModelCall) ?? null) : null;
-  $: selectedCall = (() => {
-    if (requestedCall && requestedCall.contextItemIds.includes(item?.id ?? '')) {
-      return requestedCall;
-    }
-    return pinnedCallIndex !== null ? null : latestPresentCall;
-  })();
-  $: usingLatestFallback = requestedCall === null && selectedCall !== null;
-  $: selectedEstimate =
+  let sourceCompactions = $derived(item ? (indexed.compactionBySourceId.get(item.id) ?? []) : []);
+  let summaryCompaction = $derived(
+    item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null,
+  );
+  let retainedCompactions = $derived(
+    item ? (indexed.compactionsByRetainedId.get(item.id) ?? []) : [],
+  );
+  let directPredecessors = $derived(
+    item ? (indexed.incomingLineage.get(item.id) ?? []).map((edge) => edge.from) : [],
+  );
+  let directSuccessors = $derived(
+    item ? (indexed.outgoingLineage.get(item.id) ?? []).map((edge) => edge.to) : [],
+  );
+  let version = $derived(item ? (indexed.versionByItemId.get(item.id) ?? null) : null);
+  let versions = $derived(
+    item && version ? versionChain(indexed.itemById, indexed.versionByItemId, item.id) : [],
+  );
+  let callCount = $derived(indexed.analysis.modelCalls.length);
+  let requestedCall = $derived(
+    callIndex === null ? null : (indexed.callByIndex.get(callIndex) ?? null),
+  );
+  let pinnedCall = $derived(
+    pinnedCallIndex === null ? null : (indexed.callByIndex.get(pinnedCallIndex) ?? null),
+  );
+  let absentAtPinnedCall = $derived(
+    item !== null && pinnedCall !== null && !pinnedCall.contextItemIds.includes(item.id),
+  );
+  let firstIncludedCall = $derived(
+    item?.presence.length ? (indexed.callByIndex.get(item.presence[0].startCall) ?? null) : null,
+  );
+  let latestPresentCall = $derived(
+    item && item.presence.length > 0 ? (indexed.callByIndex.get(item.lastModelCall) ?? null) : null,
+  );
+  let selectedCall = $derived(
+    (() => {
+      if (requestedCall && requestedCall.contextItemIds.includes(item?.id ?? '')) {
+        return requestedCall;
+      }
+      return pinnedCallIndex !== null ? null : latestPresentCall;
+    })(),
+  );
+  let usingLatestFallback = $derived(requestedCall === null && selectedCall !== null);
+  let selectedEstimate = $derived(
     item && selectedCall
       ? item.tokenEstimates.find(
           (estimate) => estimate.profileId === selectedCall?.tokenizationProfileId,
         )
-      : undefined;
-  $: selectedProfile = selectedEstimate
-    ? (indexed.analysis.tokenAnalysis.profiles.find(
-        (profile) => profile.id === selectedEstimate.profileId,
-      ) ?? null)
-    : null;
-  $: hasExpandedPreview =
+      : undefined,
+  );
+  let selectedProfile = $derived(
+    selectedEstimate
+      ? (indexed.analysis.tokenAnalysis.profiles.find(
+          (profile) => profile.id === selectedEstimate.profileId,
+        ) ?? null)
+      : null,
+  );
+  // Kept in sections so the choice survives the inspector closing; local so it re-renders.
+  let expandedPreview = $derived(sections.expandedPreview);
+  function togglePreview(): void {
+    expandedPreview = !expandedPreview;
+    sections.expandedPreview = expandedPreview;
+  }
+  let hasExpandedPreview = $derived(
     item?.preview !== null &&
-    item?.preview !== undefined &&
-    (item.preview.expandedText !== item.preview.text || item.preview.expandedTruncated);
-  $: itemDiagnosticCodes = [
+      item?.preview !== undefined &&
+      (item.preview.expandedText !== item.preview.text || item.preview.expandedTruncated),
+  );
+  let itemDiagnosticCodes = $derived([
     ...new Set(item?.tokenEstimates.flatMap((estimate) => estimate.noteCodes) ?? []),
-  ];
+  ]);
 
   function itemLabel(id: string): string {
     return displayItemLabel(indexed.itemById.get(id), id);
@@ -153,7 +186,7 @@
     <details use:rememberSection={{ state: sections, key: 'preview' }}>
       <summary>Content preview</summary>
       <div class="preview-details">
-        {#if hasExpandedPreview && sections.expandedPreview && item.preview}
+        {#if hasExpandedPreview && expandedPreview && item.preview}
           <pre>{item.preview.expandedText}</pre>
           {#if item.preview.expandedTruncated}<p class="preview-note">
               Expanded preview truncated.
@@ -168,9 +201,8 @@
           <button
             type="button"
             class="preview-toggle"
-            aria-expanded={sections.expandedPreview}
-            onclick={() => (sections.expandedPreview = !sections.expandedPreview)}
-            >{sections.expandedPreview ? 'Show less' : 'Show more'}</button
+            aria-expanded={expandedPreview}
+            onclick={togglePreview}>{expandedPreview ? 'Show less' : 'Show more'}</button
           >
         {/if}
       </div>

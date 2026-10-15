@@ -1,4 +1,4 @@
-<script context="module" lang="ts">
+<script module lang="ts">
   let nextContributionId = 0;
 
   // Mark token-based metrics that include partial item estimates.
@@ -41,7 +41,6 @@
     rememberSection,
     type InspectorSections,
   } from '../state/inspector-sections';
-  export let sections: InspectorSections = inspectorSections();
   const contributionId = `call-contribution-${nextContributionId++}`;
   import {
     coverageLabel,
@@ -51,70 +50,88 @@
     formatPercent,
   } from '../context-river/format';
 
-  export let call: ModelCall | null;
-  $: partialMetrics = call?.tokenAnalysis.metricsIncludePartialEstimates ?? false;
-  $: inputComparison = call ? callInputComparison(indexed, call) : null;
-  export let indexed: IndexedAnalysis;
-  export let pinned = false;
-  export let onSelectItem: (id: string) => void = () => {};
-  export let onPinCall: (index: number) => void = () => {};
+  let {
+    sections = inspectorSections(),
+    call,
+    indexed,
+    pinned = false,
+    onSelectItem = () => {},
+    onPinCall = () => {},
+  }: {
+    sections?: InspectorSections;
+    call: ModelCall | null;
+    indexed: IndexedAnalysis;
+    pinned?: boolean;
+    onSelectItem?: (id: string) => void;
+    onPinCall?: (index: number) => void;
+  } = $props();
 
-  $: compaction = call?.compactionBefore
-    ? (indexed.compactionById.get(call.compactionBefore) ?? null)
-    : null;
-  $: toolSummaries = (() => {
-    const summary = new Map<string, { count: number; failed: boolean }>();
-    for (const tool of call?.toolCallsAfter ?? []) {
-      const current = summary.get(tool.name) ?? { count: 0, failed: false };
-      summary.set(tool.name, {
-        count: current.count + 1,
-        failed: current.failed || tool.failed,
-      });
-    }
-    return [...summary.entries()].map(([name, value]) => ({ name, ...value }));
-  })();
-  $: recordedMetrics = call ? recordedResponseMetrics(call.usage) : [];
-  $: explanationCodes = call?.tokenAnalysis.explanationCodes ?? [];
+  let partialMetrics = $derived(call?.tokenAnalysis.metricsIncludePartialEstimates ?? false);
+  let inputComparison = $derived(call ? callInputComparison(indexed, call) : null);
+
+  let compaction = $derived(
+    call?.compactionBefore ? (indexed.compactionById.get(call.compactionBefore) ?? null) : null,
+  );
+  let toolSummaries = $derived(
+    (() => {
+      const summary = new Map<string, { count: number; failed: boolean }>();
+      for (const tool of call?.toolCallsAfter ?? []) {
+        const current = summary.get(tool.name) ?? { count: 0, failed: false };
+        summary.set(tool.name, {
+          count: current.count + 1,
+          failed: current.failed || tool.failed,
+        });
+      }
+      return [...summary.entries()].map(([name, value]) => ({ name, ...value }));
+    })(),
+  );
+  let recordedMetrics = $derived(call ? recordedResponseMetrics(call.usage) : []);
+  let explanationCodes = $derived(call?.tokenAnalysis.explanationCodes ?? []);
   // Explanations that apply to every call describe the session, and the estimate-quality note
   // already gives them; each call lists only its own.
-  $: sessionWideCodes = sessionWideExplanationCodes(indexed.analysis);
-  $: callExplanationCodes = explanationCodes.filter((code) => !sessionWideCodes.has(code));
+  let sessionWideCodes = $derived(sessionWideExplanationCodes(indexed.analysis));
+  let callExplanationCodes = $derived(
+    explanationCodes.filter((code) => !sessionWideCodes.has(code)),
+  );
   // Claude Code never records when a request started, and VS Code Copilot only in trace records
   // it keeps for a few days, so their calls without a start show one "Not recorded" row.
-  $: timingRecorded =
+  let timingRecorded = $derived(
     indexed.analysis.session.source === 'vscode-copilot'
       ? call?.timing.durationMs != null
-      : indexed.analysis.session.source !== 'claude-code';
-
-  $: economicsExplanationCodes = call?.economics.explanationCodes ?? [];
-  $: costCopy = describeCostBasis(
-    indexed.analysis.economics.costBasis,
-    indexed.analysis.session.source,
+      : indexed.analysis.session.source !== 'claude-code',
   );
-  $: costAssessment = call?.costAssessment ?? null;
-  $: costRate = costAssessment ? costRateLine(costAssessment) : null;
-  $: timingText = timingExplanation(indexed.analysis.session.source, timingRecorded);
-  $: costRecorded = costAssessment
-    ? recordedByHarnessLine(costAssessment, indexed.analysis.session.source)
-    : null;
-  $: tokenProfile = call?.tokenizationProfileId
-    ? (indexed.analysis.tokenAnalysis.profiles.find(
-        (profile) => profile.id === call?.tokenizationProfileId,
-      ) ?? null)
-    : null;
 
-  $: previousCall = call
-    ? (indexed.analysis.modelCalls[
-        indexed.analysis.modelCalls.findIndex((value) => value.index === call?.index) - 1
-      ] ?? null)
-    : null;
+  let economicsExplanationCodes = $derived(call?.economics.explanationCodes ?? []);
+  let costCopy = $derived(
+    describeCostBasis(indexed.analysis.economics.costBasis, indexed.analysis.session.source),
+  );
+  let costAssessment = $derived(call?.costAssessment ?? null);
+  let costRate = $derived(costAssessment ? costRateLine(costAssessment) : null);
+  let timingText = $derived(timingExplanation(indexed.analysis.session.source, timingRecorded));
+  let costRecorded = $derived(
+    costAssessment ? recordedByHarnessLine(costAssessment, indexed.analysis.session.source) : null,
+  );
+  let tokenProfile = $derived(
+    call?.tokenizationProfileId
+      ? (indexed.analysis.tokenAnalysis.profiles.find(
+          (profile) => profile.id === call?.tokenizationProfileId,
+        ) ?? null)
+      : null,
+  );
 
-  $: addedContributions = itemContributions(indexed, call?.addedItemIds ?? [], call, 'added');
-  $: droppedContributions = itemContributions(
-    indexed,
-    call?.droppedItemIds ?? [],
-    previousCall,
-    'dropped',
+  let previousCall = $derived(
+    call
+      ? (indexed.analysis.modelCalls[
+          indexed.analysis.modelCalls.findIndex((value) => value.index === call?.index) - 1
+        ] ?? null)
+      : null,
+  );
+
+  let addedContributions = $derived(
+    itemContributions(indexed, call?.addedItemIds ?? [], call, 'added'),
+  );
+  let droppedContributions = $derived(
+    itemContributions(indexed, call?.droppedItemIds ?? [], previousCall, 'dropped'),
   );
 
   function itemLabel(id: string): string {

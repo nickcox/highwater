@@ -21,17 +21,23 @@
     formatSessionCost,
     formatWeight,
   } from '../context-river/format';
-  export let indexed: IndexedAnalysis;
 
-  $: analysis = indexed.analysis;
-  $: session = analysis.session;
-  $: tokenAnalysis = analysis.tokenAnalysis;
-  $: economics = analysis.economics;
-  $: providers =
+  let {
+    indexed,
+  }: {
+    indexed: IndexedAnalysis;
+  } = $props();
+
+  let analysis = $derived(indexed.analysis);
+  let session = $derived(analysis.session);
+  let tokenAnalysis = $derived(analysis.tokenAnalysis);
+  let economics = $derived(analysis.economics);
+  let providers = $derived(
     [...new Set(analysis.modelCalls.map((call) => call.provider).filter(Boolean))].join(', ') ||
-    'Unknown';
+      'Unknown',
+  );
   // A failed attempt never reached a model; Claude Code names its placeholder "<synthetic>".
-  $: models =
+  let models = $derived(
     [
       ...new Set(
         analysis.modelCalls
@@ -39,32 +45,36 @@
           .map((call) => call.model)
           .filter(Boolean),
       ),
-    ].join(', ') || 'Unknown';
-  $: coverage = tokenAnalysis.itemEstimateCoverage;
-  $: estimates = estimateSummary(indexed);
-  $: costCopy = describeCostBasis(economics.costBasis, session.source);
+    ].join(', ') || 'Unknown',
+  );
+  let coverage = $derived(tokenAnalysis.itemEstimateCoverage);
+  let estimates = $derived(estimateSummary(indexed));
+  let costCopy = $derived(describeCostBasis(economics.costBasis, session.source));
   // Framing-based reconciliation only applies to text-only routes; otherwise
   // summarise the approximate comparison the River draws instead.
-  $: hasReconciliation = session.reconciliationComparableCalls > 0;
-  $: inputSummary = hasReconciliation ? null : summarizeInputComparisons(indexed);
-  $: costSummary = session.costSummary;
-  $: cost = sessionCost(costSummary);
-  $: costCoverage = sessionCostCoverage(costSummary);
-  $: priceData = costSummary.priceData;
-  $: costCoverageNote =
-    session.reportedCostTotal === null ? null : recordedCoverageNote(session.reportedCostCoverage);
-  $: usageCoverageNote =
+  let hasReconciliation = $derived(session.reconciliationComparableCalls > 0);
+  let inputSummary = $derived(hasReconciliation ? null : summarizeInputComparisons(indexed));
+  let costSummary = $derived(session.costSummary);
+  let cost = $derived(sessionCost(costSummary));
+  let costCoverage = $derived(sessionCostCoverage(costSummary));
+  let priceData = $derived(costSummary.priceData);
+  let costCoverageNote = $derived(
+    session.reportedCostTotal === null ? null : recordedCoverageNote(session.reportedCostCoverage),
+  );
+  let usageCoverageNote = $derived(
     session.reportedPromptTokens === null
       ? null
-      : recordedCoverageNote(session.reportedUsageCoverage);
+      : recordedCoverageNote(session.reportedUsageCoverage),
+  );
   // Copilot's own total repeats the recorded total when every call has a record.
-  $: showHarnessTotal =
+  let showHarnessTotal = $derived(
     session.harnessSessionCost !== null &&
-    !(
-      session.source === 'vscode-copilot' &&
-      session.reportedCostTotal !== null &&
-      Math.abs(session.reportedCostTotal - session.harnessSessionCost.totalUsd) < 1e-9
-    );
+      !(
+        session.source === 'vscode-copilot' &&
+        session.reportedCostTotal !== null &&
+        Math.abs(session.reportedCostTotal - session.harnessSessionCost.totalUsd) < 1e-9
+      ),
+  );
 </script>
 
 <section class="summary" aria-label="Session summary">
