@@ -30,14 +30,13 @@ test('integrated VS Code Copilot catalogue, trace records, cost and timing', asy
   const agent = copilot.find((session) => session.displayName === 'Fix the failing parser test')!;
   expect(agent.workingDirectory).toBe('/home/dev/my project');
 
-  await page.getByRole('combobox', { name: 'Harness' }).selectOption('vscode-copilot');
-  const analysisResponse = page.waitForResponse(
-    (response) => response.url().includes(agent.id) && response.url().endsWith('/analysis'),
-  );
-  await chooseSession(page, agent.id);
-  const response = await analysisResponse;
+  // The page may already have opened any of these sessions on load, which makes the browser's own
+  // request for it a 304 with no body, so read each analysis with a separate request.
+  const response = await page.request.get(`/api/sessions/${agent.id}/analysis`);
   expect(response.status()).toBe(200);
   const analysis = await response.json();
+  await page.getByRole('combobox', { name: 'Harness' }).selectOption('vscode-copilot');
+  await chooseSession(page, agent.id);
   expect(analysis.session.source).toBe('vscode-copilot');
   expect(analysis.modelCalls).toHaveLength(3);
   // The first request's two calls have trace records; the second request's call does not.
@@ -60,11 +59,10 @@ test('integrated VS Code Copilot catalogue, trace records, cost and timing', asy
 
   // A Claude call through Copilot, with cache reads and writes.
   const remote = copilot.find((session) => session.displayName === 'Summarise the service')!;
-  const remoteResponse = page.waitForResponse(
-    (candidate) => candidate.url().includes(remote.id) && candidate.url().endsWith('/analysis'),
-  );
+  const remoteAnalysis = await (
+    await page.request.get(`/api/sessions/${remote.id}/analysis`)
+  ).json();
   await chooseSession(page, remote.id);
-  const remoteAnalysis = await (await remoteResponse).json();
   expect(remoteAnalysis.modelCalls[0].economics.policyId).toBe('github-copilot-messages-cache-v1');
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   await expect(page.getByText('Could not render this session')).toHaveCount(0);
