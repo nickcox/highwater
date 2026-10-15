@@ -16,6 +16,22 @@
   import { versionChain } from '../item-versions';
   import { coverageLabel, exposureLabel, formatInteger } from '../context-river/format';
 
+  let {
+    indexed,
+    selectedItemId = null,
+    pinnedCallIndex = null,
+    onSelectItem,
+    onHoverItem,
+    findRequest = null,
+  }: {
+    indexed: IndexedAnalysis;
+    selectedItemId?: string | null;
+    pinnedCallIndex?: number | null;
+    onSelectItem: (id: string, callIndex?: number) => void;
+    onHoverItem: (id: string | null, event?: PointerEvent) => void;
+    findRequest?: { requestId: number; itemId: string } | null;
+  } = $props();
+
   const KIND_ORDER: ContextItemKind[] = [
     'assistantMessage',
     'branchSummary',
@@ -34,111 +50,142 @@
   // show matching rows a page at a time.
   const ROW_PAGE_SIZE = 200;
 
-  export let indexed: IndexedAnalysis;
-  export let selectedItemId: string | null = null;
-  export let pinnedCallIndex: number | null = null;
-  export let onSelectItem: (id: string, callIndex?: number) => void;
-  export let onHoverItem: (id: string | null, event?: PointerEvent) => void;
-  export let findRequest: { requestId: number; itemId: string } | null = null;
-
-  let searchText = '';
-  let selectedKind: ContextItemKind | 'all' = 'all';
-  let scope: 'all' | 'presentAtPin' = 'all';
-  let scopeStatus = '';
-  let sortMode: LifespanSortMode = 'tokenTurns';
-  let rowLimit = ROW_PAGE_SIZE;
-  let expanded = false;
+  let searchText = $state('');
+  let selectedKind = $state<ContextItemKind | 'all'>('all');
+  let scope = $state<'all' | 'presentAtPin'>('all');
+  let scopeStatus = $state('');
+  let sortMode = $state<LifespanSortMode>('tokenTurns');
+  let rowLimit = $state(ROW_PAGE_SIZE);
+  let expanded = $state(false);
   let handledFindRequestId = -1;
-  let pendingFindItemId: string | null = null;
-  let findStatus = '';
-  let root: HTMLElement;
+  let pendingFindItemId: string | null = $state(null);
+  let findStatus = $state('');
+  let root: HTMLElement | undefined = $state();
   let componentActive = true;
   onDestroy(() => {
     componentActive = false;
   });
 
-  $: allItems = indexed.analysis.contextItems;
-  $: conciseLabels = conciseLifespanLabels(allItems);
-  $: sizeProfileId = sizeComparisonProfileId(allItems);
-  $: sizeProfile =
+  let allItems = $derived(indexed.analysis.contextItems);
+  let conciseLabels = $derived(conciseLifespanLabels(allItems));
+  let sizeProfileId = $derived(sizeComparisonProfileId(allItems));
+  let sizeProfile = $derived(
     sizeProfileId === null
       ? null
       : (indexed.analysis.tokenAnalysis.profiles.find((profile) => profile.id === sizeProfileId) ??
-        null);
-  $: sizeProfileLabel = sizeProfile
-    ? `${sizeProfile.provider}/${sizeProfile.model} · ${sizeProfile.method}`
-    : (sizeProfileId ?? 'unavailable');
-  $: if (selectedKind !== 'all' && !availableKinds.includes(selectedKind)) selectedKind = 'all';
-  $: if (sortMode === 'size' && sizeProfileId === null) sortMode = 'tokenTurns';
-  $: if (scope === 'presentAtPin' && pinnedCallIndex === null) {
-    scope = 'all';
-    scopeStatus = 'Pin cleared; showing all items.';
-  }
-  $: if (scope === 'all' && pinnedCallIndex !== null) scopeStatus = '';
-  $: pinnedCallItemIds =
-    pinnedCallIndex === null ? null : (indexed.contextSetByCall.get(pinnedCallIndex) ?? null);
-  $: pinnedCallPosition =
-    pinnedCallIndex === null || !callPositionByIndex.has(pinnedCallIndex)
-      ? null
-      : position(pinnedCallIndex);
+          null),
+  );
+  let sizeProfileLabel = $derived(
+    sizeProfile
+      ? `${sizeProfile.provider}/${sizeProfile.model} · ${sizeProfile.method}`
+      : (sizeProfileId ?? 'unavailable'),
+  );
+  let pinnedCallItemIds = $derived(
+    pinnedCallIndex === null ? null : (indexed.contextSetByCall.get(pinnedCallIndex) ?? null),
+  );
   // Later versions of a system prompt or tool definition share their first version's row.
-  $: firstVersions = allItems.filter(
-    (item) => (indexed.versionByItemId.get(item.id)?.number ?? 1) === 1,
+  let firstVersions = $derived(
+    allItems.filter((item) => (indexed.versionByItemId.get(item.id)?.number ?? 1) === 1),
   );
-  $: versionsByRowId = new Map(
-    firstVersions.map((item) => [
-      item.id,
-      versionChain(indexed.itemById, indexed.versionByItemId, item.id),
-    ]),
+  let versionsByRowId = $derived(
+    new Map(
+      firstVersions.map((item) => [
+        item.id,
+        versionChain(indexed.itemById, indexed.versionByItemId, item.id),
+      ]),
+    ),
   );
-  $: versionsOf = (item: ContextItem): readonly ContextItem[] =>
-    versionsByRowId.get(item.id) ?? [item];
-  $: items = sortLifespans(firstVersions, sortMode, sizeProfileId, versionsOf);
-  $: scopedItems =
+  let versionsOf = $derived(
+    (item: ContextItem): readonly ContextItem[] => versionsByRowId.get(item.id) ?? [item],
+  );
+  let items = $derived(sortLifespans(firstVersions, sortMode, sizeProfileId, versionsOf));
+  let scopedItems = $derived(
     scope === 'presentAtPin' && pinnedCallItemIds !== null
       ? items.filter((item) =>
           versionsOf(item).some((version) => pinnedCallItemIds.has(version.id)),
         )
-      : items;
-  $: searchNeedle = searchText.trim().slice(0, SEARCH_LIMIT).toLowerCase();
-  $: visibleItems = scopedItems.filter((item) => {
-    const kindMatches = selectedKind === 'all' || item.kind === selectedKind;
-    const searchMatches =
-      searchNeedle.length === 0 ||
-      versionsOf(item).some(
-        (version) =>
-          version.label.toLowerCase().includes(searchNeedle) ||
-          (version.preview?.text ?? '').toLowerCase().includes(searchNeedle),
-      );
-    return kindMatches && searchMatches;
-  });
-  $: visibleItemCount = visibleItems.reduce((total, item) => total + versionsOf(item).length, 0);
-  // A new filter or sort starts again from the first page.
-  $: (searchNeedle, selectedKind, scope, sortMode, (rowLimit = ROW_PAGE_SIZE));
-  $: renderedItems = visibleItems.slice(0, rowLimit);
-  $: hiddenRowCount = visibleItems.length - renderedItems.length;
-  $: availableKinds = KIND_ORDER.filter((kind) => allItems.some((item) => item.kind === kind));
-  $: filtersActive = searchNeedle.length > 0 || selectedKind !== 'all' || scope !== 'all';
-  $: callIndices = indexed.analysis.modelCalls.map((call) => call.index);
-  $: axisTicks = callAxisTicks(callIndices);
-  $: callCount = callIndices.length;
-  $: callPositionByIndex = new Map(callIndices.map((callIndex, index) => [callIndex, index]));
-  $: selectedItemHidden =
+      : items,
+  );
+  let searchNeedle = $derived(searchText.trim().slice(0, SEARCH_LIMIT).toLowerCase());
+  let visibleItems = $derived(
+    scopedItems.filter((item) => {
+      const kindMatches = selectedKind === 'all' || item.kind === selectedKind;
+      const searchMatches =
+        searchNeedle.length === 0 ||
+        versionsOf(item).some(
+          (version) =>
+            version.label.toLowerCase().includes(searchNeedle) ||
+            (version.preview?.text ?? '').toLowerCase().includes(searchNeedle),
+        );
+      return kindMatches && searchMatches;
+    }),
+  );
+  let visibleItemCount = $derived(
+    visibleItems.reduce((total, item) => total + versionsOf(item).length, 0),
+  );
+  let renderedItems = $derived(visibleItems.slice(0, rowLimit));
+  let hiddenRowCount = $derived(visibleItems.length - renderedItems.length);
+  let availableKinds = $derived(
+    KIND_ORDER.filter((kind) => allItems.some((item) => item.kind === kind)),
+  );
+  let filtersActive = $derived(
+    searchNeedle.length > 0 || selectedKind !== 'all' || scope !== 'all',
+  );
+  let callIndices = $derived(indexed.analysis.modelCalls.map((call) => call.index));
+  let axisTicks = $derived(callAxisTicks(callIndices));
+  let callCount = $derived(callIndices.length);
+  let callPositionByIndex = $derived(
+    new Map(callIndices.map((callIndex, index) => [callIndex, index])),
+  );
+  let pinnedCallPosition = $derived(
+    pinnedCallIndex === null || !callPositionByIndex.has(pinnedCallIndex)
+      ? null
+      : position(pinnedCallIndex),
+  );
+  let selectedItemHidden = $derived(
     selectedItemId !== null &&
-    filtersActive &&
-    !visibleItems.some((item) => rowContains(item, selectedItemId));
-  $: if (findRequest && findRequest.requestId !== handledFindRequestId) {
-    handledFindRequestId = findRequest.requestId;
-    pendingFindItemId = findRequest.itemId;
-    findStatus = '';
-    expanded = true;
-    const requestId = findRequest.requestId;
-    void tick().then(() => focusRequestedItem(requestId));
-  }
-  $: if (!findRequest && pendingFindItemId) {
-    pendingFindItemId = null;
-    findStatus = '';
-  }
+      filtersActive &&
+      !visibleItems.some((item) => rowContains(item, selectedItemId)),
+  );
+  // Effects come after the derived values they read: a pre-update effect runs as soon as it is
+  // declared.
+  // Filters that no longer apply to this session or pin fall back to their defaults.
+  $effect.pre(() => {
+    if (selectedKind !== 'all' && !availableKinds.includes(selectedKind)) selectedKind = 'all';
+  });
+  $effect.pre(() => {
+    if (sortMode === 'size' && sizeProfileId === null) sortMode = 'tokenTurns';
+  });
+  $effect.pre(() => {
+    if (scope === 'presentAtPin' && pinnedCallIndex === null) {
+      scope = 'all';
+      scopeStatus = 'Pin cleared; showing all items.';
+    }
+  });
+  $effect.pre(() => {
+    if (scope === 'all' && pinnedCallIndex !== null) scopeStatus = '';
+  });
+  // A new filter or sort starts again from the first page.
+  $effect.pre(() => {
+    void [searchNeedle, selectedKind, scope, sortMode];
+    rowLimit = ROW_PAGE_SIZE;
+  });
+  $effect.pre(() => {
+    if (findRequest && findRequest.requestId !== handledFindRequestId) {
+      handledFindRequestId = findRequest.requestId;
+      pendingFindItemId = findRequest.itemId;
+      findStatus = '';
+      expanded = true;
+      const requestId = findRequest.requestId;
+      void tick().then(() => focusRequestedItem(requestId));
+    }
+  });
+  $effect.pre(() => {
+    if (!findRequest && pendingFindItemId) {
+      pendingFindItemId = null;
+      findStatus = '';
+    }
+  });
 
   function itemCountLabel(count: number): string {
     return `${formatInteger(count)} item${count === 1 ? '' : 's'}`;
