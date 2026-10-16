@@ -1,4 +1,4 @@
-import type { SessionAnalysis } from './types';
+import type { ContextItem, SessionAnalysis } from './types';
 import { itemVersions } from './item-versions';
 
 export function stableItemOrder(
@@ -29,6 +29,40 @@ export function stableItemOrder(
     if (previousRank !== undefined) ranks.set(id, previousRank);
   }
 
+  // Unrecorded request context is measured again for each segment of the session. Each
+  // measurement takes the place of the one before it.
+  const unrecorded = analysis.contextItems
+    .filter((item) => item.kind === 'unrecordedContext' && item.presence.length > 0)
+    .sort((left, right) => left.firstModelCall - right.firstModelCall);
+  for (const [index, item] of unrecorded.entries()) {
+    const previousRank = index > 0 ? ranks.get(unrecorded[index - 1]!.id) : undefined;
+    if (previousRank !== undefined) ranks.set(item.id, previousRank);
+  }
+
+  // After a compaction a harness can send the same attachments again (such as Claude Code's
+  // environment and skill listing). Each one takes the place of the earliest attachment with the
+  // same label that the compaction removed, so a label sent several times is matched in order.
+  const itemById = new Map(analysis.contextItems.map((item) => [item.id, item]));
+  const byRank = (left: ContextItem, right: ContextItem) =>
+    (ranks.get(left.id) ?? 0) - (ranks.get(right.id) ?? 0) || left.id.localeCompare(right.id);
+  for (const compaction of analysis.compactions) {
+    const removed = attachmentsByLabel(
+      compaction.sourceItemIds.flatMap((id) => itemById.get(id) ?? []),
+      byRank,
+    );
+    const sent = attachmentsByLabel(
+      analysis.contextItems.filter((item) => item.firstModelCall === compaction.beforeModelCall),
+      byRank,
+    );
+    for (const [label, sentItems] of sent) {
+      const removedItems = removed.get(label) ?? [];
+      for (const [index, item] of sentItems.entries()) {
+        const previousRank = ranks.get(removedItems[index]?.id ?? '');
+        if (previousRank !== undefined) ranks.set(item.id, previousRank);
+      }
+    }
+  }
+
   // Compactions are sorted, so a summary from an earlier event can itself anchor
   // a later summary. A median rank keeps replacement summaries near their sources.
   for (const compaction of analysis.compactions) {
@@ -48,4 +82,19 @@ export function stableItemOrder(
   return analysis.contextItems
     .map((item) => item.id)
     .sort((a, b) => (ranks.get(a) ?? 0) - (ranks.get(b) ?? 0) || a.localeCompare(b));
+}
+
+function attachmentsByLabel(
+  items: readonly ContextItem[],
+  compare: (left: ContextItem, right: ContextItem) => number,
+): Map<string, ContextItem[]> {
+  const byLabel = new Map<string, ContextItem[]>();
+  for (const item of items) {
+    if (item.kind !== 'customMessage') continue;
+    const labelItems = byLabel.get(item.label);
+    if (labelItems) labelItems.push(item);
+    else byLabel.set(item.label, [item]);
+  }
+  for (const labelItems of byLabel.values()) labelItems.sort(compare);
+  return byLabel;
 }

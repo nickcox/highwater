@@ -69,7 +69,92 @@ function withRepeatedCompactions() {
   return analysis;
 }
 
+/**
+ * Unrecorded request context and an Environment attachment in calls 1–2, removed by the
+ * compaction and sent again from call 3, as Claude Code does.
+ */
+function withHarnessItemsResent({ sentTwice = false } = {}) {
+  const analysis = testAnalysis();
+  const gap = analysis.contextItems.find((item) => item.id === 'gap')!;
+  const harnessItem = (
+    id: string,
+    kind: 'unrecordedContext' | 'customMessage',
+    label: string,
+    first: number,
+    last = first + 1,
+  ) => ({
+    ...gap,
+    id,
+    kind,
+    label,
+    sourceRecordId: `${id}-entry`,
+    firstModelCall: first,
+    lastModelCall: last,
+    presence: [{ startCall: first, endCall: last }],
+    presenceCallCount: last - first + 1,
+  });
+  analysis.contextItems.push(
+    harnessItem('context-1', 'unrecordedContext', 'Unrecorded request context · 100 tokens', 1),
+    harnessItem('env-1', 'customMessage', 'Environment', 1),
+    harnessItem('context-2', 'unrecordedContext', 'Unrecorded request context · 90 tokens', 3),
+    harnessItem('env-2', 'customMessage', 'Environment', 3),
+  );
+  const [first, second, third, fourth] = analysis.modelCalls;
+  first!.contextItemIds = ['context-1', 'a', 'gap', 'env-1'];
+  second!.contextItemIds = ['context-1', 'a', 'retained', 'env-1'];
+  third!.contextItemIds = ['context-2', 'summary', 'retained', 'env-2'];
+  fourth!.contextItemIds = ['context-2', 'summary', 'retained', 'env-2', 'gap'];
+  analysis.compactions[0]!.sourceItemIds = ['context-1', 'a', 'env-1'];
+  if (sentTwice) {
+    analysis.contextItems.push(harnessItem('env-1b', 'customMessage', 'Environment', 2, 2));
+    second!.contextItemIds.push('env-1b');
+    analysis.compactions[0]!.sourceItemIds.push('env-1b');
+  }
+  let previous: string[] = [];
+  for (const call of analysis.modelCalls) {
+    call.addedItemIds = call.contextItemIds.filter((id) => !previous.includes(id));
+    call.droppedItemIds = previous.filter((id) => !call.contextItemIds.includes(id));
+    call.transitionItemCounts = {
+      added: call.addedItemIds.length,
+      retained: call.contextItemIds.length - call.addedItemIds.length,
+      dropped: call.droppedItemIds.length,
+    };
+    previous = call.contextItemIds;
+  }
+  return analysis;
+}
+
 describe('production context-item ordering', () => {
+  it('keeps unrecorded request context and resent attachments in place across a compaction', () => {
+    const indexed = indexTestAnalysis(withHarnessItemsResent());
+
+    expect(indexed.orderedItemIdsByCall.get(1)).toEqual(['context-1', 'a', 'gap', 'env-1']);
+    expect(indexed.orderedItemIdsByCall.get(3)).toEqual([
+      'context-2',
+      'summary',
+      'env-2',
+      'retained',
+    ]);
+  });
+
+  it('places a resent attachment where the earliest removed copy of it was', () => {
+    const indexed = indexTestAnalysis(withHarnessItemsResent({ sentTwice: true }));
+
+    expect(indexed.orderedItemIdsByCall.get(2)).toEqual([
+      'context-1',
+      'a',
+      'env-1',
+      'retained',
+      'env-1b',
+    ]);
+    expect(indexed.orderedItemIdsByCall.get(3)).toEqual([
+      'context-2',
+      'summary',
+      'env-2',
+      'retained',
+    ]);
+  });
+
   it('is deterministic when API item and compaction arrays are shuffled', () => {
     const original = testAnalysis();
     const shuffled = testAnalysis();
