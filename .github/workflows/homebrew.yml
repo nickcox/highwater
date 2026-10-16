@@ -1,0 +1,26 @@
+name: Homebrew
+on:
+  # Releases start as drafts, and the formula's download URLs only work once one is published.
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  update-tap:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    env:
+      HOMEBREW_TAP_DISPATCH_TOKEN: ${{ secrets.HOMEBREW_TAP_DISPATCH_TOKEN }}
+    steps:
+      - name: Ask the tap to update its formula
+        if: env.HOMEBREW_TAP_DISPATCH_TOKEN != ''
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_DISPATCH_TOKEN }}
+          repository: nickcox/homebrew-highwater
+          event-type: highwater-release-published
+          client-payload: '{"tag": "${{ github.event.release.tag_name }}"}'
+      - name: Report a missing token
+        if: env.HOMEBREW_TAP_DISPATCH_TOKEN == ''
+        run: echo "::warning::HOMEBREW_TAP_DISPATCH_TOKEN is not set, so the Homebrew tap was not asked to update."

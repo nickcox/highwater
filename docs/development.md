@@ -44,6 +44,8 @@ The integrated browser checks run the real server with its embedded frontend. Ea
 
 `.github/workflows/release.yml` builds release archives for macOS, Linux and Windows. Pushing a tag such as `v0.1.0` checks that the tag matches the version in `Cargo.toml`, builds and packages each binary with the README, licence and changelog, and creates a draft GitHub release with the archives and a `SHA256SUMS` file. Write the release notes and publish it by hand. Running the workflow by hand from the Actions tab builds the archives without creating a release.
 
+Publishing a release runs `.github/workflows/homebrew.yml`, which asks the [Homebrew tap](https://github.com/nickcox/homebrew-highwater) to open a pull request updating its formula. It needs a `HOMEBREW_TAP_DISPATCH_TOKEN` secret, a fine-grained personal access token with read and write access to the tap's contents; without it, the workflow only logs a warning.
+
 ## Price data
 
 The price data for cost estimates is generated, not edited by hand; [data/prices/README.md](../data/prices/README.md) explains how to update it. `scripts/check.sh` runs the generator's tests with `python3 -m unittest discover -s scripts/tests`.
