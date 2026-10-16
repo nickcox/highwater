@@ -1177,3 +1177,30 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
     assert!(cache.get(&key(2)).is_some());
     assert!(cache.get(&key(3)).is_some());
 }
+
+#[test]
+fn discovery_summary_counts_sessions_and_child_sessions_by_harness() {
+    let session = |harness: &str, parent: Option<&str>| SessionFile {
+        harness: harness.into(),
+        parent_reference: parent.map(Into::into),
+        ..fixture_session("", "")
+    };
+    let mut sessions = vec![
+        session("claude-code", None),
+        session("claude-code", Some("parent")),
+        session("vscode-copilot", None),
+        session("opencode", Some("parent")),
+    ];
+    sessions.extend((0..1_000).map(|_| session("pi", None)));
+
+    assert_eq!(
+        discovery_summary(&sessions),
+        "Discovered 1,004 sessions: 1,000 Pi, 1 OpenCode (1 child session), \
+         2 Claude Code (1 child session), 1 VS Code Copilot"
+    );
+    assert_eq!(
+        discovery_summary(&sessions[2..3]),
+        "Discovered 1 session: 1 VS Code Copilot"
+    );
+    assert_eq!(discovery_summary(&[]), "Discovered 0 sessions");
+}

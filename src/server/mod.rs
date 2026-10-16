@@ -175,6 +175,52 @@ pub(crate) struct SessionFile {
     modified_nanos: Option<u128>,
 }
 
+/// The startup line, for example `Discovered 1,206 sessions: 150 Pi, 980 Claude Code (612 child
+/// sessions)`. A harness with no sessions is left out, in the session picker's order.
+fn discovery_summary(sessions: &[SessionFile]) -> String {
+    const HARNESSES: [(&str, &str); 4] = [
+        ("pi", "Pi"),
+        ("opencode", "OpenCode"),
+        ("claude-code", "Claude Code"),
+        ("vscode-copilot", "VS Code Copilot"),
+    ];
+    let count = |count: usize, noun: &str| {
+        let count = crate::domain::grouped(count as u64);
+        if count == "1" {
+            format!("{count} {noun}")
+        } else {
+            format!("{count} {noun}s")
+        }
+    };
+    let harnesses: Vec<String> = HARNESSES
+        .iter()
+        .filter_map(|(harness, name)| {
+            let listed = sessions
+                .iter()
+                .filter(|session| session.harness == *harness);
+            let total = listed.clone().count();
+            let children = listed
+                .filter(|session| session.parent_reference.is_some())
+                .count();
+            match (total, children) {
+                (0, _) => None,
+                (_, 0) => Some(format!("{} {name}", crate::domain::grouped(total as u64))),
+                _ => Some(format!(
+                    "{} {name} ({})",
+                    crate::domain::grouped(total as u64),
+                    count(children, "child session")
+                )),
+            }
+        })
+        .collect();
+    let total = format!("Discovered {}", count(sessions.len(), "session"));
+    if harnesses.is_empty() {
+        total
+    } else {
+        format!("{total}: {}", harnesses.join(", "))
+    }
+}
+
 const HINT_CHANNEL_CAPACITY: usize = 256;
 const DEGRADED_SCAN_DEADLINE: Duration = Duration::from_secs(5);
 const SCAN_SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
@@ -282,7 +328,7 @@ async fn run_with_watcher(
     diagnostics
         .catalogue_sessions
         .store(sessions.len() as u64, Ordering::Relaxed);
-    println!("Discovered {} sessions", sessions.len());
+    println!("{}", discovery_summary(&sessions));
 
     let catalog = Arc::new(SessionCatalog::new(generation.clone(), sessions));
     let (live_state, _live_receiver) = watch::channel(LiveState {
