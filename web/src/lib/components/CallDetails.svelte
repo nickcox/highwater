@@ -374,7 +374,7 @@
       </p>
     {/if}
     {#if compaction}<p>
-        Compaction · {formatInteger(compaction.sourceItemIds.length)} structurally replaced / {formatInteger(
+        Compaction · {formatInteger(compaction.sourceItemIds.length)} removed / {formatInteger(
           compaction.retainedItemIds.length,
         )} retained
       </p>{/if}
@@ -715,7 +715,7 @@
         {#if compaction}<div>
             <dt>Compaction before this call</dt>
             <dd>
-              {formatInteger(compaction.sourceItemIds.length)} structurally replaced ·
+              {formatInteger(compaction.sourceItemIds.length)} removed ·
               {formatInteger(compaction.retainedItemIds.length)} retained
             </dd>
           </div>

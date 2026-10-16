@@ -2,7 +2,12 @@
   import type { ContextItem, IndexedAnalysis } from '../types';
   import { displayItemLabel } from '../item-label';
   import { kindLabel } from '../kind-labels';
-  import { coverageLabel, exposureLabel, formatWeight } from '../context-river/format';
+  import {
+    coverageLabel,
+    exposureLabel,
+    formatInteger,
+    formatWeight,
+  } from '../context-river/format';
   import { presenceCount, tokenTurnExposure } from '../context-river/lifespans';
 
   let { item, indexed }: { item: ContextItem | null; indexed: IndexedAnalysis } = $props();
@@ -13,9 +18,9 @@
   );
   let lineageText = $derived(
     sourceCompactions.length > 0
-      ? `Structurally replaced before call ${sourceCompactions.map((event) => event.beforeModelCall).join(', ')}`
+      ? `Removed at the compaction before call ${sourceCompactions.map((event) => event.beforeModelCall).join(', ')}`
       : summaryCompaction
-        ? `Summary of ${summaryCompaction.sourceItemIds.length} structural source items`
+        ? `Replaces ${formatInteger(summaryCompaction.sourceItemIds.length)} items removed at the compaction before call ${summaryCompaction.beforeModelCall}`
         : null,
   );
 </script>

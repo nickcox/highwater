@@ -269,9 +269,9 @@
     {#if sourceCompactions.length > 0 || retainedCompactions.length > 0 || summaryCompaction}
       <h4>Compaction</h4>
       {#if sourceCompactions.length > 0}<p>
-          Structurally replaced before call {sourceCompactions
+          Removed at the compaction before call {sourceCompactions
             .map((event) => event.beforeModelCall)
-            .join(', ')}. Connector width does not represent contribution.
+            .join(', ')}.
         </p>{/if}
       {#if retainedCompactions.length > 0}<p>
           Retained unchanged through compaction before call {retainedCompactions
@@ -279,7 +279,7 @@
             .join(', ')}.
         </p>{/if}
       {#if summaryCompaction}<p>
-          Summary of {formatMetric(summaryCompaction.sourceItemIds.length)} structurally replaced items
+          Replaces {formatMetric(summaryCompaction.sourceItemIds.length)} items removed at the compaction
           before call {summaryCompaction.beforeModelCall}.
         </p>{/if}
     {/if}
