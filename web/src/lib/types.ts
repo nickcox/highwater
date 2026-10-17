@@ -421,6 +421,8 @@ export interface IndexedAnalysis {
   itemEstimateByProfile: Map<string, Map<string, ContextItemTokenEstimate>>;
   contextSetByCall: Map<number, Set<string>>;
   orderedItemIdsByCall: Map<number, string[]>;
+  /** Each item's colour in Items view (see `assignItemColors`). */
+  itemColorById: Map<string, string>;
   callByIndex: Map<number, ModelCall>;
   outgoingLineage: Map<string, LineageEdge[]>;
   incomingLineage: Map<string, LineageEdge[]>;

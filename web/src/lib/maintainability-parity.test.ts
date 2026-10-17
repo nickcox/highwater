@@ -22,15 +22,15 @@ const scenarios: SessionScenario[] = [
 // that alters any of them fails here. When one changes on purpose, update it and say why in the
 // commit message.
 const scenarioDigests: Record<SessionScenario, string> = {
-  empty: '4a62f4ecec6cf35274692dad6a11bd3ded90aa17c1c0acda63795260f52e451f',
-  singleCall: '344b1c967153320275e9d59a24fb06c47adf24c84c916e3c4e2614b6db3a11fb',
-  longSession: '89aa807c3243dfbbfb0cb410881cf9578cfd3441de5fdd45e6eebc8d16f2b31b',
-  partialGeometry: 'f2e59b9cd75ce4c90ad3cb38189d2cc948338cb7e8ae09b7316d5bca4ccf8580',
-  unavailableGeometry: 'ab8bce720bb986231644f963193f8eb3ec080c1f2d18c007c752e37f587145e7',
-  terminalCompaction: '818be6fc750677356c461564a16153cb73214b21a59158742f5df4e9a183ca61',
-  terminalSummaryOnly: '10ff0a3d9da1125693b4dbf77110c36b8cc6b9202beab5b66ae514aae393a384',
-  labelStress: '61edcc4a4687f45c674940f37612771a9fc5a95466bcf8544e5ed8f421f52e66',
-  multipleToolsMissingMetadata: '4557c27463e2815538e5c6bf0830b9cbc66296180f95b1ba05314330a5e4e552',
+  empty: '9bd126e3e7853666ffa00d0a8d6b0af45b72a22766d39a221e55544c70f262c8',
+  singleCall: '3b5e8385304f99dff9b6323f4a9bdbd78cdfd56c611949e23f846650d741779a',
+  longSession: '7f190bf52ceb12d5263dfd7f850dbe53fda7b7d45fc76fe93399ff3b18ec59e3',
+  partialGeometry: '631d6dc36100694092b8d4105e7bb903dacd0b2e1825a5746e98b3f73e75dc8c',
+  unavailableGeometry: '1e1efd927e61de9ac05fef2d827ef70725396b83b654a5e4131e10378c7bb5cd',
+  terminalCompaction: '91de53bcd50db1e8b85678e8db1410fdad2c502f8be798d2929f91a6e0c16698',
+  terminalSummaryOnly: '45131fbcbde19345cbadda8f09e3ba7825226b5773e88e436723e992eed3a130',
+  labelStress: 'd510efa91210f647bf2a91ca6f0042050ed5bca584bc6abaa6179364351f3d56',
+  multipleToolsMissingMetadata: '6c8af98b10c68711a838fdf4e69b72b2f2aa453d9fb50c68904d309289e88797',
 };
 
 const fixtures = [
@@ -42,12 +42,12 @@ const fixtures = [
   {
     name: 'composition220',
     input: compositionScenario(220),
-    expected: '720c426334debb0e7d4282435ca0d1606aea0050f6d2684d2d8c23d31b01a671',
+    expected: '5ceb0161349d8d1d45db3811bdd685e403e034ca170f10adc4886cb7083d6274',
   },
   {
     name: 'composition220Zero',
     input: compositionScenario(220, true),
-    expected: '9b13b954d714526738b32bcc2393a77e54152e232f347a82499e5ceba37283fb',
+    expected: 'fe8e81dce345c7fe75146230de7d51e3d3c54baba7d1e3214c217a4cb602f640',
   },
 ];
 

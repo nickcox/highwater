@@ -1,9 +1,17 @@
 import type { ContextItem, SessionAnalysis } from './types';
 import { itemVersions } from './item-versions';
 
+export interface ItemOrder {
+  /** Item IDs from the bottom of the stack to the top. */
+  orderedItemIds: string[];
+  /** For an item that takes the place of an earlier one, that earlier item's ID. The two are
+   * never in the same call, and the later item keeps the earlier one's place and colour. */
+  takesPlaceOf: Map<string, string>;
+}
+
 export function stableItemOrder(
   analysis: Pick<SessionAnalysis, 'modelCalls' | 'contextItems' | 'compactions'>,
-): string[] {
+): ItemOrder {
   const firstAppearance = new Map<string, number>();
   let sequence = 0;
   for (const call of analysis.modelCalls) {
@@ -19,25 +27,26 @@ export function stableItemOrder(
     else if (item.kind === 'toolDefinition') ranks.set(item.id, -1_000_000 + base);
     else ranks.set(item.id, base);
   }
+  const takesPlaceOf = new Map<string, string>();
+  const takePlace = (id: string, previousId: string | undefined) => {
+    const previousRank = previousId === undefined ? undefined : ranks.get(previousId);
+    if (previousRank === undefined) return;
+    ranks.set(id, previousRank);
+    takesPlaceOf.set(id, previousId!);
+  };
 
   // A new version of a system prompt or tool definition takes the place of the one it replaced.
   const versions = [...itemVersions(analysis.contextItems)].sort(
     ([, left], [, right]) => left.number - right.number,
   );
-  for (const [id, version] of versions) {
-    const previousRank = version.previousId === null ? undefined : ranks.get(version.previousId);
-    if (previousRank !== undefined) ranks.set(id, previousRank);
-  }
+  for (const [id, version] of versions) takePlace(id, version.previousId ?? undefined);
 
   // Unrecorded request context is measured again for each segment of the session. Each
   // measurement takes the place of the one before it.
   const unrecorded = analysis.contextItems
     .filter((item) => item.kind === 'unrecordedContext' && item.presence.length > 0)
     .sort((left, right) => left.firstModelCall - right.firstModelCall);
-  for (const [index, item] of unrecorded.entries()) {
-    const previousRank = index > 0 ? ranks.get(unrecorded[index - 1]!.id) : undefined;
-    if (previousRank !== undefined) ranks.set(item.id, previousRank);
-  }
+  for (const [index, item] of unrecorded.entries()) takePlace(item.id, unrecorded[index - 1]?.id);
 
   // After a compaction a harness can send the same attachments again (such as Claude Code's
   // environment and skill listing). Each one takes the place of the earliest attachment with the
@@ -56,10 +65,7 @@ export function stableItemOrder(
     );
     for (const [label, sentItems] of sent) {
       const removedItems = removed.get(label) ?? [];
-      for (const [index, item] of sentItems.entries()) {
-        const previousRank = ranks.get(removedItems[index]?.id ?? '');
-        if (previousRank !== undefined) ranks.set(item.id, previousRank);
-      }
+      for (const [index, item] of sentItems.entries()) takePlace(item.id, removedItems[index]?.id);
     }
   }
 
@@ -79,9 +85,10 @@ export function stableItemOrder(
     ranks.set(compaction.summaryItemId, median + 0.0001);
   }
 
-  return analysis.contextItems
+  const orderedItemIds = analysis.contextItems
     .map((item) => item.id)
     .sort((a, b) => (ranks.get(a) ?? 0) - (ranks.get(b) ?? 0) || a.localeCompare(b));
+  return { orderedItemIds, takesPlaceOf };
 }
 
 function attachmentsByLabel(

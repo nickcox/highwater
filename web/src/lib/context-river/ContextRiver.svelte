@@ -1379,11 +1379,6 @@
     return ribbon.thinnest * verticalStretch < 1;
   }
 
-  /** Versions of a system prompt or tool definition share the first version's colour. */
-  function ribbonItemColor(id: string): string {
-    return itemColor(indexed.versionByItemId.get(id)?.firstId ?? id);
-  }
-
   function itemAccessibleLabel(id: string): string {
     return displayItemLabel(indexed.itemById.get(id), id);
   }
@@ -1554,8 +1549,8 @@
                 x2={connector.targetX}
                 y2={connector.sourceY}
               >
-                <stop offset="0%" stop-color={ribbonItemColor(connector.fromItemId)} />
-                <stop offset="100%" stop-color={ribbonItemColor(connector.toItemId)} />
+                <stop offset="0%" stop-color={itemColor(indexed, connector.fromItemId)} />
+                <stop offset="100%" stop-color={itemColor(indexed, connector.toItemId)} />
               </linearGradient>
             {/each}
             <pattern
@@ -1629,7 +1624,7 @@
               {@const isGroup = ribbon.groupKind !== undefined}
               {@const ribbonColor = ribbon.groupKind
                 ? itemTypeColor(ribbon.groupKind)
-                : ribbonItemColor(ribbon.itemId)}
+                : itemColor(indexed, ribbon.itemId)}
               {@const ribbonLabel = isGroup
                 ? `Item type ${kindGroupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
                 : itemAccessibleLabel(ribbon.itemId)}
@@ -1775,7 +1770,7 @@
                 class="ribbon-emphasis hovered"
                 vector-effect="non-scaling-stroke"
                 d={hoveredRibbon.path}
-                fill={ribbonItemColor(hoveredRibbon.itemId)}
+                fill={itemColor(indexed, hoveredRibbon.itemId)}
               />
             {/if}
             {#if selectedRibbon}
@@ -1783,7 +1778,7 @@
                 class="ribbon-emphasis selected"
                 vector-effect="non-scaling-stroke"
                 d={selectedRibbon.path}
-                fill={ribbonItemColor(selectedRibbon.itemId)}
+                fill={itemColor(indexed, selectedRibbon.itemId)}
               />
             {/if}
             {#each river.versionMarks as mark (mark.key)}

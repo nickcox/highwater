@@ -32,7 +32,7 @@ The summary shows the number of model calls and context items, the peak calculat
 
 ## The Context River
 
-Each band is a context item, drawn at its estimated size at every model call it was present for. Calls run left to right.
+Each band is a context item, drawn at its estimated size at every model call it was present for. Calls run left to right. In **Items** view, bands that are next to each other at any call never share a colour while one of the ten colours is free. New items in a live session don't change the colours already shown, and an item that takes the place of an earlier one keeps that item's colour and place in the stack: a new version (see **Versions**), the Unrecorded request context measured again after a compaction or a change of model, and an attachment Claude Code sends again after a compaction.
 
 **Moving around.** Moving the pointer over the chart moves a crosshair to the nearest call. The toolbar shows the visible call range and has **‹ / ›** buttons to step between calls, zoom controls, **Fit all**, **Latest**, and a **Go to call** field. Drag across an area to zoom to it, scroll sideways or Shift-drag to pan, and pinch or use a modifier key with the scroll wheel to zoom.
 
@@ -50,7 +50,7 @@ Each band is a context item, drawn at its estimated size at every model call it 
 
 **Compaction.** In **Items** view, faint colour-blended flows join the items a compaction removed to the summary's band, and retained items carry on unchanged. The flows show that the summary took the place of those items. They do not show how much of an item's content the summary kept, or how many of the summary's tokens came from each item. Hovering or selecting a removed item highlights its flow, and selecting the summary lightly highlights all of its incoming flows. **Item types** view does not draw flows, and a summary from the end of a session, with no call after it, has no band.
 
-**Item types.** This view draws one band per kind of item, with fixed colours shared with its legend: user messages blue, tool results gold, assistant messages teal, compaction summaries lavender, and distinct colours for the rest. The colours identify kinds, not cache status. In **Items** view and in Composition, each item's colour comes from its ID. Hovering a kind's band shows its tokens at that call and how many items it has. Clicking the band, or pressing Enter on it, opens a breakdown of its items beside it without scrolling the page. Scrolling the page or the chart closes the breakdown, though its own item list can scroll, and Escape or **Close** returns focus to the band.
+**Item types.** This view draws one band per kind of item, with fixed colours shared with its legend: user messages blue, tool results gold, assistant messages teal, compaction summaries lavender, and distinct colours for the rest. The colours identify kinds, not cache status. Items view, Composition and Context lifespans give each item the same colour. Hovering a kind's band shows its tokens at that call and how many items it has. Clicking the band, or pressing Enter on it, opens a breakdown of its items beside it without scrolling the page. Scrolling the page or the chart closes the breakdown, though its own item list can scroll, and Escape or **Close** returns focus to the band.
 
 ## Cache & cost
 

@@ -137,6 +137,13 @@ describe('production context-item ordering', () => {
     ]);
   });
 
+  it('keeps the colour of the item each harness item takes the place of', () => {
+    const { itemColorById } = indexTestAnalysis(withHarnessItemsResent());
+
+    expect(itemColorById.get('context-2')).toBe(itemColorById.get('context-1'));
+    expect(itemColorById.get('env-2')).toBe(itemColorById.get('env-1'));
+  });
+
   it('places a resent attachment where the earliest removed copy of it was', () => {
     const indexed = indexTestAnalysis(withHarnessItemsResent({ sentTwice: true }));
 

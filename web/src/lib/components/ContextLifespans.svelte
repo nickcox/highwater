@@ -515,7 +515,7 @@
                 data-lifespan-item-id={item.id}
               >
                 <div class="label" title={fullItemLabel(item)}>
-                  <span class="swatch" style={`background:${itemColor(item.id)}`}></span>
+                  <span class="swatch" style={`background:${itemColor(indexed, item.id)}`}></span>
                   <div class="label-copy">
                     <button
                       type="button"
@@ -564,7 +564,7 @@
                         title={`${versionLabel === fullItemLabel(item) ? label : versionLabel}: calls ${range.startCall}–${range.endCall}`}
                         style={segmentStyle(
                           range,
-                          itemColor(item.id),
+                          itemColor(indexed, item.id),
                           replacesBefore,
                           replacedAfter,
                         )}

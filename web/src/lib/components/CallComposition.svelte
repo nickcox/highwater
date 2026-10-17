@@ -3,7 +3,7 @@
   import InfoPopover from './InfoPopover.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import type { IndexedAnalysis } from '../types';
-  import { itemColor, itemTextColor } from '../context-river/colors';
+  import { itemColor, textColorOn } from '../context-river/colors';
   import { formatMetric, formatPercent } from '../context-river/format';
   import CopyButton from './CopyButton.svelte';
   import {
@@ -582,20 +582,20 @@
                 y={rectangle.y}
                 width={rectangle.width}
                 height={rectangle.height}
-                fill={itemColor(rectangle.item.id)}
+                fill={itemColor(indexed, rectangle.item.id)}
                 fill-opacity="1"
                 class:partial={rectangle.item.estimateCoverage !== 'complete'}
               />
               {#if rectangle.labelFits && rectangle.labelText}
                 <g clip-path={`url(#${tileClipId(rectangle.optionIndex)})`} aria-hidden="true">
                   <text
-                    style:fill={itemTextColor(rectangle.item.id)}
+                    style:fill={textColorOn(itemColor(indexed, rectangle.item.id))}
                     x={rectangle.x + 5}
                     y={rectangle.y + 16}>{rectangle.labelText}</text
                   >
                   {#if rectangle.height >= 49}
                     <text
-                      style:fill={itemTextColor(rectangle.item.id)}
+                      style:fill={textColorOn(itemColor(indexed, rectangle.item.id))}
                       class="tile-value"
                       x={rectangle.x + 5}
                       y={rectangle.y + 31}
@@ -635,7 +635,10 @@
             tabindex="-1"
             onpointerup={() => selectItem(item)}
           >
-            <span class="kind-mark" style={`background:${itemColor(item.id)}`} aria-hidden="true"
+            <span
+              class="kind-mark"
+              style={`background:${itemColor(indexed, item.id)}`}
+              aria-hidden="true"
             ></span>
             <span class="row-label">
               <b>{item.label}</b>

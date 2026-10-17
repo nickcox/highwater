@@ -6,6 +6,7 @@ import type {
   SessionAnalysis,
 } from './types';
 import { stableItemOrder } from './analysis-ordering';
+import { assignItemColors } from './context-river/colors';
 import { itemVersions } from './item-versions';
 import { AnalysisValidationError, assertUnique } from './analysis-validation';
 
@@ -41,7 +42,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
       new Map(item.tokenEstimates.map((estimate) => [estimate.profileId, estimate])),
     );
   }
-  const orderedItemIds = stableItemOrder(analysis);
+  const { orderedItemIds, takesPlaceOf } = stableItemOrder(analysis);
   const rank = new Map(orderedItemIds.map((id, index) => [id, index]));
   const orderedItemIdsByCall = new Map(
     analysis.modelCalls.map((call) => [
@@ -291,6 +292,12 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     itemEstimateByProfile,
     contextSetByCall,
     orderedItemIdsByCall,
+    itemColorById: assignItemColors(
+      analysis.contextItems,
+      orderedItemIds,
+      orderedItemIdsByCall,
+      takesPlaceOf,
+    ),
     versionByItemId: itemVersions(analysis.contextItems),
   };
   return indexed;
