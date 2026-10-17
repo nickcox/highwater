@@ -741,3 +741,22 @@ fn structured_tool_errors_preserve_native_call_identity_and_recorded_content() {
         matches!(&tool.payload, TokenizationPayload::ToolResult {is_error:true,content,..} if content.parts.len() == 2)
     );
 }
+
+#[test]
+fn modern_task_result_links_the_child_session_it_started() {
+    let f = ModernFixture::new();
+    f.update("msg_after", assistant(json!([{"type":"tool","id":"call_task","name":"task","state":{"status":"completed","input":{"description":"Explore"},"metadata":{"parentSessionId":"ses_modern","sessionId":"ses_child"},"content":[{"type":"text","text":"Findings"}]}}])));
+    f.append_assistant(assistant(json!([])));
+    let r = f.replay().expect("replay");
+    validate(&r);
+    let task = r
+        .session
+        .context_items
+        .iter()
+        .find(|i| i.source_tool_call_id.as_deref() == Some("call_task"))
+        .expect("task result");
+    assert_eq!(
+        task.metadata.get("childSession"),
+        Some(&crate::source::opencode_reference("ses_child"))
+    );
+}

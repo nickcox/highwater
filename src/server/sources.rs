@@ -11,7 +11,7 @@ use crate::{
         FileKind,
     },
     opencode::storage::{self, CatalogTracker},
-    source::SessionLocator,
+    source::{claude_code_reference, opencode_reference, SessionLocator},
     vscode_copilot::discovery::{self as vscode_discovery, ListingCache as VsCodeListingCache},
 };
 use chrono::{DateTime, Utc};
@@ -236,26 +236,6 @@ impl VsCodeCopilotSource {
     }
 }
 
-pub(super) fn reference(native_id: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater OpenCode session reference v1");
-    hash.update(b"id\0");
-    hash.update(native_id.as_bytes());
-    format!("opencode-{}", &hash.finalize().to_hex()[..12])
-}
-
-/// Main sessions and subagents get different references, because a subagent's
-/// records carry its parent's session ID.
-pub(super) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater Claude Code session reference v1");
-    hash.update(b"id\0");
-    hash.update(session_id.as_bytes());
-    if let Some(agent_id) = agent_id {
-        hash.update(b"\0agent\0");
-        hash.update(agent_id.as_bytes());
-    }
-    format!("claude-code-{}", &hash.finalize().to_hex()[..12])
-}
-
 /// A transcript without a session ID (for example one whose first record is
 /// still being written) is listed under a reference derived from its file name.
 fn claude_code_fallback_reference(file: &TranscriptFile) -> String {
@@ -470,7 +450,7 @@ impl MixedScanner {
                     sessions
                         .into_iter()
                         .map(|session| SessionFile {
-                            id: reference(&session.id),
+                            id: opencode_reference(&session.id),
                             path: String::new(),
                             file_name: String::new(),
                             display_name: session.title.chars().take(160).collect(),
@@ -484,7 +464,7 @@ impl MixedScanner {
                             ),
                             modified_nanos: None,
                             harness: "opencode".into(),
-                            parent_reference: session.parent_id.as_deref().map(reference),
+                            parent_reference: session.parent_id.as_deref().map(opencode_reference),
                             subagent_type: None,
                             locator: Some(SessionLocator::OpenCode {
                                 database: source.path.clone(),

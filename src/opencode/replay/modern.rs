@@ -443,6 +443,11 @@ fn assistant(
         );
         // Inline content has no separate native row ID.
         state.session.context_items[index].source_record_id = Some(message.id.clone());
+        if let Some(child_session) = child_session(tool_state) {
+            state.session.context_items[index]
+                .metadata
+                .insert("childSession".into(), child_session);
+        }
         state.admit(index);
     }
     Ok(())

@@ -518,6 +518,21 @@ impl State<'_> {
             metadata.insert("toolName".into(), tool_name.clone());
         }
         metadata.insert("isError".into(), is_error.to_string());
+        // A subagent's transcript is listed under the session ID and its agent ID.
+        let session_id = record.value.get("sessionId").and_then(Value::as_str);
+        let agent_id = record
+            .value
+            .get("toolUseResult")
+            .and_then(|result| result.get("agentId"))
+            .and_then(Value::as_str);
+        if let (Some(session_id), Some(agent_id)) = (session_id, agent_id) {
+            if !session_id.is_empty() && !agent_id.is_empty() {
+                metadata.insert(
+                    "childSession".into(),
+                    crate::source::claude_code_reference(session_id, Some(agent_id)),
+                );
+            }
+        }
         let label = tool_result_label(&tool_name, &input, self.working_directory.as_deref());
         self.insert(NormalizedContextItem {
             id: format!("claude-code:tool:{tool_call_id}"),

@@ -33,6 +33,27 @@ pub(crate) enum SessionLocator {
     },
 }
 
+/// The portable reference an OpenCode session is listed under.
+pub(crate) fn opencode_reference(native_id: &str) -> String {
+    let mut hash = blake3::Hasher::new_derive_key("Highwater OpenCode session reference v1");
+    hash.update(b"id\0");
+    hash.update(native_id.as_bytes());
+    format!("opencode-{}", &hash.finalize().to_hex()[..12])
+}
+
+/// Main sessions and subagents get different references, because a subagent's
+/// records carry its parent's session ID.
+pub(crate) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) -> String {
+    let mut hash = blake3::Hasher::new_derive_key("Highwater Claude Code session reference v1");
+    hash.update(b"id\0");
+    hash.update(session_id.as_bytes());
+    if let Some(agent_id) = agent_id {
+        hash.update(b"\0agent\0");
+        hash.update(agent_id.as_bytes());
+    }
+    format!("claude-code-{}", &hash.finalize().to_hex()[..12])
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LoadStats {
     pub records: usize,

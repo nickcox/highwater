@@ -100,7 +100,7 @@ fn catalogue_entries_match_the_expected_listings() {
                 assert_eq!(entry.parent_reference, None, "{fixture}");
                 assert_eq!(
                     entry.id,
-                    sources::claude_code_reference(
+                    crate::source::claude_code_reference(
                         expected["sessionId"].as_str().expect("id"),
                         None
                     )
@@ -383,4 +383,27 @@ fn claude_code_cache_keys_and_etags_differ_from_pi_keys_for_the_same_file() {
         ..pi.clone()
     };
     assert_ne!(etag_for_key(&claude_code), etag_for_key(&subagent));
+}
+
+#[test]
+fn an_agent_tool_result_links_the_subagent_it_started() {
+    let entries = scan(&claude_only(vec![fixture_root()]));
+    let parent = entry_for(&entries, "-synthetic-project/subagent-parent.jsonl");
+    let child = entry_for(
+        &entries,
+        "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl",
+    );
+    let loaded =
+        crate::source::load(parent.locator.as_ref().expect("locator"), None).expect("parent loads");
+    let result = loaded
+        .normalized
+        .context_items
+        .iter()
+        .find(|item| item.source_tool_call_id.as_deref() == Some("toolu_s16_agent"))
+        .expect("Agent tool result");
+    assert_eq!(
+        result.metadata.get("childSession"),
+        Some(&child.id),
+        "the link uses the subagent's catalogue reference"
+    );
 }

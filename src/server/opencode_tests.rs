@@ -308,7 +308,7 @@ fn mixed_catalog_metadata_has_harness_relationships_and_no_database_locator() {
     assert_eq!(child.harness, "opencode");
     assert_eq!(
         child.parent_reference.as_deref(),
-        Some(sources::reference("ses_example").as_str())
+        Some(crate::source::opencode_reference("ses_example").as_str())
     );
     let json = serde_json::to_value(child).expect("listing");
     assert!(json["byteSize"].is_null());

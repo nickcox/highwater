@@ -765,6 +765,12 @@ fn assistant(
                 },
                 Some(call_id),
             );
+            let child_session = child_session(tool_state);
+            if let Some(child_session) = &child_session {
+                state.session.context_items[result]
+                    .metadata
+                    .insert("childSession".into(), child_session.clone());
+            }
             let compacted = tool_state
                 .get("time")
                 .and_then(|time| time.get("compacted"));
@@ -783,6 +789,11 @@ fn assistant(
                     },
                     Some(call_id),
                 );
+                if let Some(child_session) = child_session {
+                    state.session.context_items[revision]
+                        .metadata
+                        .insert("childSession".into(), child_session);
+                }
                 Some((at, revision))
             } else {
                 None
@@ -794,6 +805,16 @@ fn assistant(
         }
     }
     Ok(())
+}
+
+/// The child session a tool call started, which the task tool records in its state.
+fn child_session(tool_state: &Value) -> Option<String> {
+    tool_state
+        .get("metadata")
+        .and_then(|metadata| metadata.get("sessionId"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(crate::source::opencode_reference)
 }
 
 /// An image whose `url` is a base64 `data:` URL holds the image itself, so its size can be

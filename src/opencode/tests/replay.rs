@@ -219,6 +219,29 @@ fn pruned_tool_results_have_immutable_original_and_placeholder_revisions() {
 }
 
 #[test]
+fn a_task_result_links_the_child_session_it_started() {
+    let fixture = Fixture::new(false);
+    fixture.user("user_1", 10, json!({"type":"text","text":"Task"}));
+    fixture.assistant("assistant_1", "user_1", 20, false);
+    fixture.part("ses_example", "assistant_1", "tool_1", 22, json!({"type":"tool","tool":"task","callID":"call_1","state":{"status":"completed","input":{"description":"Explore"},"output":"Findings","metadata":{"sessionId":"ses_child"},"time":{"start":22,"end":24,"compacted":50}}}));
+    fixture.assistant("assistant_2", "user_1", 40, false);
+    fixture.text("assistant_2", "Before prune");
+    fixture.assistant("assistant_3", "user_1", 60, false);
+    fixture.text("assistant_3", "After prune");
+    let result = fixture.replay().expect("task replay");
+    let child_sessions = result
+        .session
+        .context_items
+        .iter()
+        .filter(|item| item.kind == ContextItemKind::ToolResult)
+        .map(|item| item.metadata.get("childSession").map(String::as_str))
+        .collect::<Vec<_>>();
+    let child = crate::source::opencode_reference("ses_child");
+    assert_eq!(child_sessions, [Some(child.as_str()), Some(child.as_str())]);
+    validate(&result);
+}
+
+#[test]
 fn ambiguous_prune_timestamp_is_reported_not_silently_classified_as_exact() {
     let fixture = Fixture::new(false);
     fixture.user("user_1", 10, json!({"type":"text","text":"Task"}));
