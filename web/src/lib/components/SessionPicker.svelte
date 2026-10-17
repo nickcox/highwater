@@ -125,7 +125,13 @@
     </select>
   </label>
   <div class="session-field">
-    <label for={`${id}-input`}>Session</label>
+    <!-- The option shares the label's row, so it adds no height above the River. -->
+    <div class="session-heading">
+      <label for={`${id}-input`}>Session</label>
+      <label class="include-children"
+        ><input type="checkbox" bind:checked={includeChildren} /> Include child sessions</label
+      >
+    </div>
     <input
       id={`${id}-input`}
       type="text"
@@ -172,9 +178,6 @@
       </ul>
     {/if}
   </div>
-  <label class="include-children"
-    ><input type="checkbox" bind:checked={includeChildren} /> Include child sessions</label
-  >
   {#if choices.length === 0}<p role="status">
       No sessions match these filters. The open session is unchanged.
     </p>{/if}
@@ -241,8 +244,14 @@
     background: var(--surface);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
   }
+  .session-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
   .include-children {
-    grid-column: 1 / -1;
     flex-direction: row;
     align-items: center;
     gap: 6px;
