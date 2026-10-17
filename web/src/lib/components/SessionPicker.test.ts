@@ -168,7 +168,7 @@ describe('Harness session picker', () => {
     await fireEvent.click(picker());
     expect(offered()).toEqual(['[Pi] Other task', '[OpenCode] Parent task']);
 
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'Include child sessions' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Child sessions' }));
     await fireEvent.click(picker());
     expect(offered()).toEqual([
       '[Pi] Other task',

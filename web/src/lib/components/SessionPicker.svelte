@@ -129,7 +129,7 @@
     <div class="session-heading">
       <label for={`${id}-input`}>Session</label>
       <label class="include-children"
-        ><input type="checkbox" bind:checked={includeChildren} /> Include child sessions</label
+        ><input type="checkbox" bind:checked={includeChildren} /><span>Child sessions</span></label
       >
     </div>
     <input
@@ -250,11 +250,19 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+    white-space: nowrap;
   }
+  /* On a narrow screen the option's text is shortened rather than wrapped, so the Session field
+     stays level with the Harness field. */
   .include-children {
     flex-direction: row;
     align-items: center;
     gap: 6px;
+    overflow: hidden;
+  }
+  .include-children span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .include-children input {
     width: auto;

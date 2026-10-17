@@ -2,7 +2,7 @@
 
 ## 0.2.0 – 2026-10-17
 
-- Child sessions (OpenCode child sessions and Claude Code subagents) are linked to their parents. The session picker leaves them out unless **Include child sessions** is ticked, and then lists each one under the session that started it. A session's summary lists its child sessions, a child session links back to the tool call in its parent that started it, and that tool call's result links to the child session.
+- Child sessions (OpenCode child sessions and Claude Code subagents) are linked to their parents. The session picker leaves them out unless **Child sessions** is ticked, and then lists each one under the session that started it. A session's summary lists its child sessions, a child session links back to the tool call in its parent that started it, and that tool call's result links to the child session.
 - In the River's Items view, bands next to each other no longer share a colour while one of the ten colours is free. Items view, Composition and Context lifespans give each item the same colour.
 - An item that takes the place of an earlier one keeps that item's colour and place in the River: a new version of a system prompt or tool definition, the Unrecorded request context measured again after a compaction or a change of model, and an attachment Claude Code sends again after a compaction.
 - Items removed by a compaction are described as removed at the compaction, and the summary as replacing them, instead of "structurally replaced".

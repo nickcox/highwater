@@ -47,7 +47,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   await picker.click();
   await expect(subagentOption).not.toBeAttached();
   await page.keyboard.press('Escape');
-  await page.getByRole('checkbox', { name: 'Include child sessions' }).check();
+  await page.getByRole('checkbox', { name: 'Child sessions' }).check();
   await picker.click();
   await expect(subagentOption).toBeAttached();
   const analysisResponse = page.waitForResponse(
