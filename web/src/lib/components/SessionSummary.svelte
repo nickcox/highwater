@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { IndexedAnalysis } from '../types';
+  import type { SessionListItem } from '../api/client';
+  import { childSessions, sessionHref } from '../session-links';
+  import { formatSessionTime } from '../session-label';
   import { estimateSummary } from '../estimate-quality';
   import InfoPopover from './InfoPopover.svelte';
   import { describeCostBasis, isPiSource } from '../cost-basis';
@@ -24,9 +27,25 @@
 
   let {
     indexed,
+    sessionId = null,
+    sessions = [],
   }: {
     indexed: IndexedAnalysis;
+    sessionId?: string | null;
+    sessions?: readonly SessionListItem[];
   } = $props();
+
+  let listed = $derived(sessions.find((candidate) => candidate.id === sessionId));
+  let parent = $derived(
+    listed?.parentReference
+      ? sessions.find((candidate) => candidate.id === listed!.parentReference)
+      : undefined,
+  );
+  let children = $derived(sessionId ? childSessions(sessions, sessionId) : []);
+  const childLabel = (child: SessionListItem) =>
+    [child.displayName, child.subagentType, formatSessionTime(child.startedAt)]
+      .filter(Boolean)
+      .join(' · ');
 
   let analysis = $derived(indexed.analysis);
   let session = $derived(analysis.session);
@@ -358,9 +377,44 @@
       </details>
     </details>
   </div>
+  {#if parent || children.length > 0}
+    <div class="session-relations">
+      {#if parent && sessionId}<p>
+          Child session of <a href={sessionHref(parent.id, sessionId)}>{parent.displayName}</a>
+        </p>{/if}
+      {#if children.length > 0}
+        <details>
+          <summary class="disclosure"
+            >{formatInteger(children.length)}
+            {children.length === 1 ? 'child session' : 'child sessions'}</summary
+          >
+          <ul>
+            {#each children as child (child.id)}
+              <li><a href={sessionHref(child.id)}>{childLabel(child)}</a></li>
+            {/each}
+          </ul>
+        </details>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>
+  .session-relations {
+    margin-top: 8px;
+    color: var(--secondary);
+    font-size: 13px;
+  }
+  .session-relations p {
+    margin: 0 0 4px;
+  }
+  .session-relations ul {
+    margin: 6px 0 0;
+    padding-left: 20px;
+  }
+  .session-relations a {
+    color: var(--accent);
+  }
   .summary {
     margin-top: 16px;
     min-width: 0;

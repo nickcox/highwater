@@ -151,6 +151,40 @@ describe('Harness session picker', () => {
     document.removeEventListener('keydown', outside);
   });
 
+  it('leaves out child sessions unless asked, then lists them under their parent', async () => {
+    const family: SessionListItem[] = [
+      { ...sessions[1], id: 'opencode-child', displayName: 'Explore the code' },
+      { ...sessions[0], id: 'pi-other', displayName: 'Other task' },
+      {
+        ...sessions[1],
+        id: 'opencode-parent',
+        displayName: 'Parent task',
+        parentReference: null,
+      },
+    ];
+    render(SessionPicker, {
+      props: { sessions: family, selectedId: 'opencode-parent', onSelect: vi.fn() },
+    });
+    await fireEvent.click(picker());
+    expect(offered()).toEqual(['[Pi] Other task', '[OpenCode] Parent task']);
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Include child sessions' }));
+    await fireEvent.click(picker());
+    expect(offered()).toEqual([
+      '[Pi] Other task',
+      '[OpenCode] Parent task',
+      '[OpenCode] Explore the code · child session',
+    ]);
+    const child = screen.getByRole('option', { name: /Explore the code/ });
+    expect(child.style.paddingInlineStart).toBe('24px');
+
+    await fireEvent.input(picker(), { target: { value: 'explore' } });
+    expect(offered()).toEqual([
+      '[OpenCode] Parent task',
+      '[OpenCode] Explore the code · child session',
+    ]);
+  });
+
   it('does not crash on ambiguous portable references or silently change selection', async () => {
     const onSelect = vi.fn();
     render(SessionPicker, {

@@ -6,6 +6,7 @@
   import { tick } from 'svelte';
   import type { SessionListItem } from '../api/client';
   import { sessionOptionLabels } from '../session-label';
+  import { sessionTree, withAncestors } from '../session-links';
   let {
     sessions,
     selectedId,
@@ -20,6 +21,8 @@
   let harness: 'all' | 'pi' | 'opencode' | 'claude-code' | 'vscode-copilot' = $state('all');
   /** Search text, used only while the list is open. */
   let query = $state('');
+  /** Child sessions are reached from their parent, so the list leaves them out by default. */
+  let includeChildren = $state(false);
   let open = $state(false);
   let activeIndex = $state(-1);
   const harnessOf = (session: SessionListItem) =>
@@ -35,20 +38,24 @@
   // option per reference instead of crashing a keyed list or selecting a DB.
   let unique = $derived([...new Map(sessions.map((session) => [session.id, session])).values()]);
   let labels = $derived(sessionOptionLabels(unique, harness === 'all'));
-  let inHarness = $derived(
-    unique.filter((session) => harness === 'all' || harnessOf(session) === harness),
+  let inFilters = $derived(
+    sessionTree(
+      unique.filter((session) => harness === 'all' || harnessOf(session) === harness),
+    ).filter((entry) => includeChildren || entry.depth === 0),
   );
-  let choices = $derived(
-    inHarness.filter((session) =>
+  // A child session that matches the search is shown under the sessions it descends from.
+  let entries = $derived(
+    withAncestors(inFilters, (session) =>
       `${session.displayName} ${session.workingDirectory ?? ''}`
         .toLocaleLowerCase()
         .includes(query.trim().toLocaleLowerCase()),
     ),
   );
+  let choices = $derived(entries.map((entry) => entry.session));
   let selected = $derived(unique.find((session) => session.id === selectedId));
   let selectedLabel = $derived(
     selected
-      ? `${labels.get(selected.id)}${inHarness.includes(selected) ? '' : ' — outside filters'}`
+      ? `${labels.get(selected.id)}${inFilters.some((entry) => entry.session === selected) ? '' : ' — outside filters'}`
       : '',
   );
   const optionId = (index: number) => `${id}-option-${index}`;
@@ -147,7 +154,7 @@
         aria-label="Sessions"
         onmousedown={(event) => event.preventDefault()}
       >
-        {#each choices as session, index (session.id)}
+        {#each entries as { session, depth }, index (session.id)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <li
             id={optionId(index)}
@@ -155,6 +162,7 @@
             aria-selected={session.id === selectedId}
             class:active={index === activeIndex}
             data-session-id={session.id}
+            style:padding-inline-start={depth > 0 ? `${8 + depth * 16}px` : undefined}
             title={session.fileName || session.displayName}
             onclick={() => choose(session)}
           >
@@ -164,6 +172,9 @@
       </ul>
     {/if}
   </div>
+  <label class="include-children"
+    ><input type="checkbox" bind:checked={includeChildren} /> Include child sessions</label
+  >
   {#if choices.length === 0}<p role="status">
       No sessions match these filters. The open session is unchanged.
     </p>{/if}
@@ -229,6 +240,18 @@
     border-radius: var(--control-radius);
     background: var(--surface);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  }
+  .include-children {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .include-children input {
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
   }
   li {
     padding: 6px 8px;

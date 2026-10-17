@@ -852,7 +852,11 @@
       <button type="button" onclick={() => sessionController.retry()}>Retry</button>
     </section>
   {:else if indexed}
-    {#key $sessionController.selectedSessionId}<SessionSummary {indexed} />{/key}
+    {#key $sessionController.selectedSessionId}<SessionSummary
+        {indexed}
+        sessionId={$sessionController.selectedSessionId}
+        sessions={$sessionController.sessions}
+      />{/key}
 
     <div class="exploration-grid" class:occupied={selectedItem !== null || pinnedCall !== null}>
       <section class="panel river-panel">
@@ -1035,6 +1039,7 @@
       >
         <Inspector
           {indexed}
+          sessions={$sessionController.sessions}
           {pinnedCall}
           {selectedItem}
           {callSections}

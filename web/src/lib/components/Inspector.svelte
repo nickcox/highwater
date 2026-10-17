@@ -2,6 +2,7 @@
   import CallDetails from './CallDetails.svelte';
   import ItemDetails from './ItemDetails.svelte';
   import type { ContextItem, IndexedAnalysis, ModelCall } from '../types';
+  import type { SessionListItem } from '../api/client';
   import type { inspectorSections } from '../state/inspector-sections';
 
   let {
@@ -19,6 +20,7 @@
     onPinCall,
     onInspectCall,
     onRevealInRiver,
+    sessions = [],
   }: {
     indexed: IndexedAnalysis;
     pinnedCall: ModelCall | null;
@@ -34,6 +36,7 @@
     onPinCall: (index: number) => void;
     onInspectCall: (index: number) => void;
     onRevealInRiver: (itemId: string) => void;
+    sessions?: readonly SessionListItem[];
   } = $props();
 </script>
 
@@ -88,6 +91,7 @@
         {pinnedCallIndex}
         {onSelectItem}
         {onRevealInRiver}
+        {sessions}
       />
     </section>
   {/if}

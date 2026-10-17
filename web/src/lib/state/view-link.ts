@@ -9,6 +9,9 @@ export interface ViewLinkState {
   range: [number, number] | null;
   pin: number | null;
   item: string | null;
+  /** Opened from this child session: select the tool call that started it. Never serialised;
+   * once the session loads it becomes `item` and `pin`. */
+  child?: string | null;
 }
 const identifier = (value: string | null) =>
   value !== null && value.length > 0 && value.length <= 512 && !/[\u0000-\u001f\u007f]/.test(value);
@@ -35,7 +38,7 @@ export function parseViewLink(
   if (hash.length > 16384) return invalid;
   const params = new URLSearchParams(hash.slice(1));
   if ((params.get('v') ?? '1') !== '1' || !identifier(params.get('session'))) return invalid;
-  for (const key of ['v', 'session', 'view', 'display', 'scope', 'range', 'pin', 'item'])
+  for (const key of ['v', 'session', 'view', 'display', 'scope', 'range', 'pin', 'item', 'child'])
     if (params.getAll(key).length > 1) return invalid;
   let ignored = false;
   let range: [number, number] | null = null;
@@ -49,6 +52,7 @@ export function parseViewLink(
   }
   const pin = call(params.get('pin'));
   const item = identifier(params.get('item')) ? params.get('item') : null;
+  const child = identifier(params.get('child')) ? params.get('child') : null;
   const view = params.get('view') === 'composition' ? 'composition' : 'river';
   const scope = params.get('scope') === 'atCall' ? 'atCall' : 'cumulative';
   const requestedDisplay = params.get('display');
@@ -59,11 +63,21 @@ export function parseViewLink(
   ignored ||=
     (params.has('pin') && pin === null) ||
     (params.has('item') && item === null) ||
+    (params.has('child') && child === null) ||
     (params.has('view') && !['river', 'composition'].includes(params.get('view')!)) ||
     (params.has('scope') && !['atCall', 'cumulative'].includes(params.get('scope')!)) ||
     (params.has('display') && !['items', 'itemTypes'].includes(params.get('display')!));
   return {
-    state: { session: params.get('session')!, view, display, scope, range, pin, item },
+    state: {
+      session: params.get('session')!,
+      view,
+      display,
+      scope,
+      range,
+      pin,
+      item,
+      ...(child === null ? {} : { child }),
+    },
     notice: ignored ? 'Some invalid view-link settings were ignored.' : '',
   };
 }
@@ -85,6 +99,19 @@ export function validateViewLink(
   state: ViewLinkState,
   indexed: IndexedAnalysis,
 ): { state: ViewLinkState; notice: string } {
+  if (state.child) {
+    // The tool call's result, at the call it first appears in. A child started from a call that
+    // is not on the shown branch has none, and the parent opens without a selection.
+    const started = indexed.analysis.contextItems.find(
+      (item) => item.metadata.childSession === state.child && item.presence.length > 0,
+    );
+    state = {
+      ...state,
+      child: null,
+      item: started?.id ?? state.item,
+      pin: started?.firstModelCall ?? state.pin,
+    };
+  }
   let ignored = false;
   const pin = state.pin !== null && indexed.callByIndex.has(state.pin) ? state.pin : null;
   const item = state.item !== null && indexed.itemById.has(state.item) ? state.item : null;

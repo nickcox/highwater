@@ -191,3 +191,37 @@ describe('ItemDetails versions', () => {
     expect(screen.queryByText(/^Call \d+:/)).toBeNull();
   });
 });
+
+describe('ItemDetails child session', () => {
+  const listed = (id: string, displayName: string) => ({
+    id,
+    displayName,
+    fileName: '',
+    workingDirectory: null,
+    startedAt: null,
+    byteSize: null,
+    modifiedAt: null,
+    parentReference: 'parent',
+  });
+
+  it('links a tool result to the child session it started', () => {
+    const analysis = testAnalysis();
+    analysis.contextItems.find((item) => item.id === 'a')!.metadata.childSession = 'child-1';
+    const indexed = indexTestAnalysis(analysis);
+    render(ItemDetails, {
+      props: {
+        item: indexed.itemById.get('a')!,
+        indexed,
+        sessions: [listed('child-1', 'Explore the code')],
+      },
+    });
+    expect(screen.getByRole('link', { name: 'Explore the code' })).toHaveAttribute(
+      'href',
+      '#session=child-1',
+    );
+
+    cleanup();
+    render(ItemDetails, { props: { item: indexed.itemById.get('a')!, indexed, sessions: [] } });
+    expect(screen.getByText('Started a child session that is not listed.')).toBeInTheDocument();
+  });
+});

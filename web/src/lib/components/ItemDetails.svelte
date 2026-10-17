@@ -2,6 +2,8 @@
   import InfoPopover from './InfoPopover.svelte';
   import { claudeEstimateNote, estimateMethodLabel } from '../token-estimate';
   import type { ContextItem, IndexedAnalysis } from '../types';
+  import type { SessionListItem } from '../api/client';
+  import { childSessionOf, sessionHref } from '../session-links';
   import { displayItemLabel } from '../item-label';
   import { kindLabel } from '../kind-labels';
   import { systemPromptChange, versionChain } from '../item-versions';
@@ -29,6 +31,7 @@
     pinnedCallIndex = null,
     onSelectItem = () => {},
     onRevealInRiver = () => {},
+    sessions = [],
   }: {
     sections?: InspectorSections;
     onInspectCall?: (index: number) => void;
@@ -38,7 +41,13 @@
     pinnedCallIndex?: number | null;
     onSelectItem?: (id: string) => void;
     onRevealInRiver?: (id: string) => void;
+    sessions?: readonly SessionListItem[];
   } = $props();
+
+  let childSessionId = $derived(item ? childSessionOf(item) : null);
+  let childSession = $derived(
+    childSessionId ? sessions.find((session) => session.id === childSessionId) : undefined,
+  );
 
   let sourceCompactions = $derived(item ? (indexed.compactionBySourceId.get(item.id) ?? []) : []);
   let summaryCompaction = $derived(
@@ -266,6 +275,14 @@
         </dd>
       </div>
     </dl>
+    {#if childSessionId}
+      <h4>Child session</h4>
+      <p>
+        {#if childSession}Started <a href={sessionHref(childSession.id)}
+            >{childSession.displayName}</a
+          >{:else}Started a child session that is not listed.{/if}
+      </p>
+    {/if}
     {#if sourceCompactions.length > 0 || retainedCompactions.length > 0 || summaryCompaction}
       <h4>Compaction</h4>
       {#if sourceCompactions.length > 0}<p>
@@ -487,6 +504,9 @@
   h3:focus {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+  a {
+    color: var(--accent);
   }
   h4 {
     margin: 11px 0 4px;

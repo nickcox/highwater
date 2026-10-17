@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { describe, expect, it } from 'vitest';
 import { costAssessmentOf, costSummaryFor, testAnalysis } from '../context-river/test-data';
@@ -180,5 +180,46 @@ describe('SessionSummary', () => {
     expect(container).toHaveTextContent('Provider-reported');
     expect(container).not.toHaveTextContent('Harness-recorded cost');
     expect(container).not.toHaveTextContent('configured Pi model rates');
+  });
+});
+
+describe('SessionSummary related sessions', () => {
+  const listed = (id: string, displayName: string, parentReference: string | null = null) => ({
+    id,
+    displayName,
+    fileName: '',
+    workingDirectory: null,
+    startedAt: null,
+    byteSize: null,
+    modifiedAt: null,
+    parentReference,
+    subagentType: parentReference ? 'Explore' : undefined,
+  });
+  const sessions = [
+    listed('parent', 'Parent task'),
+    listed('child-1', 'Explore the code', 'parent'),
+    listed('child-2', 'Check the tests', 'parent'),
+  ];
+
+  it("lists a session's child sessions", () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    render(SessionSummary, { props: { indexed, sessionId: 'parent', sessions } });
+    expect(screen.getByText('2 child sessions')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Explore the code · Explore' })).toHaveAttribute(
+      'href',
+      '#session=child-1',
+    );
+  });
+
+  it('links a child session to the tool call in its parent that started it', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const { container } = render(SessionSummary, {
+      props: { indexed, sessionId: 'child-1', sessions },
+    });
+    const relations = container.querySelector('.session-relations')!;
+    expect(
+      within(relations as HTMLElement).getByRole('link', { name: 'Parent task' }),
+    ).toHaveAttribute('href', '#session=parent&child=child-1');
+    expect(relations.querySelector('details')).toBeNull();
   });
 });

@@ -86,6 +86,22 @@ describe('bounded unversioned v1 view links', () => {
     expect(result.state).toMatchObject({ pin: null, item: null, range: null });
     expect(result.notice).not.toBe('');
   });
+  it('opens a parent from a child session at the tool call that started it', () => {
+    const analysis = testAnalysis();
+    analysis.contextItems.find((item) => item.id === 'a')!.metadata.childSession = 'child-1';
+    const indexed = indexTestAnalysis(analysis);
+    const parsed = parseViewLink('#session=parent&child=child-1').state!;
+    expect(parsed.child).toBe('child-1');
+
+    const result = validateViewLink(parsed, indexed);
+    expect(result.state).toMatchObject({ item: 'a', pin: 1, child: null });
+    expect(result.notice).toBe('');
+    expect(serializeViewLink(result.state)).not.toContain('child=');
+
+    const unknown = validateViewLink({ ...parsed, child: 'child-2' }, indexed);
+    expect(unknown.state).toMatchObject({ item: null, pin: null });
+    expect(unknown.notice).toBe('');
+  });
   it('uses adjacent real call bounds for zoomed gaps, not an invented call or accidental Fit all', () => {
     const viewport = {
       ready: true,
