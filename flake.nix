@@ -22,7 +22,8 @@
           version = cargoToml.package.version;
 
           # The built frontend in web/dist is committed and embedded by rust-embed,
-          # so the build needs no Node. The tests read files in data and fixtures.
+          # so the build needs no Node. The agent skill in skills is embedded with
+          # include_str!. The tests read files in data and fixtures.
           src = pkgs.lib.fileset.toSource {
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
@@ -31,6 +32,7 @@
               ./src
               ./data
               ./fixtures
+              ./skills
               ./web/dist
             ];
           };
