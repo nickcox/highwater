@@ -254,6 +254,57 @@ pub(crate) fn assess(table: &PriceTable, call: CallToPrice<'_>) -> CostAssessmen
     }
 }
 
+/// A call's input prices, at the rates `assess` uses: the provider's listed rate for
+/// per-token billing, or the lab's API rate for a subscription. Rates are US dollars per
+/// token; a missing cache rate falls back to the input rate, as for OpenAI models.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct InputPrice {
+    pub input: f64,
+    pub cache_read: f64,
+    pub cache_write: f64,
+    /// The call's whole input at these rates, from its reported usage, with long-prompt
+    /// tiers applied.
+    pub prompt_cost: Option<f64>,
+}
+
+/// `None` when the call has no model or time, or no price is listed for it.
+pub(crate) fn input_price(table: &PriceTable, call: CallToPrice<'_>) -> Option<InputPrice> {
+    let (provider, model, at_ms) = (call.provider?, call.model?, call.at_ms?);
+    let mode = table.billing_mode(call.harness, provider, at_ms);
+    let price_provider = mode
+        .and_then(|mode| mode.price_provider.as_deref())
+        .unwrap_or(provider);
+    let subscription = mode.is_some_and(|mode| mode.billing == Billing::Subscription);
+    let (provider, model) = if subscription {
+        table
+            .model(price_provider, model)
+            .and_then(|prices| prices.lab_equivalent.clone())
+            .unwrap_or_else(|| (price_provider.to_owned(), model.to_owned()))
+    } else {
+        (price_provider.to_owned(), model.to_owned())
+    };
+    let rates = listed_price(table.period_at(&provider, &model, at_ms))?;
+    let per_token = |rate: f64| rate / 1_000_000.0;
+    let prompt_cost = token_counts(call.usage)
+        .and_then(|tokens| {
+            cost(
+                rates,
+                TokenCounts {
+                    output_low: 0,
+                    output_high: 0,
+                    ..tokens
+                },
+            )
+        })
+        .map(|amount| amount.low);
+    Some(InputPrice {
+        input: per_token(rates.input),
+        cache_read: per_token(rates.cache_read.unwrap_or(rates.input)),
+        cache_write: per_token(rates.cache_write.unwrap_or(rates.input)),
+        prompt_cost,
+    })
+}
+
 fn priced(
     kind: CostKind,
     rates: &Rates,

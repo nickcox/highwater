@@ -187,6 +187,16 @@ pub(super) fn tokenization_targets(calls: &[NormalizedModelCall]) -> Vec<&ModelT
         .collect()
 }
 
+/// An item's whole text, written out as the generic tokenization profile counts it.
+pub(crate) fn item_text(payload: &TokenizationPayload) -> String {
+    tokenization::project_payload(
+        payload,
+        &ModelTarget::default(),
+        tokenization::ProjectionRules::GENERIC,
+    )
+    .text
+}
+
 pub(crate) fn analyze(
     mut session: NormalizedSession,
     config: AnalysisConfig,

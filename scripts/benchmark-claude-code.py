@@ -104,7 +104,7 @@ def main():
         with socket.socket() as port_socket:
             port_socket.bind(('127.0.0.1', 0))
             port = port_socket.getsockname()[1]
-        server = subprocess.Popen([arguments.binary, '--session-root', str(temporary / 'pi'), '--claude-root',
+        server = subprocess.Popen([arguments.binary, 'serve', '--session-root', str(temporary / 'pi'), '--claude-root',
                                    str(temporary / 'projects'), '--port', str(port), '--tokenization', 'auto'],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         peak = [0]

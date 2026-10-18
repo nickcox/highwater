@@ -39,7 +39,7 @@ case "$BUILD_PROFILE" in
     exit 2
     ;;
 esac
-"$BINARY" \
+"$BINARY" serve \
   --session-root "$TMP_ROOT" \
   --port "$PORT" \
   --tokenization heuristic >"$TMP_ROOT/server.log" 2>&1 &

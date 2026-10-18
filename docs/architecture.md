@@ -13,6 +13,8 @@ The server reads session files, rebuilds each model call's context, counts token
 - **Catalogue:** scheduling (debouncing, retries, rate limits and shutdown) is separate from discovery.
 - **Analysis service:** one service holds the response cache (4 entries, 16 MiB) and the analyses in progress behind one short lock, and runs at most two analyses at a time. A request joins an analysis already in progress for the same session, and that analysis finishes even if the request that started it is cancelled. Failures are typed and mapped to HTTP responses in one place, and reporting a failure can never leave a finished analysis unpublished. These limits cover the response cache and concurrency, not the process's total memory.
 - Analyses are not saved between runs, and a session that changes is analysed again in full.
+- **Commands:** `src/main.rs` runs `serve` (the server, and the default command), `report`, `show` and `skill`. `serve`'s options are also accepted without the command, but only `serve --help` lists them.
+- **Reports:** `src/report/` runs `highwater report`, `show` and `skill` without starting the server. It reads the catalogue once through the same discovery code, analyses the chosen sessions on one thread per processor, and builds its report from the normalised sessions and their analyses. See [Token reports](report.md).
 
 ## Frontend
 

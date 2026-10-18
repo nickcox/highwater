@@ -32,7 +32,7 @@ use axum::{
 };
 use catalog::{ScanError, SessionCatalog};
 use chrono::{DateTime, Utc};
-use clap::{Parser, ValueEnum};
+use clap::{Args, ValueEnum};
 use error::AppError;
 #[cfg(test)]
 use error::FlightError;
@@ -72,9 +72,10 @@ impl From<TokenizationArg> for TokenizationPolicy {
     }
 }
 
-#[derive(Parser, Debug)]
-#[command(version, about)]
-pub(crate) struct Args {
+/// Where to find sessions, for `serve`, `report` and `show`.
+#[derive(Args, Debug, Clone)]
+pub(crate) struct SourceArgs {
+    /// Pi sessions folder. On its own, it turns off the other sources' defaults.
     #[arg(long)]
     pub session_root: Option<PathBuf>,
     /// OpenCode SQLite database (repeatable). Explicit Pi roots remain Pi-only unless set.
@@ -92,6 +93,12 @@ pub(crate) struct Args {
     /// the default `$CODEX_HOME` or `~/.codex`.
     #[arg(long)]
     pub codex_home: Vec<PathBuf>,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct ServeArgs {
+    #[command(flatten)]
+    pub sources: SourceArgs,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
@@ -159,26 +166,35 @@ impl ScanCoordinator {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionFile {
-    id: String,
+    pub(crate) id: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     path: String,
     file_name: String,
-    display_name: String,
-    working_directory: Option<String>,
-    started_at: Option<DateTime<Utc>>,
+    pub(crate) display_name: String,
+    pub(crate) working_directory: Option<String>,
+    pub(crate) started_at: Option<DateTime<Utc>>,
     byte_size: Option<u64>,
-    modified_at: Option<DateTime<Utc>>,
-    harness: String,
-    parent_reference: Option<String>,
+    pub(crate) modified_at: Option<DateTime<Utc>>,
+    pub(crate) harness: String,
+    pub(crate) parent_reference: Option<String>,
     /// A Claude Code subagent's type, from its metadata file. Omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
-    subagent_type: Option<String>,
+    pub(crate) subagent_type: Option<String>,
     #[serde(skip)]
     locator: Option<crate::source::SessionLocator>,
     #[serde(skip)]
     source_revision: Option<u64>,
     #[serde(skip)]
     modified_nanos: Option<u128>,
+}
+
+impl SessionFile {
+    /// How to load the session. A Pi session is found by its path.
+    pub(crate) fn source_locator(&self) -> crate::source::SessionLocator {
+        self.locator
+            .clone()
+            .unwrap_or_else(|| crate::source::SessionLocator::PiFile(PathBuf::from(&self.path)))
+    }
 }
 
 /// The startup line, for example `Discovered 1,206 sessions: 150 Pi, 980 Claude Code (612 child
@@ -239,8 +255,46 @@ type WatcherStarter = fn(
     Arc<watcher::WatchSignals>,
 ) -> notify::Result<watcher::WatcherHandle>;
 
-pub(crate) async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) async fn run(args: ServeArgs) -> Result<(), Box<dyn std::error::Error>> {
     run_with_watcher(args, watcher::start).await
+}
+
+/// The configured session sources, with each source's default location filled in.
+fn configured_sources(args: SourceArgs) -> Result<sources::SourceSet, AppError> {
+    let home = std::env::home_dir().unwrap_or_default();
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".local/share"));
+    let claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute());
+    let vscode_defaults = sources::default_vscode_user_dirs(&home);
+    let codex_home_env = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute());
+    sources::SourceSet::configured(
+        args.session_root,
+        args.opencode_db,
+        args.claude_root,
+        &home,
+        &data_home,
+        claude_config_dir.as_deref(),
+        args.vscode_user_dir,
+        &vscode_defaults,
+        args.codex_home,
+        codex_home_env.as_deref(),
+    )
+}
+
+/// Every session in the configured sources, read once without watching for changes.
+/// Synchronous; for the `report` and `show` commands.
+pub(crate) fn discover_sessions(
+    args: SourceArgs,
+) -> Result<Vec<SessionFile>, Box<dyn std::error::Error>> {
+    let sources = configured_sources(args)?;
+    let scanner = sources::MixedScanner::new(&sources, Arc::default());
+    Ok(scanner.scan(Arc::new(AtomicBool::new(false)))?)
 }
 
 fn start_watcher_or_degraded(
@@ -262,36 +316,11 @@ fn start_watcher_or_degraded(
 }
 
 async fn run_with_watcher(
-    args: Args,
+    args: ServeArgs,
     start_watcher: WatcherStarter,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let home = std::env::home_dir().unwrap_or_default();
-    let data_home = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .unwrap_or_else(|| home.join(".local/share"));
-    let claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute());
-    let vscode_defaults = sources::default_vscode_user_dirs(&home);
-    let codex_home_env = std::env::var_os("CODEX_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute());
-    let sources = tokio::task::spawn_blocking(move || {
-        sources::SourceSet::configured(
-            args.session_root,
-            args.opencode_db,
-            args.claude_root,
-            &home,
-            &data_home,
-            claude_config_dir.as_deref(),
-            args.vscode_user_dir,
-            &vscode_defaults,
-            args.codex_home,
-            codex_home_env.as_deref(),
-        )
-    })
-    .await??;
+    let source_args = args.sources.clone();
+    let sources = tokio::task::spawn_blocking(move || configured_sources(source_args)).await??;
     let root = sources.pi_root.clone().unwrap_or_default();
     let generation = new_generation()?;
     let diagnostics = Arc::new(Diagnostics::default());

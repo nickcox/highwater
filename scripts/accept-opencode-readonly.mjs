@@ -19,7 +19,7 @@ const socket = createServer();
 await new Promise((done) => socket.listen(0, '127.0.0.1', done));
 const port = socket.address().port;
 await new Promise((done) => socket.close(done));
-const server = spawn(join(root, 'target/release/highwater'), ['--session-root', join(temporary, 'pi'), ...databases.flatMap((database) => ['--opencode-db', resolve(database)]), '--port', String(port), '--tokenization', 'heuristic'], { stdio: 'ignore' });
+const server = spawn(join(root, 'target/release/highwater'), ['serve', '--session-root', join(temporary, 'pi'), ...databases.flatMap((database) => ['--opencode-db', resolve(database)]), '--port', String(port), '--tokenization', 'heuristic'], { stdio: 'ignore' });
 let spawnFailed = false;
 server.on('error', () => { spawnFailed = true; });
 const running = () => server.pid !== undefined && server.exitCode === null && server.signalCode === null;

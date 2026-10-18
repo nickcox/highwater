@@ -60,7 +60,7 @@ def run(binary, full):
         stop = threading.Event()
         peak = [0]
         with (temporary / 'server.log').open('w') as log:
-            server = subprocess.Popen([str(binary), '--session-root', str(temporary / 'pi'), '--opencode-db', str(database),
+            server = subprocess.Popen([str(binary), 'serve', '--session-root', str(temporary / 'pi'), '--opencode-db', str(database),
                                        '--port', str(port), '--tokenization', 'heuristic'], stdout=log, stderr=log)
             base = f'http://127.0.0.1:{port}'
 

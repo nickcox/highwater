@@ -28,7 +28,7 @@ for index in range(1, 6):
         shutil.copyfileobj(source, target)
 PY
 cargo build --release >/dev/null
-./target/release/highwater --session-root "$ROOT" --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
+./target/release/highwater serve --session-root "$ROOT" --port "$PORT" --perf-diagnostics >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 RSS_FILE="$ROOT/peak-rss-kb"
 printf '0\n' >"$RSS_FILE"

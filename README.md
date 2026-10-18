@@ -38,10 +38,12 @@ cargo install --git https://github.com/nickcox/highwater --locked
 ## Run
 
 ```bash
-highwater
+highwater serve
 ```
 
-Then open the URL it prints. Without options, Highwater finds sessions in each tool's default location, when it exists:
+Then open the URL it prints. `serve` is the default command, so `highwater` on its own does the same, and so does `highwater` followed by any of `serve`'s options.
+
+Without options, Highwater finds sessions in each tool's default location, when it exists:
 
 | Source | Default location | Option |
 | --- | --- | --- |
@@ -51,9 +53,13 @@ Then open the URL it prints. Without options, Highwater finds sessions in each t
 | Codex | `$CODEX_HOME` (default `~/.codex`) | `--codex-home <dir>` (repeatable) |
 | VS Code Copilot Chat | VS Code's and VS Code Insiders' user data folders | `--vscode-user-dir <dir>` (repeatable) |
 
-An option replaces that source's default. `--session-root` on its own reads only Pi sessions; add the other options to include them too. Other options: `--port` (default 43123) and `--tokenization auto|strict|heuristic|off`.
+An option replaces that source's default, as in `highwater serve --claude-root <dir>`. `--session-root` on its own reads only Pi sessions; add the other options to include them too. Other options: `--port` (default 43123) and `--tokenization auto|strict|heuristic|off`. `highwater serve --help` lists them all.
 
 Highwater rejects requests addressed to any name other than `127.0.0.1` or `localhost`, so other web pages cannot read session data through it.
+
+## Token reports
+
+`highwater report` lists where recent sessions in the current repository spent tokens: the large tool results that stayed in context longest, and the commands run again and again. `--json` gives the same report for an agent to read, and `highwater skill install` installs a skill that has Codex, Claude Code or another agent read it and suggest changes, such as narrower commands, a new skill or script, or shorter instructions. See [Token reports](docs/report.md).
 
 ## How accurate it is
 
@@ -63,6 +69,7 @@ Session files record how many input tokens each call used, and some record its c
 
 - [User guide](docs/user-guide.md): the River, Composition, lifespans, view links and the cache and cost track.
 - [Data semantics](docs/data-semantics.md): tokenization, cost, the analysis API, and what each number means.
+- [Token reports](docs/report.md): `highwater report`, `show` and the `token-efficiency` skill.
 - Sources: [Pi](docs/sources/pi.md), [OpenCode](docs/sources/opencode.md), [Claude Code](docs/sources/claude-code.md) and [VS Code Copilot Chat](docs/sources/vscode-copilot.md).
 - [Architecture](docs/architecture.md) and [development](docs/development.md): how it is built, and how to change and check it.
 
