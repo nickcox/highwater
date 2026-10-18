@@ -48,6 +48,7 @@ pub(super) enum FileReader {
     Pi,
     ClaudeCode(FileKind),
     VsCodeCopilot,
+    Codex,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -201,6 +202,9 @@ impl AnalysisService {
             SessionLocator::VsCodeCopilotFile { path } => {
                 self.response_file(path, FileReader::VsCodeCopilot, config)
                     .await
+            }
+            SessionLocator::CodexFile { path } => {
+                self.response_file(path, FileReader::Codex, config).await
             }
             SessionLocator::OpenCode {
                 database,
@@ -523,6 +527,7 @@ pub(super) fn execute_analysis(
             kind,
         },
         FileReader::VsCodeCopilot => SessionLocator::VsCodeCopilotFile { path: path.clone() },
+        FileReader::Codex => SessionLocator::CodexFile { path: path.clone() },
     };
     let loaded = match source::load(&locator, None) {
         Ok(value) => value,
@@ -602,6 +607,9 @@ pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
         }
         FileReader::VsCodeCopilot => {
             hasher.update(b"\0vscode-copilot\0");
+        }
+        FileReader::Codex => {
+            hasher.update(b"\0codex\0");
         }
     }
     hasher.update(&key.byte_size.to_le_bytes());

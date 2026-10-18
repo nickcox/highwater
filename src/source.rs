@@ -31,6 +31,9 @@ pub(crate) enum SessionLocator {
     VsCodeCopilotFile {
         path: PathBuf,
     },
+    CodexFile {
+        path: PathBuf,
+    },
 }
 
 /// The portable reference an OpenCode session is listed under.
@@ -52,6 +55,14 @@ pub(crate) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) ->
         hash.update(agent_id.as_bytes());
     }
     format!("claude-code-{}", &hash.finalize().to_hex()[..12])
+}
+
+/// The portable reference a Codex thread is listed under.
+pub(crate) fn codex_reference(thread_id: &str) -> String {
+    let mut hash = blake3::Hasher::new_derive_key("Highwater Codex session reference v1");
+    hash.update(b"id\0");
+    hash.update(thread_id.as_bytes());
+    format!("codex-{}", &hash.finalize().to_hex()[..12])
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -87,6 +98,8 @@ pub(crate) enum LoadError {
     ClaudeCode(#[source] SourceError),
     #[error("vs code copilot session cannot be loaded")]
     VsCodeCopilot(#[source] SourceError),
+    #[error("codex session cannot be loaded")]
+    Codex(#[source] SourceError),
 }
 
 /// Synchronous, intended for a bounded blocking worker. No source mutation.
@@ -156,6 +169,25 @@ pub(crate) fn load(
         }
         SessionLocator::VsCodeCopilotFile { path } => {
             let loaded = crate::vscode_copilot::load(path).map_err(LoadError::VsCodeCopilot)?;
+            Ok(LoadedSession {
+                normalized: loaded.session,
+                stats: LoadStats {
+                    records: loaded.records,
+                    selected_records: loaded.records,
+                },
+                database_revision: None,
+                replay_limitations: BTreeSet::new(),
+                coverage_codes: Some(
+                    loaded
+                        .limitations
+                        .into_iter()
+                        .map(|limitation| limitation.as_str().to_owned())
+                        .collect(),
+                ),
+            })
+        }
+        SessionLocator::CodexFile { path } => {
+            let loaded = crate::codex::load(path).map_err(LoadError::Codex)?;
             Ok(LoadedSession {
                 normalized: loaded.session,
                 stats: LoadStats {

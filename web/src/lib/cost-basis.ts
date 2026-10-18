@@ -58,6 +58,13 @@ const CLAUDE_CODE_COPY: CostBasisCopy = {
   trackCaveat: 'no recorded cost',
 };
 
+const CODEX_COPY: CostBasisCopy = {
+  ...COST_BASIS_COPY.unknown,
+  basisLabel: 'None: Codex records no cost',
+  note: 'Codex records token usage but no cost for each call, so costs are calculated from the price table.',
+  trackCaveat: 'no recorded cost',
+};
+
 /** VS Code Copilot records what it charged for each call, in credits, but no components. */
 const VSCODE_COPILOT_COPY: CostBasisCopy = {
   ...COST_BASIS_COPY.unknown,
@@ -70,6 +77,7 @@ const VSCODE_COPILOT_COPY: CostBasisCopy = {
 
 export function describeCostBasis(basis: EconomicsCostBasis, source?: string): CostBasisCopy {
   if (source === 'claude-code') return CLAUDE_CODE_COPY;
+  if (source === 'codex') return CODEX_COPY;
   if (source === 'vscode-copilot') return VSCODE_COPILOT_COPY;
   return COST_BASIS_COPY[basis] ?? COST_BASIS_COPY.unknown;
 }

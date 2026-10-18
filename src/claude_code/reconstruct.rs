@@ -816,7 +816,7 @@ impl State<'_> {
     }
 }
 
-fn extend_presence(item: &mut NormalizedContextItem, call_index: usize) {
+pub(crate) fn extend_presence(item: &mut NormalizedContextItem, call_index: usize) {
     if let Some(last) = item.presence.last_mut() {
         if last.end_call.checked_add(1) == Some(call_index) {
             last.end_call = call_index;
@@ -954,7 +954,7 @@ fn tagged_label(first_line: Option<&str>, prefix: &str) -> String {
     format!("{prefix} · {line}")
 }
 
-fn assistant_label(payload: &TokenizationPayload) -> String {
+pub(crate) fn assistant_label(payload: &TokenizationPayload) -> String {
     let TokenizationPayload::AssistantMessage { blocks, .. } = payload else {
         return "Assistant response".into();
     };

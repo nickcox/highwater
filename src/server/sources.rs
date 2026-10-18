@@ -10,8 +10,9 @@ use crate::{
         discovery::{self, DiscoveryError, Listing, ListingCache, TranscriptFile},
         FileKind,
     },
+    codex::discovery::{self as codex_discovery, ListingCache as CodexListingCache, TitleIndex},
     opencode::storage::{self, CatalogTracker},
-    source::{claude_code_reference, opencode_reference, SessionLocator},
+    source::{claude_code_reference, codex_reference, opencode_reference, SessionLocator},
     vscode_copilot::discovery::{self as vscode_discovery, ListingCache as VsCodeListingCache},
 };
 use chrono::{DateTime, Utc};
@@ -31,12 +32,14 @@ pub(super) struct SourceSet {
     pub claude_roots: Vec<PathBuf>,
     /// VS Code user data folders, for Copilot Chat sessions.
     pub vscode_user_dirs: Vec<PathBuf>,
+    /// Codex home folders, each holding `sessions` and `archived_sessions`.
+    pub codex_homes: Vec<PathBuf>,
 }
 
 impl SourceSet {
-    /// An explicit `--session-root` is Pi only: it turns off the OpenCode, Claude Code
-    /// and VS Code defaults unless their own flags are also given. `vscode_defaults` are
-    /// the platform's VS Code user data folders; those that exist are used.
+    /// An explicit `--session-root` is Pi only: it turns off the OpenCode, Claude Code,
+    /// VS Code and Codex defaults unless their own flags are also given. `vscode_defaults`
+    /// are the platform's VS Code user data folders; those that exist are used.
     #[allow(clippy::too_many_arguments)]
     pub fn configured(
         pi: Option<PathBuf>,
@@ -47,6 +50,8 @@ impl SourceSet {
         claude_config_dir: Option<&Path>,
         vscode_user_dirs: Vec<PathBuf>,
         vscode_defaults: &[PathBuf],
+        codex_homes: Vec<PathBuf>,
+        codex_home_env: Option<&Path>,
     ) -> Result<Self, AppError> {
         let explicit_pi = pi.is_some();
         let default_databases = databases.is_empty() && !explicit_pi;
@@ -116,13 +121,31 @@ impl SourceSet {
                 vscode_user_dirs.push(folder);
             }
         }
+        let codex_candidates = if codex_homes.is_empty() && !explicit_pi {
+            let default = codex_home_env.map_or_else(|| home.join(".codex"), Path::to_path_buf);
+            if default.is_dir() {
+                vec![default]
+            } else {
+                Vec::new()
+            }
+        } else {
+            codex_homes
+        };
+        let mut codex_homes = Vec::new();
+        for folder in codex_candidates {
+            let folder = canonical_root(&folder)?;
+            if !codex_homes.contains(&folder) {
+                codex_homes.push(folder);
+            }
+        }
         if pi_root.is_none()
             && databases.is_empty()
             && claude_roots.is_empty()
             && vscode_user_dirs.is_empty()
+            && codex_homes.is_empty()
         {
             return Err(AppError::Message(
-                "no local sessions found; configure --session-root, --opencode-db, --claude-root or --vscode-user-dir"
+                "no local sessions found; configure --session-root, --opencode-db, --claude-root, --vscode-user-dir or --codex-home"
                     .into(),
             ));
         }
@@ -131,6 +154,7 @@ impl SourceSet {
             databases,
             claude_roots,
             vscode_user_dirs,
+            codex_homes,
         })
     }
 }
@@ -344,6 +368,102 @@ impl ClaudeCodeSource {
     }
 }
 
+fn codex_entry(
+    file: codex_discovery::SessionFile,
+    listing: codex_discovery::Listing,
+    title: Option<&str>,
+) -> SessionFile {
+    let file_name = file
+        .path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    // `rollout-<start time>-<thread ID>.jsonl`, for a session whose first line is unfinished.
+    let thread_id = listing.thread_id.clone().unwrap_or_else(|| {
+        let stem = file_name
+            .trim_end_matches(".zst")
+            .trim_end_matches(".jsonl");
+        stem.get(stem.len().saturating_sub(36)..)
+            .unwrap_or(stem)
+            .to_owned()
+    });
+    let short_id: String = thread_id.chars().take(8).collect();
+    let project = listing
+        .working_directory
+        .as_deref()
+        .and_then(|directory| Path::new(directory).file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty());
+    let child = listing.child.as_ref();
+    let display_name = title
+        .map(str::to_owned)
+        .or_else(|| child.and_then(|child| child.nickname.clone()))
+        .or_else(|| {
+            child
+                .filter(|child| child.kind.as_deref() == Some("guardian"))
+                .map(|_| "Guardian review".to_owned())
+        })
+        .unwrap_or_else(|| match project {
+            Some(project) => format!("{project} · {short_id}"),
+            None => short_id.clone(),
+        });
+    SessionFile {
+        id: codex_reference(&thread_id),
+        path: String::new(),
+        file_name,
+        display_name: display_name.chars().take(160).collect(),
+        working_directory: listing.working_directory,
+        started_at: listing
+            .started_at
+            .as_deref()
+            .and_then(|timestamp| timestamp.parse::<DateTime<Utc>>().ok()),
+        byte_size: Some(file.stamp.byte_size),
+        modified_at: file.modified.map(DateTime::<Utc>::from),
+        modified_nanos: file.stamp.modified_nanos,
+        harness: "codex".into(),
+        parent_reference: child.map(|child| codex_reference(&child.parent_thread_id)),
+        subagent_type: child
+            .and_then(|child| child.kind.as_deref())
+            .map(|kind| kind.chars().take(80).collect()),
+        locator: Some(SessionLocator::CodexFile { path: file.path }),
+        source_revision: None,
+    }
+}
+
+struct CodexSource {
+    home: PathBuf,
+    listings: CodexListingCache,
+    titles: TitleIndex,
+    last_good: Vec<SessionFile>,
+}
+
+impl CodexSource {
+    fn discover(&mut self, cancelled: &AtomicBool) -> Result<Vec<SessionFile>, DiscoveryError> {
+        let files = codex_discovery::find_files(&self.home, Some(cancelled))?;
+        self.listings.retain(&files);
+        self.titles.refresh(&self.home);
+        let mut entries = Vec::with_capacity(files.len());
+        for file in files {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(DiscoveryError::Cancelled);
+            }
+            // A session with no reported call has nothing to show, so it is not offered.
+            if let Some(listing) = self
+                .listings
+                .listing(&file)?
+                .filter(|listing| listing.has_responses)
+            {
+                let title = listing
+                    .thread_id
+                    .as_deref()
+                    .and_then(|id| self.titles.title(id));
+                entries.push(codex_entry(file, listing, title));
+            }
+        }
+        Ok(entries)
+    }
+}
+
 struct DatabaseSource {
     path: PathBuf,
     tracker: Option<CatalogTracker>,
@@ -354,6 +474,7 @@ struct DiscoveryState {
     databases: Vec<DatabaseSource>,
     claude_code: Vec<ClaudeCodeSource>,
     vscode_copilot: Vec<VsCodeCopilotSource>,
+    codex: Vec<CodexSource>,
 }
 
 pub(super) struct MixedScanner {
@@ -393,6 +514,16 @@ impl MixedScanner {
                     .map(|user_dir| VsCodeCopilotSource {
                         user_dir: user_dir.clone(),
                         listings: VsCodeListingCache::default(),
+                        last_good: Vec::new(),
+                    })
+                    .collect(),
+                codex: sources
+                    .codex_homes
+                    .iter()
+                    .map(|home| CodexSource {
+                        home: home.clone(),
+                        listings: CodexListingCache::default(),
+                        titles: TitleIndex::default(),
                         last_good: Vec::new(),
                     })
                     .collect(),
@@ -512,6 +643,16 @@ impl MixedScanner {
                 Err(_) => failed = true,
             }
         }
+        for source in &mut state.codex {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(ScanError::Cancelled);
+            }
+            match source.discover(&cancelled) {
+                Ok(entries) => source.last_good = entries,
+                Err(DiscoveryError::Cancelled) => return Err(ScanError::Cancelled),
+                Err(_) => failed = true,
+            }
+        }
         // A transient source read failure must not permanently disable healthy
         // filesystem watchers. A subsequent successful scan clears this state.
         self.signals
@@ -553,6 +694,22 @@ impl MixedScanner {
                     .cloned(),
             );
         }
+        // Repeated or nested home folders, or a session that is both in `sessions` and
+        // `archived_sessions` while Codex moves it, can list the same thread twice. The
+        // most recently changed copy is kept.
+        let mut codex: Vec<&SessionFile> = state
+            .codex
+            .iter()
+            .flat_map(|source| &source.last_good)
+            .collect();
+        codex.sort_by_key(|entry| std::cmp::Reverse(entry.modified_nanos));
+        let mut codex_ids = HashSet::new();
+        entries.extend(
+            codex
+                .into_iter()
+                .filter(|entry| codex_ids.insert(entry.id.clone()))
+                .cloned(),
+        );
         entries.sort_by(|left, right| {
             right
                 .modified_at

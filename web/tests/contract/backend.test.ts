@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 127) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 135) throw new Error('Incomplete live Rust contract export.');
 
 function rawOutput(name: string): WireSessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -114,6 +114,22 @@ describe('live production Rust -> indexAnalysis contract', () => {
     expect(replaced.presence).toEqual([]);
     expect(replaced.firstModelCall).toBe(0);
     expect(replaced.ageAtFinalModelCall).toBeNull();
+  });
+
+  it('indexes Codex calls, reasoning and an encrypted compaction summary', () => {
+    const analysis = output('codex-7-auto');
+    expect(analysis.session.source).toBe('codex');
+    expect(analysis.modelCalls).toHaveLength(5);
+    expect(analysis.reconstruction?.explanationCodes).toContain('missingCompactionUsage');
+    const indexed = indexTestAnalysis(analysis);
+    const [compaction] = analysis.compactions;
+    const summary = indexed.itemById.get(compaction.summaryItemId)!;
+    expect(summary.label).toBe('Compaction summary · encrypted');
+    expect(analysis.modelCalls[4].compactionBefore).toBe(compaction.id);
+    expect(analysis.contextItems.some((item) => item.kind === 'thinking')).toBe(true);
+    const fork = output('codex-8-auto');
+    expect(fork.modelCalls).toHaveLength(2);
+    expect(output('codex-6-auto').modelCalls).toHaveLength(1);
   });
 
   it('indexes OpenCode compaction lineage and retains summary reasoning', () => {

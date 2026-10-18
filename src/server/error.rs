@@ -90,7 +90,9 @@ fn load_details(error: &crate::source::LoadError) -> Details {
             "source history uses unsupported replay semantics",
         ),
         LoadError::Replay(_) => INVALID_SOURCE,
-        LoadError::ClaudeCode(error) | LoadError::VsCodeCopilot(error) => source_details(error),
+        LoadError::ClaudeCode(error)
+        | LoadError::VsCodeCopilot(error)
+        | LoadError::Codex(error) => source_details(error),
         LoadError::Storage(error) => match error {
             StorageError::NotFound => NOT_FOUND,
             StorageError::Busy | StorageError::Cancelled => (

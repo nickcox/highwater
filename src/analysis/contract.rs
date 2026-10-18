@@ -548,6 +548,34 @@ fn export_live_contract() {
         ),
     ));
 
+    // Codex sessions, plain and compressed, through the same loader and coverage notice as HTTP.
+    let codex_home = std::fs::canonicalize("fixtures/codex/home").expect("Codex fixtures");
+    for file in crate::codex::discovery::find_files(&codex_home, None).expect("Codex discovery") {
+        let loaded = crate::source::load(
+            &crate::source::SessionLocator::CodexFile {
+                path: file.path.clone(),
+            },
+            None,
+        )
+        .expect("Codex fixture");
+        let mut analysis =
+            analyze(loaded.normalized, config(TokenizationPolicy::Auto)).expect("Codex analysis");
+        analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
+            status: "partial",
+            explanation_codes: codes,
+        });
+        let name = file.path.file_name().unwrap_or_default().to_string_lossy();
+        let number = name
+            .trim_end_matches(".zst")
+            .trim_end_matches(".jsonl")
+            .rsplit('-')
+            .next()
+            .unwrap_or_default()
+            .trim_start_matches('0')
+            .to_owned();
+        cases.push((format!("codex-{number}-auto"), analysis));
+    }
+
     let modern_database = temporary.path().join("modern.db");
     let modern_writer = rusqlite::Connection::open(&modern_database).expect("modern database");
     modern_writer
@@ -749,7 +777,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 127);
+    assert_eq!(manifest.len(), 135);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

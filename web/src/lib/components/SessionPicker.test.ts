@@ -83,6 +83,34 @@ describe('Harness session picker', () => {
     expect(offered()).toEqual(['Configure the status line · child session · statusline-setup']);
   });
 
+  it('labels Codex sessions and filters to them', async () => {
+    const withCodex: SessionListItem[] = [
+      ...sessions,
+      {
+        id: 'codex-five',
+        harness: 'codex',
+        displayName: 'Refactor the importer',
+        fileName: 'rollout-five.jsonl.zst',
+        workingDirectory: '/codex',
+        startedAt: null,
+        modifiedAt: null,
+        byteSize: 40,
+      },
+    ];
+    render(SessionPicker, {
+      props: { sessions: withCodex, selectedId: 'pi-one', onSelect: vi.fn() },
+    });
+    await fireEvent.click(picker());
+    expect(
+      screen.getByRole('option', { name: '[Codex] Refactor the importer' }),
+    ).toBeInTheDocument();
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Harness' }), {
+      target: { value: 'codex' },
+    });
+    await fireEvent.click(picker());
+    expect(offered()).toEqual(['Refactor the importer']);
+  });
+
   it('labels VS Code Copilot sessions and filters to them', async () => {
     const withCopilot: SessionListItem[] = [
       ...sessions,

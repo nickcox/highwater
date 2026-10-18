@@ -8,7 +8,7 @@ export interface SessionListItem {
   startedAt: string | null;
   byteSize: number | null;
   modifiedAt: string | null;
-  harness?: 'pi' | 'opencode' | 'claude-code' | 'vscode-copilot';
+  harness?: 'pi' | 'opencode' | 'claude-code' | 'codex' | 'vscode-copilot';
   parentReference?: string | null;
   /** A Claude Code subagent's type, such as `statusline-setup`. */
   subagentType?: string;

@@ -200,7 +200,7 @@
               <dt>Compactions</dt>
               <dd>{formatInteger(analysis.compactions.length)}</dd>
             </div>
-            {#if session.source !== 'claude-code'}
+            {#if !['claude-code', 'codex'].includes(session.source)}
               <div>
                 <dt>Billed cost (USD)</dt>
                 <dd>
@@ -278,7 +278,7 @@
               {formatInteger(economics.usageCompleteness.unsupported)} unsupported
             </dd>
           </div>
-          {#if !['claude-code', 'vscode-copilot'].includes(session.source)}
+          {#if !['claude-code', 'codex', 'vscode-copilot'].includes(session.source)}
             <div>
               <dt>
                 {costCopy.label} component coverage (complete / partial / missing / unsupported)

@@ -19,6 +19,7 @@ fn vscode_only(user_dirs: Vec<PathBuf>) -> SourceSet {
         databases: Vec::new(),
         claude_roots: Vec::new(),
         vscode_user_dirs: user_dirs,
+        codex_homes: Vec::new(),
     }
 }
 
@@ -86,6 +87,8 @@ fn vscode_defaults_are_used_when_they_exist_unless_pi_is_explicit() {
         None,
         Vec::new(),
         &defaults,
+        Vec::new(),
+        None,
     )
     .expect("VS Code defaults");
     assert_eq!(sources.vscode_user_dirs, vec![existing.clone()]);
@@ -101,6 +104,8 @@ fn vscode_defaults_are_used_when_they_exist_unless_pi_is_explicit() {
         None,
         Vec::new(),
         &defaults,
+        Vec::new(),
+        None,
     )
     .expect("Pi only");
     assert!(pi_only.vscode_user_dirs.is_empty());
@@ -114,6 +119,8 @@ fn vscode_defaults_are_used_when_they_exist_unless_pi_is_explicit() {
         None,
         vec![user_dir()],
         &defaults,
+        Vec::new(),
+        None,
     )
     .expect("explicit VS Code folder");
     assert_eq!(explicit.vscode_user_dirs, vec![user_dir()]);

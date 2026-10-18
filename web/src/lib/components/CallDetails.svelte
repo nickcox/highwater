@@ -93,12 +93,12 @@
   let callExplanationCodes = $derived(
     explanationCodes.filter((code) => !sessionWideCodes.has(code)),
   );
-  // Claude Code never records when a request started, and VS Code Copilot only in trace records
-  // it keeps for a few days, so their calls without a start show one "Not recorded" row.
+  // Claude Code and Codex never record when a request started, and VS Code Copilot only in trace
+  // records it keeps for a few days, so their calls without a start show one "Not recorded" row.
   let timingRecorded = $derived(
     indexed.analysis.session.source === 'vscode-copilot'
       ? call?.timing.durationMs != null
-      : indexed.analysis.session.source !== 'claude-code',
+      : !['claude-code', 'codex'].includes(indexed.analysis.session.source),
   );
 
   let economicsExplanationCodes = $derived(call?.economics.explanationCodes ?? []);
@@ -446,9 +446,9 @@
           <dt>{inputShareLabel(call.economics.policyId)}</dt>
           <dd>{freshRatioValue()}</dd>
         </div>
-        <!-- Claude Code records no cost, and VS Code Copilot only a total, so these rows would
-             only ever say Unknown. -->
-        {#if !['claude-code', 'vscode-copilot'].includes(indexed.analysis.session.source)}
+        <!-- Claude Code and Codex record no cost, and VS Code Copilot only a total, so these rows
+             would only ever say Unknown. -->
+        {#if !['claude-code', 'codex', 'vscode-copilot'].includes(indexed.analysis.session.source)}
           <div>
             <dt>{costCopy.label} component completeness</dt>
             <dd>{call.economics.costCompleteness}</dd>

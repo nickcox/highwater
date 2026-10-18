@@ -1,7 +1,7 @@
 //! Request content a source does not record, inferred from reported usage.
 //!
 //! Claude Code, OpenCode and VS Code Copilot's session files do not record the system prompt or
-//! tool definitions they send.
+//! tool definitions they send, and Codex's do not record its built-in tool definitions.
 //! At the first call of a segment that reports its input, that content is the reported
 //! input less the estimates of the call's recorded items, because the call has little else
 //! in context. A segment starts at the first call, at each compaction and at each change of
@@ -19,7 +19,7 @@ use crate::domain::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-const SOURCES: [&str; 3] = ["claude-code", "opencode", "vscode-copilot"];
+const SOURCES: [&str; 4] = ["claude-code", "codex", "opencode", "vscode-copilot"];
 
 /// Estimates go into `registry`, which the analysis keeps, so it does not tokenize these items again.
 pub(super) fn add_unrecorded_context(

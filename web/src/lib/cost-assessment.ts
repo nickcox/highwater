@@ -7,13 +7,16 @@ export function harnessName(source: string): string {
   if (source === 'pi') return 'Pi';
   if (source === 'opencode') return 'OpenCode';
   if (source === 'claude-code') return 'Claude Code';
+  if (source === 'codex') return 'Codex';
   if (source === 'vscode-copilot') return 'VS Code Copilot';
   return 'the harness';
 }
 
-/** Claude Code does not record whether a call was covered by a subscription. */
+/** Claude Code and Codex do not record whether a call was covered by a subscription. */
 function unknownBilling(cost: CostAssessment, source: string): boolean {
-  return source === 'claude-code' && cost.classificationRule === 'billingModeTable';
+  return (
+    ['claude-code', 'codex'].includes(source) && cost.classificationRule === 'billingModeTable'
+  );
 }
 
 export function costKindLabel(cost: CostAssessment, source: string): string {
@@ -94,7 +97,8 @@ export function costRuleText(cost: CostAssessment, source: string): string {
         ? 'Billed per token; this is what Copilot recorded charging, in credits at $0.01 each.'
         : `Billed per token; this is the cost ${harness} recorded.`;
     case 'billingModeTable':
-      if (unknownBilling(cost, source)) return "At Anthropic's API rate.";
+      if (unknownBilling(cost, source))
+        return `At ${source === 'codex' ? 'OpenAI' : 'Anthropic'}'s API rate.`;
       return cost.billingMode === 'subscription'
         ? 'This provider is covered by a subscription, so this is what the call would have cost at the API rate. It is not a charge.'
         : cost.kind === 'free'

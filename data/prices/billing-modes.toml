@@ -4,7 +4,7 @@
 # period covers the call's time. Calls that match no entry are billed per token.
 #
 #   provider        provider ID as the harness records it
-#   harness         "pi", "opencode" or "claude-code"; omitted means any harness
+#   harness         "pi", "opencode", "claude-code" or "codex"; omitted means any harness
 #   price_provider  models.dev provider to price the call with, when the harness's
 #                   provider ID is not a models.dev provider
 #   billing         "perToken" or "subscription"
@@ -42,3 +42,12 @@ harness = "claude-code"
 provider = "anthropic"
 billing = "subscription"
 source = "Claude Code transcripts do not record the billing mode; see docs/sources/claude-code.md"
+
+# Codex sessions record OpenAI calls under the plain `openai` provider, whether Codex signed in
+# with a ChatGPT plan or an API key. As for Claude Code, subscription pricing shows the
+# API-equivalent cost, which is also what an API key pays.
+[[mode]]
+harness = "codex"
+provider = "openai"
+billing = "subscription"
+source = "Codex session files do not record the billing mode; see docs/sources/codex.md"

@@ -3,6 +3,8 @@ mod assets;
 mod catalog;
 #[cfg(test)]
 mod claude_code_tests;
+#[cfg(test)]
+mod codex_tests;
 mod error;
 mod events;
 mod local_origin;
@@ -86,6 +88,10 @@ pub(crate) struct Args {
     /// default `Code` and `Code - Insiders` folders for this platform.
     #[arg(long)]
     pub vscode_user_dir: Vec<PathBuf>,
+    /// Codex home folder (repeatable), holding `sessions` and `archived_sessions`. Replaces
+    /// the default `$CODEX_HOME` or `~/.codex`.
+    #[arg(long)]
+    pub codex_home: Vec<PathBuf>,
     #[arg(long, default_value_t = 43123)]
     pub port: u16,
     #[arg(long, value_enum, default_value_t = TokenizationArg::Auto)]
@@ -178,10 +184,11 @@ pub(crate) struct SessionFile {
 /// The startup line, for example `Discovered 1,206 sessions: 150 Pi, 980 Claude Code (612 child
 /// sessions)`. A harness with no sessions is left out, in the session picker's order.
 fn discovery_summary(sessions: &[SessionFile]) -> String {
-    const HARNESSES: [(&str, &str); 4] = [
+    const HARNESSES: [(&str, &str); 5] = [
         ("pi", "Pi"),
         ("opencode", "OpenCode"),
         ("claude-code", "Claude Code"),
+        ("codex", "Codex"),
         ("vscode-copilot", "VS Code Copilot"),
     ];
     let count = |count: usize, noun: &str| {
@@ -267,6 +274,9 @@ async fn run_with_watcher(
         .map(PathBuf::from)
         .filter(|path| path.is_absolute());
     let vscode_defaults = sources::default_vscode_user_dirs(&home);
+    let codex_home_env = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute());
     let sources = tokio::task::spawn_blocking(move || {
         sources::SourceSet::configured(
             args.session_root,
@@ -277,6 +287,8 @@ async fn run_with_watcher(
             claude_config_dir.as_deref(),
             args.vscode_user_dir,
             &vscode_defaults,
+            args.codex_home,
+            codex_home_env.as_deref(),
         )
     })
     .await??;
@@ -302,6 +314,20 @@ async fn run_with_watcher(
     }
     for user_dir in &sources.vscode_user_dirs {
         for folder in crate::vscode_copilot::discovery::session_folders(user_dir) {
+            if !folder.is_dir() {
+                continue;
+            }
+            if let Some(watcher) =
+                start_watcher_or_degraded(&folder, hint_sender.clone(), &signals, start_watcher)
+            {
+                watchers.push(watcher);
+            }
+        }
+    }
+    // Only the session folders are watched: the rest of the Codex home folder holds
+    // databases and logs that change constantly.
+    for codex_home in &sources.codex_homes {
+        for folder in ["sessions", "archived_sessions"].map(|name| codex_home.join(name)) {
             if !folder.is_dir() {
                 continue;
             }

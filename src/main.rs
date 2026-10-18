@@ -1,6 +1,7 @@
 mod analysis;
 mod api;
 mod claude_code;
+mod codex;
 mod domain;
 mod opencode;
 mod pi;

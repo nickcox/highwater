@@ -2,7 +2,7 @@
 
 mod branch;
 pub(crate) mod discovery;
-mod reconstruct;
+pub(crate) mod reconstruct;
 mod records;
 
 #[cfg(test)]

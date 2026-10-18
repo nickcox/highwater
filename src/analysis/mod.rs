@@ -242,7 +242,7 @@ fn derive_calls(
     let (cumulative_usages, usage_totals) = usage_rollup(&session.model_calls);
     let (call_economics, economics_summary) = if matches!(
         session.source.kind.as_str(),
-        "claude-code" | "vscode-copilot"
+        "claude-code" | "codex" | "vscode-copilot"
     ) {
         economics::derive_usage_only(&session.model_calls)
     } else {

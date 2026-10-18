@@ -40,7 +40,7 @@ export const reconstructionLimitLabels: Record<string, string> = {
 };
 
 /** Sources whose analyses must always carry a reconstruction coverage notice. */
-const PARTIAL_SOURCES = new Set(['opencode', 'claude-code', 'vscode-copilot']);
+const PARTIAL_SOURCES = new Set(['opencode', 'claude-code', 'codex', 'vscode-copilot']);
 
 export function assertReconstruction(analysis: SessionAnalysis): void {
   const coverage = analysis.reconstruction;

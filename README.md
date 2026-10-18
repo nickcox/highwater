@@ -1,6 +1,6 @@
 # <img src="docs/images/logo.svg" alt="" width="32" height="32"> Highwater
 
-Highwater shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
+Highwater shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code, Codex and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
 
 ![Highwater showing a 1,118-call Claude Code session: the session summary, and the Context River in Item types view as the context grows to 966K tokens, mostly tool results, assistant messages and thinking, before one compaction](docs/images/context-river.png)
 
@@ -48,6 +48,7 @@ Then open the URL it prints. Without options, Highwater finds sessions in each t
 | Pi | `~/.pi/agent/sessions` | `--session-root <dir>` |
 | OpenCode | `opencode.db` and `opencode-stable.db` in `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`) | `--opencode-db <file>` (repeatable) |
 | Claude Code | `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects`) | `--claude-root <dir>` (repeatable) |
+| Codex | `$CODEX_HOME` (default `~/.codex`) | `--codex-home <dir>` (repeatable) |
 | VS Code Copilot Chat | VS Code's and VS Code Insiders' user data folders | `--vscode-user-dir <dir>` (repeatable) |
 
 An option replaces that source's default. `--session-root` on its own reads only Pi sessions; add the other options to include them too. Other options: `--port` (default 43123) and `--tokenization auto|strict|heuristic|off`.

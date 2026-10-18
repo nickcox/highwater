@@ -5,6 +5,8 @@ export function timingExplanation(source: string, traced = false): string {
   switch (source) {
     case 'claude-code':
       return 'Claude Code does not record when a request started, so the response time and output rate are unavailable.';
+    case 'codex':
+      return 'Codex does not record when a request started, so the response time and output rate are unavailable.';
     case 'vscode-copilot':
       return traced
         ? `From Copilot sending the request to the end of the response, as its trace records show. ${RATE}`
