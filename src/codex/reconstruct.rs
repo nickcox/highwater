@@ -467,6 +467,7 @@ impl State {
             .model
             .clone()
             .unwrap_or_default();
+        let keeps = keeps_prior_reasoning(&model);
         let thinking = NormalizedContextItem::reported_thinking(
             format!("codex:thinking:{}", self.calls[open.call].source_record_id),
             None,
@@ -479,7 +480,9 @@ impl State {
         // Reasoning comes before the response's text and tool calls.
         if let Some(position) = self.active.iter().position(|active| *active == open.item) {
             self.active.insert(position, index);
-            self.turn_thinking.push(index);
+            if !keeps {
+                self.turn_thinking.push(index);
+            }
         }
     }
 
@@ -780,6 +783,22 @@ impl State {
     }
 }
 
+/// Whether a model sends reasoning from earlier turns with later calls. Measured on Codex
+/// sessions: GPT-5.5's input falls by the reasoning of the turn before at each new turn, while
+/// GPT-5.6 and GPT-6 models' input does not. A model this does not recognise is assumed to
+/// behave like the newest ones.
+fn keeps_prior_reasoning(model: &str) -> bool {
+    let Some(version) = model.strip_prefix("gpt-") else {
+        return true;
+    };
+    let version = version.split('-').next().unwrap_or("");
+    let mut parts = version.split('.').map(|part| part.parse::<u32>().ok());
+    match (parts.next().flatten(), parts.next().flatten().unwrap_or(0)) {
+        (Some(major), minor) => (major, minor) >= (5, 6),
+        (None, _) => true,
+    }
+}
+
 fn item(
     id: String,
     kind: ContextItemKind,
@@ -1023,5 +1042,59 @@ fn reported_usage(usage: &Value) -> ReportedUsage {
         reasoning: count("reasoning_output_tokens"),
         total_tokens: count("total_tokens"),
         cost: ReportedCost::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn newer_gpt_models_keep_reasoning_from_earlier_turns() {
+        assert!(!keeps_prior_reasoning("gpt-5.5"));
+        assert!(!keeps_prior_reasoning("gpt-5.4-mini"));
+        assert!(!keeps_prior_reasoning("gpt-5"));
+        assert!(keeps_prior_reasoning("gpt-5.6-sol"));
+        assert!(keeps_prior_reasoning("gpt-6-astra"));
+        assert!(keeps_prior_reasoning("gpt-6.1-sol"));
+        assert!(keeps_prior_reasoning("codex-auto-review"));
+    }
+
+    /// Two turns with one response each; the first response reasons.
+    fn two_turns(model: &str) -> NormalizedSession {
+        let usage = |reasoning: u64| {
+            format!(
+                r#"{{"type":"event_msg","payload":{{"type":"token_count","info":{{"last_token_usage":{{"input_tokens":1000,"cached_input_tokens":0,"output_tokens":50,"reasoning_output_tokens":{reasoning}}}}}}}}}"#
+            )
+        };
+        let lines = [
+            r#"{"type":"session_meta","payload":{"id":"thread","cli_version":"0.160.0"}}"#.to_owned(),
+            format!(r#"{{"type":"turn_context","payload":{{"model":"{model}"}}}}"#),
+            r#"{"type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#.to_owned(),
+            r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"First"}]}}"#.to_owned(),
+            r#"{"type":"response_item","payload":{"type":"reasoning","encrypted_content":"x"}}"#.to_owned(),
+            r#"{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"One"}]}}"#.to_owned(),
+            usage(40),
+            r#"{"type":"event_msg","payload":{"type":"task_started","turn_id":"turn-2"}}"#.to_owned(),
+            r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Second"}]}}"#.to_owned(),
+            r#"{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Two"}]}}"#.to_owned(),
+            usage(0),
+        ];
+        reconstruct(&(lines.join("\n") + "\n"), "thread")
+            .expect("reconstructs")
+            .session
+    }
+
+    fn second_call_has_thinking(session: &NormalizedSession) -> bool {
+        session.model_calls[1]
+            .context_item_ids
+            .iter()
+            .any(|id| id.starts_with("codex:thinking:"))
+    }
+
+    #[test]
+    fn reasoning_reaches_the_next_turn_only_for_models_that_keep_it() {
+        assert!(second_call_has_thinking(&two_turns("gpt-5.6-sol")));
+        assert!(!second_call_has_thinking(&two_turns("gpt-5.5")));
     }
 }
