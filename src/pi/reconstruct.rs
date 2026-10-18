@@ -118,9 +118,13 @@ fn reconstruct_selected(
         .map(|(index, entry_index)| (entries[*entry_index].id.as_str(), index))
         .collect();
     let tool_invocations = collect_tool_invocations(entries, &selected);
+    let forked_at = header.and_then(forked_at);
     let mut state = ReconstructionState::new(id, working_directory, source);
 
     for entry_index in &selected {
+        let inherited = forked_at.is_some_and(|forked_at| {
+            timestamp(&entries[*entry_index]).is_some_and(|at| at < forked_at)
+        });
         match interpret::interpret(
             &entries[*entry_index],
             &state.id,
@@ -129,6 +133,13 @@ fn reconstruct_selected(
             &tool_invocations,
             &failed_tool_call_ids,
         )? {
+            interpret::SelectedEntry::Assistant { item, call } if inherited => {
+                state.apply_inherited_response(item, call.stop_reason.as_deref());
+            }
+            interpret::SelectedEntry::Message(mut item) if inherited => {
+                item.metadata.insert("inherited".into(), "true".into());
+                state.apply_message(item, None);
+            }
             interpret::SelectedEntry::Assistant { item, call } => {
                 let has_thinking = matches!(
                     &item.payload,
@@ -160,11 +171,26 @@ fn reconstruct_selected(
                 tokens_before,
                 &branch_positions,
                 &entries[*entry_index],
+                !inherited,
             ),
             interpret::SelectedEntry::Ignored => {}
         }
     }
     Ok(state.finish())
+}
+
+/// When a fork was made, for a session made with `/fork` or `/clone`. Its file starts with a
+/// copy of the parent's entries, which keep their own timestamps, after a header with the
+/// time the fork was made. Those entries are context for the fork's first call; their calls
+/// and compactions were the parent's.
+fn forked_at(header: &PiEntry) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    header.value.get("parentSession")?;
+    timestamp(header)
+}
+
+fn timestamp(entry: &PiEntry) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let text = entry.value.get("timestamp")?.as_str()?;
+    chrono::DateTime::parse_from_rfc3339(text).ok()
 }
 
 fn message(entry: &PiEntry) -> Option<&Value> {

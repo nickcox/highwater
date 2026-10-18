@@ -36,7 +36,7 @@ If the report lists no sessions, say so and suggest `--all` or `--dir`.
 - Each session has `tokens`, `cost`, `averageContextTokens`, `userTurns`, `contextByKind` (what made up the context, as a share of token-turns), `carriedContext`, `tools` (the most expensive tools), `commandFamilies` (shell commands grouped by program and subcommand, such as `rg` or `git diff`) and `findings`.
 - `commandFamilies` at the top level totals the shell commands over all the sessions, and `acrossSessions` holds commands and file reads repeated in several sessions.
 - **Look at the totals before the findings.** In long sessions most of the cost is spread over many items: hundreds of small tool results, the agent's own messages and thinking, and conversation carried from earlier turns. Individual findings are often worth cents in a session that cost tens of dollars. Compare each figure with the session's cost before deciding what matters.
-- Sessions can share history. A forked session starts with a copy of its parent's conversation, so the same findings can appear in both. Count them once.
+- Sessions can share history. A forked session starts with a copy of its parent's conversation. For Pi and Codex forks the report leaves the copied tool runs out of the fork's findings; for other harnesses the same findings can appear in both, so count them once.
 - `reconstruction.medianAbsoluteGapPercent` is how far Highwater's reconstruction is from the reported input. If it is above about 10%, treat that session's item figures with caution.
 
 ### Findings

@@ -40,13 +40,19 @@ pub(super) const CARRIED_AFTER_TURNS: usize = 3;
 /// tool definitions, attachments, summaries and measured context sent with every call.
 const CONVERSATION_KINDS: [&str; 4] = ["userMessage", "assistantMessage", "toolResult", "thinking"];
 
+/// Whether a fork copied the item from its parent session. Those items are context for the
+/// fork's calls, but the parent's report covers the turns and tool runs they came from.
+pub(super) fn inherited(item: &ContextItem) -> bool {
+    item.metadata.get("inherited").map(String::as_str) == Some("true")
+}
+
 /// The user turn each call belongs to, by position (call `n` at `n - 1`): the number of
-/// user messages added at or before it.
+/// user messages added at or before it, not counting those a fork copied from its parent.
 pub(super) fn user_turns(analysis: &Analysis) -> Vec<usize> {
     let mut starts: Vec<usize> = analysis
         .context_items
         .iter()
-        .filter(|item| item.kind == "userMessage")
+        .filter(|item| item.kind == "userMessage" && !inherited(item))
         .filter_map(|item| item.presence.first().map(|range| range.start_call))
         .collect();
     starts.sort_unstable();
@@ -228,8 +234,13 @@ pub(super) fn item_costs(analysis: &Analysis, normalized: &NormalizedSession) ->
         .zip(shares)
         .map(|(item, item_shares)| {
             let first_call = item.presence.first().map_or(0, |range| range.start_call);
-            let added_turn =
-                turn_at(first_call).filter(|_| CONVERSATION_KINDS.contains(&item.kind.as_str()));
+            // Items a fork copied from its parent were added before its first turn.
+            let added_turn = (if inherited(item) {
+                Some(0)
+            } else {
+                turn_at(first_call)
+            })
+            .filter(|_| CONVERSATION_KINDS.contains(&item.kind.as_str()));
             let mut cost = ItemCost {
                 first_call,
                 present_calls: item_shares.len(),
@@ -256,7 +267,8 @@ pub(super) fn item_costs(analysis: &Analysis, normalized: &NormalizedSession) ->
         .collect()
 }
 
-/// Every tool result, joined to the call that asked for it.
+/// Every tool result, joined to the call that asked for it, except those a fork copied from
+/// its parent.
 fn tool_runs(
     session: &SessionFile,
     normalized: &NormalizedSession,
@@ -288,7 +300,7 @@ fn tool_runs(
         .context_items
         .iter()
         .zip(costs)
-        .filter(|(item, _)| item.kind == "toolResult")
+        .filter(|(item, _)| item.kind == "toolResult" && !inherited(item))
         .filter_map(|(item, cost)| {
             let payload = payloads.get(item.id.as_str())?;
             let TokenizationPayload::ToolResult {

@@ -70,7 +70,7 @@ Session files record how many input tokens each call used, and some record its c
 - [User guide](docs/user-guide.md): the River, Composition, lifespans, view links and the cache and cost track.
 - [Data semantics](docs/data-semantics.md): tokenization, cost, the analysis API, and what each number means.
 - [Token reports](docs/report.md): `highwater report`, `show` and the `token-efficiency` skill.
-- Sources: [Pi](docs/sources/pi.md), [OpenCode](docs/sources/opencode.md), [Claude Code](docs/sources/claude-code.md) and [VS Code Copilot Chat](docs/sources/vscode-copilot.md).
+- Sources: [Pi](docs/sources/pi.md), [OpenCode](docs/sources/opencode.md), [Claude Code](docs/sources/claude-code.md), [Codex](docs/sources/codex.md) and [VS Code Copilot Chat](docs/sources/vscode-copilot.md).
 - [Architecture](docs/architecture.md) and [development](docs/development.md): how it is built, and how to change and check it.
 
 ## Third-party data

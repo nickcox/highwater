@@ -203,6 +203,26 @@ impl ReconstructionState {
         }
     }
 
+    /// A response a fork copied from its parent: an item in the context, not a call.
+    pub(super) fn apply_inherited_response(
+        &mut self,
+        mut item: NormalizedContextItem,
+        stop_reason: Option<&str>,
+    ) {
+        item.metadata.insert("inherited".into(), "true".into());
+        let index = insert_item(
+            &mut self.items,
+            &mut self.item_indices,
+            item.id.clone(),
+            item,
+        );
+        if assistant_response_is_contextual(stop_reason) {
+            self.active.push(index);
+        }
+    }
+
+    /// `record` is false for a compaction a fork copied from its parent, which only shapes
+    /// the context the fork starts with.
     pub(super) fn apply_compaction(
         &mut self,
         item: NormalizedContextItem,
@@ -210,6 +230,7 @@ impl ReconstructionState {
         tokens_before: Option<u64>,
         branch_positions: &HashMap<&str, usize>,
         entry: &PiEntry,
+        record: bool,
     ) {
         let previous_globals: HashSet<ItemIndex> = self
             .global
@@ -257,6 +278,12 @@ impl ReconstructionState {
         self.active.clear();
         self.active.push(summary_index);
         self.active.extend(retained);
+        if !record {
+            self.items[summary_index.0]
+                .metadata
+                .insert("inherited".into(), "true".into());
+            return;
+        }
         self.last_compaction = Some(summary_id);
         self.compactions.push(PendingCompaction {
             record_id,

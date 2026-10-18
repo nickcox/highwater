@@ -182,6 +182,7 @@ fn large_long_lived_results(
         .zip(costs)
         .filter(|(item, cost)| {
             item.kind == "toolResult"
+                && !super::build::inherited(item)
                 && cost.tokens.unwrap_or(0) >= thresholds.large_result_tokens
                 && cost.present_calls >= thresholds.long_lived_calls
         })

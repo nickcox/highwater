@@ -14,7 +14,7 @@ Each line is one entry with a `type`. Entries other than the header have an `id`
 
 | Entry `type` | What Highwater uses |
 | --- | --- |
-| `session` | Header: `id`, `cwd`, `timestamp`, `version`. |
+| `session` | Header: `id`, `cwd`, `timestamp`, `version`, and `parentSession`, the parent's file, for a session made with `/fork` or `/clone`. |
 | `message` | `message.role` is `user`, `assistant`, `toolResult` (or `tool`), `system` or `toolDefinition`. An assistant message has `content` blocks (text, thinking, tool calls with `id`, `name` and `arguments`), `provider`, `model`, `api`, `stopReason`, `timestamp`, `usage` and `cost`. A tool result has `toolCallId`, `toolName`, `content` and `isError`. |
 | `custom_message`, `branch_summary` | Context added by extensions, and the summary Pi writes when a session moves to another branch. |
 | `compaction` | `summary`, `tokensBefore` and `firstKeptEntryId`. |
@@ -26,6 +26,7 @@ Each line is one entry with a `type`. Entries other than the header have an `id`
 - **Calls.** Each assistant message on the branch is one model call. Its context is every context item before it on the branch.
 - **Context items.** User messages, assistant messages, tool results, custom messages, branch summaries, and the system prompt and tool definitions (see below). A tool result is labelled from its tool call on the selected branch, for example **Write result · filename**.
 - **Compaction.** After a `compaction` entry the context is its summary, followed by the branch's entries from `firstKeptEntryId` onwards, which continue as retained items. Items before that point end at the last call before the compaction, and are drawn as the summary's sources.
+- **Forks.** A session made with `/fork` or `/clone` starts with a copy of its parent's entries, which keep their own timestamps, after a header with the time the fork was made. The entries older than the header are the parent's. Their messages, responses, tool results and compactions shape the context of the fork's first call, and those items have the `inherited` metadata; their calls, with their usage, and their compactions are not the fork's.
 - **Failed attempts.** An aborted or errored response with default-zero counters keeps them as placeholder usage (`usage.placeholder`), not as measurements, and its cost is unknown.
 - **Unfinished last line.** While Pi is still writing a session, its last line is skipped if it has no trailing newline and is not yet valid JSON. Every completed line must be valid.
 

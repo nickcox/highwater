@@ -348,6 +348,76 @@ fn consecutive_compactions_keep_stable_indexes_and_defer_response_filtering() {
 }
 
 #[test]
+fn a_fork_starts_with_the_parent_history_but_not_its_calls() {
+    let at = |time: &str| format!("2026-09-15T{time}.000Z");
+    let record = |id: &str, parent: Option<&str>, time: &str, message: Value| {
+        let mut record = message_record(id, parent, message);
+        record["timestamp"] = serde_json::json!(at(time));
+        record
+    };
+    let session = parse_records(&[
+        serde_json::json!({"type":"session","version":3,"id":"fork","timestamp":at("12:00:00"),
+            "parentSession":"/sessions/parent.jsonl"}),
+        record(
+            "u1",
+            None,
+            "10:00:00",
+            serde_json::json!({"role":"user","content":"first"}),
+        ),
+        record(
+            "a1",
+            Some("u1"),
+            "10:00:01",
+            serde_json::json!({"role":"assistant","content":"first answer"}),
+        ),
+        record(
+            "u2",
+            Some("a1"),
+            "10:00:02",
+            serde_json::json!({"role":"user","content":"retained"}),
+        ),
+        serde_json::json!({"type":"compaction","id":"c1","parentId":"u2","timestamp":at("10:00:03"),
+            "summary":"parent summary","firstKeptEntryId":"u2"}),
+        record(
+            "a2",
+            Some("c1"),
+            "10:00:04",
+            serde_json::json!({"role":"assistant","content":"second answer"}),
+        ),
+        record(
+            "u3",
+            Some("a2"),
+            "12:00:01",
+            serde_json::json!({"role":"user","content":"in the fork"}),
+        ),
+        record(
+            "a3",
+            Some("u3"),
+            "12:00:02",
+            serde_json::json!({"role":"assistant","content":"fork answer"}),
+        ),
+    ]);
+    assert_eq!(
+        session.model_calls.len(),
+        1,
+        "the parent's calls are not the fork's"
+    );
+    assert!(
+        session.compactions.is_empty(),
+        "the parent's compaction is not the fork's"
+    );
+    assert_eq!(suffixes(&session, 1), vec!["c1", "u2", "a2", "u3"]);
+    let inherited: Vec<&str> = session
+        .context_items
+        .iter()
+        .filter(|item| item.metadata.get("inherited").map(String::as_str) == Some("true"))
+        .filter_map(|item| item.source_record_id.as_deref())
+        .collect();
+    assert_eq!(inherited.len(), 3);
+    assert!(!inherited.contains(&"u3"));
+}
+
+#[test]
 fn command_shaped_and_unknown_records_remain_ignored() {
     let session = parse_records(&[
         message_record(

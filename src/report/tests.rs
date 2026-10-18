@@ -440,3 +440,87 @@ fn a_read_whose_result_a_compaction_removed_is_counted_when_it_runs_again() {
     );
     assert_eq!(finding.items[0].item_id, "later-1");
 }
+
+#[test]
+fn a_fork_reports_only_its_own_turns_and_tool_runs() {
+    let root = tempfile::tempdir().expect("temporary folder");
+    let folder = root.path().join("--project--");
+    fs::create_dir_all(&folder).expect("session folder");
+    let at = |time: &str| format!("2026-09-15T{time}.000Z");
+    let message = |id: &str, parent: Option<&str>, time: &str, message: serde_json::Value| json!({"type":"message","id":id,"parentId":parent,"timestamp":at(time),"message":message});
+    let search = |id: &str| json!({"role":"assistant","content":[{"type":"toolCall","id":id,"name":"bash","arguments":{"command":"rg foo"}}]});
+    let result = |id: &str| json!({"role":"toolResult","toolCallId":id,"toolName":"bash","content":[{"type":"text","text":"src/main.rs: foo"}]});
+    let parent = folder.join("parent.jsonl");
+    let history = [
+        message(
+            "u1",
+            None,
+            "10:00:00",
+            json!({"role":"user","content":"find foo"}),
+        ),
+        message("a1", Some("u1"), "10:00:01", search("t1")),
+        message("r1", Some("a1"), "10:00:02", result("t1")),
+    ];
+    let lines = |header: serde_json::Value, records: &[serde_json::Value]| {
+        std::iter::once(&header)
+            .chain(records)
+            .map(|record| format!("{record}\n"))
+            .collect::<String>()
+    };
+    fs::write(
+        &parent,
+        lines(
+            json!({"type":"session","version":3,"id":"parent","timestamp":at("10:00:00"),"cwd":"/project"}),
+            &history,
+        ),
+    )
+    .expect("parent session");
+    let mut fork = history.to_vec();
+    fork.extend([
+        message(
+            "u2",
+            Some("r1"),
+            "12:00:01",
+            json!({"role":"user","content":"again"}),
+        ),
+        message("a2", Some("u2"), "12:00:02", search("t2")),
+        message("r2", Some("a2"), "12:00:03", result("t2")),
+        message(
+            "a3",
+            Some("r2"),
+            "12:00:04",
+            json!({"role":"assistant","content":"done"}),
+        ),
+    ]);
+    fs::write(
+        folder.join("fork.jsonl"),
+        lines(
+            json!({"type":"session","version":3,"id":"fork","timestamp":at("12:00:00"),"cwd":"/project",
+                "parentSession":parent.display().to_string()}),
+            &fork,
+        ),
+    )
+    .expect("fork session");
+    let sessions = discover_sessions(SourceArgs {
+        session_root: Some(root.path().to_path_buf()),
+        opencode_db: Vec::new(),
+        claude_root: Vec::new(),
+        vscode_user_dir: Vec::new(),
+        codex_home: Vec::new(),
+    })
+    .expect("discovery");
+    let session = sessions
+        .iter()
+        .find(|session| matches!(session.source_locator(), crate::source::SessionLocator::PiFile(path) if path.ends_with("fork.jsonl")))
+        .unwrap_or_else(|| panic!("the fork in {sessions:?}"));
+    let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).expect("fork analysis");
+    let report = session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
+    assert_eq!(report.calls, 2, "the parent's call is not the fork's");
+    assert_eq!(report.user_turns, 1);
+    assert_eq!(report.runs.len(), 1, "the parent's run is not the fork's");
+    assert!(
+        report.runs[0].item_id.contains("r2"),
+        "{}",
+        report.runs[0].item_id
+    );
+}

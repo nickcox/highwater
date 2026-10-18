@@ -6,6 +6,7 @@
 - `highwater report` summarises where recent sessions spent tokens, as text or JSON, without starting the viewer: each session's usage and cost, what made up its context, its most expensive tools and shell commands by program, how much of its input went on conversation from several user turns earlier, large tool results that stayed in context for many calls, commands run repeatedly within a session or across sessions, and commands run again after a compaction removed their results. By default it covers the 10 most recent sessions in the current directory's git repository and its worktrees.
 - `highwater show` prints one item from a session, such as a tool result a report points to.
 - `highwater skill print` and `highwater skill install` provide the `token-efficiency` agent skill, which runs the report and suggests ways to spend fewer tokens. `skill install` writes it to `~/.agents/skills` by default, to `~/.claude/skills` with `--agent claude-code`, or to the current repository's folder with `--project`.
+- A Pi session made with `/fork` or `/clone` no longer counts its parent's calls, usage and compactions as its own. The history it copied from the parent is the context of its first call.
 
 ## 0.3.0 – 2026-10-18
 
