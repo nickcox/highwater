@@ -31,8 +31,11 @@ fn discovery_finds_dated_and_archived_sessions_and_nothing_else() {
             file.path
                 .strip_prefix(home())
                 .expect("inside home")
-                .to_string_lossy()
-                .into_owned()
+                // Joined with `/` on every platform, so the expected names hold on Windows.
+                .components()
+                .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/")
         })
         .collect();
     assert_eq!(
