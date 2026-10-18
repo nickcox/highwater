@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 – 2026-10-18
+
+- Reads OpenAI Codex sessions from `$CODEX_HOME` (default `~/.codex`), or the folders given with `--codex-home`, including archived and zstd-compressed session files, with titles from Codex's session index. Guardian reviews and spawned subagents are listed as child sessions.
+- Codex calls take their usage from Codex's token counts, with cached input separated. The system prompt and the Codex app's tools are shown as recorded items; encrypted reasoning is sized by its reported tokens and kept across turns for GPT-5.6 and later models. Compactions show what Codex kept and an encrypted summary. Forked and spawned threads start with their parent's history as context, without repeating the parent's calls.
+- A Codex response that ran web searches reports the usage of several requests together, so its input is not compared with its context, and the search results it keeps are measured as Unrecorded request context.
+- Where a Codex thread was given little of its parent's history, or its context was reset without a compaction record, Highwater infers the boundary from the reported input and says so in the coverage note.
+- Codex calls are priced at the API-equivalent rate, as Claude Code's are.
+
 ## 0.2.0 – 2026-10-17
 
 - Child sessions (OpenCode child sessions and Claude Code subagents) are linked to their parents. The session picker leaves them out unless **Child sessions** is ticked, and then lists each one under the session that started it. A session's summary lists its child sessions, a child session links back to the tool call in its parent that started it, and that tool call's result links to the child session.
