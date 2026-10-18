@@ -1,5 +1,5 @@
 use super::{
-    analyse,
+    analyse, analyse_groups,
     build::{command_family, command_key, item_costs, session_report, user_turns, Paths},
     findings::keep_top,
     repository::repository_of,
@@ -196,9 +196,14 @@ fn worktrees_of_a_repository_share_its_git_folder() {
 fn a_directory_scope_keeps_its_sessions_and_their_children() {
     let sessions = fixture_sessions();
     let (_, all) = select(&sessions, &args(None)).expect("all sessions");
-    assert_eq!(all.len(), sessions.len(), "every session, each child once");
-    let (scope, selected) =
+    assert_eq!(
+        all.concat().len(),
+        sessions.len(),
+        "every session, each child once"
+    );
+    let (scope, groups) =
         select(&sessions, &args(Some("/synthetic/project"))).expect("one directory");
+    let selected = groups.concat();
     assert_eq!(scope.kind, "directory");
     assert!(!selected.is_empty());
     for (position, session) in selected.iter().enumerate() {
@@ -501,6 +506,26 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
         ),
     )
     .expect("fork session");
+    // A fork that was never used: only the parent's history.
+    let unused = folder.join("unused.jsonl");
+    fs::write(
+        &unused,
+        lines(
+            json!({"type":"session","version":3,"id":"unused","timestamp":at("13:00:00"),"cwd":"/project",
+                "parentSession":parent.display().to_string()}),
+            &history,
+        ),
+    )
+    .expect("unused fork");
+    for (name, seconds) in [("parent.jsonl", 1), ("fork.jsonl", 2), ("unused.jsonl", 3)] {
+        fs::File::options()
+            .write(true)
+            .open(folder.join(name))
+            .and_then(|file| {
+                file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds))
+            })
+            .expect("modification time");
+    }
     let sessions = discover_sessions(SourceArgs {
         session_root: Some(root.path().to_path_buf()),
         opencode_db: Vec::new(),
@@ -523,4 +548,20 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
         "{}",
         report.runs[0].item_id
     );
+
+    let mut scope = args(None);
+    scope.last = 1;
+    let (_, groups) = select(&sessions, &scope).expect("all sessions");
+    let latest: Vec<&str> = analyse_groups(&groups, Some(1), CONFIG)
+        .iter()
+        .map(|(session, _)| session.id.as_str())
+        .collect();
+    assert_eq!(
+        latest,
+        [session.id.as_str()],
+        "the unused fork is skipped, not counted"
+    );
+    let unused_id = &groups[0][0].id;
+    let named = analyse_groups(&[vec![groups[0][0]]], None, CONFIG);
+    assert_eq!(named[0].0.id, *unused_id, "a named session is kept");
 }

@@ -52,7 +52,7 @@ pub(crate) struct ReportArgs {
     #[arg(long)]
     dir: Option<PathBuf>,
     /// How many of the most recently updated sessions to report on. Child sessions of those
-    /// sessions are included and not counted.
+    /// sessions are included and not counted. Sessions that made no calls are skipped.
     #[arg(long, default_value_t = 10)]
     last: usize,
     /// Only sessions updated on or after this date (YYYY-MM-DD, UTC).
@@ -95,13 +95,13 @@ pub(crate) fn run(args: ReportArgs) -> Result<(), Error> {
         perf_diagnostics: false,
     };
     let sessions = discover_sessions(args.sources.clone())?;
-    let (scope, selected) = select(&sessions, &args)?;
+    let (scope, groups) = select(&sessions, &args)?;
     let thresholds = Thresholds::default();
-    let analysed = analyse_all(&selected, config);
+    let analysed = analyse_groups(&groups, scope.last, config);
     let mut reports = Vec::new();
     let mut skipped = Vec::new();
     let mut price_data = None;
-    for (session, result) in selected.iter().zip(analysed) {
+    for (session, result) in analysed {
         match result {
             Ok((normalized, analysis)) => {
                 price_data.get_or_insert_with(|| {
@@ -165,11 +165,51 @@ pub(crate) fn run(args: ReportArgs) -> Result<(), Error> {
     Ok(())
 }
 
-/// The sessions in scope, most recently updated first, each followed by its child sessions.
+/// Analyses the groups in order until `last` of them have a session that made calls (all
+/// of them when `last` is `None`). A session with no calls, such as a fork that was never
+/// used, is left out unless it was named on the command line.
+fn analyse_groups<'a>(
+    groups: &[Vec<&'a SessionFile>],
+    last: Option<usize>,
+    config: AnalysisConfig,
+) -> Vec<(&'a SessionFile, Analysed)> {
+    let mut kept = Vec::new();
+    let mut remaining = groups.iter();
+    let mut wanted = last.unwrap_or(groups.len());
+    while wanted > 0 {
+        let batch: Vec<&Vec<&SessionFile>> = remaining.by_ref().take(wanted).collect();
+        if batch.is_empty() {
+            break;
+        }
+        let sessions: Vec<&SessionFile> = batch
+            .iter()
+            .flat_map(|group| group.iter().copied())
+            .collect();
+        let mut results = sessions.iter().copied().zip(analyse_all(&sessions, config));
+        for group in batch {
+            let group_results: Vec<_> = results
+                .by_ref()
+                .take(group.len())
+                .filter(|(_, result)| {
+                    last.is_none()
+                        || !matches!(result, Ok((_, analysis)) if analysis.model_calls.is_empty())
+                })
+                .collect();
+            if !group_results.is_empty() {
+                wanted -= 1;
+                kept.extend(group_results);
+            }
+        }
+    }
+    kept
+}
+
+/// The sessions in scope, most recently updated first, each in a group with its child
+/// sessions after it. Sessions named on the command line are one group each.
 fn select<'a>(
     sessions: &'a [SessionFile],
     args: &ReportArgs,
-) -> Result<(Scope, Vec<&'a SessionFile>), Error> {
+) -> Result<(Scope, Vec<Vec<&'a SessionFile>>), Error> {
     if !args.sessions.is_empty() {
         let mut selected = Vec::new();
         for reference in &args.sessions {
@@ -177,7 +217,7 @@ fn select<'a>(
                 .iter()
                 .find(|session| &session.id == reference)
                 .ok_or_else(|| format!("no session has the reference {reference}"))?;
-            selected.push(session);
+            selected.push(vec![session]);
         }
         return Ok((Scope::sessions(), selected));
     }
@@ -211,20 +251,20 @@ fn select<'a>(
         })
         .collect();
     top_level.sort_by_key(|session| std::cmp::Reverse(updated(session)));
-    top_level.truncate(args.last);
     let mut selected = Vec::new();
     for parent in top_level {
-        selected.push(parent);
+        let mut group = vec![parent];
         let mut stack = vec![parent.id.as_str()];
         while let Some(reference) = stack.pop() {
             for child in sessions
                 .iter()
                 .filter(|session| session.parent_reference.as_deref() == Some(reference))
             {
-                selected.push(child);
+                group.push(child);
                 stack.push(child.id.as_str());
             }
         }
+        selected.push(group);
     }
     let scope = Scope {
         kind: if directory.is_some() {
