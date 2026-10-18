@@ -241,7 +241,13 @@
     <dl class="essential-metrics">
       <div>
         <dt>Input</dt>
-        <dd>{call.usage.placeholder ? 'Unavailable' : formatMetric(call.reportedPromptTokens)}</dd>
+        <dd>
+          {call.usage.placeholder ? 'Unavailable' : formatMetric(call.reportedPromptTokens)}
+          {#if call.stopReason === 'web-search-aggregate'}<small
+              >The total of several requests: this response ran web searches, so it is not compared
+              with the context.</small
+            >{/if}
+        </dd>
       </div>
       {#each recordedMetrics as metric}
         <div>

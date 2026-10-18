@@ -344,7 +344,8 @@ fn local_codex_sessions_load_and_analyse() {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").expect("HOME")).join(".codex"));
     let files = find_files(&fs::canonicalize(home).expect("Codex home"), None).expect("discovery");
-    let (mut loaded, mut analysed, mut gaps) = (0, 0, Vec::new());
+    let (mut loaded, mut analysed, mut gaps, mut aggregates) = (0, 0, Vec::new(), 0);
+    let mut inferred = std::collections::BTreeMap::new();
     for file in &files {
         let session = match super::load(&file.path) {
             Ok(session) => session,
@@ -354,6 +355,14 @@ fn local_codex_sessions_load_and_analyse() {
             }
         };
         loaded += 1;
+        for limitation in &session.limitations {
+            if matches!(
+                limitation,
+                Limitation::InferredUnsentHistory | Limitation::InferredContextReset
+            ) {
+                *inferred.entry(limitation.as_str()).or_insert(0) += 1;
+            }
+        }
         let config = AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
             perf_diagnostics: false,
@@ -362,6 +371,14 @@ fn local_codex_sessions_load_and_analyse() {
             Ok(analysis) => {
                 analysed += 1;
                 for call in &analysis.model_calls {
+                    if call
+                        .stop_reason
+                        .as_deref()
+                        .is_some_and(|reason| reason.ends_with("-aggregate"))
+                    {
+                        aggregates += 1;
+                        continue;
+                    }
                     let analysis = &call.token_analysis;
                     if let (Some(reported), Some(calculated)) = (
                         analysis.reported_prompt_tokens,
@@ -387,10 +404,11 @@ fn local_codex_sessions_load_and_analyse() {
     };
     let at = |values: &[f64], share: f64| values[((values.len() - 1) as f64 * share) as usize];
     println!(
-        "files {}, loaded {loaded}, analysed {analysed}, calls compared {}",
+        "files {}, loaded {loaded}, analysed {analysed}, calls compared {}, aggregate calls left out {aggregates}",
         files.len(),
         gaps.len()
     );
+    println!("sessions with inferred boundaries: {inferred:?}");
     println!(
         "calculated vs reported input: median gap {:.2}%, median absolute {:.2}%, 90th percentile absolute {:.2}%",
         at(&gaps, 0.5) * 100.0,

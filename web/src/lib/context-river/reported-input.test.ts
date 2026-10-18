@@ -72,7 +72,15 @@ describe('reported input comparison', () => {
     expect(refs[0].fill).toBe('');
   });
 
-  it.each(['missing', 'partial', 'aggregate', 'no-profile', 'no-visible', 'mismatched-stack'])(
+  it.each([
+    'missing',
+    'partial',
+    'aggregate',
+    'web-search-aggregate',
+    'no-profile',
+    'no-visible',
+    'mismatched-stack',
+  ])(
     'breaks the reference at an incomparable %s call instead of interpolating across it',
     (mode) => {
       const { indexed, columns } = fixture();
@@ -80,6 +88,7 @@ describe('reported input comparison', () => {
       if (mode === 'missing') call.reportedPromptTokens = null;
       if (mode === 'partial') call.reportedUsageCompleteness = 'partial';
       if (mode === 'aggregate') call.stopReason = 'compaction-aggregate';
+      if (mode === 'web-search-aggregate') call.stopReason = 'web-search-aggregate';
       if (mode === 'no-profile') call.tokenizationProfileId = null;
       if (mode === 'no-visible') call.tokenAnalysis.calculatedVisibleTokens = null;
       if (mode === 'mismatched-stack') columns[1].totalDisplayWeight += 1;

@@ -25,6 +25,10 @@ export const reconstructionLimitLabels: Record<string, string> = {
     'Migrated assistant records may omit original request boundaries or include synthetic attempts.',
   unrecordedHarnessCalls:
     "The harness's own model calls, such as title generation and compaction, are not recorded.",
+  inferredUnsentHistory:
+    "A forked or spawned thread's first call reported far less input than its parent's history, so the oldest inherited items are shown as not sent. Where that history ends was inferred from usage.",
+  inferredContextReset:
+    'At the start of a turn the reported input fell far below the calculated context with no compaction recorded, so the earlier conversation is shown as reset. This was inferred from usage.',
   unverifiedCompactionRetention:
     'A compaction does not record which recent messages it kept; only its summary is carried forward.',
   unrenderedAttachments:

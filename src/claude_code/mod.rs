@@ -36,6 +36,10 @@ pub(crate) enum Limitation {
     /// A compaction boundary named a later record as its predecessor; the branch continued
     /// from the last record before the boundary.
     RepairedCompactionLink,
+    /// Codex: a thread's inherited history was mostly not sent, judged from reported usage.
+    InferredUnsentHistory,
+    /// Codex: the context was reset without a compaction record, judged from reported usage.
+    InferredContextReset,
 }
 
 impl Limitation {
@@ -49,6 +53,8 @@ impl Limitation {
             Self::UnrenderedAttachments => "unrenderedAttachments",
             Self::UnsupportedContent => "unsupportedContent",
             Self::RepairedCompactionLink => "repairedCompactionLink",
+            Self::InferredUnsentHistory => "inferredUnsentHistory",
+            Self::InferredContextReset => "inferredContextReset",
         }
     }
 }

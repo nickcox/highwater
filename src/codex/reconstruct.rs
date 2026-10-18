@@ -26,6 +26,8 @@ struct OpenResponse {
     /// An input item (such as a tool output) was recorded after the response's own items.
     /// Another output item then starts a new call.
     after_input: bool,
+    /// The first call of its turn.
+    starts_turn: bool,
 }
 
 struct PendingCompaction {
@@ -62,6 +64,9 @@ struct State {
     /// including the parent's calls. Its turns started before the thread was created.
     forked: bool,
     inherited: bool,
+    /// Items from this index on were made in the current turn.
+    turn_start: usize,
+    turn_has_call: bool,
 }
 
 /// `text` is the session file's text. Records are separated only by `\n`, because text
@@ -139,6 +144,8 @@ impl State {
             Some("event_msg") => match kind {
                 "task_started" => {
                     self.end_turn();
+                    self.turn_start = self.items.len();
+                    self.turn_has_call = false;
                     // Turn and thread IDs are UUIDv7, which sort in the order they were made.
                     if let (true, Some(turn), Some(thread)) =
                         (self.forked, text(payload, "turn_id"), &self.thread_id)
@@ -271,6 +278,11 @@ impl State {
                 let (id, name, arguments) = tool_call(payload, kind);
                 let open = self.response(line, record);
                 let (call, item) = (open.call, open.item);
+                // OpenAI runs a web search inside the response, with further model steps, and
+                // reports the usage of every step together.
+                if kind == "web_search_call" {
+                    self.calls[call].stop_reason = Some("web-search-aggregate".into());
+                }
                 self.calls[call].tool_calls_after.push(NormalizedToolCall {
                     id: id.clone(),
                     name: name.clone(),
@@ -409,7 +421,9 @@ impl State {
                 item,
                 has_reasoning: false,
                 after_input: false,
+                starts_turn: !self.turn_has_call,
             });
+            self.turn_has_call = true;
         }
         self.open.as_mut().expect("a response is open")
     }
@@ -439,8 +453,119 @@ impl State {
         let Some(open) = &self.open else {
             return;
         };
-        self.calls[open.call].reported_usage = reported_usage(usage);
+        let (call, starts_turn) = (open.call, open.starts_turn);
+        self.calls[call].reported_usage = reported_usage(usage);
+        self.check_reported_input(call, starts_turn);
         self.close_response();
+    }
+
+    /// Codex does not record two things that change what a call is sent: how much of its
+    /// parent's history a forked or spawned thread is given, and a context reset without a
+    /// compaction. Both show when a call's reported input is under half its calculated
+    /// context, which is judged here from text length (characters ÷ 4), enough for a gap
+    /// that size.
+    fn check_reported_input(&mut self, call: usize, starts_turn: bool) {
+        let usage = &self.calls[call].reported_usage;
+        let (Some(input), Some(read), Some(write)) =
+            (usage.input, usage.cache_read, usage.cache_write)
+        else {
+            return;
+        };
+        let reported = input + read + write;
+        let context: Vec<usize> = self.calls[call]
+            .context_item_ids
+            .iter()
+            .filter_map(|id| self.item_indexes.get(id).copied())
+            .collect();
+        let size = |indexes: &[usize], items: &[NormalizedContextItem]| -> u64 {
+            indexes
+                .iter()
+                .map(|index| rough_tokens(&items[*index].payload))
+                .sum()
+        };
+        if reported.saturating_mul(2) >= size(&context, &self.items) {
+            return;
+        }
+        let inherited: Vec<usize> = context
+            .iter()
+            .copied()
+            .filter(|index| self.items[*index].metadata.contains_key("inherited"))
+            .collect();
+        if call == 0 && !inherited.is_empty() {
+            // The thread was given only its parent's latest turns, or none: the oldest
+            // inherited items go until the context fits the reported input.
+            let mut total = size(&context, &self.items);
+            let mut unsent = Vec::new();
+            for index in inherited {
+                if total <= reported {
+                    break;
+                }
+                total = total.saturating_sub(rough_tokens(&self.items[index].payload));
+                unsent.push(index);
+            }
+            self.leave_out(call, &unsent);
+            self.limitations.insert(Limitation::InferredUnsentHistory);
+        } else if starts_turn && call > 0 && self.calls[call].compaction_before.is_none() {
+            // Everything before this turn was replaced by something the file does not record.
+            let loadout: HashSet<usize> = self.active[..self.loadout].iter().copied().collect();
+            let earlier: Vec<usize> = context
+                .iter()
+                .copied()
+                .filter(|index| !loadout.contains(index) && *index < self.turn_start)
+                .collect();
+            if earlier.is_empty() {
+                return;
+            }
+            self.leave_out(call, &earlier);
+            let summary = self.summary_item(
+                format!("codex:reset:{}", self.calls[call].source_record_id),
+                "Context reset · inferred from usage",
+            );
+            let index = call + 1;
+            extend_presence(&mut self.items[summary], index);
+            let summary_id = self.items[summary].id.clone();
+            self.calls[call]
+                .context_item_ids
+                .insert(self.loadout, summary_id.clone());
+            self.active.insert(self.loadout, summary);
+            self.calls[call].compaction_before = Some(summary_id.clone());
+            self.compactions.push(PendingCompaction {
+                before_model_call: index,
+                source_item_ids: earlier
+                    .iter()
+                    .map(|index| self.items[*index].id.clone())
+                    .collect(),
+                retained_item_ids: Vec::new(),
+                summary_item_id: summary_id,
+            });
+            self.limitations.insert(Limitation::InferredContextReset);
+        }
+    }
+
+    /// Takes items out of a call's context, and out of the context from then on.
+    fn leave_out(&mut self, call: usize, indexes: &[usize]) {
+        let leaving: HashSet<usize> = indexes.iter().copied().collect();
+        let ids: HashSet<String> = indexes
+            .iter()
+            .map(|index| self.items[*index].id.clone())
+            .collect();
+        self.calls[call]
+            .context_item_ids
+            .retain(|id| !ids.contains(id));
+        for index in indexes {
+            let presence = &mut self.items[*index].presence;
+            if let Some(last) = presence.last_mut() {
+                if last.end_call == call + 1 {
+                    if last.start_call == call + 1 {
+                        presence.pop();
+                    } else {
+                        last.end_call -= 1;
+                    }
+                }
+            }
+        }
+        self.active.retain(|index| !leaving.contains(index));
+        self.turn_thinking.retain(|index| !leaving.contains(index));
     }
 
     /// The response's reasoning is sent back with the rest of its turn's calls. Its text is
@@ -597,7 +722,10 @@ impl State {
         for (position, entry) in replacement.iter().enumerate() {
             let kind = entry.get("type").and_then(Value::as_str).unwrap_or("");
             if kind == "compaction" {
-                let index = self.summary_item(format!("codex:summary:{line}:{position}"));
+                let index = self.summary_item(
+                    format!("codex:summary:{line}:{position}"),
+                    "Compaction summary · encrypted",
+                );
                 summary.get_or_insert(index);
                 kept.push(index);
                 continue;
@@ -637,7 +765,10 @@ impl State {
         } else if summary.is_none() {
             self.limitations
                 .insert(Limitation::UnverifiedCompactionRetention);
-            let index = self.summary_item(format!("codex:summary:{line}"));
+            let index = self.summary_item(
+                format!("codex:summary:{line}"),
+                "Compaction summary · encrypted",
+            );
             summary = Some(index);
             kept.push(index);
         }
@@ -675,11 +806,11 @@ impl State {
     }
 
     /// The summary is encrypted, so it has no countable text.
-    fn summary_item(&mut self, id: String) -> usize {
+    fn summary_item(&mut self, id: String, label: &str) -> usize {
         self.add(item(
             id,
             ContextItemKind::CompactionSummary,
-            "Compaction summary · encrypted".into(),
+            label.into(),
             TokenizationPayload::CompactionSummary(String::new()),
             0,
         ))
@@ -780,6 +911,43 @@ impl State {
             compactions: normalized_compactions,
             lineage,
         }
+    }
+}
+
+/// A rough size for an item: characters ÷ 4, an image as 1,000 tokens, and reasoning at its
+/// reported size. Only used to notice inputs far smaller than the calculated context.
+fn rough_tokens(payload: &TokenizationPayload) -> u64 {
+    let content = |content: &MessageContent| -> u64 {
+        content
+            .parts
+            .iter()
+            .map(|part| match part {
+                ContentPart::Text(text) | ContentPart::ToolReference(text) => text.len() as u64 / 4,
+                ContentPart::Image(_) => 1_000,
+                ContentPart::Unsupported => 0,
+            })
+            .sum()
+    };
+    match payload {
+        TokenizationPayload::UserMessage(message) | TokenizationPayload::CustomMessage(message) => {
+            content(message)
+        }
+        TokenizationPayload::ToolResult {
+            content: message, ..
+        } => content(message),
+        TokenizationPayload::AssistantMessage { blocks, .. } => blocks
+            .iter()
+            .map(|block| match block {
+                AssistantContentBlock::Text(text) => text.len() as u64 / 4,
+                AssistantContentBlock::ToolCall { arguments, .. } => arguments.len() as u64 / 4,
+                _ => 0,
+            })
+            .sum(),
+        TokenizationPayload::SystemPrompt { text, .. }
+        | TokenizationPayload::ToolDefinition { text, .. }
+        | TokenizationPayload::CompactionSummary(text) => text.len() as u64 / 4,
+        TokenizationPayload::ReportedThinking { tokens, .. } => *tokens,
+        _ => 0,
     }
 }
 
@@ -1090,6 +1258,139 @@ mod tests {
             .context_item_ids
             .iter()
             .any(|id| id.starts_with("codex:thinking:"))
+    }
+
+    fn record(kind: &str, payload: &str) -> String {
+        format!(r#"{{"type":"{kind}","payload":{payload}}}"#)
+    }
+    fn message(role: &str, text: &str) -> String {
+        record(
+            "response_item",
+            &format!(
+                r#"{{"type":"message","role":"{role}","content":[{{"type":"input_text","text":"{text}"}}]}}"#
+            ),
+        )
+    }
+    fn turn(id: &str) -> String {
+        record(
+            "event_msg",
+            &format!(r#"{{"type":"task_started","turn_id":"{id}"}}"#),
+        )
+    }
+    fn usage(input: u64) -> String {
+        record(
+            "event_msg",
+            &format!(
+                r#"{{"type":"token_count","info":{{"last_token_usage":{{"input_tokens":{input},"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}}}}}"#
+            ),
+        )
+    }
+    fn read(lines: &[String]) -> Reconstruction {
+        reconstruct(&(lines.join("\n") + "\n"), "thread").expect("reconstructs")
+    }
+
+    #[test]
+    fn a_response_with_web_searches_has_combined_usage() {
+        let loaded = read(&[
+            record("session_meta", r#"{"id":"thread"}"#),
+            turn("t1"),
+            message("user", "Search"),
+            record(
+                "response_item",
+                r#"{"type":"web_search_call","status":"completed","action":{"type":"search","query":"q"}}"#,
+            ),
+            message("assistant", "Found"),
+            usage(9000),
+            message("user", "Thanks"),
+            message("assistant", "Welcome"),
+            usage(1200),
+        ]);
+        let calls = &loaded.session.model_calls;
+        assert_eq!(
+            calls[0].stop_reason.as_deref(),
+            Some("web-search-aggregate")
+        );
+        assert_eq!(calls[1].stop_reason, None);
+    }
+
+    #[test]
+    fn a_thread_given_little_of_its_parent_history_leaves_the_oldest_out() {
+        let long = "x".repeat(40_000);
+        let loaded = read(&[
+            record(
+                "session_meta",
+                r#"{"id":"01b00000-0000-7000-8000-000000000000","forked_from_id":"parent"}"#,
+            ),
+            turn("01a00000-0000-7000-8000-000000000001"),
+            message("user", &long),
+            turn("01a00000-0000-7000-8000-000000000002"),
+            message("user", "Recent parent message"),
+            turn("01c00000-0000-7000-8000-000000000003"),
+            message("user", "The thread's own message"),
+            message("assistant", "Reply"),
+            usage(500),
+        ]);
+        let call = &loaded.session.model_calls[0];
+        assert_eq!(
+            call.context_item_ids.len(),
+            2,
+            "{:?}",
+            call.context_item_ids
+        );
+        assert!(loaded
+            .limitations
+            .contains(&Limitation::InferredUnsentHistory));
+        assert!(loaded
+            .session
+            .context_items
+            .iter()
+            .all(|item| !item.label.contains("xxxx")));
+    }
+
+    fn reset_session(second_input: u64) -> Reconstruction {
+        let long = "x".repeat(40_000);
+        read(&[
+            record("session_meta", r#"{"id":"thread"}"#),
+            turn("t1"),
+            message("user", &long),
+            message("assistant", "First"),
+            usage(12_000),
+            turn("t2"),
+            message("user", "Second"),
+            message("assistant", "Done"),
+            usage(second_input),
+        ])
+    }
+
+    #[test]
+    fn a_turn_whose_input_falls_far_below_the_context_starts_after_a_reset() {
+        let loaded = reset_session(400);
+        let session = &loaded.session;
+        assert_eq!(session.compactions.len(), 1);
+        let compaction = &session.compactions[0];
+        assert_eq!(compaction.before_model_call, 2);
+        // The first reply would first have been sent at call 2, so it is in no call.
+        assert_eq!(compaction.source_item_ids.len(), 1);
+        let summary = session
+            .context_items
+            .iter()
+            .find(|item| item.id == compaction.summary_item_id)
+            .expect("summary");
+        assert_eq!(summary.label, "Context reset · inferred from usage");
+        assert_eq!(
+            session.model_calls[1].compaction_before.as_deref(),
+            Some(compaction.id.as_str())
+        );
+        assert_eq!(session.model_calls[1].context_item_ids.len(), 2);
+        assert!(loaded
+            .limitations
+            .contains(&Limitation::InferredContextReset));
+
+        let normal = reset_session(12_200);
+        assert!(normal.session.compactions.is_empty());
+        assert!(!normal
+            .limitations
+            .contains(&Limitation::InferredContextReset));
     }
 
     #[test]

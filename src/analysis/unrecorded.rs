@@ -5,10 +5,12 @@
 //! At the first call of a segment that reports its input, that content is the reported
 //! input less the estimates of the call's recorded items, because the call has little else
 //! in context. A segment starts at the first call, at each compaction and at each change of
-//! model, since each can change the unrecorded content. A failed attempt (such as Claude
-//! Code's `<synthetic>` error message) never reached a model, so its model is ignored. The
-//! item stays in context to the end of its segment; for VS Code Copilot it also covers the
-//! segment's calls before the measuring call. Pi records its system context, so it is left out
+//! model, since each can change the unrecorded content. It also starts at a Codex response
+//! that ran web searches, because their results stay in the context without being recorded.
+//! A failed attempt (such as Claude Code's `<synthetic>` error message) never reached a
+//! model, so its model is ignored. The item stays in context to the end of its segment; for
+//! VS Code Copilot, and from a web-search response, it also covers the segment's calls before
+//! the measuring call. Pi records its system context, so it is left out
 //! (see docs/data-semantics.md, "Pi system context").
 
 use super::reconciliation::{reported_prompt_tokens, UsageCompleteness};
@@ -53,7 +55,7 @@ pub(super) fn add_unrecorded_context(
             // A Copilot session file reports input only on a request's last call, so the
             // segment's earlier calls, which carried the same system prompt and tools, start
             // with the content measured later.
-            let first = if session.source.kind == "vscode-copilot" {
+            let first = if session.source.kind == "vscode-copilot" || is_web_search(&calls[start]) {
                 calls[start].index
             } else {
                 anchor
@@ -83,9 +85,15 @@ fn reached_model(call: &NormalizedModelCall) -> Option<&Option<String>> {
     super::reached_a_model(call).then_some(&call.target.model)
 }
 
+/// A response that ran web searches, whose usage adds up several requests.
+fn is_web_search(call: &NormalizedModelCall) -> bool {
+    call.stop_reason.as_deref() == Some("web-search-aggregate")
+}
+
 /// `model` is the segment's model so far, from its first call that reached one.
 fn starts_segment(model: Option<&Option<String>>, call: &NormalizedModelCall) -> bool {
     call.compaction_before.is_some()
+        || is_web_search(call)
         || reached_model(call).is_some_and(|reached| model.is_some_and(|model| model != reached))
 }
 
@@ -97,7 +105,12 @@ fn measure(
     policy: TokenizationPolicy,
     call: &NormalizedModelCall,
 ) -> Option<Option<NormalizedContextItem>> {
-    if call.stop_reason.as_deref() == Some("compaction-aggregate") {
+    // An aggregate's usage adds up several requests, so it is not one request's input.
+    if call
+        .stop_reason
+        .as_deref()
+        .is_some_and(|reason| reason.ends_with("-aggregate"))
+    {
         return None;
     }
     if call.tool_loadout_known {
@@ -231,6 +244,25 @@ mod tests {
             }]
         );
         assert_eq!(session.model_calls[0].context_item_ids[0], items[0].id);
+    }
+
+    #[test]
+    fn a_web_search_response_starts_a_segment_measured_at_the_next_call() {
+        let mut session = claude_code("compaction");
+        session.model_calls[1].stop_reason = Some("web-search-aggregate".into());
+        add_unrecorded_context(
+            &mut session,
+            &mut ProfileRegistry::default(),
+            TokenizationPolicy::Auto,
+        );
+        let spans: Vec<_> = unrecorded(&session)
+            .iter()
+            .map(|item| (item.first_model_call, item.last_model_call))
+            .collect();
+        // The search response is not measured, but the item measured after it covers it.
+        assert_eq!(spans, [(1, 1), (2, 3), (4, 4)]);
+        let second = unrecorded(&session)[1];
+        assert_eq!(second.metadata["measuredAtCall"], "3");
     }
 
     #[test]

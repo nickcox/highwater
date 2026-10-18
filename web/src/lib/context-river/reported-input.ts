@@ -19,7 +19,8 @@ export function callInputComparison(
 ): InputComparison | null {
   if (
     indexed.analysis.displayWeightUnit === 'unavailable' ||
-    call.stopReason === 'compaction-aggregate' ||
+    // Usage that adds up several requests is not one request's input.
+    call.stopReason?.endsWith('-aggregate') ||
     call.reportedUsageCompleteness !== 'complete'
   )
     return null;
