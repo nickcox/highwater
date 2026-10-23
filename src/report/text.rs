@@ -83,7 +83,21 @@ fn write_session(out: &mut impl Write, session: &SessionReport) -> io::Result<()
         facts.push(format!("{} API-equivalent", usd(cost.low)));
     }
     if let Some(average) = session.average_context_tokens {
-        facts.push(format!("average context {} tokens", grouped(average)));
+        // Failed attempts are left out of the count: they recorded nothing to miss.
+        let prompt = session.tokens.coverage.prompt;
+        let coverage = if prompt.missing_calls > 0 {
+            format!(
+                " ({} of {} calls recorded)",
+                prompt.recorded_calls,
+                prompt.recorded_calls + prompt.missing_calls
+            )
+        } else {
+            String::new()
+        };
+        facts.push(format!(
+            "average context {} tokens{coverage}",
+            grouped(average)
+        ));
     }
     if let Some(peak) = session.peak_context_tokens {
         facts.push(format!("peak {}", grouped(peak)));

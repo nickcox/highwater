@@ -104,7 +104,8 @@ pub(crate) struct SessionReport {
     pub cost: SessionCost,
     pub reconstruction: Reconstruction,
     pub peak_context_tokens: Option<u64>,
-    /// Reported input per call, on average.
+    /// Average over calls with a complete recorded prompt total, including zero.
+    /// The calls it covers are `tokens.coverage.prompt.recorded_calls`.
     pub average_context_tokens: Option<u64>,
     pub compactions: usize,
     /// User messages: each starts a turn.
@@ -131,13 +132,27 @@ impl SessionReport {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TokenTotals {
+    /// Total prompt input, including calls that did not record its breakdown.
+    pub prompt: Option<u64>,
     /// Input that was neither read from nor written to the cache.
-    pub fresh_input: u64,
-    pub cache_read: u64,
-    pub cache_write: u64,
-    /// Output, including reasoning.
-    pub output: u64,
-    pub reasoning: u64,
+    pub fresh_input: Option<u64>,
+    pub cache_read: Option<u64>,
+    pub cache_write: Option<u64>,
+    /// Output, including reasoning exactly once when the relationship is known.
+    pub output: Option<u64>,
+    pub reasoning: Option<u64>,
+    pub coverage: TokenTotalsCoverage,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TokenTotalsCoverage {
+    pub prompt: crate::api::RecordedCallCoverage,
+    pub fresh_input: crate::api::RecordedCallCoverage,
+    pub cache_read: crate::api::RecordedCallCoverage,
+    pub cache_write: crate::api::RecordedCallCoverage,
+    pub output: crate::api::RecordedCallCoverage,
+    pub reasoning: crate::api::RecordedCallCoverage,
 }
 
 #[derive(Debug, Serialize)]

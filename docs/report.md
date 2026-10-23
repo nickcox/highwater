@@ -40,6 +40,10 @@ Costs are in US dollars at the rates the viewer uses: the provider's rate for pe
 
 The JSON is one object, written without spaces. `schemaVersion` changes when a field is removed or changes meaning.
 
+Token totals are subtotals over calls that recorded each value. `null` means no value was recorded, or the sum exceeded the safe JSON integer range; zero means a recorded zero. Each field has coverage counts under `tokens.coverage`: `recordedCalls`, `failedAttemptCalls` and `missingCalls`. These counts add up to the session's call count. Failed-attempt placeholder counters are not measurements.
+
+`tokens.prompt` includes calls that recorded only total input, without its cache breakdown. Do not reconstruct it by adding the bucket subtotals: those can cover different calls. `averageContextTokens` is the integer average over calls with complete recorded prompt totals, including zero, and `tokens.coverage.prompt.recordedCalls` gives its denominator. Missing calls do not reduce the average. An overflowed prompt subtotal leaves the average `null`, even when calls contributed. Text output gives the coverage beside the average when calls are missing, not counting failed attempts.
+
 | Field | What it holds |
 | --- | --- |
 | `highwaterVersion`, `priceDataCommit` | The Highwater version and the models.dev commit of its prices. |
@@ -55,8 +59,8 @@ Each session has:
 | Field | What it holds |
 | --- | --- |
 | `ref`, `harness`, `title`, `workingDirectory`, `parent`, `childSessions`, `startedAt`, `updatedAt` | What the session is. `ref` is the reference used in view links and by `show`. |
-| `models`, `calls`, `userTurns`, `compactions`, `averageContextTokens`, `peakContextTokens` | Its size. `userTurns` counts user messages; `averageContextTokens` is the reported input per call. |
-| `tokens` | Reported usage summed over its calls: `freshInput` (neither read from nor written to the cache), `cacheRead`, `cacheWrite`, `output` (including reasoning) and `reasoning`. |
+| `models`, `calls`, `userTurns`, `compactions`, `averageContextTokens`, `peakContextTokens` | Its size. `userTurns` counts user messages; the average covers calls with complete recorded prompt totals only. |
+| `tokens` | Recorded subtotals: `prompt` (total input), `freshInput` (neither read from nor written to the cache), `cacheRead`, `cacheWrite`, `output` (including reasoning exactly once when known) and `reasoning`. Each has matching counts under `coverage`. |
 | `cost` | `billed` and `apiEquivalent` ranges (`low`, `high`), as the viewer's session summary gives them, and `unknownCalls`. |
 | `reconstruction` | `medianAbsoluteGapPercent`, how far the calculated context is from the reported input, and `limitationCodes` from the session's reader. |
 | `contextByKind[]` | The kinds of item that made up at least 1% of the token-turns: `kind`, `items`, `tokenTurns`, `share` (0 to 1) and `estimatedCost`. |
@@ -76,7 +80,7 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 | `largeLongLivedResult` | A tool result of at least 5,000 tokens was in context for at least 10 calls. | `tokens`, `presentCalls`, `firstCall`, `lastCall`, `tool` |
 | `repeatedCommand`, in a session | One tool ran with the same command at least 3 times, or ran again with a result identical to an earlier run's. | `tool`, `command`, `runs`, `identicalResults`, `failed`, `resultTokens` |
 | `repeatedCommand`, across sessions | One tool ran with the same command in at least 3 of the sessions. | `tool`, `command`, `runs`, `sessions`, `failed`, `resultTokens` |
-| `carriedContext` | `carriedContext.share` is at least 25%. | `share`, `olderThanTurns`, `userTurns`, `calls`, `averageContextTokens`, `compactions` |
+| `carriedContext` | `carriedContext.share` is at least 25%. | `share`, `olderThanTurns`, `userTurns`, `calls`, `averageContextTokens`, `averageContextRecordedCalls`, `compactions` |
 | `rerunAfterCompaction` | At least 2 commands or file reads ran again after a compaction removed their earlier results, before the next compaction. Only the first re-run of each after each compaction counts. One finding covers all the session's compactions. | `compactions`, `reruns`, `resultTokens`, `commands` (up to five, with the number of compactions after which each ran again) |
 
 **Forks.** A Pi or Codex fork starts with a copy of its parent's history. Those items count towards the fork's context and its cost, but the fork's `userTurns`, tool runs and findings cover only what happened after the fork, so the parent's runs are not reported twice. In `carriedContext` they count as added before the fork's first turn.

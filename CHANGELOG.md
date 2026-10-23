@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Report JSON token subtotals retain unavailable values as `null`, include total-only prompt input and expose coverage for each field. Average context uses only calls with complete recorded prompt totals, preserves measured zero and gives its contributing-call count in the `carriedContext` finding. Text reports identify averages with missing calls.
+
 ## 0.4.0 – 2026-10-19
 
 - `highwater report` summarises where recent sessions spent tokens, as text or JSON, without starting the viewer: each session's usage and cost, what made up its context, its most expensive tools and shell commands by program, how much of its input went on conversation from several user turns earlier, large tool results that stayed in context for many calls, commands run repeatedly within a session or across sessions, and commands run again after a compaction removed their results. By default it covers the 10 most recent sessions in the current directory's git repository and its worktrees. The JSON format (`--json`) is new and may still change in 0.4 releases.

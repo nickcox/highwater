@@ -144,7 +144,29 @@ pub(super) struct SessionUsageSubtotals {
     pub(super) cost_coverage: RecordedCallCoverage,
 }
 
-pub(super) fn add_recorded(total: &mut Option<u64>, overflowed: &mut bool, value: Option<u64>) {
+/// A recorded token subtotal with per-field coverage. Overflow remains unavailable
+/// even if later calls record values that would fit on their own.
+#[derive(Debug, Default)]
+pub(crate) struct RecordedTokenSubtotal {
+    pub(crate) value: Option<u64>,
+    pub(crate) coverage: RecordedCallCoverage,
+    overflowed: bool,
+}
+
+impl RecordedTokenSubtotal {
+    pub(crate) fn record(&mut self, value: Option<u64>, failed_attempt: bool) {
+        if failed_attempt {
+            self.coverage.failed_attempt_calls += 1;
+        } else if value.is_some() {
+            self.coverage.recorded_calls += 1;
+            add_recorded(&mut self.value, &mut self.overflowed, value);
+        } else {
+            self.coverage.missing_calls += 1;
+        }
+    }
+}
+
+fn add_recorded(total: &mut Option<u64>, overflowed: &mut bool, value: Option<u64>) {
     let Some(value) = value.filter(|_| !*overflowed) else {
         return;
     };
@@ -156,28 +178,48 @@ pub(super) fn add_recorded(total: &mut Option<u64>, overflowed: &mut bool, value
     *total = next;
 }
 
-pub(super) fn session_usage_subtotals(calls: &[NormalizedModelCall]) -> SessionUsageSubtotals {
-    let mut subtotals = SessionUsageSubtotals::default();
-    let mut overflowed = [false; 3];
-    for call in calls {
-        let usage = &call.reported_usage;
-        let failed_attempt = usage.placeholder.is_some();
-        let (prompt, completeness) = reported_prompt_tokens(usage);
-        if completeness == UsageCompleteness::Complete {
-            subtotals.usage_coverage.recorded_calls += 1;
-            add_recorded(&mut subtotals.prompt, &mut overflowed[0], prompt);
-        } else if failed_attempt {
-            subtotals.usage_coverage.failed_attempt_calls += 1;
-        } else {
-            subtotals.usage_coverage.missing_calls += 1;
-        }
-        add_recorded(&mut subtotals.completion, &mut overflowed[1], usage.output);
-        add_recorded(
-            &mut subtotals.reasoning,
-            &mut overflowed[2],
-            usage.reasoning,
-        );
+/// Token subtotals over a session's calls, each with its own coverage. The report and the
+/// session summary both read these, so they count calls the same way.
+#[derive(Debug, Default)]
+pub(crate) struct ReportedTokenSubtotals {
+    pub(crate) prompt: RecordedTokenSubtotal,
+    pub(crate) fresh_input: RecordedTokenSubtotal,
+    pub(crate) cache_read: RecordedTokenSubtotal,
+    pub(crate) cache_write: RecordedTokenSubtotal,
+    pub(crate) output: RecordedTokenSubtotal,
+    pub(crate) reasoning: RecordedTokenSubtotal,
+}
 
+pub(crate) fn reported_token_subtotals(calls: &[NormalizedModelCall]) -> ReportedTokenSubtotals {
+    let mut subtotals = ReportedTokenSubtotals::default();
+    for usage in calls.iter().map(|call| &call.reported_usage) {
+        let failed_attempt = usage.placeholder.is_some();
+        // A prompt total is returned only when it is complete.
+        let (prompt, _) = reported_prompt_tokens(usage);
+        subtotals.prompt.record(prompt, failed_attempt);
+        subtotals.fresh_input.record(usage.input, failed_attempt);
+        subtotals
+            .cache_read
+            .record(usage.cache_read, failed_attempt);
+        subtotals
+            .cache_write
+            .record(usage.cache_write, failed_attempt);
+        subtotals.output.record(usage.output, failed_attempt);
+        subtotals.reasoning.record(usage.reasoning, failed_attempt);
+    }
+    subtotals
+}
+
+pub(super) fn session_usage_subtotals(calls: &[NormalizedModelCall]) -> SessionUsageSubtotals {
+    let tokens = reported_token_subtotals(calls);
+    let mut subtotals = SessionUsageSubtotals {
+        prompt: tokens.prompt.value,
+        completion: tokens.output.value,
+        reasoning: tokens.reasoning.value,
+        usage_coverage: tokens.prompt.coverage,
+        ..SessionUsageSubtotals::default()
+    };
+    for usage in calls.iter().map(|call| &call.reported_usage) {
         match usage
             .cost
             .total
@@ -188,18 +230,10 @@ pub(super) fn session_usage_subtotals(calls: &[NormalizedModelCall]) -> SessionU
                 let next = subtotals.cost.unwrap_or(0.0) + value;
                 subtotals.cost = Some(next).filter(|next| next.is_finite());
             }
-            None if failed_attempt => subtotals.cost_coverage.failed_attempt_calls += 1,
+            None if usage.placeholder.is_some() => {
+                subtotals.cost_coverage.failed_attempt_calls += 1
+            }
             None => subtotals.cost_coverage.missing_calls += 1,
-        }
-    }
-    // An overflowed subtotal is not a lower bound anyone can use; report it as unknown.
-    for (total, overflowed) in [
-        (&mut subtotals.prompt, overflowed[0]),
-        (&mut subtotals.completion, overflowed[1]),
-        (&mut subtotals.reasoning, overflowed[2]),
-    ] {
-        if overflowed {
-            *total = None;
         }
     }
     subtotals

@@ -22,6 +22,7 @@ pub(super) struct SessionFacts<'a> {
     pub carried: &'a CarriedContext,
     pub turns: usize,
     pub average_context_tokens: Option<u64>,
+    pub average_context_recorded_calls: usize,
 }
 
 pub(super) fn session_findings(
@@ -70,6 +71,7 @@ fn carried_context(facts: &SessionFacts<'_>, thresholds: &Thresholds) -> Option<
             ("userTurns", json!(facts.turns)),
             ("calls", json!(facts.analysis.model_calls.len())),
             ("averageContextTokens", json!(facts.average_context_tokens)),
+            ("averageContextRecordedCalls", json!(facts.average_context_recorded_calls)),
             ("compactions", json!(facts.analysis.compactions.len())),
         ]),
     })

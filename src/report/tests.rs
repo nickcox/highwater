@@ -565,3 +565,294 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
     let named = analyse_groups(&[vec![groups[0][0]]], None, CONFIG);
     assert_eq!(named[0].0.id, *unused_id, "a named session is kept");
 }
+
+/// Keep reconstruction unchanged while replacing the recorded counters under test.
+fn report_with_usage(usages: &[crate::domain::ReportedUsage]) -> super::types::SessionReport {
+    let sessions = fixture_sessions();
+    let (session, mut normalized) = sessions
+        .iter()
+        .find_map(|session| {
+            let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            (analysis.model_calls.len() >= usages.len().max(2)).then_some((session, normalized))
+        })
+        .expect("fixture with enough calls");
+    for (position, call) in normalized.model_calls.iter_mut().enumerate() {
+        call.reported_usage = usages.get(position).cloned().unwrap_or_default();
+    }
+    let analysis = crate::analysis::analyze(normalized.clone(), CONFIG).expect("modified usage");
+    let report = session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
+    let coverage = &report.tokens.coverage;
+    for counts in [
+        coverage.prompt,
+        coverage.fresh_input,
+        coverage.cache_read,
+        coverage.cache_write,
+        coverage.output,
+        coverage.reasoning,
+    ] {
+        assert_eq!(
+            counts.recorded_calls + counts.failed_attempt_calls + counts.missing_calls,
+            report.calls
+        );
+    }
+    report
+}
+
+#[test]
+fn report_average_uses_known_prompt_totals_not_all_calls_or_only_buckets() {
+    use crate::domain::ReportedUsage;
+    let report = report_with_usage(&[
+        ReportedUsage {
+            input_total: Some(120),
+            ..Default::default()
+        },
+        ReportedUsage {
+            input: Some(30),
+            cache_read: Some(40),
+            cache_write: Some(10),
+            ..Default::default()
+        },
+    ]);
+    assert_eq!(report.average_context_tokens, Some(100));
+    let json = serde_json::to_value(&report).expect("report JSON");
+    assert_eq!(json["tokens"]["prompt"], 200);
+    assert_eq!(json["tokens"]["freshInput"], 30);
+    assert_eq!(json["tokens"]["coverage"]["prompt"]["recordedCalls"], 2);
+    assert_eq!(json["tokens"]["coverage"]["freshInput"]["recordedCalls"], 1);
+}
+
+#[test]
+fn report_preserves_measured_zero_and_missing_buckets() {
+    use crate::domain::ReportedUsage;
+    let report = report_with_usage(&[ReportedUsage {
+        input_total: Some(0),
+        ..Default::default()
+    }]);
+    assert_eq!(report.average_context_tokens, Some(0));
+    let json = serde_json::to_value(&report).expect("report JSON");
+    assert_eq!(json["tokens"]["prompt"], 0);
+    assert!(json["tokens"]["freshInput"].is_null());
+    assert!(json["tokens"]["output"].is_null());
+    assert_eq!(json["tokens"]["coverage"]["prompt"]["recordedCalls"], 1);
+    assert_eq!(
+        json["tokens"]["coverage"]["output"]["missingCalls"],
+        report.calls
+    );
+}
+
+#[test]
+fn report_keeps_failed_attempts_separate_from_missing_usage() {
+    use crate::domain::{PlaceholderUsage, ReportedUsage};
+    let report = report_with_usage(&[
+        ReportedUsage {
+            placeholder: Some(PlaceholderUsage {
+                cache_write_1h: None,
+                reasoning: None,
+                cost: Default::default(),
+            }),
+            ..Default::default()
+        },
+        ReportedUsage {
+            input_total: Some(80),
+            ..Default::default()
+        },
+    ]);
+    assert_eq!(report.average_context_tokens, Some(80));
+    let json = serde_json::to_value(&report).expect("report JSON");
+    assert_eq!(
+        json["tokens"]["coverage"]["prompt"]["failedAttemptCalls"],
+        1
+    );
+    assert_eq!(
+        json["tokens"]["coverage"]["prompt"]["missingCalls"],
+        report.calls - 2
+    );
+}
+
+#[test]
+fn report_does_not_invent_output_from_reasoning_or_raw_output() {
+    use crate::domain::ReportedUsage;
+    let report = report_with_usage(&[ReportedUsage {
+        recorded_output: Some(20),
+        reasoning: Some(10),
+        ..Default::default()
+    }]);
+    let json = serde_json::to_value(&report).expect("report JSON");
+    assert!(json["tokens"]["output"].is_null());
+    assert_eq!(json["tokens"]["reasoning"], 10);
+    assert!(report.average_context_tokens.is_none());
+}
+
+#[test]
+fn report_overflow_stays_unavailable_after_later_values() {
+    use crate::domain::{ReportedUsage, MAX_SAFE_JSON_INTEGER};
+    let report = report_with_usage(&[
+        ReportedUsage {
+            input: Some(MAX_SAFE_JSON_INTEGER),
+            cache_read: Some(0),
+            cache_write: Some(0),
+            output: Some(MAX_SAFE_JSON_INTEGER),
+            recorded_output: Some(MAX_SAFE_JSON_INTEGER),
+            reasoning: Some(MAX_SAFE_JSON_INTEGER),
+            ..Default::default()
+        },
+        ReportedUsage {
+            input: Some(1),
+            cache_read: Some(0),
+            cache_write: Some(0),
+            output: Some(1),
+            recorded_output: Some(1),
+            reasoning: Some(1),
+            ..Default::default()
+        },
+        ReportedUsage {
+            input: Some(0),
+            cache_read: Some(0),
+            cache_write: Some(0),
+            output: Some(0),
+            recorded_output: Some(0),
+            reasoning: Some(0),
+            ..Default::default()
+        },
+    ]);
+    let json = serde_json::to_value(&report).expect("report JSON");
+    for field in ["prompt", "freshInput", "output", "reasoning"] {
+        assert!(json["tokens"][field].is_null(), "{field}");
+        assert_eq!(json["tokens"]["coverage"][field]["recordedCalls"], 3);
+    }
+    assert!(report.average_context_tokens.is_none());
+    assert_eq!(report.tokens.cache_read, Some(0));
+    assert_eq!(report.tokens.cache_write, Some(0));
+}
+
+#[test]
+fn report_token_totals_for_no_calls_are_unavailable_with_empty_coverage() {
+    let sessions = fixture_sessions();
+    let (mut normalized, _) = analyse(&sessions[0].source_locator(), CONFIG).expect("fixture");
+    normalized.model_calls.clear();
+    let json = serde_json::to_value(super::build::token_totals(&normalized)).expect("totals");
+    for field in [
+        "prompt",
+        "freshInput",
+        "cacheRead",
+        "cacheWrite",
+        "output",
+        "reasoning",
+    ] {
+        assert!(json[field].is_null(), "{field}");
+        assert_eq!(
+            json["coverage"][field],
+            json!({"recordedCalls": 0, "failedAttemptCalls": 0, "missingCalls": 0})
+        );
+    }
+}
+
+#[test]
+fn report_preserves_partial_buckets_without_claiming_a_complete_prompt() {
+    use crate::domain::ReportedUsage;
+    let report = report_with_usage(&[ReportedUsage {
+        input: Some(30),
+        cache_read: Some(0),
+        output: Some(20),
+        recorded_output: Some(20),
+        reasoning: Some(10),
+        ..Default::default()
+    }]);
+    assert!(report.tokens.prompt.is_none());
+    assert!(report.average_context_tokens.is_none());
+    assert_eq!(report.tokens.fresh_input, Some(30));
+    assert_eq!(report.tokens.cache_read, Some(0));
+    assert_eq!(report.tokens.cache_write, None);
+    assert_eq!(
+        report.tokens.output,
+        Some(20),
+        "reasoning is not added again"
+    );
+    assert_eq!(report.tokens.reasoning, Some(10));
+}
+
+fn report_of(session: super::types::SessionReport) -> super::types::Report {
+    super::types::Report {
+        schema_version: super::REPORT_SCHEMA_VERSION,
+        highwater_version: env!("CARGO_PKG_VERSION"),
+        price_data_commit: None,
+        scope: super::types::Scope::sessions(),
+        thresholds: Thresholds::default(),
+        command_families: Vec::new(),
+        sessions: vec![session],
+        across_sessions: Vec::new(),
+        skipped: Vec::new(),
+    }
+}
+
+fn report_text(report: &super::types::Report) -> String {
+    let mut text = Vec::new();
+    super::text::write(&mut text, report).expect("text report");
+    String::from_utf8(text).expect("UTF-8")
+}
+
+#[test]
+fn report_complete_usage_and_text_average_have_explicit_coverage() {
+    use crate::domain::ReportedUsage;
+    let report = report_with_usage(&[ReportedUsage {
+        input: Some(30),
+        cache_read: Some(40),
+        cache_write: Some(10),
+        output: Some(20),
+        recorded_output: Some(20),
+        reasoning: Some(10),
+        ..Default::default()
+    }]);
+    assert_eq!(report.average_context_tokens, Some(80));
+    assert_eq!(report.tokens.prompt, Some(80));
+    assert_eq!(report.tokens.coverage.output.recorded_calls, 1);
+    let calls = report.calls;
+    let report = report_of(report);
+    let json = serde_json::to_value(&report).expect("JSON");
+    assert_eq!(json["schemaVersion"], 1);
+    let text = report_text(&report);
+    assert!(
+        text.contains(&format!(
+            "average context 80 tokens (1 of {calls} calls recorded)"
+        )),
+        "{text}"
+    );
+}
+
+#[test]
+fn report_text_does_not_count_failed_attempts_as_unrecorded() {
+    use crate::{api::RecordedCallCoverage, domain::ReportedUsage};
+    // Three calls, so that one can be a failed attempt and one missing.
+    let usages = [
+        ReportedUsage {
+            input_total: Some(80),
+            ..Default::default()
+        },
+        ReportedUsage::default(),
+        ReportedUsage::default(),
+    ];
+    let mut report = report_with_usage(&usages);
+    let calls = report.calls;
+    report.tokens.coverage.prompt = RecordedCallCoverage {
+        recorded_calls: calls - 1,
+        failed_attempt_calls: 1,
+        missing_calls: 0,
+    };
+    let text = report_text(&report_of(report));
+    assert!(text.contains("average context 80 tokens ·"), "{text}");
+
+    let mut report = report_with_usage(&usages);
+    report.tokens.coverage.prompt = RecordedCallCoverage {
+        recorded_calls: 1,
+        failed_attempt_calls: 1,
+        missing_calls: calls - 2,
+    };
+    let text = report_text(&report_of(report));
+    assert!(
+        text.contains(&format!(
+            "average context 80 tokens (1 of {} calls recorded)",
+            calls - 1
+        )),
+        "{text}"
+    );
+}

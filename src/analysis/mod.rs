@@ -36,6 +36,7 @@ use tokenization::{
     payload_fingerprint, preview_payload, EstimateIndex, PayloadPreview, ProfileIndex,
     ProfileRegistry, TokenCoverage, TokenEstimate, TokenizationMethod, TokenizationProfile,
 };
+pub(crate) use usage::reported_token_subtotals;
 use usage::{session_usage_subtotals, usage_rollup, UsageSnapshot};
 use validate::{validate_normalized_session, ValidatedSession};
 

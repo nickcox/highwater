@@ -5,10 +5,12 @@ use super::{
     distinct, findings,
     types::{
         CarriedContext, FamilyTotal, FindingCost, KindTotal, Reconstruction, SessionCost,
-        SessionReport, Thresholds, TokenStats, TokenTotals, ToolRun, ToolTotal, UsdRange,
+        SessionReport, Thresholds, TokenStats, TokenTotals, TokenTotalsCoverage, ToolRun,
+        ToolTotal, UsdRange,
     },
 };
 use crate::{
+    analysis::reported_token_subtotals,
     api::{Analysis, ContextItem, CostSubtotal},
     domain::{AssistantContentBlock, NormalizedSession, TokenizationPayload},
     pricing::{self, CallToPrice, InputPrice},
@@ -71,10 +73,11 @@ pub(super) fn session_report(
     let costs = item_costs(analysis, normalized);
     let runs = tool_runs(session, normalized, analysis, &costs);
     let summary = &analysis.session;
-    let tokens = token_totals(analysis);
+    let tokens = token_totals(normalized);
     let calls = analysis.model_calls.len();
-    let input = tokens.fresh_input + tokens.cache_read + tokens.cache_write;
-    let average_context_tokens = (calls > 0 && input > 0).then(|| input / calls as u64);
+    let average_context_tokens = tokens
+        .prompt
+        .and_then(|total| total.checked_div(tokens.coverage.prompt.recorded_calls as u64));
     let turns = user_turns(analysis).last().copied().unwrap_or(0);
     let carried = carried_context(&costs);
     let findings = findings::session_findings(
@@ -85,6 +88,7 @@ pub(super) fn session_report(
             carried: &carried,
             turns,
             average_context_tokens,
+            average_context_recorded_calls: tokens.coverage.prompt.recorded_calls,
         },
         thresholds,
         limit,
@@ -142,16 +146,24 @@ fn usd_range(subtotal: &CostSubtotal) -> Option<UsdRange> {
     })
 }
 
-fn token_totals(analysis: &Analysis) -> TokenTotals {
-    let mut totals = TokenTotals::default();
-    for usage in analysis.model_calls.iter().map(|call| &call.usage) {
-        totals.fresh_input += usage.input.unwrap_or(0);
-        totals.cache_read += usage.cache_read.unwrap_or(0);
-        totals.cache_write += usage.cache_write.unwrap_or(0);
-        totals.output += usage.output.unwrap_or(0);
-        totals.reasoning += usage.reasoning.unwrap_or(0);
+pub(super) fn token_totals(session: &NormalizedSession) -> TokenTotals {
+    let subtotals = reported_token_subtotals(&session.model_calls);
+    TokenTotals {
+        prompt: subtotals.prompt.value,
+        fresh_input: subtotals.fresh_input.value,
+        cache_read: subtotals.cache_read.value,
+        cache_write: subtotals.cache_write.value,
+        output: subtotals.output.value,
+        reasoning: subtotals.reasoning.value,
+        coverage: TokenTotalsCoverage {
+            prompt: subtotals.prompt.coverage,
+            fresh_input: subtotals.fresh_input.coverage,
+            cache_read: subtotals.cache_read.coverage,
+            cache_write: subtotals.cache_write.coverage,
+            output: subtotals.output.coverage,
+            reasoning: subtotals.reasoning.coverage,
+        },
     }
-    totals
 }
 
 /// The item's tokens under the call's tokenization profile, or its first estimate.
