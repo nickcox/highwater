@@ -69,6 +69,11 @@ pub(crate) struct Thresholds {
     /// A result at least this large, in tokens, from a shell command or search that did not
     /// limit its output is reported.
     pub unlimited_output_tokens: u64,
+    /// A call is a cache miss when it read at least this many tokens fewer from the cache
+    /// than expected...
+    pub cache_miss_tokens: u64,
+    /// ...and at least this part of what was expected.
+    pub cache_miss_share: f64,
 }
 
 impl Default for Thresholds {
@@ -82,6 +87,8 @@ impl Default for Thresholds {
             reruns_after_compaction: 2,
             repeated_result_tokens: 1_000,
             unlimited_output_tokens: 5_000,
+            cache_miss_tokens: 10_000,
+            cache_miss_share: 0.5,
         }
     }
 }

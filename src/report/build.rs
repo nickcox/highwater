@@ -83,6 +83,7 @@ pub(super) fn session_report(
     let findings = findings::session_findings(
         &findings::SessionFacts {
             analysis,
+            prices: &call_prices(analysis, normalized),
             costs: &costs,
             runs: &runs,
             carried: &carried,
@@ -178,19 +179,19 @@ fn tokens_at(item: &ContextItem, profile: Option<&str>) -> Option<u64> {
         .and_then(|estimate| estimate.tokens)
 }
 
-/// Each item's cost over its lifetime. Within a call, an item sent for the first time in a
-/// stretch is priced as a cache write (or uncached input) and the others as cache reads;
-/// those amounts are then scaled so the call's items add up to the call's reported input
-/// cost, which takes in cache misses and rewrites the simple model leaves out.
-pub(super) fn item_costs(analysis: &Analysis, normalized: &NormalizedSession) -> Vec<ItemCost> {
+/// Each call's input prices, in call order.
+pub(super) fn call_prices(
+    analysis: &Analysis,
+    normalized: &NormalizedSession,
+) -> Vec<Option<InputPrice>> {
     let table = pricing::embedded();
     let harness = analysis.session.source.as_str();
-    let calls: Vec<(Option<&str>, Option<InputPrice>)> = analysis
+    analysis
         .model_calls
         .iter()
         .zip(&normalized.model_calls)
         .map(|(call, source)| {
-            let price = pricing::input_price(
+            pricing::input_price(
                 table,
                 CallToPrice {
                     harness,
@@ -199,9 +200,21 @@ pub(super) fn item_costs(analysis: &Analysis, normalized: &NormalizedSession) ->
                     at_ms: call.timing.recorded_at_ms.or(call.timing.started_at_ms),
                     usage: &source.reported_usage,
                 },
-            );
-            (call.tokenization_profile_id.as_deref(), price)
+            )
         })
+        .collect()
+}
+
+/// Each item's cost over its lifetime. Within a call, an item sent for the first time in a
+/// stretch is priced as a cache write (or uncached input) and the others as cache reads;
+/// those amounts are then scaled so the call's items add up to the call's reported input
+/// cost, which takes in cache misses and rewrites the simple model leaves out.
+pub(super) fn item_costs(analysis: &Analysis, normalized: &NormalizedSession) -> Vec<ItemCost> {
+    let calls: Vec<(Option<&str>, Option<InputPrice>)> = analysis
+        .model_calls
+        .iter()
+        .zip(call_prices(analysis, normalized))
+        .map(|(call, price)| (call.tokenization_profile_id.as_deref(), price))
         .collect();
     // Each item's tokens and simple-model cost at every call it is present for.
     let mut shares: Vec<Vec<(usize, u64, Option<f64>)>> = Vec::new();

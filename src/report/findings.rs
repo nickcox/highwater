@@ -7,8 +7,9 @@ use super::{
     types::{CarriedContext, Finding, FindingCost, ItemRef, SessionReport, Thresholds, ToolRun},
 };
 use crate::{
-    api::{Analysis, Range},
+    api::{Analysis, EconomicsCompleteness, ModelCall, Range},
     domain::grouped,
+    pricing::InputPrice,
 };
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -17,10 +18,19 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 const ITEM_LIMIT: usize = 3;
 /// Longest command written in a summary.
 const COMMAND_LIMIT: usize = 120;
+/// Calls listed for a `cacheMiss` finding.
+const CALL_LIMIT: usize = 5;
+/// How long a provider keeps a cached prompt after its last use, in milliseconds: one hour
+/// for sessions that wrote one-hour cache entries, otherwise five minutes. Five minutes is
+/// approximate for providers without a fixed lifetime, such as OpenAI.
+const CACHE_LIFETIME_MS: i64 = 5 * 60 * 1000;
+const ONE_HOUR_CACHE_LIFETIME_MS: i64 = 60 * 60 * 1000;
 
 /// What a session's findings are made from.
 pub(super) struct SessionFacts<'a> {
     pub analysis: &'a Analysis,
+    /// Each call's input prices, in call order.
+    pub prices: &'a [Option<InputPrice>],
     pub costs: &'a [ItemCost],
     pub runs: &'a [ToolRun],
     pub carried: &'a CarriedContext,
@@ -50,7 +60,172 @@ pub(super) fn session_findings(
         facts.runs,
         thresholds,
     ));
+    findings.extend(cache_misses(facts.analysis, facts.prices, thresholds));
     findings
+}
+
+/// Whether two adjacent calls can be compared for cache reads, by the rules the call
+/// economics use for a change in cache read ratio: the same provider, model and API, complete
+/// usage under the same pricing policy, no compaction between them and neither retried.
+fn comparable(previous: &ModelCall, call: &ModelCall) -> bool {
+    let complete = |call: &ModelCall| {
+        call.economics.usage_completeness == EconomicsCompleteness::Complete
+            && call.economics.prompt_tokens.is_some()
+    };
+    previous.provider == call.provider
+        && previous.model == call.model
+        && previous.api == call.api
+        && previous.economics.policy_id.is_some()
+        && previous.economics.policy_id == call.economics.policy_id
+        && complete(previous)
+        && complete(call)
+        && call.usage.cache_read.is_some()
+        && call.compaction_before.is_none()
+        && !previous.retried
+        && !call.retried
+}
+
+/// The time from the end of the previous call to the start of this one, in milliseconds.
+/// When the start is not recorded, the time between the two calls' ends, which also
+/// includes this call's own generation time.
+fn pause_ms(previous: &ModelCall, call: &ModelCall) -> Option<i64> {
+    let end = previous.timing.recorded_at_ms?;
+    call.timing
+        .started_at_ms
+        .or(call.timing.recorded_at_ms)
+        .map(|start| start - end)
+}
+
+/// Calls that read much less from the cache than the previous call's prompt, outside a
+/// compaction, with the likely cause of each.
+fn cache_misses(
+    analysis: &Analysis,
+    prices: &[Option<InputPrice>],
+    thresholds: &Thresholds,
+) -> Option<Finding> {
+    let lifetime_ms = if analysis
+        .model_calls
+        .iter()
+        .any(|call| call.usage.cache_write_1h.unwrap_or(0) > 0)
+    {
+        ONE_HOUR_CACHE_LIFETIME_MS
+    } else {
+        CACHE_LIFETIME_MS
+    };
+    struct Miss {
+        call: usize,
+        shortfall: u64,
+        cause: &'static str,
+        pause_ms: Option<i64>,
+    }
+    let mut misses = Vec::new();
+    let mut cost = FindingCost::default();
+    for (position, pair) in analysis.model_calls.windows(2).enumerate() {
+        let [previous, call] = pair else {
+            continue;
+        };
+        if !comparable(previous, call) {
+            continue;
+        }
+        let (Some(previous_prompt), Some(prompt), Some(read)) = (
+            previous.economics.prompt_tokens,
+            call.economics.prompt_tokens,
+            call.usage.cache_read,
+        ) else {
+            continue;
+        };
+        let expected = previous_prompt.min(prompt);
+        let shortfall = expected.saturating_sub(read);
+        if shortfall < thresholds.cache_miss_tokens
+            || (shortfall as f64) < expected as f64 * thresholds.cache_miss_share
+        {
+            continue;
+        }
+        let pause_ms = pause_ms(previous, call);
+        let cause = match pause_ms {
+            None => "unknownTiming",
+            Some(pause) if pause > lifetime_ms => "afterPause",
+            Some(_) => "unexplained",
+        };
+        // A provider without a cache write rate charges the input rate instead.
+        let usd = prices
+            .get(position + 1)
+            .copied()
+            .flatten()
+            .map(|price| shortfall as f64 * (price.cache_write - price.cache_read).max(0.0));
+        cost.add(FindingCost {
+            usd,
+            token_turns: shortfall,
+        });
+        misses.push(Miss {
+            call: call.index,
+            shortfall,
+            cause,
+            pause_ms,
+        });
+    }
+    if misses.is_empty() {
+        return None;
+    }
+    let count = |cause: &str| misses.iter().filter(|miss| miss.cause == cause).count();
+    let (unexplained, after_pause, unknown) = (
+        count("unexplained"),
+        count("afterPause"),
+        count("unknownTiming"),
+    );
+    let shortfall: u64 = misses.iter().map(|miss| miss.shortfall).sum();
+    let causes: Vec<String> = [
+        (after_pause, "after a pause longer than the cache lifetime"),
+        (unexplained, "unexplained"),
+        (unknown, "with no timing recorded"),
+    ]
+    .iter()
+    .filter(|(count, _)| *count > 0)
+    .map(|(count, cause)| format!("{count} {cause}"))
+    .collect();
+    let mut largest: Vec<&Miss> = misses.iter().collect();
+    largest.sort_by_key(|miss| std::cmp::Reverse(miss.shortfall));
+    let providers = super::distinct(
+        analysis
+            .model_calls
+            .iter()
+            .filter(|call| misses.iter().any(|miss| miss.call == call.index))
+            .filter_map(|call| call.provider.as_deref()),
+    );
+    Some(Finding {
+        pattern: "cacheMiss",
+        basis: "estimated",
+        estimated_cost: cost,
+        summary: format!(
+            "{} read much less from the cache than the call before ({} tokens): {}",
+            plural(misses.len(), "call"),
+            grouped(shortfall),
+            causes.join(", ")
+        ),
+        items: Vec::new(),
+        facts: BTreeMap::from([
+            ("providers", json!(providers)),
+            ("misses", json!(misses.len())),
+            ("afterPause", json!(after_pause)),
+            ("unexplained", json!(unexplained)),
+            ("unknownTiming", json!(unknown)),
+            ("shortfallTokens", json!(shortfall)),
+            ("cacheLifetimeSeconds", json!(lifetime_ms / 1000)),
+            (
+                "calls",
+                json!(largest
+                    .iter()
+                    .take(CALL_LIMIT)
+                    .map(|miss| json!({
+                        "call": miss.call,
+                        "shortfallTokens": miss.shortfall,
+                        "cause": miss.cause,
+                        "pauseSeconds": miss.pause_ms.map(|pause| pause / 1000),
+                    }))
+                    .collect::<Vec<_>>()),
+            ),
+        ]),
+    })
 }
 
 /// Much of the session's input went on conversation from several user turns earlier.
@@ -698,6 +873,20 @@ pub(super) fn reruns_for_test(
     thresholds: &Thresholds,
 ) -> Option<Finding> {
     reruns_after_compactions(analysis, runs, thresholds)
+}
+
+#[cfg(test)]
+pub(super) fn cache_misses_for_test(
+    analysis: &Analysis,
+    prices: &[Option<InputPrice>],
+    thresholds: &Thresholds,
+) -> Option<Finding> {
+    cache_misses(analysis, prices, thresholds)
+}
+
+#[cfg(test)]
+pub(super) fn comparable_for_test(previous: &ModelCall, call: &ModelCall) -> bool {
+    comparable(previous, call)
 }
 
 #[cfg(test)]

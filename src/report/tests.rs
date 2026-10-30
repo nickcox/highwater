@@ -586,6 +586,72 @@ fn a_large_result_is_counted_when_an_identical_one_is_still_in_context() {
 }
 
 #[test]
+fn cache_misses_are_classed_by_the_pause_before_them() {
+    // Three calls in a row that can be compared.
+    let (mut analysis, first) = fixture_sessions()
+        .into_iter()
+        .find_map(|session| {
+            let (_, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let first = analysis.model_calls.windows(3).position(|calls| {
+                super::findings::comparable_for_test(&calls[0], &calls[1])
+                    && super::findings::comparable_for_test(&calls[1], &calls[2])
+            })?;
+            Some((analysis, first))
+        })
+        .expect("a fixture with three comparable calls");
+    for call in &mut analysis.model_calls {
+        call.usage.cache_write_1h = None;
+    }
+    // Each reads the whole of the previous prompt from the cache, 1,000 seconds apart.
+    for (offset, call) in analysis.model_calls[first..first + 3]
+        .iter_mut()
+        .enumerate()
+    {
+        call.economics.prompt_tokens = Some(100_000);
+        call.usage.cache_read = Some(100_000);
+        call.timing.started_at_ms = None;
+        call.timing.recorded_at_ms = Some(1_000_000 * offset as i64);
+    }
+    let thresholds = Thresholds::default();
+    let prices = vec![None; analysis.model_calls.len()];
+    let misses = |analysis: &crate::api::Analysis| {
+        super::findings::cache_misses_for_test(analysis, &prices, &thresholds)
+            .map_or(0, |finding| finding.facts["misses"].as_u64().unwrap_or(0))
+    };
+    let others = misses(&analysis);
+
+    // The second call reads nothing after the pause; the third reads 60% of the prompt,
+    // which is not a miss.
+    analysis.model_calls[first + 1].usage.cache_read = Some(0);
+    analysis.model_calls[first + 2].usage.cache_read = Some(60_000);
+    let finding = super::findings::cache_misses_for_test(&analysis, &prices, &thresholds)
+        .expect("a cache miss");
+    assert_eq!(finding.pattern, "cacheMiss");
+    assert_eq!(finding.facts["misses"], others + 1);
+    let call = analysis.model_calls[first + 1].index;
+    let listed = |finding: &Finding| {
+        finding.facts["calls"]
+            .as_array()
+            .and_then(|calls| calls.iter().find(|listed| listed["call"] == call))
+            .cloned()
+            .expect("the miss is listed")
+    };
+    assert_eq!(listed(&finding)["cause"], "afterPause");
+    assert_eq!(listed(&finding)["shortfallTokens"], 100_000);
+
+    // Within the cache lifetime, the same miss has no explanation.
+    analysis.model_calls[first + 1].timing.recorded_at_ms = Some(60_000);
+    let finding = super::findings::cache_misses_for_test(&analysis, &prices, &thresholds)
+        .expect("a cache miss");
+    assert_eq!(listed(&finding)["cause"], "unexplained");
+    assert_eq!(listed(&finding)["pauseSeconds"], 60);
+
+    // A compaction before the call explains it.
+    analysis.model_calls[first + 1].compaction_before = Some("compaction".into());
+    assert_eq!(misses(&analysis), others);
+}
+
+#[test]
 fn a_fork_reports_only_its_own_turns_and_tool_runs() {
     let root = tempfile::tempdir().expect("temporary folder");
     let folder = root.path().join("--project--");
