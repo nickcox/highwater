@@ -8,6 +8,7 @@
 - A new `largeUnlimitedOutput` finding reports shell commands such as `cat`, `git diff` and `rg`, and search tools, that returned at least 5,000 tokens without limiting their output, in each session and across sessions.
 - A new `cacheMiss` finding reports calls that read much less from the cache than the call before, outside a compaction, and whether each followed a pause longer than the cache lifetime.
 - The `token-efficiency` skill explains the three new findings and what to suggest for each.
+- A new `fixedOverhead` finding reports, for each harness, how large its sessions' prompts are before any work, what the system prompt, tool definitions and the harness's own messages cost as a share of input and of all cost, and their most expensive parts, with how often each defined tool was used.
 
 ## 0.4.0 – 2026-10-19
 
