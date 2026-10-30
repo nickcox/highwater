@@ -2,7 +2,8 @@
 //! change is left to the reader. See docs/report.md.
 
 use super::{
-    build::ItemCost,
+    build::{has_output_limit, ItemCost, LIMITABLE_FAMILIES},
+    text::plural,
     types::{CarriedContext, Finding, FindingCost, ItemRef, SessionReport, Thresholds, ToolRun},
 };
 use crate::{
@@ -42,6 +43,7 @@ pub(super) fn session_findings(
         thresholds,
         limit,
     ));
+    findings.extend(large_unlimited_outputs(facts.runs, thresholds, limit));
     findings.extend(carried_context(facts, thresholds));
     findings.extend(reruns_after_compactions(
         facts.analysis,
@@ -401,6 +403,168 @@ fn repeated_results_in_context(
     findings
 }
 
+/// Search tools, by name in lower case, whose results can be long.
+const SEARCH_TOOLS: [&str; 5] = ["grep", "glob", "find", "grep_search", "file_search"];
+
+/// Arguments that limit a search tool's results.
+const SEARCH_LIMITS: [&str; 4] = ["head_limit", "limit", "maxResults", "max_results"];
+
+/// What a large result with no limit on its output is grouped by: the shell command's family,
+/// or the search tool's name. `None` when the run limited its output, or is not a shell
+/// command or search tool that could have. Shell commands that run several commands in turn
+/// are left out, since their output cannot be divided between them.
+fn unlimited_family(run: &ToolRun, thresholds: &Thresholds) -> Option<String> {
+    if run.tokens.unwrap_or(0) < thresholds.unlimited_output_tokens {
+        return None;
+    }
+    if let Some(family) = &run.family {
+        let list = ["&&", "||", ";", "\n"]
+            .iter()
+            .any(|separator| run.command.trim().contains(separator));
+        return (LIMITABLE_FAMILIES.contains(&family.as_str())
+            && !list
+            && !has_output_limit(family, &run.command))
+        .then(|| family.clone());
+    }
+    if !SEARCH_TOOLS.contains(&run.tool.to_lowercase().as_str()) {
+        return None;
+    }
+    let arguments: Value = serde_json::from_str(&run.command).unwrap_or(Value::Null);
+    let given = |key: &str| arguments.get(key).is_some_and(|value| !value.is_null());
+    // Claude Code's Grep lists matching files unless asked for the lines.
+    let lists_files = run.tool == "Grep"
+        && arguments.get("output_mode").and_then(Value::as_str) != Some("content");
+    (!lists_files && !SEARCH_LIMITS.iter().any(|key| given(key))).then(|| run.tool.clone())
+}
+
+/// Runs of one family that returned large results without limiting their output, whichever
+/// shell tool ran them.
+fn unlimited_groups<'a>(
+    runs: impl IntoIterator<Item = &'a ToolRun>,
+    thresholds: &Thresholds,
+) -> Vec<(String, Vec<&'a ToolRun>)> {
+    let mut groups: Vec<(String, Vec<&ToolRun>)> = Vec::new();
+    let mut positions: HashMap<String, usize> = HashMap::new();
+    for run in runs {
+        let Some(family) = unlimited_family(run, thresholds) else {
+            continue;
+        };
+        let position = *positions.entry(family.clone()).or_insert_with(|| {
+            groups.push((family, Vec::new()));
+            groups.len() - 1
+        });
+        groups[position].1.push(run);
+    }
+    groups
+}
+
+/// The facts both forms of `largeUnlimitedOutput` share, with up to three of the commands,
+/// largest result first.
+fn unlimited_facts(family: &str, runs: &[&ToolRun]) -> BTreeMap<&'static str, Value> {
+    let mut largest: Vec<&&ToolRun> = runs.iter().collect();
+    largest.sort_by_key(|run| std::cmp::Reverse(run.tokens.unwrap_or(0)));
+    let mut commands: Vec<String> = Vec::new();
+    for run in largest {
+        let command = shorten(&run.command);
+        if commands.len() < ITEM_LIMIT && !commands.contains(&command) {
+            commands.push(command);
+        }
+    }
+    BTreeMap::from([
+        (
+            "tools",
+            json!(super::distinct(runs.iter().map(|run| run.tool.as_str()))),
+        ),
+        ("family", json!(family)),
+        ("runs", json!(runs.len())),
+        (
+            "resultTokens",
+            json!(runs.iter().map(|run| run.tokens.unwrap_or(0)).sum::<u64>()),
+        ),
+        (
+            "largestResultTokens",
+            json!(runs.iter().map(|run| run.tokens.unwrap_or(0)).max()),
+        ),
+        ("commands", json!(commands)),
+    ])
+}
+
+/// Large results from shell commands and searches that did not limit their output.
+fn large_unlimited_outputs(
+    runs: &[ToolRun],
+    thresholds: &Thresholds,
+    limit: usize,
+) -> Vec<Finding> {
+    let mut findings: Vec<Finding> = unlimited_groups(runs, thresholds)
+        .into_iter()
+        .map(|(family, runs)| {
+            let result_tokens: u64 = runs.iter().map(|run| run.tokens.unwrap_or(0)).sum();
+            Finding {
+                pattern: "largeUnlimitedOutput",
+                basis: "estimated",
+                estimated_cost: total_cost(&runs),
+                summary: format!(
+                    "`{family}` returned {} without limiting its output ({} tokens)",
+                    plural(runs.len(), "large result"),
+                    grouped(result_tokens)
+                ),
+                items: runs
+                    .iter()
+                    .take(ITEM_LIMIT)
+                    .map(|run| run.item(false))
+                    .collect(),
+                facts: unlimited_facts(&family, &runs),
+            }
+        })
+        .collect();
+    rank(&mut findings, limit);
+    findings
+}
+
+/// Shell commands and searches that returned large results without limiting their output
+/// in several of the reported sessions.
+fn large_unlimited_outputs_across(
+    runs: &[ToolRun],
+    thresholds: &Thresholds,
+    limit: usize,
+) -> Vec<Finding> {
+    let mut findings: Vec<Finding> = unlimited_groups(runs, thresholds)
+        .into_iter()
+        .filter_map(|(family, runs)| {
+            let sessions: Vec<&str> =
+                super::distinct(runs.iter().map(|run| run.reference.as_str()));
+            if sessions.len() < thresholds.repeated_sessions {
+                return None;
+            }
+            let result_tokens: u64 = runs.iter().map(|run| run.tokens.unwrap_or(0)).sum();
+            let mut examples = Vec::new();
+            let mut listed = HashSet::new();
+            for run in &runs {
+                if examples.len() < ITEM_LIMIT && listed.insert(run.reference.as_str()) {
+                    examples.push(run.item(true));
+                }
+            }
+            let mut facts = unlimited_facts(&family, &runs);
+            facts.insert("sessions", json!(sessions.len()));
+            Some(Finding {
+                pattern: "largeUnlimitedOutput",
+                basis: "estimated",
+                estimated_cost: total_cost(&runs),
+                summary: format!(
+                    "`{family}` returned {} without limiting its output in {} sessions ({} tokens)",
+                    plural(runs.len(), "large result"),
+                    sessions.len(),
+                    grouped(result_tokens)
+                ),
+                items: examples,
+                facts,
+            })
+        })
+        .collect();
+    rank(&mut findings, limit);
+    findings
+}
+
 /// A command run in several of the reported sessions.
 pub(super) fn across_sessions(
     reports: &[SessionReport],
@@ -454,6 +618,7 @@ pub(super) fn across_sessions(
         })
         .collect();
     rank(&mut findings, limit);
+    findings.extend(large_unlimited_outputs_across(&runs, thresholds, limit));
     findings
 }
 
@@ -533,6 +698,14 @@ pub(super) fn reruns_for_test(
     thresholds: &Thresholds,
 ) -> Option<Finding> {
     reruns_after_compactions(analysis, runs, thresholds)
+}
+
+#[cfg(test)]
+pub(super) fn unlimited_outputs_for_test(
+    runs: &[ToolRun],
+    thresholds: &Thresholds,
+) -> Vec<Finding> {
+    large_unlimited_outputs(runs, thresholds, usize::MAX)
 }
 
 #[cfg(test)]

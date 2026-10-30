@@ -480,6 +480,87 @@ pub(super) fn command_family(command: &str) -> String {
     family
 }
 
+/// Shell command families whose output can be long and can be shortened from the command
+/// line. Test runners and builds are left out: their output is hard to shorten that way.
+pub(super) const LIMITABLE_FAMILIES: [&str; 9] = [
+    "cat", "git diff", "git show", "git log", "grep", "rg", "find", "ls", "tree",
+];
+
+/// Programs that shorten what is piped into them.
+const LIMITING_PROGRAMS: [&str; 10] = [
+    "head", "tail", "grep", "rg", "jq", "wc", "cut", "sed", "awk", "less",
+];
+
+/// Whether a shell command limits its output: by piping it into a program that shortens it,
+/// or with an option that does, such as `git diff --stat`, `git log -n 5` or `rg -l`.
+pub(super) fn has_output_limit(family: &str, command: &str) -> bool {
+    // A pipe, but not the second half of `||`.
+    let mut after_or = false;
+    for part in command.split('|').skip(1) {
+        if part.is_empty() {
+            after_or = true;
+            continue;
+        }
+        if !after_or && LIMITING_PROGRAMS.contains(&command_family(part).as_str()) {
+            return true;
+        }
+        after_or = false;
+    }
+    let first = command.split(['|', ';', '&']).next().unwrap_or_default();
+    let mut words = first.split_whitespace();
+    match family {
+        "git diff" | "git show" => words.any(|word| {
+            [
+                "--stat",
+                "--name-only",
+                "--name-status",
+                "--shortstat",
+                "--numstat",
+                "--no-patch",
+                "-s",
+                "--quiet",
+            ]
+            .iter()
+            .any(|option| word == *option || word.starts_with(&format!("{option}=")))
+        }),
+        "git log" => words.any(|word| {
+            word == "-n"
+                || word.starts_with("--max-count")
+                || word
+                    .strip_prefix("-n")
+                    .or_else(|| word.strip_prefix('-'))
+                    .is_some_and(|count| !count.is_empty() && count.parse::<u32>().is_ok())
+        }),
+        "grep" | "rg" => words.any(|word| {
+            if let Some(long) = word.strip_prefix("--") {
+                return [
+                    "files-with-matches",
+                    "files-without-match",
+                    "count",
+                    "count-matches",
+                    "max-count",
+                    "quiet",
+                ]
+                .iter()
+                .any(|option| long == *option || long.starts_with(&format!("{option}=")));
+            }
+            // Short options together, as in `-rl`, up to one that takes a value.
+            word.strip_prefix('-').is_some_and(|options| {
+                for option in options.chars() {
+                    if matches!(option, 'l' | 'L' | 'c' | 'm' | 'q') {
+                        return true;
+                    }
+                    if "efgtTABCdDEjM".contains(option) {
+                        return false;
+                    }
+                }
+                false
+            })
+        }),
+        _ => false,
+    }
+}
+
 /// The top folder of a session's working tree, for writing its paths relatively, so that
 /// the same file in two worktrees of a repository compares equal.
 pub(super) struct Paths {

@@ -212,7 +212,7 @@ fn usd(value: f64) -> String {
     format!("${value:.2}")
 }
 
-fn plural(count: usize, noun: &str) -> String {
+pub(super) fn plural(count: usize, noun: &str) -> String {
     let count_text = grouped(count as u64);
     if count == 1 {
         format!("{count_text} {noun}")

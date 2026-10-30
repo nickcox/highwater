@@ -66,6 +66,9 @@ pub(crate) struct Thresholds {
     /// A tool result at least this large, in tokens, is reported when it repeats an earlier
     /// result still in context.
     pub repeated_result_tokens: u64,
+    /// A result at least this large, in tokens, from a shell command or search that did not
+    /// limit its output is reported.
+    pub unlimited_output_tokens: u64,
 }
 
 impl Default for Thresholds {
@@ -78,6 +81,7 @@ impl Default for Thresholds {
             carried_share: 0.25,
             reruns_after_compaction: 2,
             repeated_result_tokens: 1_000,
+            unlimited_output_tokens: 5_000,
         }
     }
 }

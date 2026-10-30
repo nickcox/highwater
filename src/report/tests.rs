@@ -1,6 +1,9 @@
 use super::{
     analyse, analyse_groups,
-    build::{command_family, command_key, item_costs, session_report, user_turns, Paths},
+    build::{
+        command_family, command_key, has_output_limit, item_costs, session_report, user_turns,
+        Paths,
+    },
     findings::keep_top,
     repository::repository_of,
     select,
@@ -362,6 +365,96 @@ fn shell_commands_are_grouped_by_program_and_subcommand() {
     for (command, expected) in cases {
         assert_eq!(command_family(command), expected, "{command}");
     }
+}
+
+#[test]
+fn shell_commands_that_limit_their_output_are_recognised() {
+    let cases = [
+        ("cat src/main.rs", false),
+        ("cat src/main.rs | head -50", true),
+        ("cat a || tail b", false),
+        ("git diff", false),
+        ("git diff --stat", true),
+        ("git diff --stat=200", true),
+        ("git show HEAD --name-only", true),
+        ("git log", false),
+        ("git log --oneline", false),
+        ("git log -n 5", true),
+        ("git log -20 --oneline", true),
+        ("git log --max-count=3", true),
+        ("rg pattern src", false),
+        ("rg -l pattern", true),
+        ("rg -nl pattern", true),
+        ("rg -tmd pattern", false),
+        ("rg --count pattern", true),
+        ("grep -rn pattern . | wc -l", true),
+        ("find . -name '*.rs'", false),
+        ("find . -name '*.rs' | /usr/bin/head", true),
+    ];
+    for (command, limited) in cases {
+        let family = command_family(command);
+        assert_eq!(has_output_limit(&family, command), limited, "{command}");
+    }
+}
+
+#[test]
+fn large_results_are_reported_when_the_command_or_search_did_not_limit_them() {
+    let shell = |command: &str, tokens: u64| ToolRun {
+        tool: "bash".into(),
+        family: Some(command_family(command)),
+        tokens: Some(tokens),
+        ..run("s", command, command, 1)
+    };
+    let search = |tool: &str, arguments: &str| ToolRun {
+        tool: tool.into(),
+        tokens: Some(8_000),
+        ..run("s", arguments, arguments, 1)
+    };
+    let runs = vec![
+        shell("git diff", 6_000),
+        shell("git diff src", 7_000),
+        shell("git diff | head -100", 6_000),
+        shell("git diff HEAD~1", 4_999),
+        shell("cargo test", 9_000),
+        shell("ls src; cat src/main.rs", 9_000),
+        search("Grep", r#"{"pattern":"x","output_mode":"content"}"#),
+        search("Grep", r#"{"pattern":"y"}"#),
+        search(
+            "Grep",
+            r#"{"pattern":"z","output_mode":"content","head_limit":50}"#,
+        ),
+        search("glob", r#"{"pattern":"**/*"}"#),
+        search("Read", r#"{"file_path":"big.rs"}"#),
+    ];
+    let findings = super::findings::unlimited_outputs_for_test(&runs, &Thresholds::default());
+    let mut found: Vec<(String, u64)> = findings
+        .iter()
+        .map(|finding| {
+            (
+                finding.facts["family"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                finding.facts["runs"].as_u64().unwrap_or_default(),
+            )
+        })
+        .collect();
+    found.sort();
+    assert_eq!(
+        found,
+        [
+            ("Grep".to_owned(), 1),
+            ("git diff".to_owned(), 2),
+            ("glob".to_owned(), 1)
+        ]
+    );
+    let diff = findings
+        .iter()
+        .find(|finding| finding.facts["family"] == "git diff")
+        .expect("the git diff finding");
+    assert_eq!(diff.facts["resultTokens"], 13_000);
+    assert_eq!(diff.facts["largestResultTokens"], 7_000);
+    assert_eq!(diff.facts["commands"], json!(["git diff src", "git diff"]));
 }
 
 #[test]
