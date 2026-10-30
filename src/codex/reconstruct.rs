@@ -670,6 +670,7 @@ impl State {
                     Some(other) => MessageContent::text(other.to_string()),
                     None => MessageContent::empty(),
                 };
+                let is_error = tool_output_failed(&content);
                 let mut result = item(
                     id,
                     ContextItemKind::ToolResult,
@@ -678,7 +679,7 @@ impl State {
                         tool_call_id: call_id.clone(),
                         tool_name: name.clone(),
                         content,
-                        is_error: false,
+                        is_error,
                     },
                     bytes,
                 );
@@ -1139,6 +1140,32 @@ fn harness_label(role: &str, first_line: Option<&str>) -> Option<String> {
         "developer" => Some(format!("Developer · {line}")),
         _ => None,
     }
+}
+
+/// Whether a tool's output says it failed. Codex writes the outcome in a header before the
+/// `Output:` line: `Process exited with code N` (`exec_command` and `write_stdin`),
+/// `Exit code: N` (`apply_patch`) or `Script failed` (`exec`). A tool stopped by the user
+/// returns `aborted by user after …`. Only the header is read, so the command's own output
+/// cannot match.
+pub(super) fn tool_output_failed(content: &MessageContent) -> bool {
+    let Some(text) = content.parts.iter().find_map(|part| match part {
+        ContentPart::Text(text) => Some(text.as_str()),
+        _ => None,
+    }) else {
+        return false;
+    };
+    let nonzero = |code: &str| code.trim().parse::<i64>().is_ok_and(|code| code != 0);
+    text.lines()
+        .take_while(|line| *line != "Output:")
+        .take(8)
+        .any(|line| {
+            line == "Script failed"
+                || line.starts_with("aborted by user")
+                || line
+                    .strip_prefix("Process exited with code ")
+                    .or_else(|| line.strip_prefix("Exit code: "))
+                    .is_some_and(nonzero)
+        })
 }
 
 /// `exec_command` shows its command, `apply_patch` its first file and `view_image` its path.

@@ -104,4 +104,6 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 
 ## Not yet included
 
-These patterns are planned, with the data Highwater already has: repeated status commands (polling), failed tool calls and their retries, and what child sessions cost compared with what they return.
+This pattern is planned, with the data Highwater already has: what child sessions cost compared with what they return.
+
+Polling and failed tool calls are not findings of their own. On the sessions they were measured on, both cost little: polling was mostly done inside one command that waits, and most failures were commands that exit with a code other than 0 as part of normal work, such as tests and searches with no matches. Failed runs are counted in `tools[].failed`, `commandFamilies[].failed` and the `failed` fact of `repeatedCommand` and `repeatedResultInContext`.

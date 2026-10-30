@@ -337,6 +337,53 @@ fn an_empty_compaction_and_the_history_after_it_are_one_compaction() {
         .contains(&Limitation::UnverifiedCompactionRetention));
 }
 
+#[test]
+fn a_tool_result_fails_when_its_header_says_so() {
+    let cases = [
+        (
+            "Chunk ID: a1\nWall time: 0.1 seconds\nProcess exited with code 0\nOutput:\nok",
+            false,
+        ),
+        (
+            "Chunk ID: a1\nWall time: 0.1 seconds\nProcess exited with code 2\nOutput:\nerror",
+            true,
+        ),
+        (
+            "Exit code: 0\nWall time: 0.1 seconds\nOutput:\nSuccess.",
+            false,
+        ),
+        (
+            "Exit code: 1\nWall time: 0.1 seconds\nOutput:\napply_patch verification failed",
+            true,
+        ),
+        ("Script completed\nWall time 2.3 seconds\nOutput:\n", false),
+        (
+            "Script failed\nWall time 4.7 seconds\nOutput:\nScript error:",
+            true,
+        ),
+        (
+            "Script running with cell ID 9\nWall time 10.0 seconds\nOutput:\n",
+            false,
+        ),
+        ("aborted by user after 3.0s", true),
+        // The command's own output is not read.
+        (
+            "Process exited with code 0\nOutput:\nProcess exited with code 1\nScript failed",
+            false,
+        ),
+        ("", false),
+    ];
+    for (text, failed) in cases {
+        assert_eq!(
+            super::reconstruct::tool_output_failed(&crate::domain::MessageContent::text(
+                text.to_owned()
+            )),
+            failed,
+            "{text:?}"
+        );
+    }
+}
+
 /// Loads and analyses every local Codex session and prints counts and accuracy only, never
 /// content. Run with `cargo test --release local_codex_sessions -- --ignored --nocapture`.
 #[test]

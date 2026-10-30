@@ -9,6 +9,7 @@
 - A new `cacheMiss` finding reports calls that read much less from the cache than the call before, outside a compaction, and whether each followed a pause longer than the cache lifetime.
 - The `token-efficiency` skill explains the three new findings and what to suggest for each.
 - A new `fixedOverhead` finding reports, for each harness, how large its sessions' prompts are before any work, what the system prompt, tool definitions and the harness's own messages cost as a share of input and of all cost, and their most expensive parts, with how often each defined tool was used.
+- Codex tool results are marked as failed when Codex's output header says the command exited with a code other than 0, the script failed or the user stopped it. Before, no Codex result was counted as failed.
 
 ## 0.4.0 – 2026-10-19
 
