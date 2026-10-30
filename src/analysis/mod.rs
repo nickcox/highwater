@@ -15,7 +15,7 @@ mod test_support;
 mod tests;
 mod timing;
 mod tokenization;
-pub(crate) use tokenization::claude_keeps_prior_thinking;
+pub(crate) use tokenization::{claude_keeps_prior_thinking, tool_result_hash};
 mod unrecorded;
 mod usage;
 #[cfg(test)]

@@ -100,6 +100,21 @@ pub(crate) fn payload_fingerprint(payload: &TokenizationPayload) -> PayloadFinge
     PayloadFingerprint(hasher.finalize())
 }
 
+/// What a tool result returned, without its tool call ID or tool name, so two calls that
+/// returned the same content have the same hash. `None` for other payloads.
+pub(crate) fn tool_result_hash(payload: &TokenizationPayload) -> Option<blake3::Hash> {
+    let TokenizationPayload::ToolResult {
+        content, is_error, ..
+    } = payload
+    else {
+        return None;
+    };
+    let mut hasher = Hasher::new();
+    hash_bool(&mut hasher, b"is-error", *is_error);
+    hash_content(&mut hasher, content);
+    Some(hasher.finalize())
+}
+
 /// Hex is retained only as a test helper; the analysis hot path keeps
 /// `PayloadFingerprint` as a fixed-size in-memory key.
 #[cfg(test)]
@@ -1061,6 +1076,31 @@ mod tests {
         assert_eq!(
             (projected.text.as_str(), projected.image_tokens),
             ("[image]", 0)
+        );
+    }
+
+    #[test]
+    fn identical_tool_results_of_different_calls_have_the_same_result_hash() {
+        let result = |id: &str, name: &str, text: &str, is_error: bool| {
+            tool_result_hash(&TokenizationPayload::ToolResult {
+                tool_call_id: id.into(),
+                tool_name: name.into(),
+                content: MessageContent {
+                    parts: vec![ContentPart::Text(text.into())],
+                },
+                is_error,
+            })
+        };
+        let first = result("call-1", "Read", "fn main() {}", false);
+        assert!(first.is_some());
+        assert_eq!(first, result("call-2", "bash", "fn main() {}", false));
+        assert_ne!(first, result("call-1", "Read", "fn main() { }", false));
+        assert_ne!(first, result("call-1", "Read", "fn main() {}", true));
+        assert_eq!(
+            tool_result_hash(&TokenizationPayload::UserMessage(MessageContent {
+                parts: vec![ContentPart::Text("fn main() {}".into())],
+            })),
+            None
         );
     }
 

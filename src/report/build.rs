@@ -336,7 +336,7 @@ fn tool_runs(
                 command,
                 first_call: cost.first_call,
                 failed: *is_error,
-                result_hash: Some(blake3::hash(crate::analysis::item_text(payload).as_bytes())),
+                result_hash: crate::analysis::tool_result_hash(payload),
                 cost: cost.cost,
                 reference: session.id.clone(),
                 item_id: item.id.clone(),
