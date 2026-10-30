@@ -4,6 +4,7 @@
 
 - Report JSON token subtotals retain unavailable values as `null`, include total-only prompt input and expose coverage for each field. Average context uses only calls with complete recorded prompt totals, preserves measured zero and gives its contributing-call count in the `carriedContext` finding. Text reports identify averages with missing calls.
 - `repeatedCommand` findings count runs whose result is identical to an earlier run's. Before, results from different calls never matched, so the count was always 0.
+- A new `repeatedResultInContext` finding reports tool results of at least 1,000 tokens that are identical to an earlier result still in context, such as a file read again before it was edited.
 
 ## 0.4.0 – 2026-10-19
 

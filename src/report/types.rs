@@ -63,6 +63,9 @@ pub(crate) struct Thresholds {
     pub carried_share: f64,
     /// Re-runs after a compaction are a finding when there are at least this many.
     pub reruns_after_compaction: usize,
+    /// A tool result at least this large, in tokens, is reported when it repeats an earlier
+    /// result still in context.
+    pub repeated_result_tokens: u64,
 }
 
 impl Default for Thresholds {
@@ -74,6 +77,7 @@ impl Default for Thresholds {
             repeated_sessions: 3,
             carried_share: 0.25,
             reruns_after_compaction: 2,
+            repeated_result_tokens: 1_000,
         }
     }
 }

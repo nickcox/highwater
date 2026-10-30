@@ -5,7 +5,10 @@ use super::{
     build::ItemCost,
     types::{CarriedContext, Finding, FindingCost, ItemRef, SessionReport, Thresholds, ToolRun},
 };
-use crate::{api::Analysis, domain::grouped};
+use crate::{
+    api::{Analysis, Range},
+    domain::grouped,
+};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -33,6 +36,12 @@ pub(super) fn session_findings(
     let mut findings =
         large_long_lived_results(facts.analysis, facts.costs, facts.runs, thresholds, limit);
     findings.extend(repeated_commands(facts.runs, thresholds, limit));
+    findings.extend(repeated_results_in_context(
+        facts.analysis,
+        facts.runs,
+        thresholds,
+        limit,
+    ));
     findings.extend(carried_context(facts, thresholds));
     findings.extend(reruns_after_compactions(
         facts.analysis,
@@ -309,6 +318,89 @@ fn repeated_commands(runs: &[ToolRun], thresholds: &Thresholds, limit: usize) ->
     findings
 }
 
+/// Large tool results identical to an earlier result that was still in context when they
+/// were first sent, grouped by the tool and command that returned them again.
+fn repeated_results_in_context(
+    analysis: &Analysis,
+    runs: &[ToolRun],
+    thresholds: &Thresholds,
+    limit: usize,
+) -> Vec<Finding> {
+    let presence: HashMap<&str, &[Range]> = analysis
+        .context_items
+        .iter()
+        .map(|item| (item.id.as_str(), item.presence.as_slice()))
+        .collect();
+    let in_context = |run: &ToolRun, call: usize| {
+        presence.get(run.item_id.as_str()).is_some_and(|ranges| {
+            ranges
+                .iter()
+                .any(|range| range.start_call <= call && call <= range.end_call)
+        })
+    };
+    let mut ordered: Vec<&ToolRun> = runs.iter().collect();
+    ordered.sort_by_key(|run| run.first_call);
+    // Each repeat with the earliest identical result still in context.
+    let mut earlier: HashMap<blake3::Hash, Vec<&ToolRun>> = HashMap::new();
+    let mut repeats: Vec<(&ToolRun, &ToolRun)> = Vec::new();
+    for run in ordered {
+        let Some(hash) = run.result_hash else {
+            continue;
+        };
+        let copies = earlier.entry(hash).or_default();
+        if run.tokens.unwrap_or(0) >= thresholds.repeated_result_tokens {
+            if let Some(copy) = copies.iter().find(|copy| in_context(copy, run.first_call)) {
+                repeats.push((run, copy));
+            }
+        }
+        copies.push(run);
+    }
+    let mut groups: Vec<Vec<(&ToolRun, &ToolRun)>> = Vec::new();
+    let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
+    for (run, copy) in repeats {
+        let key = (run.tool.as_str(), run.command.as_str());
+        let position = *positions.entry(key).or_insert_with(|| {
+            groups.push(Vec::new());
+            groups.len() - 1
+        });
+        groups[position].push((run, copy));
+    }
+    let mut findings: Vec<Finding> = groups
+        .into_iter()
+        .map(|group| {
+            let (first, first_copy) = group[0];
+            let result_tokens: u64 = group.iter().map(|(run, _)| run.tokens.unwrap_or(0)).sum();
+            let runs: Vec<&ToolRun> = group.iter().map(|(run, _)| *run).collect();
+            Finding {
+                pattern: "repeatedResultInContext",
+                basis: "estimated",
+                estimated_cost: total_cost(&runs),
+                summary: format!(
+                    "{} returned the same result {} while an earlier copy was in context ({} tokens)",
+                    describe_run(first),
+                    more_times(group.len()),
+                    grouped(result_tokens)
+                ),
+                items: runs.iter().take(ITEM_LIMIT).map(|run| run.item(false)).collect(),
+                facts: BTreeMap::from([
+                    ("tool", json!(first.tool)),
+                    ("command", json!(shorten(&first.command))),
+                    ("repeats", json!(group.len())),
+                    ("resultTokens", json!(result_tokens)),
+                    (
+                        "firstCall",
+                        json!(group.iter().map(|(_, copy)| copy.first_call).min()),
+                    ),
+                    ("callsBetween", json!(first.first_call - first_copy.first_call)),
+                    ("failed", json!(runs.iter().filter(|run| run.failed).count())),
+                ]),
+            }
+        })
+        .collect();
+    rank(&mut findings, limit);
+    findings
+}
+
 /// A command run in several of the reported sessions.
 pub(super) fn across_sessions(
     reports: &[SessionReport],
@@ -406,6 +498,24 @@ fn describe(tool: &str, command: &str) -> String {
     format!("{tool} `{}`", shorten(command))
 }
 
+/// The run's tool and command, or the tool alone when there is no command.
+fn describe_run(run: &ToolRun) -> String {
+    if run.command.is_empty() {
+        run.tool.clone()
+    } else {
+        describe(&run.tool, &run.command)
+    }
+}
+
+/// "again" or "3 more times".
+fn more_times(count: usize) -> String {
+    if count == 1 {
+        "again".to_owned()
+    } else {
+        format!("{count} more times")
+    }
+}
+
 /// The command's first line, cut at `COMMAND_LIMIT` characters.
 fn shorten(command: &str) -> String {
     let line = command.lines().next().unwrap_or_default();
@@ -423,4 +533,13 @@ pub(super) fn reruns_for_test(
     thresholds: &Thresholds,
 ) -> Option<Finding> {
     reruns_after_compactions(analysis, runs, thresholds)
+}
+
+#[cfg(test)]
+pub(super) fn repeated_results_for_test(
+    analysis: &Analysis,
+    runs: &[ToolRun],
+    thresholds: &Thresholds,
+) -> Vec<Finding> {
+    repeated_results_in_context(analysis, runs, thresholds, usize::MAX)
 }

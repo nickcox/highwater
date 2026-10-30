@@ -82,6 +82,9 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 | `repeatedCommand`, across sessions | One tool ran with the same command in at least 3 of the sessions. | `tool`, `command`, `runs`, `sessions`, `failed`, `resultTokens` |
 | `carriedContext` | `carriedContext.share` is at least 25%. | `share`, `olderThanTurns`, `userTurns`, `calls`, `averageContextTokens`, `averageContextRecordedCalls`, `compactions` |
 | `rerunAfterCompaction` | At least 2 commands or file reads ran again after a compaction removed their earlier results, before the next compaction. Only the first re-run of each after each compaction counts. One finding covers all the session's compactions. | `compactions`, `reruns`, `resultTokens`, `commands` (up to five, with the number of compactions after which each ran again) |
+| `repeatedResultInContext` | A tool result of at least 1,000 tokens is identical to an earlier result of any tool that was still in context when it was first sent. Results are compared by their content, without the tool call's ID or the tool's name. One finding covers the repeats returned by one tool and command. | `tool`, `command`, `repeats`, `resultTokens`, `firstCall` (of the earliest identical result), `callsBetween` (from it to the first repeat), `failed` |
+
+**Repeated results.** `repeatedResultInContext` does not decide which tools read files. A large identical result means the agent was sent text it could already see, whatever the tool. The size threshold leaves out edit and write confirmations, and an edit between two reads changes the text, so that read is not counted. It is not counted either when the earlier copy was removed by a compaction; `rerunAfterCompaction` covers that. A repeat also counts towards `repeatedCommand`'s `identicalResults`, which does not check whether the earlier result was in context.
 
 **Forks.** A Pi or Codex fork starts with a copy of its parent's history. Those items count towards the fork's context and its cost, but the fork's `userTurns`, tool runs and findings cover only what happened after the fork, so the parent's runs are not reported twice. In `carriedContext` they count as added before the fork's first turn.
 
@@ -91,4 +94,4 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 
 ## Not yet included
 
-These patterns are planned, with the data Highwater already has: files read again while an earlier read is still in context, repeated status commands (polling), failed tool calls and their retries, fixed overhead per call, tool definitions that are never used, cache misses not explained by a compaction, and what child sessions cost compared with what they return.
+These patterns are planned, with the data Highwater already has: repeated status commands (polling), failed tool calls and their retries, fixed overhead per call, tool definitions that are never used, cache misses not explained by a compaction, and what child sessions cost compared with what they return.

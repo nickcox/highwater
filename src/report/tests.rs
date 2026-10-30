@@ -447,6 +447,52 @@ fn a_read_whose_result_a_compaction_removed_is_counted_when_it_runs_again() {
 }
 
 #[test]
+fn a_large_result_is_counted_when_an_identical_one_is_still_in_context() {
+    // A tool result that stays in context for several calls.
+    let (session, analysis, earlier) = fixture_sessions()
+        .into_iter()
+        .find_map(|session| {
+            let (_, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let item = analysis
+                .context_items
+                .iter()
+                .find(|item| {
+                    item.kind == "toolResult"
+                        && item.presence.len() == 1
+                        && item.presence[0].end_call > item.presence[0].start_call
+                })?
+                .clone();
+            Some((session, analysis, item))
+        })
+        .expect("a fixture tool result in context for several calls");
+    let (start, end) = (earlier.presence[0].start_call, earlier.presence[0].end_call);
+    let result = |item: &str, text: &str, call: usize, tokens: u64| ToolRun {
+        result_hash: Some(blake3::hash(text.as_bytes())),
+        tokens: Some(tokens),
+        ..run(&session.id, item, "a.rs", call)
+    };
+    let runs = vec![
+        result(&earlier.id, "same", start, 1_500),
+        result("while-present", "same", end, 1_500),
+        result("too-small", "same", end, 999),
+        result("different", "other", end, 1_500),
+        // An earlier result that is not in context at any call.
+        result("never-in-context", "gone", start, 1_500),
+        result("after-it-left", "gone", end, 1_500),
+    ];
+    let findings =
+        super::findings::repeated_results_for_test(&analysis, &runs, &Thresholds::default());
+    assert_eq!(findings.len(), 1);
+    let finding = &findings[0];
+    assert_eq!(finding.pattern, "repeatedResultInContext");
+    assert_eq!(finding.facts["repeats"], 1);
+    assert_eq!(finding.facts["resultTokens"], 1_500);
+    assert_eq!(finding.facts["firstCall"], start);
+    assert_eq!(finding.facts["callsBetween"], end - start);
+    assert_eq!(finding.items[0].item_id, "while-present");
+}
+
+#[test]
 fn a_fork_reports_only_its_own_turns_and_tool_runs() {
     let root = tempfile::tempdir().expect("temporary folder");
     let folder = root.path().join("--project--");
