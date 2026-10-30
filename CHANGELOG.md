@@ -7,6 +7,7 @@
 - A new `repeatedResultInContext` finding reports tool results of at least 1,000 tokens that are identical to an earlier result still in context, such as a file read again before it was edited.
 - A new `largeUnlimitedOutput` finding reports shell commands such as `cat`, `git diff` and `rg`, and search tools, that returned at least 5,000 tokens without limiting their output, in each session and across sessions.
 - A new `cacheMiss` finding reports calls that read much less from the cache than the call before, outside a compaction, and whether each followed a pause longer than the cache lifetime.
+- The `token-efficiency` skill explains the three new findings and what to suggest for each.
 
 ## 0.4.0 – 2026-10-19
 
