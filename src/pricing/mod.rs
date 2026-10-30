@@ -265,6 +265,8 @@ pub(crate) struct InputPrice {
     /// The call's whole input at these rates, from its reported usage, with long-prompt
     /// tiers applied.
     pub prompt_cost: Option<f64>,
+    /// The call's output at these rates, the low end when the output is a range.
+    pub output_cost: Option<f64>,
 }
 
 /// `None` when the call has no model or time, or no price is listed for it.
@@ -285,7 +287,8 @@ pub(crate) fn input_price(table: &PriceTable, call: CallToPrice<'_>) -> Option<I
     };
     let rates = listed_price(table.period_at(&provider, &model, at_ms))?;
     let per_token = |rate: f64| rate / 1_000_000.0;
-    let prompt_cost = token_counts(call.usage)
+    let tokens = token_counts(call.usage);
+    let prompt_cost = tokens
         .and_then(|tokens| {
             cost(
                 rates,
@@ -297,11 +300,16 @@ pub(crate) fn input_price(table: &PriceTable, call: CallToPrice<'_>) -> Option<I
             )
         })
         .map(|amount| amount.low);
+    let output_cost = tokens
+        .and_then(|tokens| cost(rates, tokens))
+        .zip(prompt_cost)
+        .map(|(whole, prompt)| (whole.low - prompt).max(0.0));
     Some(InputPrice {
         input: per_token(rates.input),
         cache_read: per_token(rates.cache_read.unwrap_or(rates.input)),
         cache_write: per_token(rates.cache_write.unwrap_or(rates.input)),
         prompt_cost,
+        output_cost,
     })
 }
 

@@ -4,9 +4,9 @@
 use super::{
     distinct, findings,
     types::{
-        CarriedContext, FamilyTotal, FindingCost, KindTotal, Reconstruction, SessionCost,
-        SessionReport, Thresholds, TokenStats, TokenTotals, TokenTotalsCoverage, ToolRun,
-        ToolTotal, UsdRange,
+        CarriedContext, FamilyTotal, FindingCost, FixedOverhead, FixedPart, KindTotal,
+        Reconstruction, SessionCost, SessionReport, Thresholds, TokenStats, TokenTotals,
+        TokenTotalsCoverage, ToolRun, ToolTotal, UsdRange,
     },
 };
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
 };
 use serde_json::Value;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     path::Path,
 };
 
@@ -80,10 +80,12 @@ pub(super) fn session_report(
         .and_then(|total| total.checked_div(tokens.coverage.prompt.recorded_calls as u64));
     let turns = user_turns(analysis).last().copied().unwrap_or(0);
     let carried = carried_context(&costs);
+    let prices = call_prices(analysis, normalized);
+    let fixed = fixed_overhead(analysis, &costs, &prices);
     let findings = findings::session_findings(
         &findings::SessionFacts {
             analysis,
-            prices: &call_prices(analysis, normalized),
+            prices: &prices,
             costs: &costs,
             runs: &runs,
             carried: &carried,
@@ -136,6 +138,7 @@ pub(super) fn session_report(
         child_sessions: Vec::new(),
         findings,
         runs,
+        fixed,
     }
 }
 
@@ -712,6 +715,129 @@ fn carried_context(costs: &[ItemCost]) -> CarriedContext {
             carried.token_turns as f64 / all.token_turns as f64
         },
     }
+}
+
+/// What the session sent before any work. An item counts when it was not copied from a
+/// parent session and is:
+///
+/// - a system prompt or tool definition, or a later version of one
+/// - unrecorded request context measured at the first call, at the first call after a
+///   compaction, or at a change of model
+/// - a harness message (`customMessage`) sent at the first call, or sent again after a
+///   compaction with the label of one the compaction removed
+///
+/// These follow the viewer's rules for an item that takes the place of an earlier one
+/// (`web/src/lib/analysis-ordering.ts`).
+pub(super) fn fixed_overhead(
+    analysis: &Analysis,
+    costs: &[ItemCost],
+    prices: &[Option<InputPrice>],
+) -> FixedOverhead {
+    let calls = &analysis.model_calls;
+    let Some(first) = calls.first() else {
+        return FixedOverhead::default();
+    };
+    let compactions: HashSet<usize> = analysis
+        .compactions
+        .iter()
+        .map(|compaction| compaction.before_model_call)
+        .collect();
+    let model_changes: HashSet<usize> = calls
+        .windows(2)
+        .filter(|pair| pair[0].model != pair[1].model)
+        .map(|pair| pair[1].index)
+        .collect();
+    let items: HashMap<&str, &ContextItem> = analysis
+        .context_items
+        .iter()
+        .map(|item| (item.id.as_str(), item))
+        .collect();
+    // The labels of harness messages each compaction removed, by the call after it.
+    let mut removed: HashMap<usize, HashSet<&str>> = HashMap::new();
+    for compaction in &analysis.compactions {
+        let retained: HashSet<&str> = compaction
+            .retained_item_ids
+            .iter()
+            .map(String::as_str)
+            .collect();
+        removed
+            .entry(compaction.before_model_call)
+            .or_default()
+            .extend(
+                compaction
+                    .source_item_ids
+                    .iter()
+                    .filter(|id| !retained.contains(id.as_str()))
+                    .filter_map(|id| items.get(id.as_str()))
+                    .filter(|item| item.kind == "customMessage")
+                    .map(|item| item.label.as_str()),
+            );
+    }
+    let counts = |item: &ContextItem| {
+        let at = item.first_model_call;
+        match item.kind.as_str() {
+            "system" | "toolDefinition" => true,
+            "unrecordedContext" => {
+                at == first.index || compactions.contains(&at) || model_changes.contains(&at)
+            }
+            "customMessage" => {
+                at == first.index
+                    || removed
+                        .get(&at)
+                        .is_some_and(|labels| labels.contains(item.label.as_str()))
+            }
+            _ => false,
+        }
+    };
+    let parts = analysis
+        .context_items
+        .iter()
+        .zip(costs)
+        .filter(|(item, _)| !inherited(item) && !item.presence.is_empty() && counts(item))
+        .map(|(item, cost)| FixedPart {
+            kind: item.kind.clone(),
+            label: part_label(item),
+            tokens: cost.tokens.unwrap_or(0),
+            cost: cost.cost,
+            item_id: item.id.clone(),
+        })
+        .collect();
+    let sum = |values: Vec<Option<f64>>| {
+        values
+            .iter()
+            .any(Option::is_some)
+            .then(|| values.iter().flatten().sum())
+    };
+    // A fork's first call also sends the history it copied from its parent.
+    let forked = analysis.context_items.iter().any(inherited);
+    FixedOverhead {
+        first_call_tokens: first.economics.prompt_tokens.filter(|_| !forked),
+        parts,
+        input_usd: sum(costs.iter().map(|cost| cost.cost.usd).collect()),
+        output_usd: sum(prices
+            .iter()
+            .map(|price| price.and_then(|price| price.output_cost))
+            .collect()),
+    }
+}
+
+/// A fixed item's name for grouping it with the same item in other sessions: a tool
+/// definition's tool name, or the label without a measured token count.
+fn part_label(item: &ContextItem) -> String {
+    if item.kind == "toolDefinition" {
+        if let Some(name) = item.metadata.get("toolName") {
+            return name.clone();
+        }
+        if let Some(name) = item.label.strip_suffix(" definition") {
+            return name.to_owned();
+        }
+    }
+    if item.kind == "unrecordedContext" {
+        if let Some((name, _)) = item.label.split_once(" · ") {
+            return name.to_owned();
+        }
+    }
+    item.label.clone()
 }
 
 /// Command families listed for each session.

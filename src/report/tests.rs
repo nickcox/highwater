@@ -1,14 +1,14 @@
 use super::{
     analyse, analyse_groups,
     build::{
-        command_family, command_key, has_output_limit, item_costs, session_report, user_turns,
-        Paths,
+        command_family, command_key, fixed_overhead, has_output_limit, item_costs, session_report,
+        user_turns, ItemCost, Paths,
     },
     findings::keep_top,
     repository::repository_of,
     select,
     skill::install,
-    types::{Finding, FindingCost, Thresholds, ToolRun},
+    types::{Finding, FindingCost, FixedOverhead, FixedPart, Thresholds, ToolRun},
     ReportArgs,
 };
 use crate::{
@@ -649,6 +649,166 @@ fn cache_misses_are_classed_by_the_pause_before_them() {
     // A compaction before the call explains it.
     analysis.model_calls[first + 1].compaction_before = Some("compaction".into());
     assert_eq!(misses(&analysis), others);
+}
+
+#[test]
+fn fixed_overhead_is_what_a_session_sends_before_any_work() {
+    // A session with a compaction, and a later call that is neither after a compaction nor
+    // a change of model.
+    let (mut analysis, compaction, other) = fixture_sessions()
+        .into_iter()
+        .find_map(|session| {
+            let (_, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let compaction = analysis.compactions.first()?.before_model_call;
+            let calls = &analysis.model_calls;
+            let other = calls.windows(2).find_map(|pair| {
+                let call = pair[1].index;
+                (call != compaction
+                    && call != calls[0].index
+                    && pair[0].model == pair[1].model
+                    && analysis
+                        .compactions
+                        .iter()
+                        .all(|compaction| compaction.before_model_call != call))
+                .then_some(call)
+            })?;
+            Some((analysis, compaction, other))
+        })
+        .expect("a fixture with a compaction and another later call");
+    let first = analysis.model_calls[0].index;
+    let base = analysis.context_items[0].clone();
+    let item = |id: &str, kind: &str, label: &str, at: usize| crate::api::ContextItem {
+        id: id.into(),
+        kind: kind.into(),
+        label: label.into(),
+        first_model_call: at,
+        presence: vec![crate::api::Range {
+            start_call: at,
+            end_call: at,
+        }],
+        metadata: BTreeMap::new(),
+        ..base.clone()
+    };
+    let mut inherited = item("inherited-system", "system", "Copied", first);
+    inherited.metadata.insert("inherited".into(), "true".into());
+    analysis.context_items = vec![
+        item("system", "system", "System prompt", first),
+        item("tool", "toolDefinition", "x_tool definition", first),
+        item(
+            "unrecorded-first",
+            "unrecordedContext",
+            "Unrecorded request context · 9 tokens",
+            first,
+        ),
+        item(
+            "unrecorded-compaction",
+            "unrecordedContext",
+            "Unrecorded request context · 9 tokens",
+            compaction,
+        ),
+        item(
+            "unrecorded-other",
+            "unrecordedContext",
+            "Unrecorded request context · 9 tokens",
+            other,
+        ),
+        item("removed", "customMessage", "Skill listing", first),
+        item("sent-again", "customMessage", "Skill listing", compaction),
+        item(
+            "new-after-compaction",
+            "customMessage",
+            "File · a.rs",
+            compaction,
+        ),
+        item("later-message", "customMessage", "Instructions", other),
+        item("user", "userMessage", "Hello", first),
+        inherited,
+    ];
+    analysis.compactions[0].source_item_ids = vec!["removed".into()];
+    analysis.compactions[0].retained_item_ids = Vec::new();
+    let costs = vec![ItemCost::default(); analysis.context_items.len()];
+    let fixed = fixed_overhead(&analysis, &costs, &[]);
+    let counted: Vec<(&str, &str)> = fixed
+        .parts
+        .iter()
+        .map(|part| (part.item_id.as_str(), part.label.as_str()))
+        .collect();
+    assert_eq!(
+        counted,
+        [
+            ("system", "System prompt"),
+            ("tool", "x_tool"),
+            ("unrecorded-first", "Unrecorded request context"),
+            ("unrecorded-compaction", "Unrecorded request context"),
+            ("removed", "Skill listing"),
+            ("sent-again", "Skill listing"),
+        ]
+    );
+    assert_eq!(
+        fixed.first_call_tokens, None,
+        "a session with copied items is a fork"
+    );
+}
+
+#[test]
+fn fixed_overhead_is_reported_for_each_harness_with_several_sessions() {
+    let session = &fixture_sessions()[0];
+    let (normalized, analysis) =
+        analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+    let part = |kind: &str, label: &str, tokens: u64, usd: f64| FixedPart {
+        kind: kind.into(),
+        label: label.into(),
+        tokens,
+        cost: FindingCost {
+            usd: Some(usd),
+            token_turns: tokens * 10,
+        },
+        item_id: format!("{label}-item"),
+    };
+    let report = |first_call: u64, system_tokens: u64, tool_run: Option<&str>| {
+        let mut report =
+            session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
+        report.harness = "codex".into();
+        report.runs = tool_run
+            .map(|tool| {
+                vec![ToolRun {
+                    tool: tool.into(),
+                    ..run(&report.reference, "run", "", 1)
+                }]
+            })
+            .unwrap_or_default();
+        report.fixed = FixedOverhead {
+            first_call_tokens: Some(first_call),
+            parts: vec![
+                part("system", "System prompt", system_tokens, 1.0),
+                part("toolDefinition", "codex_app.read_thread", 50, 0.5),
+            ],
+            input_usd: Some(10.0),
+            output_usd: Some(5.0),
+        };
+        report
+    };
+    let mut reports = vec![
+        report(1_000, 100, Some("read_thread")),
+        report(2_000, 120, None),
+    ];
+    let thresholds = Thresholds::default();
+    assert!(super::findings::fixed_overheads_for_test(&reports, &thresholds).is_empty());
+
+    reports.push(report(3_000, 120, None));
+    let findings = super::findings::fixed_overheads_for_test(&reports, &thresholds);
+    assert_eq!(findings.len(), 1);
+    let facts = &findings[0].facts;
+    assert_eq!(findings[0].pattern, "fixedOverhead");
+    assert_eq!(facts["harness"], "codex");
+    assert_eq!(facts["sessions"], 3);
+    assert_eq!(facts["medianFirstCallTokens"], 2_000);
+    assert_eq!(facts["shareOfInput"], 0.15);
+    assert_eq!(facts["shareOfCost"], 0.1);
+    assert_eq!(facts["parts"][0]["label"], "System prompt");
+    assert_eq!(facts["parts"][0]["medianTokens"], 120);
+    assert_eq!(facts["parts"][1]["usedInSessions"], 1);
+    assert!(facts["parts"][0].get("usedInSessions").is_none());
 }
 
 #[test]

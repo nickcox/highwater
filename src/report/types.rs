@@ -135,12 +135,43 @@ pub(crate) struct SessionReport {
     /// Every tool run, for finding commands repeated across sessions. Not written out.
     #[serde(skip)]
     pub runs: Vec<ToolRun>,
+    /// What the session sent before any work, for the `fixedOverhead` finding. Not written
+    /// out.
+    #[serde(skip)]
+    pub fixed: FixedOverhead,
 }
 
 impl SessionReport {
     pub(crate) fn drop_working_data(&mut self) {
         self.runs = Vec::new();
+        self.fixed = FixedOverhead::default();
     }
+}
+
+/// The items a session sends before any work (system prompt, tool definitions, the
+/// harness's instructions and unrecorded request context), with the session's costs at the
+/// rates the item costs use.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct FixedOverhead {
+    /// The first call's prompt, which also includes the user's first message. `None` for a
+    /// fork, whose first call also sends its parent's history.
+    pub first_call_tokens: Option<u64>,
+    pub parts: Vec<FixedPart>,
+    /// The session's input cost, the sum of all its item costs.
+    pub input_usd: Option<f64>,
+    /// The session's output cost at the same rates.
+    pub output_usd: Option<f64>,
+}
+
+/// One item of a session's fixed overhead.
+#[derive(Debug, Clone)]
+pub(crate) struct FixedPart {
+    pub kind: String,
+    /// The item's label, without a measured token count; a tool definition's tool name.
+    pub label: String,
+    pub tokens: u64,
+    pub cost: FindingCost,
+    pub item_id: String,
 }
 
 /// Reported usage, summed over the session's calls.

@@ -794,6 +794,192 @@ pub(super) fn across_sessions(
         .collect();
     rank(&mut findings, limit);
     findings.extend(large_unlimited_outputs_across(&runs, thresholds, limit));
+    findings.extend(fixed_overheads(reports, thresholds));
+    findings
+}
+
+/// Parts listed for a `fixedOverhead` finding.
+const PART_LIMIT: usize = 8;
+
+/// One part of the fixed overhead over a harness's sessions.
+#[derive(Default)]
+struct PartTotal<'a> {
+    kind: &'a str,
+    label: &'a str,
+    /// The part's tokens in each session it was in: the largest, when it was sent again.
+    tokens: Vec<u64>,
+    cost: FindingCost,
+    used_in: usize,
+    /// The most expensive single item, with its session.
+    example: Option<(f64, &'a str, &'a str)>,
+}
+
+fn median(values: &mut [u64]) -> Option<u64> {
+    values.sort_unstable();
+    values.get(values.len() / 2).copied()
+}
+
+/// For each harness with several sessions, what its sessions sent before any work and what
+/// that cost.
+fn fixed_overheads(reports: &[SessionReport], thresholds: &Thresholds) -> Vec<Finding> {
+    let mut harnesses: BTreeMap<&str, Vec<&SessionReport>> = BTreeMap::new();
+    for report in reports {
+        harnesses.entry(&report.harness).or_default().push(report);
+    }
+    let mut findings: Vec<Finding> = harnesses
+        .into_iter()
+        .filter(|(_, sessions)| sessions.len() >= thresholds.repeated_sessions)
+        .filter_map(|(harness, sessions)| {
+            let mut parts: Vec<PartTotal<'_>> = Vec::new();
+            let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
+            let mut cost = FindingCost::default();
+            for session in &sessions {
+                let tools: HashSet<&str> =
+                    session.runs.iter().map(|run| run.tool.as_str()).collect();
+                let mut in_session: HashMap<usize, u64> = HashMap::new();
+                for part in &session.fixed.parts {
+                    cost.add(part.cost);
+                    let position = *positions
+                        .entry((&part.kind, &part.label))
+                        .or_insert_with(|| {
+                            parts.push(PartTotal {
+                                kind: &part.kind,
+                                label: &part.label,
+                                ..PartTotal::default()
+                            });
+                            parts.len() - 1
+                        });
+                    let total = &mut parts[position];
+                    total.cost.add(part.cost);
+                    let usd = part.cost.rank();
+                    if total.example.is_none_or(|(largest, _, _)| usd > largest) {
+                        total.example = Some((usd, &session.reference, &part.item_id));
+                    }
+                    let tokens = in_session.entry(position).or_default();
+                    *tokens = (*tokens).max(part.tokens);
+                }
+                for (position, tokens) in in_session {
+                    let total = &mut parts[position];
+                    total.tokens.push(tokens);
+                    let short = total.label.rsplit('.').next().unwrap_or(total.label);
+                    if total.kind == "toolDefinition"
+                        && (tools.contains(total.label) || tools.contains(short))
+                    {
+                        total.used_in += 1;
+                    }
+                }
+            }
+            if parts.is_empty() {
+                return None;
+            }
+            parts.sort_by(|a, b| b.cost.rank().total_cmp(&a.cost.rank()));
+            let mut first_calls: Vec<u64> = sessions
+                .iter()
+                .filter_map(|session| session.fixed.first_call_tokens)
+                .collect();
+            let largest_first_call = first_calls.iter().max().copied();
+            let median_first_call = median(&mut first_calls);
+            let total = |amounts: &mut dyn Iterator<Item = Option<f64>>| {
+                amounts.flatten().fold(None, |sum: Option<f64>, usd| {
+                    Some(sum.unwrap_or(0.0) + usd)
+                })
+            };
+            let input = total(&mut sessions.iter().map(|session| session.fixed.input_usd));
+            let output = total(&mut sessions.iter().map(|session| session.fixed.output_usd));
+            let share = |whole: Option<f64>| {
+                cost.usd
+                    .zip(whole)
+                    .filter(|(_, whole)| *whole > 0.0)
+                    .map(|(part, whole)| (part / whole * 1000.0).round() / 1000.0)
+            };
+            let share_of_input = share(input);
+            let share_of_cost = share(input.map(|input| input + output.unwrap_or(0.0)));
+            let percent = |share: Option<f64>, of: &str| {
+                share.map(|share| format!("{:.1}% of {of}", share * 100.0))
+            };
+            let shares: Vec<String> = [
+                percent(share_of_input, "input"),
+                percent(share_of_cost, "all cost"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            let amount = |cost: FindingCost| {
+                cost.usd.map_or_else(
+                    || format!("{} token-turns", grouped(cost.token_turns)),
+                    |usd| format!("${usd:.2}"),
+                )
+            };
+            let largest: Vec<String> = parts
+                .iter()
+                .take(ITEM_LIMIT)
+                .map(|part| format!("{} ({})", part.label, amount(part.cost)))
+                .collect();
+            let start = median_first_call.map_or_else(
+                || format!("{harness} sessions' fixed overhead"),
+                |tokens| {
+                    format!(
+                        "{harness} sessions start with a median of {} tokens before any work; this part",
+                        grouped(tokens)
+                    )
+                },
+            );
+            Some(Finding {
+                pattern: "fixedOverhead",
+                basis: "estimated",
+                estimated_cost: cost,
+                summary: format!(
+                    "{start} cost {}{} over {} sessions. Largest: {}",
+                    amount(cost),
+                    if shares.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({})", shares.join(", "))
+                    },
+                    sessions.len(),
+                    largest.join(", ")
+                ),
+                items: parts
+                    .iter()
+                    .take(ITEM_LIMIT)
+                    .filter_map(|part| part.example)
+                    .map(|(_, reference, item_id)| ItemRef {
+                        reference: Some(reference.to_owned()),
+                        item_id: item_id.to_owned(),
+                    })
+                    .collect(),
+                facts: BTreeMap::from([
+                    ("harness", json!(harness)),
+                    ("sessions", json!(sessions.len())),
+                    ("medianFirstCallTokens", json!(median_first_call)),
+                    ("largestFirstCallTokens", json!(largest_first_call)),
+                    ("shareOfInput", json!(share_of_input)),
+                    ("shareOfCost", json!(share_of_cost)),
+                    (
+                        "parts",
+                        json!(parts
+                            .iter_mut()
+                            .take(PART_LIMIT)
+                            .map(|part| {
+                                let mut fact = json!({
+                                    "kind": part.kind,
+                                    "label": part.label,
+                                    "sessions": part.tokens.len(),
+                                    "medianTokens": median(&mut part.tokens),
+                                    "estimatedCost": part.cost,
+                                });
+                                if part.kind == "toolDefinition" {
+                                    fact["usedInSessions"] = json!(part.used_in);
+                                }
+                                fact
+                            })
+                            .collect::<Vec<_>>()),
+                    ),
+                ]),
+            })
+        })
+        .collect();
+    rank(&mut findings, usize::MAX);
     findings
 }
 
@@ -864,6 +1050,14 @@ fn shorten(command: &str) -> String {
         shortened.push('…');
     }
     shortened
+}
+
+#[cfg(test)]
+pub(super) fn fixed_overheads_for_test(
+    reports: &[SessionReport],
+    thresholds: &Thresholds,
+) -> Vec<Finding> {
+    fixed_overheads(reports, thresholds)
 }
 
 #[cfg(test)]
