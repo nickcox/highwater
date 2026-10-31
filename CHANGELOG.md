@@ -1,15 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 – 2026-10-31
 
-- Report JSON token subtotals retain unavailable values as `null`, include total-only prompt input and expose coverage for each field. Average context uses only calls with complete recorded prompt totals, preserves measured zero and gives its contributing-call count in the `carriedContext` finding. Text reports identify averages with missing calls.
+- `highwater report` has four new findings:
+  - `cacheMiss`: calls that read much less from the cache than the call before, outside a compaction, and whether each followed a pause longer than the cache lifetime.
+  - `repeatedResultInContext`: tool results of at least 1,000 tokens that are identical to an earlier result still in context, such as a file read again before it was edited.
+  - `largeUnlimitedOutput`: shell commands such as `cat`, `git diff` and `rg`, and search tools, that returned at least 5,000 tokens without limiting their output, in each session and across sessions.
+  - `fixedOverhead`: for each harness, how large its sessions' prompts are before any work, what the system prompt, tool definitions and the harness's own messages cost as a share of input and of all cost, and their most expensive parts, with how often each defined tool was used.
+- The `token-efficiency` skill explains the new findings and what to suggest for each.
 - `repeatedCommand` findings count runs whose result is identical to an earlier run's. Before, results from different calls never matched, so the count was always 0.
-- A new `repeatedResultInContext` finding reports tool results of at least 1,000 tokens that are identical to an earlier result still in context, such as a file read again before it was edited.
-- A new `largeUnlimitedOutput` finding reports shell commands such as `cat`, `git diff` and `rg`, and search tools, that returned at least 5,000 tokens without limiting their output, in each session and across sessions.
-- A new `cacheMiss` finding reports calls that read much less from the cache than the call before, outside a compaction, and whether each followed a pause longer than the cache lifetime.
-- The `token-efficiency` skill explains the three new findings and what to suggest for each.
-- A new `fixedOverhead` finding reports, for each harness, how large its sessions' prompts are before any work, what the system prompt, tool definitions and the harness's own messages cost as a share of input and of all cost, and their most expensive parts, with how often each defined tool was used.
 - Codex tool results are marked as failed when Codex's output header says the command exited with a code other than 0, the script failed or the user stopped it. Before, no Codex result was counted as failed.
+- Report JSON token subtotals keep unavailable values as `null`, include total-only prompt input and give coverage for each field. Average context uses only calls with complete recorded prompt totals, keeps a measured zero and gives its contributing-call count in the `carriedContext` finding. Text reports say when an average leaves out calls.
 
 ## 0.4.0 – 2026-10-19
 
