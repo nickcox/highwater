@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 – 2026-11-09
 
 - Each entry in the session picker shows when its session last changed, which is the order the list is sorted in. Before, it showed when the session started, so the dates looked out of order.
 
