@@ -6,7 +6,7 @@ How to open sessions and read the Context River, Composition and lifespans views
 
 Open the URL Highwater prints when it starts. The server listens only on `127.0.0.1` and never changes session files. It also rejects any request whose `Host` (or `Origin`, when present) is not `127.0.0.1` or `localhost` on its own port, so a web page cannot use DNS rebinding to read your sessions.
 
-The picker has a **Harness** list (All harnesses, Pi, OpenCode, Claude Code, Codex, VS Code Copilot) and a **Session** field showing the open session. Click or type in the field to open the session list; typing filters it by title or working directory. ↑/↓ and Enter choose a session, and Escape closes the list without changing anything. Filtering never switches the open session.
+The picker has a **Harness** list (All harnesses, Pi, OpenCode, Claude Code, Codex, VS Code Copilot) and a **Session** field showing the open session. Click or type in the field to open the session list. The list shows the most recently changed sessions first, and each entry shows when its session last changed. Typing filters the list by title or working directory. ↑/↓ and Enter choose a session, and Escape closes the list without changing anything. Filtering never switches the open session.
 
 When the list mixes harnesses, each entry names the application that recorded it.
 

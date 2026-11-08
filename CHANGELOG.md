@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Each entry in the session picker shows when its session last changed, which is the order the list is sorted in. Before, it showed when the session started, so the dates looked out of order.
+
 ## 0.5.0 – 2026-10-31
 
 - `highwater report` has four new findings:

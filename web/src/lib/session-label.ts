@@ -38,7 +38,8 @@ export function harnessName(session: SessionListItem): string {
   return 'Pi';
 }
 
-/** Option labels for the picker. Identical labels get the file name (or
+/** Option labels for the picker. Each shows the session's last-changed time,
+ * which is what the list is sorted by. Identical labels get the file name (or
  * reference) appended so every option can be told apart. */
 export function sessionOptionLabels(
   sessions: readonly SessionListItem[],
@@ -48,8 +49,8 @@ export function sessionOptionLabels(
   const base = new Map(
     sessions.map((session) => {
       const parts = [session.displayName];
-      const started = formatSessionTime(session.startedAt, now);
-      if (started) parts.push(started);
+      const changed = formatSessionTime(session.modifiedAt, now);
+      if (changed) parts.push(changed);
       if (session.parentReference)
         parts.push(
           session.subagentType ? `child session · ${session.subagentType}` : 'child session',

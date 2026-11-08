@@ -37,12 +37,13 @@ describe('session labels', () => {
     expect(formatByteSize(null)).toBeNull();
   });
 
-  it('adds the harness and start time, and disambiguates identical labels', () => {
-    const started = new Date(2026, 9, 9, 15, 27).toISOString();
+  it('adds the harness and last-changed time, and disambiguates identical labels', () => {
+    const changed = new Date(2026, 9, 9, 15, 27).toISOString();
+    const started = new Date(2026, 8, 1, 9, 0).toISOString();
     const labels = sessionOptionLabels(
       [
-        session({ id: 'pi-a', startedAt: started, fileName: 'a.jsonl' }),
-        session({ id: 'pi-b', startedAt: started, fileName: 'b.jsonl' }),
+        session({ id: 'pi-a', startedAt: started, modifiedAt: changed, fileName: 'a.jsonl' }),
+        session({ id: 'pi-b', startedAt: started, modifiedAt: changed, fileName: 'b.jsonl' }),
         session({
           id: 'opencode-c',
           harness: 'opencode',
@@ -54,6 +55,8 @@ describe('session labels', () => {
       now,
     );
     expect(labels.get('pi-a')).toMatch(/^\[Pi\] Highwater · 01a11eea · .+ · a\.jsonl$/);
+    expect(labels.get('pi-a')).toContain(formatSessionTime(changed, now)!);
+    expect(labels.get('pi-a')).not.toContain(formatSessionTime(started, now)!);
     expect(labels.get('pi-b')).toMatch(/· b\.jsonl$/);
     expect(labels.get('opencode-c')).toBe('[OpenCode] Fix tests · child session');
   });
