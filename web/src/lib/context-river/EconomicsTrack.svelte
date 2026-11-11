@@ -623,12 +623,12 @@
         patternUnits="userSpaceOnUse"
         patternTransform="rotate(45)"
       >
-        <rect width="6" height="6" fill="#9167c7" />
-        <path d="M0 0V6" stroke="#e0c9ff" stroke-width="1.5" opacity=".7" />
+        <rect width="6" height="6" fill="var(--cache-write)" />
+        <path d="M0 0V6" stroke="var(--cache-write-mark)" stroke-width="1.5" opacity=".7" />
       </pattern>
       <pattern id="economics-fresh-pattern" width="6" height="6" patternUnits="userSpaceOnUse">
-        <rect width="6" height="6" fill="#277d68" />
-        <circle cx="2" cy="2" r="1" fill="#b5f6df" />
+        <rect width="6" height="6" fill="var(--cache-fresh)" />
+        <circle cx="2" cy="2" r="1" fill="var(--cache-fresh-mark)" />
       </pattern>
       <pattern
         id="economics-nonread-pattern"
@@ -637,8 +637,8 @@
         patternUnits="userSpaceOnUse"
         patternTransform="rotate(45)"
       >
-        <rect width="7" height="7" fill="#49536a" />
-        <path d="M0 0V7" stroke="#aab5c9" stroke-width="1.5" opacity=".8" />
+        <rect width="7" height="7" fill="var(--cache-nonread)" />
+        <path d="M0 0V7" stroke="var(--cache-nonread-mark)" stroke-width="1.5" opacity=".8" />
       </pattern>
     </defs>
     <rect class="track-background" x="0" y="0" {width} height={trackHeight} />
@@ -923,7 +923,7 @@
     stroke: var(--text);
   }
   .event-count {
-    fill: #fff;
+    fill: var(--active-text);
     font-size: var(--text-xs);
     font-weight: 750;
     pointer-events: none;
@@ -931,7 +931,7 @@
   .track-event-trigger:focus-visible .event-hit {
     fill: var(--action);
     fill-opacity: 0.35;
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 2.5;
   }
   .track-y-label {
@@ -948,7 +948,7 @@
     stroke-width: 0.6;
   }
   .cache-segment.cacheRead {
-    fill: #428fdc;
+    fill: var(--cache-read);
   }
   .cache-segment.cacheWrite {
     fill: url(#economics-write-pattern);
@@ -981,12 +981,12 @@
   }
   .missing-mark {
     fill: none;
-    stroke: #aab5c9;
+    stroke: var(--cache-nonread-mark);
     stroke-dasharray: 2 1;
     stroke-width: 1.5;
   }
   .cost-stem {
-    stroke: #7ddbb7;
+    stroke: var(--cost);
     stroke-width: 1.5;
   }
   .cost-stem.partial {
@@ -994,7 +994,7 @@
     stroke-dasharray: 3 2;
   }
   .cost-dot {
-    fill: #7ddbb7;
+    fill: var(--cost);
     stroke: var(--plot);
     stroke-width: 1;
   }
@@ -1004,7 +1004,7 @@
   }
   .cost-zero {
     fill: var(--plot);
-    stroke: #7ddbb7;
+    stroke: var(--cost);
     stroke-width: 1.5;
   }
   .cost-zero.partial {
@@ -1013,28 +1013,28 @@
   }
   /* API-equivalent costs are not charges: hollow marks in a separate colour. */
   .api-equivalent .cost-stem {
-    stroke: #b9a8ff;
+    stroke: var(--api-cost);
     stroke-dasharray: 3 2;
   }
   .api-equivalent .cost-dot {
     fill: var(--plot);
-    stroke: #b9a8ff;
+    stroke: var(--api-cost);
     stroke-width: 1.5;
   }
   .api-equivalent .cost-zero {
-    stroke: #b9a8ff;
+    stroke: var(--api-cost);
   }
   .cost-range {
-    stroke: #7ddbb7;
+    stroke: var(--cost);
     stroke-width: 4;
     stroke-linecap: round;
     opacity: 0.45;
   }
   .api-equivalent .cost-range {
-    stroke: #b9a8ff;
+    stroke: var(--api-cost);
   }
   .track-pin {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 1.5;
     pointer-events: none;
   }
@@ -1049,7 +1049,7 @@
   .economics-mark:focus-visible .cost-zero,
   .economics-mark:focus-visible .zero-mark,
   .economics-mark:focus-visible .uncertain-mark {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 2.5;
   }
 </style>

@@ -5,6 +5,7 @@ import { projectCallComposition, projectCumulativeComposition } from './composit
 import { compositionScenario } from './testing/composition-scenarios';
 import { sessionScenario, type SessionScenario } from './testing/session-scenarios';
 import type { SessionAnalysis } from './types';
+import { palettes } from './theme/palettes';
 
 const scenarios: SessionScenario[] = [
   'empty',
@@ -62,7 +63,21 @@ function serialize(value: unknown): string {
 
 function updateParityHash(input: SessionAnalysis, hash: Hash): void {
   const indexed = indexTestAnalysis(input);
-  hash.update(serialize(indexed));
+  // Compare the new stable slots in the original Dark-colour representation. This keeps the
+  // pinned digests checking that assignment, index order and geometry have not changed.
+  const legacyIndexed = Object.fromEntries(
+    Object.entries(indexed).map(([key, value]) =>
+      key === 'itemColorSlotById'
+        ? [
+            'itemColorById',
+            new Map(
+              [...indexed.itemColorSlotById].map(([id, slot]) => [id, palettes.dark.items[slot]]),
+            ),
+          ]
+        : [key, value],
+    ),
+  );
+  hash.update(serialize(legacyIndexed));
   hash.update(serialize(projectCumulativeComposition(indexed, null)));
   for (const call of indexed.analysis.modelCalls) {
     hash.update(serialize(projectCallComposition(indexed, call.index)));

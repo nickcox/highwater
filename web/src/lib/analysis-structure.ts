@@ -6,7 +6,7 @@ import type {
   SessionAnalysis,
 } from './types';
 import { stableItemOrder } from './analysis-ordering';
-import { assignItemColors } from './context-river/colors';
+import { assignItemColorSlots } from './context-river/colors';
 import { itemVersions } from './item-versions';
 import { AnalysisValidationError, assertUnique } from './analysis-validation';
 
@@ -292,7 +292,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     itemEstimateByProfile,
     contextSetByCall,
     orderedItemIdsByCall,
-    itemColorById: assignItemColors(
+    itemColorSlotById: assignItemColorSlots(
       analysis.contextItems,
       orderedItemIds,
       orderedItemIdsByCall,

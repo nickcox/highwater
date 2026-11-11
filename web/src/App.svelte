@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, onDestroy, tick, untrack } from 'svelte';
+  import ThemeSelector from './lib/components/ThemeSelector.svelte';
+  import { themeController } from './lib/theme/controller';
+
+  onDestroy(themeController.start());
   import {
     readPresentationPreferences,
     writePresentationPreferences,
@@ -762,15 +766,15 @@
 
 <main bind:this={appRoot}>
   <header class="titlebar">
-    <div>
+    <div class="title-summary">
       <h1>
         <svg class="logo" viewBox="6 19 52 36" width="30" height="21" aria-hidden="true">
-          <path d="M8 54 C20 52 30 40 56 30 L56 54 Z" fill="#dab66c" />
-          <path d="M8 54 C22 53 32 46 56 40 L56 54 Z" fill="#64c4af" />
-          <path d="M8 54 C24 54 36 50 56 48 L56 54 Z" fill="#7eafe3" />
+          <path d="M8 54 C20 52 30 40 56 30 L56 54 Z" fill="var(--item-type-toolResult)" />
+          <path d="M8 54 C22 53 32 46 56 40 L56 54 Z" fill="var(--item-type-assistantMessage)" />
+          <path d="M8 54 C24 54 36 50 56 48 L56 54 Z" fill="var(--item-type-userMessage)" />
           <path
             d="M8 22 H56"
-            stroke="#9cd8c5"
+            stroke="var(--accent)"
             stroke-opacity="0.75"
             stroke-width="2.25"
             stroke-dasharray="3.5 3.5"
@@ -797,11 +801,16 @@
         <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
       {/if}
     </div>
-    {#if $sessionController.sessions.length > 0}<SessionPicker
-        sessions={$sessionController.sessions}
-        selectedId={$sessionController.selectedSessionId}
-        onSelect={selectSession}
-      />{/if}
+    <div class="theme-controls"><ThemeSelector /></div>
+    {#if $sessionController.sessions.length > 0}
+      <div class="session-controls">
+        <SessionPicker
+          sessions={$sessionController.sessions}
+          selectedId={$sessionController.selectedSessionId}
+          onSelect={selectSession}
+        />
+      </div>
+    {/if}
   </header>
 
   {#if viewLinkNotice || copyLinkNotice}
@@ -1080,11 +1089,26 @@
     padding: 26px;
   }
   .titlebar {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(320px, 600px);
     align-items: start;
-    gap: 24px;
+    gap: 8px 24px;
     min-width: 0;
+  }
+  .title-summary {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .session-controls {
+    grid-column: 2;
+    grid-row: 2;
+    width: min(600px, 100%);
+    justify-self: end;
+  }
+  .theme-controls {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
   }
   .titlebar > * {
     min-width: 0;
@@ -1355,10 +1379,29 @@
       padding: 16px;
     }
     .titlebar {
-      flex-direction: column;
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 16px;
+    }
+    .title-summary {
+      grid-row: 1;
+    }
+    .session-controls {
+      grid-column: 1 / -1;
     }
     .item-hover-position {
       display: none;
+    }
+  }
+  @media (max-width: 380px) {
+    .titlebar {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .theme-controls {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .session-controls {
+      grid-row: 3;
     }
   }
 </style>

@@ -14,6 +14,12 @@ When the list mixes harnesses, each entry names the application that recorded it
 
 Going back to a session you viewed recently shows the analysis the browser kept, then checks with the server in the background whether it has changed. If that check fails, the kept view stays and a warning appears.
 
+## Theme
+
+Use the **Light / Dark / Auto** toggle above the session picker at the top right to choose the appearance. Auto is the default and follows changes to your operating system appearance. Dark and Light stay selected regardless of the system setting.
+
+Your choice is saved in this browser for future visits. It does not change the session, selected item, pinned call or chart position, and is not included in shared view links. If the browser blocks local storage, the choice still works for the current visit.
+
 ## The session summary
 
 The summary shows the number of model calls and context items, the peak calculated context, and the cost.
@@ -46,7 +52,7 @@ Each band is a context item, drawn at its estimated size at every model call it 
 
 **Reported input.** Where the provider recorded each call's input, a dashed **Reported input** line shows it, and hatched **Unreconciled input** fills the gap between the stacked estimates and that line. Both appear in either display mode and either scale. The line breaks where a call has no comparable figure, and estimates above the reported input are never shrunk to fit. The gap is an approximate difference, not missing items, and it does not change item counts, lifetimes, token-turns, Composition or costs.
 
-**Versions.** A request carries one system prompt and one definition per tool, so when a new one replaces the previous one, Highwater shows them as versions of one item. Versions share a colour and a place in the stack, and each version's band runs into the next. A white mark shows where the system prompt changes; tool definitions are too thin to mark.
+**Versions.** A request carries one system prompt and one definition per tool, so when a new one replaces the previous one, Highwater shows them as versions of one item. Versions share a colour and a place in the stack, and each version's band runs into the next. A contrasting mark shows where the system prompt changes; tool definitions are too thin to mark.
 
 **Compaction.** In **Items** view, faint colour-blended flows join the items a compaction removed to the summary's band, and retained items carry on unchanged. The flows show that the summary took the place of those items. They do not show how much of an item's content the summary kept, or how many of the summary's tokens came from each item. Hovering or selecting a removed item highlights its flow, and selecting the summary lightly highlights all of its incoming flows. **Item types** view does not draw flows, and a summary from the end of a session, with no call after it, has no band.
 

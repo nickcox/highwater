@@ -4,6 +4,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { IndexedAnalysis } from '../types';
   import { itemColor, textColorOn } from '../context-river/colors';
+  import { activePalette } from '../theme/controller';
   import { formatMetric, formatPercent } from '../context-river/format';
   import CopyButton from './CopyButton.svelte';
   import {
@@ -582,20 +583,22 @@
                 y={rectangle.y}
                 width={rectangle.width}
                 height={rectangle.height}
-                fill={itemColor(indexed, rectangle.item.id)}
+                fill={itemColor(indexed, rectangle.item.id, $activePalette)}
                 fill-opacity="1"
                 class:partial={rectangle.item.estimateCoverage !== 'complete'}
               />
               {#if rectangle.labelFits && rectangle.labelText}
                 <g clip-path={`url(#${tileClipId(rectangle.optionIndex)})`} aria-hidden="true">
                   <text
-                    style:fill={textColorOn(itemColor(indexed, rectangle.item.id))}
+                    style:fill={textColorOn(itemColor(indexed, rectangle.item.id, $activePalette))}
                     x={rectangle.x + 5}
                     y={rectangle.y + 16}>{rectangle.labelText}</text
                   >
                   {#if rectangle.height >= 49}
                     <text
-                      style:fill={textColorOn(itemColor(indexed, rectangle.item.id))}
+                      style:fill={textColorOn(
+                        itemColor(indexed, rectangle.item.id, $activePalette),
+                      )}
                       class="tile-value"
                       x={rectangle.x + 5}
                       y={rectangle.y + 31}
@@ -637,7 +640,7 @@
           >
             <span
               class="kind-mark"
-              style={`background:${itemColor(indexed, item.id)}`}
+              style={`background:${itemColor(indexed, item.id, $activePalette)}`}
               aria-hidden="true"
             ></span>
             <span class="row-label">
@@ -773,7 +776,7 @@
   .presentation-controls button[aria-pressed='true'] {
     border-color: var(--accent);
     background: var(--action);
-    color: #fff;
+    color: var(--active-text);
   }
   .composition-header {
     justify-content: space-between;
@@ -918,7 +921,7 @@
     stroke-width: 2;
   }
   .composition-treemap g[role='option'].selected rect {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 2;
   }
   .composition-treemap g[role='option'] rect.partial {
@@ -926,7 +929,7 @@
     stroke-dasharray: 3 2;
   }
   .composition-treemap g[role='option'] text {
-    fill: #fff;
+    fill: var(--text);
     font-size: 10px;
     pointer-events: none;
   }
@@ -961,7 +964,7 @@
     background: var(--surface-raised);
   }
   .composition-row.selected {
-    border-color: #fff;
+    border-color: var(--selection);
     background: var(--action);
   }
   .composition-row.unavailable {
@@ -994,7 +997,7 @@
     font-variant-numeric: tabular-nums;
   }
   .row-measures b {
-    color: #fff;
+    color: var(--text-strong);
     font-size: var(--text-sm);
   }
   .selected-composition-item {

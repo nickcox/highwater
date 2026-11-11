@@ -65,4 +65,4 @@ fi
 
 HIGHWATER_BROWSER_INTEGRATED=1 \
 HIGHWATER_BROWSER_BASE_URL="http://127.0.0.1:$PORT" \
-  npm --prefix "$ROOT/web" run test:browser -- --grep 'integrated Rust-served'
+  npm --prefix "$ROOT/web" run test:browser -- --grep 'integrated Rust-served|is applied before the application module loads'

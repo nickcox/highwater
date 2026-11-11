@@ -4,6 +4,7 @@
   import { conciseLifespanLabels, displayItemLabel } from '../item-label';
   import { kindLabel } from '../kind-labels';
   import { itemColor } from '../context-river/colors';
+  import { activePalette } from '../theme/controller';
   import {
     callAxisTicks,
     nearestLifespanCall,
@@ -515,7 +516,10 @@
                 data-lifespan-item-id={item.id}
               >
                 <div class="label" title={fullItemLabel(item)}>
-                  <span class="swatch" style={`background:${itemColor(indexed, item.id)}`}></span>
+                  <span
+                    class="swatch"
+                    style={`background:${itemColor(indexed, item.id, $activePalette)}`}
+                  ></span>
                   <div class="label-copy">
                     <button
                       type="button"
@@ -564,7 +568,7 @@
                         title={`${versionLabel === fullItemLabel(item) ? label : versionLabel}: calls ${range.startCall}–${range.endCall}`}
                         style={segmentStyle(
                           range,
-                          itemColor(indexed, item.id),
+                          itemColor(indexed, item.id, $activePalette),
                           replacesBefore,
                           replacedAfter,
                         )}
@@ -662,7 +666,7 @@
   h2 {
     font-size: var(--text-lg);
     margin: 0;
-    color: #fff;
+    color: var(--text-strong);
   }
   .result-count {
     color: var(--secondary);
@@ -777,7 +781,7 @@
   }
   .legend-presence {
     border-radius: 4px;
-    background: #728fc5;
+    background: var(--lifespan-version);
   }
   .legend-pin {
     width: 0 !important;
@@ -843,7 +847,7 @@
     top: 0;
     left: 2px;
     padding: 0 2px;
-    color: #fff;
+    color: var(--text-strong);
     background: var(--plot);
     font-size: 9px;
     white-space: nowrap;
@@ -871,14 +875,14 @@
   }
   .row.selected {
     background: var(--selected-surface);
-    box-shadow: inset 3px 0 #fff;
+    box-shadow: inset 3px 0 var(--selection);
   }
   .row:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
   }
   .row.selected .segment {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--selection);
     outline-offset: 1px;
   }
   .label {
@@ -957,15 +961,15 @@
     border-bottom-left-radius: 0;
   }
   .segment.compacted {
-    border-right: 4px double #fff;
+    border-right: 4px double var(--selection);
     background-image: repeating-linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.18) 0 3px,
+      var(--presence-overlay) 0 3px,
       transparent 3px 7px
     );
   }
   .segment:focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--selection);
     outline-offset: 1px;
   }
   .boundary {
@@ -977,7 +981,7 @@
     z-index: 3;
     top: 3px;
     height: 16px;
-    border-left: 1.5px solid rgba(255, 255, 255, 0.8);
+    border-left: 1.5px solid var(--selection-focus);
     pointer-events: none;
   }
   .meta {

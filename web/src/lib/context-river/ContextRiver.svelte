@@ -19,6 +19,7 @@
     type ViewportAdjustment,
   } from './navigation';
   import { itemColor, itemTypeColor } from './colors';
+  import { activePalette } from '../theme/controller';
   import { installRiverDom, pointerInput, capturePointer, releasePointer } from './dom-interaction';
   import EconomicsTrack from './EconomicsTrack.svelte';
   import EconomicsBreakdown from './EconomicsBreakdown.svelte';
@@ -1500,14 +1501,15 @@
                 height="8"
                 patternUnits="userSpaceOnUse"
               >
-                <rect width="8" height="8" fill="#8793aa" opacity=".08" />
+                <rect width="8" height="8" fill="var(--input-gap-base)" opacity=".08" />
                 <path
                   d="M-2 2L2-2M0 8L8 0M6 10L10 6"
-                  stroke="#aab4c7"
+                  stroke="var(--input-gap)"
                   stroke-width="1"
                   opacity=".45"
                 />
               </pattern>
+              <!-- Black and white encode visibility in this luminance mask, not palette colours. -->
               <mask
                 id={`${mergeId}-input-mask`}
                 maskUnits="userSpaceOnUse"
@@ -1549,8 +1551,14 @@
                 x2={connector.targetX}
                 y2={connector.sourceY}
               >
-                <stop offset="0%" stop-color={itemColor(indexed, connector.fromItemId)} />
-                <stop offset="100%" stop-color={itemColor(indexed, connector.toItemId)} />
+                <stop
+                  offset="0%"
+                  stop-color={itemColor(indexed, connector.fromItemId, $activePalette)}
+                />
+                <stop
+                  offset="100%"
+                  stop-color={itemColor(indexed, connector.toItemId, $activePalette)}
+                />
               </linearGradient>
             {/each}
             <pattern
@@ -1560,8 +1568,8 @@
               patternUnits="userSpaceOnUse"
               patternTransform={`matrix(${1 / (horizontalProjection.scale || 1)} 0 0 ${1 / verticalStretch} ${-horizontalProjection.offset / (horizontalProjection.scale || 1)} ${-verticalOffset / verticalStretch}) rotate(35)`}
             >
-              <rect width="8" height="8" fill="#46516a" />
-              <path d="M0 0V8" stroke="#8793aa" stroke-width="2" opacity=".65" />
+              <rect width="8" height="8" fill="var(--unknown-fill)" />
+              <path d="M0 0V8" stroke="var(--unknown-mark)" stroke-width="2" opacity=".65" />
             </pattern>
           </defs>
           <rect
@@ -1623,8 +1631,8 @@
             {#each river.ribbons as ribbon (ribbon.key)}
               {@const isGroup = ribbon.groupKind !== undefined}
               {@const ribbonColor = ribbon.groupKind
-                ? itemTypeColor(ribbon.groupKind)
-                : itemColor(indexed, ribbon.itemId)}
+                ? itemTypeColor(ribbon.groupKind, $activePalette)
+                : itemColor(indexed, ribbon.itemId, $activePalette)}
               {@const ribbonLabel = isGroup
                 ? `Item type ${kindGroupLabel(ribbon.groupKind!)} · ${ribbon.memberItemIds?.length ?? 0} items`
                 : itemAccessibleLabel(ribbon.itemId)}
@@ -1770,7 +1778,7 @@
                 class="ribbon-emphasis hovered"
                 vector-effect="non-scaling-stroke"
                 d={hoveredRibbon.path}
-                fill={itemColor(indexed, hoveredRibbon.itemId)}
+                fill={itemColor(indexed, hoveredRibbon.itemId, $activePalette)}
               />
             {/if}
             {#if selectedRibbon}
@@ -1778,7 +1786,7 @@
                 class="ribbon-emphasis selected"
                 vector-effect="non-scaling-stroke"
                 d={selectedRibbon.path}
-                fill={itemColor(indexed, selectedRibbon.itemId)}
+                fill={itemColor(indexed, selectedRibbon.itemId, $activePalette)}
               />
             {/if}
             {#each river.versionMarks as mark (mark.key)}
@@ -1830,7 +1838,7 @@
           role="status"
           style:left={`${hoveredGroup.x}px`}
           style:top={`${hoveredGroup.y}px`}
-          style:--group-color={itemTypeColor(hoveredGroup.kind)}
+          style:--group-color={itemTypeColor(hoveredGroup.kind, $activePalette)}
         >
           <strong>{kindGroupLabel(hoveredGroup.kind)}</strong>
           <span
@@ -1846,7 +1854,11 @@
           {#each [...new Set(river.ribbons
                 .map((ribbon) => ribbon.groupKind)
                 .filter(Boolean))] as kind}
-            <span><i style={`background:${itemTypeColor(kind!)}`}></i>{kindGroupLabel(kind!)}</span>
+            <span
+              ><i style={`background:${itemTypeColor(kind!, $activePalette)}`}></i>{kindGroupLabel(
+                kind!,
+              )}</span
+            >
           {/each}
         </div>
       {/if}
@@ -1979,7 +1991,7 @@
     width: 10px;
     height: 10px;
     border-radius: var(--radius-small);
-    border: 1px solid rgb(255 255 255 / 45%);
+    border: 1px solid var(--swatch-border);
   }
   .group-hover-card {
     position: absolute;
@@ -1995,7 +2007,7 @@
     background: var(--plot);
     color: var(--text);
     font-size: var(--text-sm);
-    box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+    box-shadow: 0 6px 18px var(--shadow);
     pointer-events: none;
     transform: translate(14px, 14px);
   }
@@ -2105,11 +2117,11 @@
   .call-target:hover,
   .call-target:focus-visible,
   .call-target.pinned {
-    color: #fff;
+    color: var(--text-strong);
     outline: none;
   }
   .call-target:focus-visible rect {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 2;
   }
   .call-target.condensed {
@@ -2167,8 +2179,12 @@
     margin-top: 8px;
   }
   .input-gap-key {
-    background: repeating-linear-gradient(135deg, transparent 0 4px, #aab4c775 4px 5px);
-    border: 1px solid #8793aa55;
+    background: repeating-linear-gradient(
+      135deg,
+      transparent 0 4px,
+      color-mix(in srgb, var(--input-gap) 46%, transparent) 4px 5px
+    );
+    border: 1px solid color-mix(in srgb, var(--input-gap-base) 34%, transparent);
   }
   .input-comparison-readout {
     flex-basis: 100%;
@@ -2201,11 +2217,11 @@
     fill-opacity: 1;
   }
   .ribbon-emphasis.hovered {
-    stroke: rgba(255, 255, 255, 0.55);
+    stroke: var(--selection-soft);
     stroke-width: 1.5;
   }
   .ribbon-emphasis.selected {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 2.5;
   }
   .ribbon.subpixel {
@@ -2219,7 +2235,7 @@
     pointer-events: fill;
   }
   .ribbon-hit:focus-visible {
-    stroke: rgba(255, 255, 255, 0.75);
+    stroke: var(--selection-focus);
     stroke-width: 3;
     outline: none;
   }
@@ -2236,13 +2252,13 @@
     opacity: 0.65;
   }
   .version-mark {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 1.5;
     opacity: 0.8;
   }
   .lineage-connector {
     fill: none;
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 1.5;
     stroke-dasharray: 4 4;
     opacity: 0.88;
@@ -2254,7 +2270,7 @@
     pointer-events: none;
   }
   .pin-line {
-    stroke: #fff;
+    stroke: var(--selection);
     stroke-width: 2;
     pointer-events: none;
   }

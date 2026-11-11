@@ -288,21 +288,29 @@
   }
   .swatch.read,
   .swatch.cacheRead {
-    background: #428fdc;
+    background: var(--cache-read);
   }
   .swatch.write,
   .swatch.cacheWrite {
-    background: repeating-linear-gradient(135deg, #9167c7 0 3px, #e0c9ff 3px 4px);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--cache-write) 0 3px,
+      var(--cache-write-mark) 3px 4px
+    );
   }
   .swatch.fresh {
-    background: radial-gradient(circle, #b5f6df 1px, #277d68 1.5px);
+    background: radial-gradient(circle, var(--cache-fresh-mark) 1px, var(--cache-fresh) 1.5px);
   }
   .swatch.nonread,
   .swatch.nonRead {
-    background: repeating-linear-gradient(135deg, #49536a 0 3px, #aab5c9 3px 4px);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--cache-nonread) 0 3px,
+      var(--cache-nonread-mark) 3px 4px
+    );
   }
   .swatch.uncached {
-    background: radial-gradient(circle, #b5f6df 1px, #277d68 1.5px);
+    background: radial-gradient(circle, var(--cache-fresh-mark) 1px, var(--cache-fresh) 1.5px);
   }
   .swatch.uncertain {
     background: transparent;
@@ -316,8 +324,8 @@
     justify-content: center;
     width: 14px;
     border: 0;
-    color: var(--page);
-    background: #ffbd64;
+    color: var(--event-warning-text);
+    background: var(--event-warning);
     font-size: 10px;
     font-style: normal;
     font-weight: 800;
@@ -333,7 +341,7 @@
     justify-content: center;
     border-color: var(--accent);
     background: var(--action);
-    color: #fff;
+    color: var(--active-text);
     font-size: 7px;
     font-style: normal;
     font-weight: 750;
@@ -352,12 +360,12 @@
   }
   .swatch.cost {
     border-radius: 50%;
-    background: #7ddbb7;
+    background: var(--cost);
   }
   .swatch.api-equivalent {
     border-radius: 50%;
     background: transparent;
-    border-color: #b9a8ff;
+    border-color: var(--api-cost);
   }
   @media (max-width: 620px) {
     .economics-track-controls {

@@ -123,7 +123,7 @@
     border-radius: var(--radius);
     background: var(--surface);
     color: var(--text);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 28px var(--shadow-strong);
     font-size: var(--text-sm);
     font-weight: normal;
     text-align: left;

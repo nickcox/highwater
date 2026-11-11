@@ -71,7 +71,7 @@
     background: var(--surface);
     border: 1px solid var(--control-border);
     border-radius: var(--radius);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 10px 30px var(--shadow);
   }
   header {
     display: flex;
@@ -88,7 +88,7 @@
     font-size: var(--text-sm);
   }
   header strong {
-    color: #fff;
+    color: var(--text-strong);
     overflow-wrap: anywhere;
   }
   dl {
@@ -126,6 +126,6 @@
   .lineage {
     border-left: 3px dashed var(--compaction);
     padding-left: 8px;
-    color: #d8c6a8;
+    color: var(--compaction-text);
   }
 </style>

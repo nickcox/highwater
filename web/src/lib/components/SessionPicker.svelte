@@ -246,7 +246,7 @@
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius);
     background: var(--surface);
-    box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+    box-shadow: 0 8px 24px var(--shadow);
   }
   .session-heading {
     display: flex;
@@ -290,7 +290,7 @@
   li.active,
   li:hover {
     background: var(--action);
-    color: #fff;
+    color: var(--active-text);
   }
   p {
     grid-column: 1 / -1;

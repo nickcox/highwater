@@ -906,7 +906,7 @@
   .ratio-discontinuity {
     margin-top: 9px;
     padding: 8px 10px;
-    border-left: 3px solid #ffbd64;
+    border-left: 3px solid var(--event-warning);
     border-radius: 4px;
     background: var(--surface-raised);
     color: var(--text);

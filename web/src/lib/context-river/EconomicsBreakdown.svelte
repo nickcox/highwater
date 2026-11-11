@@ -83,7 +83,7 @@
     background: var(--surface);
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius);
-    box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+    box-shadow: 0 8px 24px var(--shadow);
   }
   .event-breakdown-header,
   li {
@@ -93,7 +93,7 @@
     gap: 8px;
   }
   .event-breakdown-header {
-    color: #fff;
+    color: var(--text-strong);
     font-size: var(--text-sm);
   }
   .event-breakdown-header button {

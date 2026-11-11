@@ -138,10 +138,10 @@ describe('production context-item ordering', () => {
   });
 
   it('keeps the colour of the item each harness item takes the place of', () => {
-    const { itemColorById } = indexTestAnalysis(withHarnessItemsResent());
+    const { itemColorSlotById } = indexTestAnalysis(withHarnessItemsResent());
 
-    expect(itemColorById.get('context-2')).toBe(itemColorById.get('context-1'));
-    expect(itemColorById.get('env-2')).toBe(itemColorById.get('env-1'));
+    expect(itemColorSlotById.get('context-2')).toBe(itemColorSlotById.get('context-1'));
+    expect(itemColorSlotById.get('env-2')).toBe(itemColorSlotById.get('env-1'));
   });
 
   it('places a resent attachment where the earliest removed copy of it was', () => {

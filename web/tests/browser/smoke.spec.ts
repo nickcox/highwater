@@ -2,79 +2,21 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { costAssessmentOf, testAnalysis } from '../../src/lib/context-river/test-data';
-import type { SessionAnalysis, WireSessionAnalysis } from '../../src/lib/types';
+import type { WireSessionAnalysis } from '../../src/lib/types';
 import { toWireAnalysis } from '../../src/lib/testing/wire-analysis';
-import { ITEM_TYPE_PALETTE } from '../../src/lib/context-river/colors';
+import { palettes } from '../../src/lib/theme/palettes';
 import { timingExplanation } from '../../src/lib/components/call-timing';
 import { compositionScenario } from '../../src/lib/testing/composition-scenarios';
 import { sessionScenario } from '../../src/lib/testing/session-scenarios';
+import { generation, mockApi } from './mock-api';
+import { economicsScenario } from './economics-scenario';
+import { expectThemePreference, selectTheme } from './theme-picker';
 
+test.use({ colorScheme: 'dark' });
 const integrated = process.env.HIGHWATER_BROWSER_INTEGRATED === '1';
-const generation = '0123456789abcdef0123456789abcdef';
 const failedUsageExport = JSON.parse(
   readFileSync(new URL('../../../fixtures/analysis/failed-usage.json', import.meta.url), 'utf8'),
 ) as WireSessionAnalysis;
-
-function economicsScenario(): ReturnType<typeof testAnalysis> {
-  const analysis = testAnalysis();
-  for (const call of analysis.modelCalls) {
-    const input = call.index === 1 ? 750 : 1000;
-    const cacheRead = call.index === 1 ? 250 : 0;
-    const cacheWrite = 0;
-    const promptTokens = input + cacheRead + cacheWrite;
-    const piPromptCost = 0.0000000123 * call.index;
-    call.provider = 'anthropic';
-    call.api = 'anthropic-messages';
-    call.usage = { ...call.usage, input, cacheRead, cacheWrite };
-    call.cost = {
-      input: piPromptCost,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      total: piPromptCost,
-    };
-    call.costAssessment = costAssessmentOf('recorded', piPromptCost);
-    call.economics = {
-      ...call.economics,
-      policyId: 'anthropic-messages-cache-v1',
-      usageCompleteness: 'complete',
-      costCompleteness: 'complete',
-      cacheWriteStatus: 'reported',
-      promptTokens,
-      cacheReadRatio: cacheRead / promptTokens,
-      cacheWriteRatio: 0,
-      freshRatio: input / promptTokens,
-      piPromptCost,
-      cacheRatioDiscontinuity: null,
-      explanationCodes: [],
-    };
-  }
-  analysis.modelCalls[3].model = 'different-model';
-  analysis.modelCalls[1].economics.cacheRatioDiscontinuity = {
-    previousCallIndex: 1,
-    direction: 'drop',
-    previousRatio: 0.25,
-    currentRatio: 0,
-    delta: 0.25,
-    magnitude: 'notable',
-    method: 'adjacent-cache-read-share-v1',
-    previousPromptTokens: 1000,
-    currentPromptTokens: 1000,
-    compactionBefore: analysis.modelCalls[1].compactionBefore,
-  };
-  analysis.economics = {
-    ...analysis.economics,
-    supportedPolicyIds: ['anthropic-messages-cache-v1'],
-    usageCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
-    costCompleteness: { complete: 4, partial: 0, missing: 0, unsupported: 0 },
-    cacheReadEligibleCalls: 4,
-    cacheReadPromptTokens: 4000,
-    cacheReadTokens: 250,
-    cacheReadRatio: 0.0625,
-    explanationCodes: [],
-  };
-  return analysis;
-}
 
 function clusteredEconomicsScenario(): ReturnType<typeof testAnalysis> {
   const analysis = economicsScenario();
@@ -310,84 +252,6 @@ function denseEconomicsScenario(): ReturnType<typeof testAnalysis> {
   analysis.session.calculatedTokenTurns = analysis.tokenAnalysis.totalCalculatedTokenTurns;
   analysis.session.calculatedTokenTurnsCoverage = analysis.tokenAnalysis.itemEstimateCoverage;
   return analysis;
-}
-
-async function mockApi(
-  page: Page,
-  sourceAnalysis: SessionAnalysis | WireSessionAnalysis = testAnalysis(),
-): Promise<void> {
-  await page.addInitScript((liveGeneration: string) => {
-    class StableEventSource extends EventTarget {
-      readonly url: string;
-      readonly withCredentials = false;
-      private state = 0;
-      onopen: ((event: Event) => void) | null = null;
-      onerror: ((event: Event) => void) | null = null;
-
-      constructor(url: string | URL) {
-        super();
-        this.url = String(url);
-        queueMicrotask(() => {
-          if (this.state === 2) return;
-          this.state = 1;
-          this.onopen?.(new Event('open'));
-          this.dispatchEvent(
-            new MessageEvent('liveStatus', {
-              data: JSON.stringify({ generation: liveGeneration, availability: 'active' }),
-            }),
-          );
-        });
-      }
-
-      get readyState(): number {
-        return this.state;
-      }
-      close(): void {
-        this.state = 2;
-      }
-    }
-
-    (window as unknown as { EventSource: typeof EventSource }).EventSource =
-      StableEventSource as unknown as typeof EventSource;
-  }, generation);
-
-  const analysis = structuredClone(sourceAnalysis);
-  analysis.session.id = 'browser-smoke';
-
-  await page.route('**/api/sessions', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      headers: {
-        etag: '"catalog-v0"',
-        'X-Highwater-Server-Generation': generation,
-        'X-Highwater-Catalog-Revision': '0',
-        'X-Highwater-Live-Updates': 'active',
-      },
-      body: JSON.stringify({
-        sessions: [
-          {
-            id: 'browser-smoke',
-            fileName: 'browser-smoke.jsonl',
-            displayName: 'Sanitized browser smoke fixture',
-            workingDirectory: '/tmp/highwater-browser-smoke',
-            startedAt: null,
-            byteSize: 1,
-            modifiedAt: null,
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route('**/api/sessions/**/analysis', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      headers: { etag: '"analysis-v0"' },
-      body: JSON.stringify(toWireAnalysis(analysis)),
-    });
-  });
 }
 
 async function assertLoaded(page: Page): Promise<void> {
@@ -1093,7 +957,7 @@ test('Item types use distinct semantic colors consistently in ribbons and legend
   expect(new Set(actual).size).toBe(9);
   const sessionKinds = new Set(allKinds.contextItems.map((item) => item.kind));
   expect([...actual].sort()).toEqual(
-    [...sessionKinds].map((kind) => ITEM_TYPE_PALETTE[kind]).sort(),
+    [...sessionKinds].map((kind) => palettes.dark.itemTypes[kind]).sort(),
   );
   const ribbonRgb = await grouped.evaluateAll((nodes) =>
     nodes.map((node) => getComputedStyle(node).fill).sort(),
@@ -3234,8 +3098,12 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    if (width === 1440)
-      expect((await page.locator('.river-scroll .river-plot').boundingBox())!.y).toBeLessThan(400);
+    if (width === 1440) {
+      // The theme control has its own header row; keep the content below the header compact.
+      const header = (await page.locator('.titlebar').boundingBox())!;
+      const plot = (await page.locator('.river-scroll .river-plot').boundingBox())!;
+      expect(plot.y - header.y - header.height).toBeLessThan(320);
+    }
     if (process.env.HIGHWATER_CALM_SCREENSHOTS)
       await captureBaselineState(
         page,
@@ -3385,7 +3253,20 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Pinned call 8' })).toBeVisible();
   await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.5×');
+  for (const palette of Object.values(palettes)) {
+    await selectTheme(page, palette.id);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', palette.id);
+    expect(
+      await page
+        .locator('html')
+        .evaluate((root) => getComputedStyle(root).getPropertyValue('--plot').trim()),
+    ).toBe(palette.tokens.plot);
+    await expect(page.getByRole('region', { name: 'Pinned call 8' })).toBeVisible();
+    await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.5×');
+  }
   await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expectThemePreference(page, 'light');
   await assertLoaded(page);
   await expect(page.getByRole('region', { name: 'Pinned call 8' })).toBeVisible();
   await expect(page.getByText('Selected item', { exact: true })).toBeVisible();

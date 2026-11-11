@@ -116,14 +116,14 @@
     background: var(--surface);
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius);
-    box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+    box-shadow: 0 8px 24px var(--shadow);
   }
   .event-breakdown-header {
     display: flex;
     align-items: start;
     justify-content: space-between;
     gap: 8px;
-    color: #fff;
+    color: var(--text-strong);
     font-size: var(--text-sm);
   }
   .event-breakdown-header button {

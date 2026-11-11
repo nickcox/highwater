@@ -496,7 +496,7 @@
     font-size: var(--text-sm);
   }
   h3 {
-    color: #fff;
+    color: var(--text-strong);
     font-size: var(--text-lg);
     margin: 0 0 6px;
     overflow-wrap: anywhere;

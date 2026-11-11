@@ -1,30 +1,5 @@
 :root {
-  --page: #11171c;
-  --surface: #161e24;
-  --plot: #131b21;
-  --text: #e5edf0;
-  --secondary: #a5b4be;
-  --separator: #2b3942;
-  --control-border: #526570;
-  --accent: #9cd8c5;
-  --action: #253f39;
-  --warning: #ffd28d;
-  --error: #ffc0ae;
-  /* Text: --text-strong for headings and active controls, --muted for the faintest captions. */
-  --text-strong: #f4f8f9;
-  --muted: #8a99a3;
-  /* Popovers, cards and hovered controls sit one step above --surface. */
-  --surface-raised: #1d272e;
-  /* The background of a selected row. */
-  --selected-surface: #22333a;
-  --chart-guide: #1e2a31;
-  --warning-surface: #2a2415;
-  --warning-border: #7d6840;
-  --error-surface: #2a1c1f;
-  --error-border: #7d493f;
-  /* Compaction boundaries in the River, lifespans and economics track. */
-  --compaction: #ffb14e;
-  --compaction-text: #ffca87;
+  /* Palette colours and native control appearance are generated into the document head. */
   --text-xs: 11px;
   --text-sm: 12px;
   --text-md: 13px;
@@ -38,14 +13,9 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
-  /* Drawn instead of the browser's own arrow, which sits against the right border. */
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a5b4be' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 * {
   box-sizing: border-box;
-}
-html {
-  color-scheme: dark;
 }
 body {
   margin: 0;
@@ -115,7 +85,7 @@ summary:focus-visible {
 .toggle-group > button[aria-pressed='true'] {
   border-color: var(--accent);
   background-color: var(--action);
-  color: #fff;
+  color: var(--active-text);
 }
 input {
   color: var(--text);

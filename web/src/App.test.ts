@@ -485,6 +485,31 @@ describe('Context River interactions', () => {
     await fireEvent.keyDown(main, { key: 'l' });
     expect(container.querySelector('#pinned-call-summary')).toHaveTextContent('Pinned call 2');
   });
+  it('changes chart colours without invalidating geometry or losing the investigation', async () => {
+    const geometry = vi.spyOn(riverLayout, 'layoutContextRiver');
+    try {
+      await renderLoaded();
+      const river = screen.getByRole('application', { name: 'Context River' });
+      const item = within(river).getByRole('button', { name: 'bash: npm test' });
+      await fireEvent.click(item);
+      await waitFor(() => expect(screen.getByText('Selected item', { exact: true })).toBeVisible());
+      await waitFor(() =>
+        expect(screen.queryByRole('status', { name: 'Refresh progress' })).toBeNull(),
+      );
+      const theme = screen.getByRole('radiogroup', { name: 'Theme' });
+      await fireEvent.click(within(theme).getByRole('radio', { name: 'Dark' }));
+      const previousCalls = geometry.mock.calls.length;
+      const fill = river.querySelector('.ribbon')!.getAttribute('fill');
+      await fireEvent.click(within(theme).getByRole('radio', { name: 'Light' }));
+      expect(river.querySelector('.ribbon')!.getAttribute('fill')).not.toBe(fill);
+      expect(item).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByText('Pinned call 1', { exact: true })).toBeVisible();
+      expect(geometry).toHaveBeenCalledTimes(previousCalls);
+      expect(localStorage.getItem('highwater.theme.v1')).toBe('"light"');
+    } finally {
+      geometry.mockRestore();
+    }
+  });
   it('does not invalidate River geometry for controller status-only publications', async () => {
     const geometry = vi.spyOn(riverLayout, 'layoutContextRiver');
     try {

@@ -40,6 +40,20 @@ The integrated browser checks run the real server with its embedded frontend. Ea
 - `scripts/browser-smoke-claude-code-integrated.sh` copies `fixtures/claude-code/projects` to a temporary folder, and checks the Claude Code filter, subagent labels, the coverage notice, API-equivalent cost, the River, Composition, a `304`, the own-total row, a live append and the narrow layout.
 - `scripts/browser-smoke-vscode-copilot-integrated.sh` copies `fixtures/vscode-copilot/User` to a temporary folder, builds its trace database from `fixtures/vscode-copilot/traces.sql`, and checks the VS Code Copilot catalogue and filter, calls with and without trace records (timing, recorded cost, coverage note), a Claude call's cache policy and a `304`.
 
+## Colour schemes
+
+`web/src/lib/theme/palettes.ts` is the single source for named palette metadata, interface tokens, item-type colours and the ten individual-item colours. Add a complete entry to `palettes` to add a scheme; its ID must match its registry key. Set `colorScheme` to the native browser appearance it should use. System always resolves to the registered Dark or Light palette. The top-right picker labels this preference Auto. It shows a three-way Light / Dark / Auto toggle for the two built-in palettes and automatically uses a dropdown when more palettes are registered.
+
+Keep token names semantic and define every token in every palette. Preserve item-kind meanings and individual-item slot ordering. `IndexedAnalysis.itemColorSlotById` stores stable assignments independently of the displayed palette; rendering helpers resolve slots using the active palette. Theme changes must not re-index analysis or recompute geometry.
+
+The Vite plugin in `web/scripts/theme-html.ts` generates the palette CSS and adds a blocking classic script to the document head. It serves `theme-bootstrap.js` in development and emits `web/dist/theme-bootstrap.js` for production. The script is same-origin because the embedded server's Content Security Policy prohibits inline scripts. Both development and production HTML use it. Do not duplicate colours in component CSS or hand-edit the generated HTML. Black and white inside the River's luminance mask encode visibility and deliberately remain fixed; the standalone favicon is fixed artwork too.
+
+The controller stores only the preference in `highwater.theme.v1`, separate from presentation preferences and shared links. Startup and system appearance changes do not write storage. The bootstrap and runtime controller share preference validation and are checked for equivalent resolution.
+
+Run the generic palette/contrast tests and `npm --prefix web run test:browser -- theme.spec.ts` when adding a scheme. The browser tests capture desktop and narrow screenshots under `.playwright/test-results/` and test startup before the application module loads. Review neighbouring chart colours and translucent marks visually as well as checking text contrast. The Dark palette slightly brightens muted text, control borders and the non-read cache pattern compared with the original dark-only interface to meet the contrast checks. Ratio-change glyph labels now use contrasting text rather than always white.
+
+Rebuild `web/dist/` before building Rust, and run the embedded browser checks as described above. The integrated Pi smoke test checks palette changes and persistence as well as chart navigation.
+
 ## Releases
 
 `.github/workflows/release.yml` builds release archives for macOS, Linux and Windows. Pushing a tag such as `v0.1.0` checks that the tag matches the version in `Cargo.toml`, builds and packages each binary with the README, licence and changelog, and creates a draft GitHub release with the archives and a `SHA256SUMS` file. Write the release notes and publish it by hand. Running the workflow by hand from the Actions tab builds the archives without creating a release.

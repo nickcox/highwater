@@ -77,29 +77,38 @@
     vertical-align: middle;
   }
   .event-glyph-svg text {
-    fill: #fff;
+    fill: var(--active-text);
     font:
       750 9px ui-sans-serif,
       system-ui,
       sans-serif;
     pointer-events: none;
   }
+  .event-glyph-svg-compaction text {
+    fill: var(--event-compaction-text);
+  }
+  .event-glyph-svg-ratioChange text {
+    fill: var(--event-warning-text);
+  }
+  .event-glyph-svg.rise text {
+    fill: var(--event-success-text);
+  }
   .glyph-compaction {
-    fill: #4b3821;
+    fill: var(--event-compaction-fill);
     stroke: var(--compaction);
     stroke-width: 1.25;
   }
   .glyph-target {
     fill: var(--action);
-    stroke: #aad3ef;
+    stroke: var(--event-target);
     stroke-width: 1.25;
   }
   .glyph-ratio {
-    fill: #ffbd64;
+    fill: var(--event-warning);
     stroke: var(--page);
     stroke-width: 1.25;
   }
   .event-glyph-svg.rise .glyph-ratio {
-    fill: #80dcba;
+    fill: var(--event-success);
   }
 </style>
