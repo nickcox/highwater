@@ -955,7 +955,7 @@
     color: var(--error);
     margin-left: 6px;
   }
-  @media (max-width: 520px) {
+  @container highwater (max-width: 520px) {
     .essential-metrics,
     .detail-rows,
     .technical-values,

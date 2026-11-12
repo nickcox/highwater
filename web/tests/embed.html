@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Embedded Highwater test</title>
+    <style>
+      body { margin: 20px; font: 18px serif; background: white; color: black; }
+      #embed { width: 420px; }
+      #outside { background: rgb(200, 20, 40); color: white; }
+    </style>
+  </head>
+  <body>
+    <h1>Unrelated host page</h1>
+    <button id="outside">Outside button</button>
+    <div id="embed"></div>
+    <div id="second-embed" style="width: 420px"></div>
+    <script type="module" src="/tests/embed-harness.ts"></script>
+  </body>
+</html>

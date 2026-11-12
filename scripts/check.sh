@@ -14,6 +14,7 @@ for argument in "$@"; do
   esac
 done
 npm --prefix web ci
+scripts/check-embed.sh
 if [[ "$RUST_CHECKS" == 1 ]]; then
   cargo fmt --check
   cargo clippy --all-targets --locked -- -D warnings

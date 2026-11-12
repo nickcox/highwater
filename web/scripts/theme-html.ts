@@ -16,8 +16,15 @@ function declarations(palette: Palette): string {
   return `color-scheme:${palette.colorScheme};${tokens.join('')}${types.join('')}--chevron:${chevron};`;
 }
 
-export function themeCss(registry: readonly Palette[] = Object.values(palettes)): string {
-  return `:root{${declarations(palettes.dark)}}html{background:var(--page)}${registry.map((palette) => `html[data-theme="${palette.id}"]{${declarations(palette)}}`).join('')}`;
+export function themeCss(
+  registry: readonly Palette[] = Object.values(palettes),
+  selector: 'html' | ':host' = 'html',
+): string {
+  const root = selector === 'html' ? ':root' : ':host';
+  const background = selector === 'html' ? 'html{background:var(--page)}' : '';
+  const themed = (id: string) =>
+    selector === 'html' ? `html[data-theme="${id}"]` : `:host([data-theme="${id}"])`;
+  return `${root}{${declarations(palettes.dark)}}${background}${registry.map((palette) => `${themed(palette.id)}{${declarations(palette)}}`).join('')}`;
 }
 
 /** Generate a self-contained classic script without importing application code. */
@@ -44,19 +51,22 @@ export function themeHtml(): Plugin {
       // Add the already-generated classic script after Vite's module processing. A module
       // would defer startup; an inline script would violate the embedded server's CSP.
       order: 'post',
-      handler: () => [
-        {
-          tag: 'style',
-          attrs: { id: 'theme-palettes' },
-          children: themeCss(),
-          injectTo: 'head',
-        },
-        {
-          tag: 'script',
-          attrs: { id: 'theme-bootstrap', src: '/theme-bootstrap.js' },
-          injectTo: 'head',
-        },
-      ],
+      handler: (_html, context) =>
+        context.path !== '/index.html'
+          ? []
+          : [
+              {
+                tag: 'style',
+                attrs: { id: 'theme-palettes' },
+                children: themeCss(),
+                injectTo: 'head',
+              },
+              {
+                tag: 'script',
+                attrs: { id: 'theme-bootstrap', src: '/theme-bootstrap.js' },
+                injectTo: 'head',
+              },
+            ],
     },
   };
 }

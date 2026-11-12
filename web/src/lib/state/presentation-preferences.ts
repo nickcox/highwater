@@ -54,9 +54,10 @@ export function parsePresentationPreferences(raw: string | null): PresentationPr
 
 export function readPresentationPreferences(
   access: StorageAccess = browserStorage,
+  key: string = PRESENTATION_KEY,
 ): PresentationPreferences {
   try {
-    return parsePresentationPreferences(access()?.getItem(PRESENTATION_KEY) ?? null);
+    return parsePresentationPreferences(access()?.getItem(key) ?? null);
   } catch {
     return defaultPresentationPreferences();
   }
@@ -65,12 +66,10 @@ export function readPresentationPreferences(
 export function writePresentationPreferences(
   value: PresentationPreferences,
   access: StorageAccess = browserStorage,
+  key: string = PRESENTATION_KEY,
 ): void {
   try {
-    access()?.setItem(
-      PRESENTATION_KEY,
-      JSON.stringify(parsePresentationPreferences(JSON.stringify(value))),
-    );
+    access()?.setItem(key, JSON.stringify(parsePresentationPreferences(JSON.stringify(value))));
   } catch {
     // The per-App in-memory preference remains usable with blocked storage.
   }

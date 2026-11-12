@@ -124,7 +124,7 @@
     font-size: 10px;
     white-space: nowrap;
   }
-  @media (max-width: 620px) {
+  @container highwater (max-width: 620px) {
     .event-breakdown {
       position: static;
       width: 100%;

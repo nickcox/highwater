@@ -1,0 +1,14 @@
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font:
+    14px/1.45 Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+#app {
+  container-type: inline-size;
+  container-name: highwater;
+}

@@ -54,6 +54,16 @@ Run the generic palette/contrast tests and `npm --prefix web run test:browser --
 
 Rebuild `web/dist/` before building Rust, and run the embedded browser checks as described above. The integrated Pi smoke test checks palette changes and persistence as well as chart navigation.
 
+## Embeddable session view
+
+`npm --prefix web run build:embed` builds `web/src/embed.ts` into the self-contained ES module `integrations/bb/vendor/highwater-embed.js`. The module and its hand-written declaration file are tracked, so consumers do not need Svelte build tools. It is separate from the Rust server's embedded frontend in `web/dist/`.
+
+`mountHighwater({ target, loadAnalysis, preferencesKey, theme })` attaches a shadow root and returns `refresh()`, `setTheme()` and `destroy()`. `loadAnalysis(signal, etag)` supplies an analysis or a not-modified result; it should honour cancellation. The module validates and indexes the payload. The caller starts refreshes; the view does not poll. Call `destroy()` when removing the view. A destroyed target can be mounted again, including after a React development-mode effect cleanup.
+
+Display preferences use the supplied storage key. Theme changes update only the palette store and the target element, not the host page, system setting or `highwater.theme.v1`. Multiple views in one module follow the same palette. The standalone page remains responsible for its own theme-controller lifecycle and URL updates. Catalogue references used in standalone view links remain separate from native IDs in analysis payloads.
+
+`scripts/check-embed.sh` rebuilds the module and checks that its bytes match the tracked version. The normal check runs it without bb dependencies or build tools. Rebuild and include the vendor module whenever the shared view changes. `web/src/embed.test.ts` and `web/tests/browser/embed.spec.ts` exercise the built module, including focus, narrow layouts, palettes, two views and live replacements. The browser fixture in `web/tests/embed.html` is a test consumer, not another standalone entry point.
+
 ## Releases
 
 `.github/workflows/release.yml` builds release archives for macOS, Linux and Windows. Pushing a tag such as `v0.1.0` checks that the tag matches the version in `Cargo.toml`, builds and packages each binary with the README, licence and changelog, and creates a draft GitHub release with the archives and a `SHA256SUMS` file. Write the release notes and publish it by hand. Running the workflow by hand from the Actions tab builds the archives without creating a release.

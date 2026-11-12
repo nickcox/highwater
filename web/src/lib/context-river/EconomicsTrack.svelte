@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { domRoot } from '../dom-root';
+  let trackRoot: HTMLDivElement;
   import { onDestroy, untrack } from 'svelte';
   import { createOverlayFocus } from './overlay-focus';
   import type { IndexedAnalysis } from '../types';
@@ -371,7 +373,7 @@
     const id = cluster.id;
     openEventClusterId = id;
     eventFocus.focusAfterUpdate(
-      () => document.getElementById(`${id}-close`),
+      () => domRoot(trackRoot).getElementById(`${id}-close`),
       () => openEventClusterId === id,
     );
   }
@@ -390,8 +392,8 @@
 
   function eventTrigger(triggerId: string): HTMLElement | null {
     return (
-      document.getElementById(triggerId) ??
-      document.querySelector<HTMLElement>('.economics-track-header button')
+      domRoot(trackRoot).getElementById(triggerId) ??
+      domRoot(trackRoot).querySelector<HTMLElement>('.economics-track-header button')
     );
   }
 
@@ -570,7 +572,7 @@
   }
 
   function focusCall(index: number): void {
-    document.getElementById(`economics-call-${index}`)?.focus();
+    domRoot(trackRoot).getElementById(`economics-call-${index}`)?.focus();
   }
 
   function handleMarkKeydown(event: KeyboardEvent, callIndex: number): void {
@@ -600,6 +602,7 @@
 </script>
 
 <div
+  bind:this={trackRoot}
   class="track-shell"
   style={`width:${width}px`}
   role="presentation"

@@ -1045,7 +1045,7 @@
         'reset';
     }
   }
-  @media (max-width: 700px) {
+  @container highwater (max-width: 700px) {
     .axis-row,
     .row {
       grid-template-columns: 120px minmax(0, 1fr);
@@ -1055,7 +1055,7 @@
       display: none;
     }
   }
-  @media (max-width: 420px) {
+  @container highwater (max-width: 420px) {
     .browse-controls {
       grid-template-columns: minmax(0, 1fr);
     }

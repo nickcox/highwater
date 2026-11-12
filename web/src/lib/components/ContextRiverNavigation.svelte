@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { domRoot } from '../dom-root';
   import type { RiverViewportStatus } from '../context-river/viewport';
   import { stepCallTarget } from '../context-river/viewport';
   import RiverCallJump from './RiverCallJump.svelte';
@@ -41,9 +42,13 @@
   // the first and last calls. The focused button is checked before the buttons update, and the
   // other one is focused after, once it is enabled.
   $effect.pre(() => {
-    if (next === null && previous !== null && document.activeElement === nextButton)
+    if (next === null && previous !== null && domRoot(nextButton).activeElement === nextButton)
       void tick().then(() => previousButton.focus());
-    if (previous === null && next !== null && document.activeElement === previousButton)
+    if (
+      previous === null &&
+      next !== null &&
+      domRoot(previousButton).activeElement === previousButton
+    )
       void tick().then(() => nextButton.focus());
   });
   let rangeText = $derived(
@@ -175,7 +180,7 @@
     font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
   }
-  @media (max-width: 760px) {
+  @container highwater (max-width: 760px) {
     .viewport-navigation {
       grid-template-columns: minmax(0, 1fr);
     }

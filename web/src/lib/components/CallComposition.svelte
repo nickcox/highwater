@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { domRoot } from '../dom-root';
   import { estimateMethodLabel } from '../token-estimate';
   import InfoPopover from './InfoPopover.svelte';
   import { onMount, tick, untrack } from 'svelte';
@@ -207,7 +208,7 @@
   async function keepActiveListItemVisible(): Promise<void> {
     await tick();
     if (effectivePresentation !== 'list' || !listElement || !activeOptionId) return;
-    const activeOption = document.getElementById(activeOptionId);
+    const activeOption = domRoot(listElement).getElementById(activeOptionId);
     if (!activeOption || !listElement.contains(activeOption)) return;
     const viewport = listElement.getBoundingClientRect();
     const option = activeOption.getBoundingClientRect();
@@ -1047,7 +1048,7 @@
     border-radius: var(--radius);
     background: var(--plot);
   }
-  @media (max-width: 650px) {
+  @container highwater (max-width: 650px) {
     .reconciliation dl {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1055,7 +1056,7 @@
       align-items: flex-start;
     }
   }
-  @media (max-width: 440px) {
+  @container highwater (max-width: 440px) {
     .composition-row {
       grid-template-columns: 10px minmax(0, 1fr);
     }

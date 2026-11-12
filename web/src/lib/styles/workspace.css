@@ -1,5 +1,6 @@
-:root {
-  /* Palette colours and native control appearance are generated into the document head. */
+:root,
+:host {
+  /* Palette colours and native control appearance are supplied by the entry point. */
   --text-xs: 11px;
   --text-sm: 12px;
   --text-md: 13px;
@@ -16,16 +17,6 @@
 }
 * {
   box-sizing: border-box;
-}
-body {
-  margin: 0;
-  background: var(--page);
-  color: var(--text);
-  font:
-    14px/1.45 Inter,
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
 }
 /* background-color, not background, so the select chevron below is kept. */
 button,

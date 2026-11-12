@@ -646,7 +646,7 @@
   p {
     margin: 8px 0 0;
   }
-  @media (max-width: 520px) {
+  @container highwater (max-width: 520px) {
     .essential-metrics,
     .detail-rows {
       grid-template-columns: 1fr;

@@ -33,6 +33,11 @@ export function createThemeController() {
     }
   }
 
+  /** Embedders supply the palette without taking ownership of the page or preferences. */
+  function setPalette(id: keyof typeof palettes): void {
+    palette.set(palettes[id]);
+  }
+
   function start(): () => void {
     root = document.documentElement;
     const previousTheme = root.getAttribute('data-theme');
@@ -65,7 +70,13 @@ export function createThemeController() {
     };
   }
 
-  return { preference: readonly(preference), palette: readonly(palette), setPreference, start };
+  return {
+    preference: readonly(preference),
+    palette: readonly(palette),
+    setPreference,
+    setPalette,
+    start,
+  };
 }
 
 export const themeController = createThemeController();

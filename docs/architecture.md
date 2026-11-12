@@ -21,6 +21,9 @@ The server reads session files, rebuilds each model call's context, counts token
 - TypeScript validates and indexes the analysis response. It never counts tokens or fills in missing values.
 - D3 computes the scales, the SVG band paths and the Composition treemap layout.
 - Svelte renders the page and holds the interaction state.
+- `SessionView.svelte` owns the summary, charts, inspector, lifespans and interaction state. The standalone `App.svelte` owns session discovery, the title bar, theme controls, errors and page-address handling.
+- `web/src/embed.ts` mounts the same session view in a shadow root. Its caller supplies analyses and a Light or Dark palette; the embedded view does not discover sessions or change the page address. Refreshes validate and index new analyses, preserving interaction state only when the native session ID is unchanged. Its Follow latest control navigates to the newest calls until a call is pinned.
+- Responsive rules use the named `highwater` container, rather than the browser's width. Shared styles and palette declarations stay inside the embedded shadow root. DOM lookups use the owning root, so multiple mounted views can keep their focus and selections independent.
 
 ## Live updates
 

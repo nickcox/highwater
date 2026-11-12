@@ -5,6 +5,7 @@
 <script lang="ts">
   const mergeId = `compaction-merge-${nextMergeId++}`;
   import { onMount, untrack } from 'svelte';
+  import { domRoot } from '../dom-root';
   import type { IndexedAnalysis, ContextItemKind } from '../types';
   import { displayItemLabel } from '../item-label';
   import { kindGroupLabel } from '../kind-labels';
@@ -96,6 +97,7 @@
     onSelectItem,
     onEmptyClick,
     onEscape,
+    consumeUnhandledEscape = true,
     preferences = defaultPresentationPreferences(),
     onPreferencesChange = () => {},
   }: {
@@ -114,7 +116,8 @@
     onHoverItem: (id: string | null, event?: PointerEvent) => void;
     onSelectItem: (id: string) => void;
     onEmptyClick: (index: number) => void;
-    onEscape: () => void;
+    onEscape: () => void | boolean;
+    consumeUnhandledEscape?: boolean;
     preferences?: PresentationPreferences;
     onPreferencesChange?: (value: PresentationPreferences) => void;
   } = $props();
@@ -132,7 +135,7 @@
     riverDisplayMode = next.river.display;
     const mode = next.economics.expanded ? next.economics.lastMode : 'off';
     if (mode === 'off' && economicsTrackMode !== 'off') {
-      const focus = document.activeElement;
+      const focus = domRoot(host).activeElement;
       const inside =
         focus instanceof Node &&
         (economicsHeader?.contains(focus) ||
@@ -1149,7 +1152,9 @@
     if (groupBreakdown === null) {
       groupBreakdownReturnElement =
         returnElement ??
-        (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        (domRoot(host).activeElement instanceof HTMLElement
+          ? (domRoot(host).activeElement as HTMLElement)
+          : null);
     }
     const bounds = returnElement?.getBoundingClientRect();
     // Keyboard activation anchors to the visible part of the originating ribbon;
@@ -1165,7 +1170,7 @@
     const next = { kind, memberIds, callIndex, anchor };
     groupBreakdown = next;
     groupFocus.focusAfterUpdate(
-      () => document.getElementById('group-breakdown-close'),
+      () => domRoot(host).getElementById('group-breakdown-close'),
       () => groupBreakdown !== null && isVisible,
       { preventScroll: true },
     );
@@ -1230,7 +1235,7 @@
     closeEconomicsBreakdown(false);
     onPinCall(callIndex);
     economicsInspectFocus.focusAfterUpdate(
-      () => document.getElementById(`economics-call-${callIndex}`),
+      () => domRoot(host).getElementById(`economics-call-${callIndex}`),
       () => isVisible && indexed.callByIndex.has(callIndex),
     );
   }
@@ -1296,17 +1301,20 @@
         event.currentTarget instanceof SVGElement ? event.currentTarget : null,
       );
     } else if (event.key === 'Escape') {
+      handleEscapeKey(event);
+    }
+  }
+
+  function handleEscapeKey(event: KeyboardEvent): void {
+    if (onEscape() !== false || consumeUnhandledEscape) {
       event.preventDefault();
       event.stopPropagation();
-      onEscape();
     }
   }
 
   function handleHostKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      onEscape();
+      handleEscapeKey(event);
     } else if (event.code === 'Space' && (event.target === host || event.target === svg)) {
       spaceHeld = true;
       event.preventDefault();
@@ -1358,9 +1366,7 @@
       event.preventDefault();
       selectRibbonItem(id);
     } else if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      onEscape();
+      handleEscapeKey(event);
     }
   }
 
@@ -1369,9 +1375,7 @@
       event.preventDefault();
       onPinCall(callIndex);
     } else if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      onEscape();
+      handleEscapeKey(event);
     }
   }
 
@@ -1740,6 +1744,7 @@
             {#if callLabelPositions.has(position)}
               <g
                 class="call-target"
+                data-call-index={column.callIndex}
                 class:condensed={callTargetStride > 1}
                 class:pinned={pinnedCallIndex === column.callIndex}
                 role="button"
@@ -2281,7 +2286,7 @@
     stroke-dasharray: 4 3;
     pointer-events: none;
   }
-  @media (max-width: 620px) {
+  @container highwater (max-width: 620px) {
     .vertical-scale-controls {
       display: block;
     }

@@ -367,7 +367,7 @@
     background: transparent;
     border-color: var(--api-cost);
   }
-  @media (max-width: 620px) {
+  @container highwater (max-width: 620px) {
     .economics-track-controls {
       align-items: start;
     }

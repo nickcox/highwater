@@ -1,3 +1,4 @@
+import { domRoot } from '../dom-root';
 import type { GesturePointer } from './gestures';
 
 /** DOM ownership only. Gesture/navigation decisions and mutable view state remain in River. */
@@ -15,6 +16,7 @@ export interface RiverDomHandlers {
 
 export function installRiverDom(host: HTMLDivElement, handlers: RiverDomHandlers): () => void {
   let disposed = false;
+  const root = domRoot(host);
   const measure = () => {
     if (!disposed && host.clientWidth > 0) handlers.onResize(host.clientWidth, 'element');
   };
@@ -27,6 +29,7 @@ export function installRiverDom(host: HTMLDivElement, handlers: RiverDomHandlers
   window.addEventListener('keyup', handlers.onKeyUp);
   window.addEventListener('blur', handlers.onBlur);
   document.addEventListener('scroll', handlers.onDocumentScroll, true);
+  if (root !== document) root.addEventListener('scroll', handlers.onDocumentScroll, true);
   window.addEventListener('resize', measure);
   measure();
   const observer =
@@ -51,6 +54,7 @@ export function installRiverDom(host: HTMLDivElement, handlers: RiverDomHandlers
     window.removeEventListener('keyup', handlers.onKeyUp);
     window.removeEventListener('blur', handlers.onBlur);
     document.removeEventListener('scroll', handlers.onDocumentScroll, true);
+    if (root !== document) root.removeEventListener('scroll', handlers.onDocumentScroll, true);
     window.removeEventListener('resize', measure);
   };
 }

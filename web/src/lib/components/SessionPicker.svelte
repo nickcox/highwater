@@ -4,6 +4,8 @@
 
 <script lang="ts">
   import { tick } from 'svelte';
+  import { domRoot } from '../dom-root';
+  let pickerRoot: HTMLDivElement;
   import type { SessionListItem } from '../api/client';
   import { sessionOptionLabels } from '../session-label';
   import { sessionTree, withAncestors } from '../session-links';
@@ -65,7 +67,9 @@
 
   async function showActive(): Promise<void> {
     await tick();
-    document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+    domRoot(pickerRoot)
+      .getElementById(optionId(activeIndex))
+      ?.scrollIntoView?.({ block: 'nearest' });
   }
   function openList(): void {
     if (open) return;
@@ -116,7 +120,7 @@
   }
 </script>
 
-<div class="picker">
+<div class="picker" bind:this={pickerRoot}>
   <label
     >Harness
     <select bind:value={harness}>

@@ -554,7 +554,7 @@
     overflow-wrap: anywhere;
     color: var(--secondary);
   }
-  @media (max-width: 800px) {
+  @container highwater (max-width: 800px) {
     .primary-metrics {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }

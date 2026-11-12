@@ -422,6 +422,19 @@ describe('view links', () => {
     expect(screen.queryByText('Selected item')).not.toBeInTheDocument();
   });
 
+  it('keeps the catalogue reference in view links when the analysis has a different native session ID', async () => {
+    modifyAnalysis = (analysis) => {
+      analysis.session.id = 'native-session-id';
+    };
+    await renderLoaded();
+    const button = screen.getByRole('button', { name: 'Copy view link' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.click(button);
+    const input = await screen.findByRole('textbox', { name: 'View link' });
+    const params = new URLSearchParams(new URL((input as HTMLInputElement).value).hash.slice(1));
+    expect(params.get('session')).toBe('one');
+  });
+
   it('offers a selectable manual copy fallback without copying query tokens when the clipboard is unavailable', async () => {
     window.history.replaceState(null, '', '/?token=private');
     render(App);
