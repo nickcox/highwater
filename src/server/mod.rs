@@ -459,7 +459,8 @@ async fn run_with_watcher(
     // Use the bound port so `--port 0` still accepts its own Host header.
     let address = listener.local_addr()?;
     let app = local_origin::protect(router(state), address.port());
-    println!("Listening on http://{address}");
+    // External clients discover an ephemeral port by reading this stable stdout line.
+    println!("{}", listening_message(address));
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(shutdown.clone()))
         .await?;
@@ -480,6 +481,10 @@ async fn run_with_watcher(
         print_diagnostics(&diagnostics);
     }
     Ok(())
+}
+
+fn listening_message(address: SocketAddr) -> String {
+    format!("Listening on http://{address}")
 }
 
 async fn shutdown_signal(shutdown: watch::Sender<bool>) {

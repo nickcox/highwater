@@ -1,0 +1,44 @@
+{
+  "name": "bb-plugin-highwater",
+  "version": "0.5.1",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bb": ">=0.49",
+    "bbPluginSdk": ">=0.6.132"
+  },
+  "bb": {
+    "name": "Highwater",
+    "description": "See how a coding-agent thread uses its context window, call by call.",
+    "branding": {
+      "icon": "./assets/icon.svg"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "skills": []
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "bb plugin build",
+    "format": "prettier --write \"*.ts\" \"host/**/*.ts\" \"tests/**/*.ts\" \"*.json\"",
+    "format:check": "prettier --check \"*.ts\" \"host/**/*.ts\" \"tests/**/*.ts\" \"*.json\""
+  },
+  "dependencies": {
+    "semver": "^7.7.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.132",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/semver": "^7.7.0",
+    "bb-app": "0.49.0",
+    "better-sqlite3": "^13.0.3",
+    "cron-parser": "^5.5.0",
+    "hono": "^4.13.16",
+    "prettier": "^3.9.9",
+    "typescript": "5.9.2",
+    "vitest": "3.2.7"
+  }
+}

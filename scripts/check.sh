@@ -30,6 +30,7 @@ npm --prefix web run build
 export HIGHWATER_FRONTEND_BUILT=1
 cargo build --release --locked
 if [[ "$FULL" == 1 ]]; then
+  scripts/check-bb-plugin.sh
   npm --prefix web run test:browser:install -- --with-deps
   npm --prefix web run test:browser
   scripts/browser-smoke-integrated.sh

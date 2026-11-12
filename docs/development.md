@@ -16,7 +16,7 @@ Build the frontend before the Rust binary, because `rust-embed` packs the curren
 
 ```bash
 scripts/check.sh          # locked installs, Rust and frontend checks, live contract, embedded release build
-scripts/check.sh --full   # also Chromium, mocked and integrated (debug and release) browser checks, large benchmark
+scripts/check.sh --full   # also bb host checks, Chromium, integrated (debug and release) browser checks, large benchmark
 scripts/check.sh --full --skip-rust-checks   # as CI runs it: leaves out rustfmt, clippy and the Rust tests
 
 # Optional focused checks:
@@ -63,6 +63,14 @@ Rebuild `web/dist/` before building Rust, and run the embedded browser checks as
 Display preferences use the supplied storage key. Theme changes update only the palette store and the target element, not the host page, system setting or `highwater.theme.v1`. Multiple views in one module follow the same palette. The standalone page remains responsible for its own theme-controller lifecycle and URL updates. Catalogue references used in standalone view links remain separate from native IDs in analysis payloads.
 
 `scripts/check-embed.sh` rebuilds the module and checks that its bytes match the tracked version. The normal check runs it without bb dependencies or build tools. Rebuild and include the vendor module whenever the shared view changes. `web/src/embed.test.ts` and `web/tests/browser/embed.spec.ts` exercise the built module, including focus, narrow layouts, palettes, two views and live replacements. The browser fixture in `web/tests/embed.html` is a test consumer, not another standalone entry point.
+
+## bb host package
+
+`integrations/bb/` is an independent package with its own lockfile and development dependencies. It currently contains the embeddable vendor module and the host entry; its server entry registers nothing, and it does not yet add a Context tab or row. See [its development guide](../integrations/bb/README.md) for the implemented behaviour and limits.
+
+`scripts/check-bb-plugin.sh` installs the frontend dependencies, checks the vendor module, builds debug and release Highwater binaries, installs the plugin's dependencies, checks formatting and types, runs unit and real-binary SDK host tests, then builds the plugin with its pinned bb toolchain. Tests create only disposable fixtures under the repository's ignored `target/` directory. The ordinary repository check does not require bb tooling; `--full` runs this additional script. A separate CI job exercises it on Linux and macOS.
+
+For a focused iteration after dependencies and binaries exist, run `npm --prefix integrations/bb run check`, `npm --prefix integrations/bb test` and `npm --prefix integrations/bb run build`. `bb plugin types integrations/bb --check` checks the SDK pin against a running bb installation. The plugin has no CLI command, agent tool or injected skill.
 
 ## Releases
 

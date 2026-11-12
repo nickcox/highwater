@@ -1,6 +1,8 @@
 /target
 /node-compile-cache/
 web/node_modules
+integrations/bb/node_modules/
+integrations/bb/dist/
 web/dist/assets/*
 !web/dist/assets/index-*.js
 !web/dist/assets/index-*.css

@@ -11,6 +11,14 @@ use std::{
 };
 use tower::ServiceExt;
 
+#[test]
+fn listening_stdout_line_is_stable_for_external_clients() {
+    assert_eq!(
+        listening_message(SocketAddr::from(([127, 0, 0, 1], 43123))),
+        "Listening on http://127.0.0.1:43123"
+    );
+}
+
 fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> SessionFile {
     let path = path.into();
     let file_name = file_name.into();
