@@ -80,7 +80,7 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
           headers: { ...headers, 'content-type': 'application/json', 'content-encoding': 'gzip' },
         });
       } catch (error) {
-        if (signal.aborted) throw error;
+        if (signal.aborted) return new Response(null, { status: 499, headers: responseHeaders });
         return jsonState(failure(error));
       }
     },
@@ -112,7 +112,13 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
               usage: currentUsage,
             };
       } catch (error) {
-        if (signal.aborted) throw error;
+        if (signal.aborted)
+          return {
+            state: 'error' as const,
+            httpStatus: 499,
+            code: 'requestCancelled',
+            message: 'The request was cancelled.',
+          };
         return failure(error);
       }
     },

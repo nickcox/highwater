@@ -12,14 +12,20 @@ describe('package boundaries', () => {
   it('uses public SDK imports and no private bb packages', async () => {
     const result = await experimental_scanPublicSdkOnly(
       fileURLToPath(new URL('..', import.meta.url)),
-      { allow: [/^semver$/, /^vitest\/config$/] },
+      {
+        allow: [
+          /^semver$/,
+          /^vitest\/config$/,
+          /^(react(?:-dom)?(?:\/.*)?|@testing-library\/react|@radix-ui\/react-slot|class-variance-authority|clsx|tailwind-merge)$/,
+        ],
+      },
     );
     expect(result.violations).toEqual([]);
     expect(result.privateDependencies).toEqual([]);
   });
   it('declares only implemented entries, no agent skills and the current version range', () => {
     expect(manifest.bb.skills).toEqual([]);
-    expect(manifest.bb).not.toHaveProperty('app');
+    expect(manifest.bb.app).toBe('./app.tsx');
     const [major, minor] = manifest.version.split('.').map(Number);
     expect(ACCEPTED_VERSIONS).toBe(`>=${major}.${minor}.0 <${major}.${minor + 1}.0`);
     const cargoVersion = /^version = "([^"]+)"/m.exec(

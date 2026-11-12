@@ -493,7 +493,8 @@ describe('analysis HTTP route', () => {
     const response = host.http({ signal: controller.signal });
     const read = await reading.promise;
     controller.abort();
-    await response;
+    expect((await response).status).toBe(499);
+    expect(host.harness.logEntries).toHaveLength(0);
     expect(read.signal?.aborted).toBe(true);
     const close = host.driver.mock.calls.find(
       ([call]) => call.method === 'closeAnalysisTransfer',
@@ -521,7 +522,7 @@ describe('summary, settings and signals', () => {
     const read = await reading.promise;
     await host.harness.lifecycle.dispose();
     expect(read.signal?.aborted).toBe(true);
-    expect((await pending).status).not.toBe(200);
+    expect((await pending).status).toBe(499);
   });
   it('cancels summary work without reading context usage afterwards', async () => {
     const host = setup();
@@ -542,10 +543,14 @@ describe('summary, settings and signals', () => {
       { threadId, ifNoneMatch: null },
       { signal: controller.signal },
     );
-    const rejected = expect(pending).rejects.toMatchObject({ code: 'handler_error' });
     const read = await reading.promise;
     controller.abort();
-    await rejected;
+    expect(await pending).toMatchObject({
+      state: 'error',
+      httpStatus: 499,
+      code: 'requestCancelled',
+    });
+    expect(host.harness.logEntries).toHaveLength(0);
     expect(read.signal?.aborted).toBe(true);
     expect(host.harness.sdk.callsTo('threads.context')).toHaveLength(0);
   });

@@ -7,8 +7,18 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "strict": true,
+    "jsx": "react-jsx",
     "skipLibCheck": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["*.ts", "host/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "app/**/*",
+    "components/**/*",
+    "host/**/*",
+    "lib/**/*",
+    "server/**/*",
+    "tests/**/*"
+  ]
 }

@@ -1,8 +1,18 @@
 # Highwater bb plugin
 
-**In development.** The embeddable view, host entry and server entry are implemented. The server resolves Pi and Claude Code threads, serves analyses and summaries, and publishes update signals. There is no Context tab or row yet.
+**In development.** The Context tab works for Pi and Claude Code threads. It uses the shared Highwater session view and updates from bb thread events. The compact Context row is not implemented yet.
 
 The plugin runs a private Highwater server on the agent's machine, reads its catalogue and analyses through the existing HTTP API, and prepares compressed transfers and small summaries for bb. It does not read or modify session files itself.
+
+## Try the Context tab
+
+Once the plugin is installed and enabled, open a Pi or Claude Code thread, show its right panel, select **+** (New tab), then **Context**. You can also find Context in the panel's file/action search. The tab shows the session summary, River, Composition, inspector and lifespans. Pin a call to stop Follow latest; select **Follow latest** to resume.
+
+The view follows bb's light or dark theme. It only requests analyses while visible. Hiding the tab pauses requests without losing pins or selections; reopening it checks for changes. Editing a message or clearing context resolves the session again, so an old session is not kept on screen. Errors explain what happened and provide Retry.
+
+Refreshes start no more than once every two seconds, and no sooner than five times the previous fetch/JSON cycle duration. Signals received during a request are retained. Idle queues a final refresh after at least one second, subject to the same rate limit. Large sessions can therefore update more slowly. New session files get at most three automatic retries.
+
+Analyses contain session content and travel through bb. The current development build requires Highwater on the agent machine's PATH or the binary override below. Automatic binary provisioning is still planned for the release package.
 
 ## Development
 
@@ -19,7 +29,7 @@ npm --prefix integrations/bb run build
 
 On macOS or Linux, `scripts/check-bb-plugin.sh` also checks the vendor module and runs all host and server checks. The complete repository check includes it with `--full`; the ordinary repository check does not install bb dependencies.
 
-Tests use generated Pi sessions and copies of the Claude Code fixtures under this repository's ignored `target/` directory. They do not use existing conversations or session files. The process, SDK host and server round-trip tests exercise both debug and release binaries. Linux and macOS CI jobs run the same checks. Windows has not been validated.
+Tests use generated Pi sessions and copies of the Claude Code fixtures under this repository's ignored `target/` directory. They do not use existing conversations or session files. The process, SDK host and server round-trip tests exercise both debug and release binaries. UI tests mount the real embedded view through the SDK slot harness; scheduler tests use fake timers. Linux and macOS CI jobs run the same checks. Windows has not been validated.
 
 ## Server behaviour
 
