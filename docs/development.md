@@ -66,9 +66,9 @@ Display preferences use the supplied storage key. Theme changes update only the 
 
 ## bb host package
 
-`integrations/bb/` is an independent package with its own lockfile and development dependencies. It currently contains the embeddable vendor module and the host entry; its server entry registers nothing, and it does not yet add a Context tab or row. See [its development guide](../integrations/bb/README.md) for the implemented behaviour and limits.
+`integrations/bb/` is an independent package with its own lockfile and development dependencies. It contains the embeddable vendor module, host entry and server entry. The server resolves thread identities, serves analyses and summaries, and publishes update signals; it does not yet add a Context tab or row. See [its development guide](../integrations/bb/README.md) for the implemented behaviour and limits.
 
-`scripts/check-bb-plugin.sh` installs the frontend dependencies, checks the vendor module, builds debug and release Highwater binaries, installs the plugin's dependencies, checks formatting and types, runs unit and real-binary SDK host tests, then builds the plugin with its pinned bb toolchain. Tests create only disposable fixtures under the repository's ignored `target/` directory. The ordinary repository check does not require bb tooling; `--full` runs this additional script. A separate CI job exercises it on Linux and macOS.
+`scripts/check-bb-plugin.sh` installs the frontend dependencies, checks the vendor module, builds debug and release Highwater binaries, installs the plugin's dependencies, checks formatting and types, runs unit, server contract and real-binary host/server round-trip tests, then builds the plugin with its pinned bb toolchain. Tests create only disposable fixtures under the repository's ignored `target/` directory. The ordinary repository check does not require bb tooling; `--full` runs this additional script. A separate CI job exercises it on Linux and macOS.
 
 For a focused iteration after dependencies and binaries exist, run `npm --prefix integrations/bb run check`, `npm --prefix integrations/bb test` and `npm --prefix integrations/bb run build`. `bb plugin types integrations/bb --check` checks the SDK pin against a running bb installation. The plugin has no CLI command, agent tool or injected skill.
 

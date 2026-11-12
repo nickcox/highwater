@@ -37,6 +37,59 @@ const analysisInput = binary.extend({ sessionId, ifNoneMatch: etag }).strict();
 const notModified = z.object({ status: z.literal('notModified'), etag: z.string() }).strict();
 const transferId = z.string().uuid();
 
+export const threadIdSchema = z
+  .string()
+  .regex(/^thr_[A-Za-z0-9]+$/)
+  .max(160);
+export const threadRequestSchema = z
+  .object({ threadId: threadIdSchema, ifNoneMatch: etag })
+  .strict();
+export const threadStateSchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('unknownThread') }).strict(),
+  z.object({ state: z.literal('unsupportedAgent'), providerId: z.string() }).strict(),
+  z.object({ state: z.literal('noEnvironment') }).strict(),
+  z.object({ state: z.literal('noSession') }).strict(),
+  z.object({ state: z.literal('binaryMissing') }).strict(),
+  z
+    .object({ state: z.literal('unsupportedVersion'), version: z.string(), accepted: z.string() })
+    .strict(),
+  z.object({ state: z.literal('startFailed'), message: z.string() }).strict(),
+  z.object({ state: z.literal('sessionNotFound'), providerThreadId: z.string() }).strict(),
+  z
+    .object({
+      state: z.literal('error'),
+      httpStatus: z.number().int().min(400).max(599),
+      code: z.string(),
+      message: z.string(),
+    })
+    .strict(),
+]);
+export type ThreadState = z.infer<typeof threadStateSchema>;
+const usageSchema = z
+  .object({
+    usedTokens: z.number().nonnegative(),
+    contextWindowTokens: z.number().nonnegative(),
+  })
+  .strict()
+  .nullable();
+export const rpcContract = defineRpcContract({
+  threadSummary: {
+    input: threadRequestSchema,
+    output: z.union([
+      z
+        .object({
+          state: z.literal('ok'),
+          etag: z.string(),
+          summary: summarySchema,
+          usage: usageSchema,
+        })
+        .strict(),
+      z.object({ state: z.literal('notModified'), etag: z.string(), usage: usageSchema }).strict(),
+      threadStateSchema,
+    ]),
+  },
+});
+
 export const hostContract = defineRpcContract({
   status: { input: binary, output: statusSchema, experimental_retryable: true },
   findSession: {

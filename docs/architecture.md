@@ -25,11 +25,11 @@ The server reads session files, rebuilds each model call's context, counts token
 - `web/src/embed.ts` mounts the same session view in a shadow root. Its caller supplies analyses and a Light or Dark palette; the embedded view does not discover sessions or change the page address. Refreshes validate and index new analyses, preserving interaction state only when the native session ID is unchanged. Its Follow latest control navigates to the newest calls until a call is pinned.
 - Responsive rules use the named `highwater` container, rather than the browser's width. Shared styles and palette declarations stay inside the embedded shadow root. DOM lookups use the owning root, so multiple mounted views can keep their focus and selections independent.
 
-## bb host integration (in development)
+## bb integration (in development)
 
 `integrations/bb/` is a separate TypeScript package. Its host entry starts one private Highwater process on the agent's machine and uses the existing catalogue and analysis API. It verifies session references against that catalogue, computes small summaries and prepares gzip transfers with bounded pieces, memory use and expiry. Concurrent row/tab requests share startup, catalogue validation and analysis work. The process and its in-memory transfers stop with the host worker.
 
-The server entry currently registers nothing; thread resolution, the Context tab and the Context row are later milestones. No bb types or identifiers are passed to the Rust server. The listening stdout line has a format test because clients use it to discover an ephemeral port.
+The server entry resolves a thread's latest identity and environment on every request, invalidating an older identity after a completed context clear. Its HTTP route joins bounded gzip transfers and preserves ETags and analysis errors; its RPC returns summaries with bb's current context usage. Both accept only thread IDs. Thread events publish refresh signals without storing mappings or starting background work. The Context tab and Context row are later milestones. No bb types or identifiers are passed to the Rust server. The listening stdout line has a format test because clients use it to discover an ephemeral port.
 
 ## Live updates
 

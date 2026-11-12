@@ -1,6 +1,6 @@
 # Highwater bb plugin
 
-**In development.** The embeddable view and host entry are implemented. There is no Context tab, row or thread resolver yet. Installing this package does not currently add a usable interface.
+**In development.** The embeddable view, host entry and server entry are implemented. The server resolves Pi and Claude Code threads, serves analyses and summaries, and publishes update signals. There is no Context tab or row yet.
 
 The plugin runs a private Highwater server on the agent's machine, reads its catalogue and analyses through the existing HTTP API, and prepares compressed transfers and small summaries for bb. It does not read or modify session files itself.
 
@@ -17,9 +17,20 @@ npm --prefix integrations/bb test
 npm --prefix integrations/bb run build
 ```
 
-On macOS or Linux, `scripts/check-bb-plugin.sh` also checks the vendor module and runs all host checks. The complete repository check includes it with `--full`; the ordinary repository check does not install bb dependencies.
+On macOS or Linux, `scripts/check-bb-plugin.sh` also checks the vendor module and runs all host and server checks. The complete repository check includes it with `--full`; the ordinary repository check does not install bb dependencies.
 
-Tests use generated Pi sessions and copies of the Claude Code fixtures under this repository's ignored `target/` directory. They do not use existing conversations or session files. The process and SDK host tests exercise both debug and release binaries. Linux and macOS CI jobs run the same checks. Windows has not been validated.
+Tests use generated Pi sessions and copies of the Claude Code fixtures under this repository's ignored `target/` directory. They do not use existing conversations or session files. The process, SDK host and server round-trip tests exercise both debug and release binaries. Linux and macOS CI jobs run the same checks. Windows has not been validated.
+
+## Server behaviour
+
+For local development, install from the repository root with `bb plugin install path:./integrations/bb`. The **Highwater binary** setting defaults to an empty string, which uses `highwater` on PATH. Set an override with `bb plugin config highwater set binaryPath /absolute/path/to/highwater`; changes apply on the next request without a reload.
+
+- `GET /api/v1/plugins/highwater/http/analysis?threadId=thr_…` accepts only a thread ID, never a session ID or path. It returns gzip JSON with an ETag, or a bodyless `304` for an unchanged analysis. Invalid input returns `400`; unavailable session states return `409`. Highwater errors keep their original status, code and message.
+- The `threadSummary` RPC accepts `{ threadId, ifNoneMatch }` and returns a small summary with current bb context usage, including on an unchanged result. It never sends an analysis body to the caller.
+- Each request resolves the thread's provider, latest identity and environment again. Resolution pages backward past unrelated operations. A completed context clear before the latest identity means no current session; the next prompt's identity restores resolution. Codex and other providers remain unsupported.
+- The server joins at most 16 pieces and 64 MiB of compressed analysis, closes every opened transfer, and retries an expired transfer once. Cancellation stops that request, not other callers' shared host work. Plugin disposal aborts active requests.
+- Coalesced thread events publish `thread-advanced` with `{ threadId, idle: false }`; idle and failure publish `idle: true`. No background service, schedule or stored thread mapping is used.
+- HTTP and RPC use bb's local origin guard. This is not authentication: requests without an Origin are accepted by bb's local API. Remote access depends on the deployment's enclosing access controls and has not been validated. First-release support is local to the bb server's machine.
 
 ## Host behaviour
 
@@ -32,8 +43,8 @@ Tests use generated Pi sessions and copies of the Claude Code fixtures under thi
 - Analyses and summaries share in-flight loading per process generation and session. Each fetch revalidates its cached ETag. A cancelled caller stops waiting without cancelling shared work for other callers. At most two different analyses load concurrently.
 - Compressed analyses are cached for two sessions. Cached and active-transfer buffers share a 64 MiB limit. Transfers are immutable, expire after 60 seconds and can be explicitly closed. Each raw piece is at most 4 MiB before base64, below bb's 8 MiB JSON result limit.
 - Each HTTP fetch has a 20-second timeout. Analyses are limited to 128 MiB uncompressed and 64 MiB compressed. These bounds do not cap total process memory: parsing, compression and HTTP buffers require additional working memory.
-- Session content stays in memory on the host at this stage. Later milestones send analyses through the bb server to the interface, so the finished plugin must not claim that session content never leaves the agent's machine.
+- Analyses include session content. They travel through the bb server to the requesting client; summaries follow the same route. The plugin sends nothing to another service and does not persist analyses.
 
 ## Scope
 
-The Rust server remains independent of bb. The Rust change for this milestone preserves and tests the existing listening-line format as an external startup contract. The TypeScript package depends only on public bb SDK surfaces and ordinary runtime dependencies. `skills: []` prevents adding agent instructions to every thread.
+The Rust server remains independent of bb. Its existing listening-line format is tested as an external startup contract. The TypeScript package depends only on public bb SDK surfaces and ordinary runtime dependencies. `skills: []` prevents adding agent instructions to every thread.

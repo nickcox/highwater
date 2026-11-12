@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercise the plugin host against both real binaries, without installing the plugin into bb.
+# Check the host and server against both real binaries, without installing the plugin into bb.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"

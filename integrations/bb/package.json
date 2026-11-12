@@ -21,8 +21,8 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "build": "bb plugin build",
-    "format": "prettier --write \"*.ts\" \"host/**/*.ts\" \"tests/**/*.ts\" \"*.json\"",
-    "format:check": "prettier --check \"*.ts\" \"host/**/*.ts\" \"tests/**/*.ts\" \"*.json\""
+    "format": "prettier --write \"*.ts\" \"host/**/*.ts\" \"server/**/*.ts\" \"tests/**/*.ts\" \"*.json\"",
+    "format:check": "prettier --check \"*.ts\" \"host/**/*.ts\" \"server/**/*.ts\" \"tests/**/*.ts\" \"*.json\""
   },
   "dependencies": {
     "semver": "^7.7.0",
