@@ -12,7 +12,9 @@ The view follows bb's light or dark theme. It only requests analyses while visib
 
 Refreshes start no more than once every two seconds, and no sooner than five times the previous fetch/JSON cycle duration. Signals received during a request are retained. Idle queues a final refresh after at least one second, subject to the same rate limit. Large sessions can therefore update more slowly. New session files get at most three automatic retries.
 
-Analyses contain session content and travel through bb. The current development build requires Highwater on the agent machine's PATH or the binary override below. Automatic binary provisioning is still planned for the release package.
+Analyses contain session content and travel through bb. No separate Highwater installation is required: the first request downloads a pinned release on the agent machine, verifies its archive and executable SHA-256 hashes against pins shipped with the plugin, and installs it privately. GitHub receives only binary download requests, not session content. Later starts recheck cached files and work offline. Download failures show a message and Retry; an explicit override can use a preinstalled binary.
+
+The plugin source is not yet published. Develop with the path installation below. After publication, install with `bb plugin install git:https://github.com/nickcox/highwater.git --plugin highwater`. No marketplace submission is required for direct installation.
 
 ## Context row
 
@@ -35,9 +37,13 @@ npm --prefix integrations/bb test
 npm --prefix integrations/bb run build
 ```
 
+Plugin maintenance scripts live in `integrations/bb/scripts/`. From the repository root, use `python3 integrations/bb/scripts/check-bb-release.py` to check release metadata, `python3 integrations/bb/scripts/pin-bb-binary-release.py VERSION` to review and pin a published binary release, and `python3 integrations/bb/scripts/generate-bb-notices.py` to regenerate dependency notices after installing both packages. These scripts resolve paths from their own location, not the working directory. Shared fixtures, Rust builds and embedded-view sources remain in the main repository.
+
 On macOS or Linux, `scripts/check-bb-plugin.sh` also checks the vendor module and runs all host and server checks. The complete repository check includes it with `--full`; the ordinary repository check does not install bb dependencies.
 
-Tests use generated Pi sessions and copies of the Claude Code and Codex fixtures under this repository's ignored `target/` directory. They do not use existing conversations or session files. The process, SDK host and server round-trip tests exercise both debug and release binaries. UI tests mount the real embedded view through the SDK slot harness; scheduler tests use fake timers. Linux and macOS CI jobs are configured to run the same checks; this worktree has not yet run in remote CI.
+Ordinary tests use generated Pi sessions and copies of the Claude Code and Codex fixtures under this repository's ignored `target/` directory. They do not use existing conversations or session files. The process, SDK host and server round-trip tests exercise both debug and release binaries. UI tests mount the real embedded view through the SDK slot harness; scheduler tests use fake timers. Linux and macOS CI jobs are configured to run the same checks; this worktree has not yet run in remote CI.
+
+Provisioning tests use synthetic archives and stubbed HTTP responses, covering checksum and size failures, HTTPS redirects, unsafe paths, links, cancellation, atomic installation, cache corruption and compatible fallback. `npm --prefix integrations/bb run test:release` separately downloads all five real pinned archives, starts the native binary with no Highwater on PATH, and checks offline reuse. That acceptance suite requires internet access.
 
 ## Validation and limitations
 
@@ -51,7 +57,7 @@ Observed browser JavaScript heap was about 40 MiB before opening and 235 MiB imm
 
 ## Server behaviour
 
-For local development, install from the repository root with `bb plugin install path:./integrations/bb`. The **Highwater binary** setting defaults to an empty string, which uses `highwater` on PATH. Set an override with `bb plugin config highwater set binaryPath /absolute/path/to/highwater`; changes apply on the next request without a reload.
+For local development, install from the repository root with `bb plugin install path:./integrations/bb`. The **Highwater binary** setting defaults to an empty string, which provisions the pinned release. A non-empty value bypasses downloading, including a command such as `highwater` to deliberately use PATH. Set an override with `bb plugin config highwater set binaryPath /absolute/path/to/highwater`; changes apply on the next request without a reload.
 
 - `GET /api/v1/plugins/highwater/http/analysis?threadId=thr_…` accepts only a thread ID, never a session ID or path. It returns gzip JSON with an ETag, or a bodyless `304` for an unchanged analysis. Invalid input returns `400`; unavailable session states return `409`. Highwater errors keep their original status, code and message.
 - The `threadSummary` RPC accepts `{ threadId, ifNoneMatch }` and returns a small summary with current bb context usage, including on an unchanged result. It never sends an analysis body to the caller.
@@ -63,7 +69,10 @@ For local development, install from the repository root with `bb plugin install 
 ## Host behaviour
 
 - No process starts when the module is loaded. The first request starts a server on an ephemeral loopback port.
-- Development uses `highwater` on the host worker's PATH or an explicit `binaryPath`. The accepted binary range matches the plugin's minor version. Automatic binary download is deferred to the final packaging milestone; users of the released plugin will not need a separate install.
+- The accepted binary range matches the plugin's minor version. The preferred binary is pinned independently of the plugin patch version, currently Highwater 0.5.1. Downloads are available for macOS arm64/x64, Linux arm64/x64 (glibc 2.35 or newer), and Windows x64; availability is not a claim of verified execution on every platform. Unsupported platforms require an explicit compatible executable.
+- Provisioning follows at most three HTTPS redirects, only through GitHub and its release asset hosts. Each archive is limited to its pinned size and 32 MiB, expansion to 128 MiB and 16 entries, and download/installation to 20 seconds, with bounded version-probe cleanup. Archive and executable hashes are pinned in `host/binary-release.json`; remote checksums are never trusted at runtime.
+- Only expected regular files are read; links, special files, duplicate entries and path traversal are rejected. The executable and MIT licence are written into a private staging directory, synced and installed by same-filesystem directory rename. No system installer, elevation or PATH change is used. Existing OS security settings are not changed.
+- Binaries live under the host's plugin data directory, in `binaries/VERSION/TARGET-SHA256/`. Cached executables and licences are rehashed before a new process starts; a running server is reused without hashing on each refresh. Concurrent requests in a worker share provisioning. Failed upgrades leave older caches intact; fallback is allowed only for compatible versions whose expected hashes remain in the plugin's pin history. Other old caches are not automatically executed or deleted.
 - Pi lookup uses `BB_PI_BRIDGE_SESSION_DIR` when present in the worker environment, otherwise `~/.bb/pi-bridge-sessions`. Claude Code uses `CLAUDE_CONFIG_DIR/projects`, otherwise `~/.claude/projects`. Codex uses `CODEX_HOME`, otherwise `~/.codex`. Its UUID must match the complete UUID suffix in a `rollout-…-UUID.jsonl` or `.jsonl.zst` filename. Archived main sessions and forks are eligible; subagents are excluded.
 - bb may remove daemon-owned `BB_*` variables before starting a host worker. A custom Pi root is therefore honoured when it reaches that worker, but propagation from provider configuration is not yet verified. This must be resolved before claiming custom-root support in the finished plugin.
 - An empty, private Pi directory suppresses Highwater's default sources when the real Pi directory does not exist. The process restarts when source directories appear or disappear, the binary path changes, or the child exits.

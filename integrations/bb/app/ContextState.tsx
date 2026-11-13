@@ -23,9 +23,9 @@ export function stateMessage(state: ThreadState): { title: string; detail: strin
       };
     case 'binaryMissing':
       return {
-        title: 'Highwater not installed',
+        title: 'Highwater binary not found',
         detail:
-          'During development, install Highwater on the agent’s machine or set Highwater binary in the plugin settings.',
+          'The explicit Highwater binary could not be found. Correct its path, or clear the setting to download the pinned release automatically.',
       };
     case 'unsupportedVersion':
       return {
@@ -57,7 +57,7 @@ export function ContextState({
   if (!state)
     return (
       <div className="p-4 text-sm text-muted-foreground" role="status">
-        Analysing session…
+        Preparing Highwater and loading the session…
       </div>
     );
   const message = stateMessage(state);

@@ -8,11 +8,11 @@ The view refreshes when the thread advances. Follow latest moves to new calls; p
 
 The Context row shows call and compaction counts, a small history chart and bb's current token usage. Select it to open the tab. Narrow panes show a segment above the composer instead. With only the row visible, the browser receives a small summary rather than the full analysis.
 
-## Development requirements
+## Requirements
 
-This plugin is still in development. It currently needs a compatible Highwater binary on the agent machine's PATH, or an explicit path in the Highwater binary setting. Automatic binary provisioning is planned but not implemented.
+No separate Highwater installation is required. On first use, the plugin downloads a pinned binary from GitHub on the agent machine, verifies its archive and executable checksums, and caches it privately. First use requires internet access; verified cached binaries work offline. The Highwater binary setting can select an existing executable instead. Errors explain what happened and provide Retry.
 
-Local macOS use is verified. Windows and remote access are not validated. Large sessions update less frequently because refreshes are limited by analysis time.
+Release downloads cover macOS arm64/x64, Linux arm64/x64 with glibc 2.35 or newer, and Windows x64. Execution is verified locally on macOS arm64; other machines, Linux, Windows and remote access remain unvalidated. Large sessions update less frequently because refreshes are limited by analysis time. The plugin is not yet published.
 
 ## Session content
 

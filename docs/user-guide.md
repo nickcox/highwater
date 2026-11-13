@@ -14,6 +14,14 @@ When the list mixes harnesses, each entry names the application that recorded it
 
 Going back to a session you viewed recently shows the analysis the browser kept, then checks with the server in the background whether it has changed. If that check fails, the kept view stays and a warning appears.
 
+## In bb
+
+The optional [bb plugin](../integrations/bb/README.md) shows the current Pi, Claude Code or Codex thread. Select **Context** above the composer or in the thread context card, or choose **+ → Context** in the right panel. The row shows model calls, compactions, a small input-token history and bb's current context usage. The tab contains the summary, River, Composition, inspector and lifespans described below.
+
+The first request downloads a pinned, checksum-verified Highwater binary on the agent machine. It is stored privately and reused offline; no separate installation is required. The **Highwater binary** plugin setting can select an existing executable instead. Download or startup errors show a message and Retry. The view follows bb's theme, updates from thread events and pauses analysis requests while hidden. Pinning a call stops **Follow latest**; select it again to resume. An edit or clear resolves the session again rather than showing an old session.
+
+Analyses include session previews and travel through the bb server to your client. The download service receives no session content. Standalone theme controls and view links do not apply to the embedded tab. See the plugin README for platform validation, remote-access limitations and transfer bounds.
+
 ## Theme
 
 Use the **Light / Dark / Auto** toggle above the session picker at the top right to choose the appearance. Auto is the default and follows changes to your operating system appearance. Dark and Light stay selected regardless of the system setting.

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add an optional bb plugin with a live Context tab and compact summary for Pi, Claude Code and Codex threads. It reuses the standalone session view, follows bb's theme, and preserves selections across updates to the same session.
+- Provision a pinned Highwater binary automatically on the agent machine, verifying archive and executable checksums before use. Cache it privately for offline use, retain compatible verified fallbacks on upgrade failure, and allow an explicit binary override. Analyses travel through the user's bb server to their client.
+
 ## 0.5.1 – 2026-11-09
 
 - Each entry in the session picker shows when its session last changed, which is the order the list is sorted in. Before, it showed when the session started, so the dates looked out of order.

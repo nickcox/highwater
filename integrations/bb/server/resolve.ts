@@ -81,7 +81,7 @@ export async function resolveThread(
     });
   if (!environment?.hostId) return { state: 'noEnvironment' };
   const options = { hostId: environment.hostId, signal };
-  const status = await host.call('status', { binaryPath }, options);
+  const status = await host.call('status', { binaryPath }, { ...options, timeoutMs: 60_000 });
   switch (status.state) {
     case 'missing':
       return { state: 'binaryMissing' };

@@ -9,7 +9,11 @@ Highwater shows how a coding agent's context window fills up over a session. It 
 - **Context lifespans:** when each item entered and left the context, searchable and filterable.
 - **Cache and cost:** cache reads and writes per call, and each call's cost, recorded or estimated from bundled price data.
 
-Everything runs locally. Highwater serves its interface on `127.0.0.1`, reads session files without changing them, and never sends session content anywhere.
+Standalone Highwater runs locally: it serves its interface on `127.0.0.1` and reads session files without changing them. The optional bb plugin sends analyses through your bb server to your client, not to another analysis service.
+
+## bb plugin (unreleased)
+
+The [bb plugin](integrations/bb/README.md) adds a live **Context** tab and a compact context summary to Pi, Claude Code and Codex threads. It downloads a pinned, checksum-verified Highwater binary on the agent's machine when first needed; no separate Highwater installation is required. Cached binaries work offline. See the plugin guide for installation, platform validation and limits.
 
 ## Install
 

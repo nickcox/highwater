@@ -198,7 +198,7 @@ describe('Context tab', () => {
     [{ state: 'unsupportedAgent', providerId: 'opencode' }, 'Agent not supported'],
     [{ state: 'noEnvironment' }, 'No machine assigned'],
     [{ state: 'noSession' }, 'No session yet'],
-    [{ state: 'binaryMissing' }, 'Highwater not installed'],
+    [{ state: 'binaryMissing' }, 'Highwater binary not found'],
     [
       { state: 'unsupportedVersion', version: '9.0.0', accepted: '>=0.5.0 <0.6.0' },
       'Highwater version not supported',
@@ -308,7 +308,7 @@ describe('Context tab', () => {
       .mockImplementation(async () => Response.json(fixture, { headers: { etag: '"v1"' } }));
     vi.stubGlobal('fetch', fetcher);
     const slot = await mount();
-    await slot.findByText('Highwater not installed');
+    await slot.findByText('Highwater binary not found');
     fireEvent.click(slot.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(target(slot).shadowRoot?.textContent).toContain('Context River'), {
       timeout: 4000,

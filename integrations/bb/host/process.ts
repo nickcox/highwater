@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import semver from 'semver';
 import manifest from '../package.json';
 import type { HostStatus } from '../contract';
+import { BinaryProvisioner, type ProvisionOptions } from './provision';
 import { HostFailure, waitFor, type HighwaterServer } from './http';
 
 const version = semver.parse(manifest.version)!;
@@ -17,6 +18,7 @@ export interface ProcessOptions {
   probeTimeoutMs?: number;
   stopGraceMs?: number;
   now?: () => number;
+  provisioning?: ProvisionOptions;
 }
 export class ProcessUnavailable extends HostFailure {
   constructor(public readonly state: Exclude<HostStatus, { state: 'ready' }>) {
@@ -51,15 +53,24 @@ export class HighwaterProcess {
   private tail: Promise<unknown> = Promise.resolve();
   private stopping = new WeakMap<ChildProcess, Promise<void>>();
   private generation = 0;
-  private binary: string | undefined;
+  private binary: string | null | undefined;
   private failures = 0;
   private failedAt = 0;
   private lastFailure = '';
   private closed = false;
+  private readonly provisioner: BinaryProvisioner;
 
   constructor(private readonly options: ProcessOptions) {
     this.env = options.env ?? process.env;
     this.home = options.home ?? homedir();
+    this.provisioner = new BinaryProvisioner(options.dataDir, ACCEPTED_VERSIONS, {
+      ...options.provisioning,
+      validate: async (path, version, signal) => {
+        const found = await this.probe(path, signal);
+        if (found !== version || !semver.satisfies(found, ACCEPTED_VERSIONS))
+          throw new Error(`Downloaded Highwater reports ${found}, not pinned version ${version}.`);
+      },
+    });
   }
   get pid(): number | undefined {
     return this.child?.pid;
@@ -68,7 +79,7 @@ export class HighwaterProcess {
   get(binaryPath: string | null, signal?: AbortSignal): Promise<HighwaterServer> {
     const work = this.tail.then(() => {
       signal?.throwIfAborted();
-      return this.ensure(binaryPath?.trim() || 'highwater');
+      return this.ensure(binaryPath?.trim() || null);
     });
     this.tail = work.catch(() => {});
     return waitFor(work, signal);
@@ -98,16 +109,17 @@ export class HighwaterProcess {
     if (await directory(codex)) args.push('--codex-home', codex);
     return args;
   }
-  private async ensure(binary: string): Promise<HighwaterServer> {
+  private async ensure(override: string | null): Promise<HighwaterServer> {
     if (this.closed)
       throw new HostFailure(503, 'processStopped', 'The Highwater host has been disposed.');
-    if (binary !== this.binary) {
-      this.binary = binary;
+    const choice = override;
+    if (choice !== this.binary) {
+      this.binary = choice;
       this.failures = 0;
       await this.stopCurrent();
     }
     const args = await this.roots();
-    const key = JSON.stringify([binary, args]);
+    const key = JSON.stringify([choice, args]);
     if (
       this.running?.key === key &&
       this.running.child.exitCode === null &&
@@ -123,6 +135,7 @@ export class HighwaterProcess {
       });
     }
     try {
+      const binary = override ?? (await this.provisioner.get(this.lifetime.signal));
       const found = await this.probe(binary);
       if (!semver.satisfies(found, ACCEPTED_VERSIONS)) {
         throw new ProcessUnavailable({
@@ -143,10 +156,13 @@ export class HighwaterProcess {
       throw new ProcessUnavailable({ state: 'failed', message: this.lastFailure });
     }
   }
-  private probe(binary: string): Promise<string> {
+  private probe(binary: string, external?: AbortSignal): Promise<string> {
+    const signal = external
+      ? AbortSignal.any([this.lifetime.signal, external])
+      : this.lifetime.signal;
     return new Promise((resolve, reject) => {
-      if (this.lifetime.signal.aborted) {
-        reject(this.lifetime.signal.reason);
+      if (signal.aborted) {
+        reject(signal.reason);
         return;
       }
       const child = execFile(
@@ -162,7 +178,7 @@ export class HighwaterProcess {
           maxBuffer: 16 * 1024,
         },
         (error, stdout) => {
-          this.lifetime.signal.removeEventListener('abort', abort);
+          signal.removeEventListener('abort', abort);
           if (error) {
             reject(
               (error as NodeJS.ErrnoException).code === 'ENOENT'
@@ -184,8 +200,8 @@ export class HighwaterProcess {
       const abort = () => {
         child.kill('SIGKILL');
       };
-      this.lifetime.signal.addEventListener('abort', abort, { once: true });
-      if (this.lifetime.signal.aborted) abort();
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
     });
   }
   private start(

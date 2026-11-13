@@ -180,7 +180,7 @@ describe('Context row and segment', () => {
         ),
     );
     const slot = await mount();
-    expect(await slot.findByText('Highwater not installed')).toBeTruthy();
+    expect(await slot.findByText('Highwater binary not found')).toBeTruthy();
     fireEvent.click(slot.getByRole('button', { name: /Context/ }));
     expect(slot.inspection.experimental_panelCalls).toHaveLength(1);
     expect(slot.queryByRole('img', { name: 'Reported input tokens per model call' })).toBeNull();

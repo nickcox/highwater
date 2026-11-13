@@ -1,0 +1,54 @@
+{
+  "releases": [
+    {
+      "version": "0.5.1",
+      "platforms": {
+        "darwin-arm64": {
+          "target": "aarch64-apple-darwin",
+          "format": "tar.gz",
+          "archiveSha256": "8e3dcd0a47cf13ac84e7cb074a351c850c335244ccb370fb915695b62f8d97a6",
+          "archiveBytes": 5790978,
+          "binarySha256": "e8d5146455767637678965014bb2aa485191997f9c8a930035b02d8cd8223a60",
+          "binaryBytes": 15149456,
+          "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
+        },
+        "darwin-x64": {
+          "target": "x86_64-apple-darwin",
+          "format": "tar.gz",
+          "archiveSha256": "e9683730bb7b0e98a26221e40c438ecf5ba980cac58bd3f63c14045f6bfd1c63",
+          "archiveBytes": 5951968,
+          "binarySha256": "900eb02775ddb0e011b8379403da85dd7f6225ebe60bcbec4666e5a0bd1fee07",
+          "binaryBytes": 15475704,
+          "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
+        },
+        "linux-arm64": {
+          "target": "aarch64-unknown-linux-gnu",
+          "format": "tar.gz",
+          "archiveSha256": "242da295bb63a8a9092b606fb8b7a4448a3aee4717f888f9beeb26e4d19cd9a2",
+          "archiveBytes": 6162723,
+          "binarySha256": "38001e5f000b042cc251ba3d7e9ebbb01fc7058c51d33c19234e271d934f2689",
+          "binaryBytes": 16596120,
+          "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
+        },
+        "linux-x64": {
+          "target": "x86_64-unknown-linux-gnu",
+          "format": "tar.gz",
+          "archiveSha256": "8012c3a54dd703550278463312ef73123f0e11d82b2d680463e6efd133432ac7",
+          "archiveBytes": 6221397,
+          "binarySha256": "9ceed54667dc2067bfebf5804d46636c0fc7dd39f56e2be4b95a46eb74fc6ad6",
+          "binaryBytes": 17106880,
+          "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
+        },
+        "win32-x64": {
+          "target": "x86_64-pc-windows-msvc",
+          "format": "zip",
+          "archiveSha256": "a4b23df551c9349ab0d0f4ec07e0de6fe55b5cb026fbcf6a20cebefd477675de",
+          "archiveBytes": 5470757,
+          "binarySha256": "6027b36dbfb1b426a9d52becf478d2214ffda2d6ebc817b3e59ab2148375b95a",
+          "binaryBytes": 14386176,
+          "licenceSha256": "022a12fccb77514e825a2e6488057c3df5002d38f6c5cc43744574dfd564105c"
+        }
+      }
+    }
+  ]
+}
