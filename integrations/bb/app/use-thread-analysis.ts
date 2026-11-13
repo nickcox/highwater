@@ -4,19 +4,25 @@ import {
   useRealtime,
   useRealtimeConnectionState,
 } from '@get-bb/plugin-sdk/app';
-import { getThreadAnalysis } from './thread-analysis';
+import { getThreadAnalysis, type Interest } from './thread-analysis';
 
-export function useThreadAnalysis(threadId: string, visible: boolean) {
+export function useThreadAnalysis(
+  threadId: string,
+  visible: boolean,
+  interest: Interest = 'analysis',
+) {
   const pluginId = experimental_usePluginId();
   const thread = useMemo(() => getThreadAnalysis(pluginId, threadId), [pluginId, threadId]);
   useEffect(() => thread.retain(), [thread]);
   const subscribe = useCallback(
-    (listener: () => void) => (visible ? thread.subscribe(listener) : () => {}),
-    [thread, visible],
+    (listener: () => void) => (visible ? thread.subscribe(listener, interest) : () => {}),
+    [thread, visible, interest],
   );
   const snapshot = useSyncExternalStore(subscribe, thread.getSnapshot, thread.getSnapshot);
   useRealtime('thread-advanced', (payload) => {
     if (!visible || typeof payload !== 'object' || !payload) return;
+    if (interest === 'summary' && thread.getSnapshot().summaryState?.state === 'unsupportedAgent')
+      return;
     if (
       'threadId' in payload &&
       payload.threadId === threadId &&

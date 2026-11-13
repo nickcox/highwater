@@ -4,9 +4,13 @@ Open a Pi or Claude Code thread's right panel and choose **Context** from New ta
 
 The view refreshes when the thread advances. Follow latest moves to new calls; pinning a call stops it. Updates to the same session preserve selections. An edited message or cleared context is resolved again. The view follows bb's light or dark theme, and hidden tabs pause requests.
 
+## Compact summary
+
+The Context row shows call and compaction counts, a small history chart and bb's current token usage. Select it to open the tab. Narrow panes show a segment above the composer instead. With only the row visible, the browser receives a small summary rather than the full analysis.
+
 ## Development requirements
 
-This plugin is still in development. It currently needs a compatible Highwater binary on the agent machine's PATH, or an explicit path in the Highwater binary setting. Automatic binary provisioning and the compact Context row are planned but not implemented. Codex is not supported yet.
+This plugin is still in development. It currently needs a compatible Highwater binary on the agent machine's PATH, or an explicit path in the Highwater binary setting. Automatic binary provisioning is planned but not implemented. Codex is not supported yet.
 
 Local macOS use is verified. Windows and remote access are not validated. Large sessions update less frequently because refreshes are limited by analysis time.
 

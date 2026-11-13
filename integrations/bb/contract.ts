@@ -1,22 +1,18 @@
 import { defineRpcContract } from '@get-bb/plugin-sdk';
 import { z } from 'zod';
-import { threadIdSchema, threadStateSchema } from './state';
-export { threadIdSchema, threadStateSchema, type ThreadState } from './state';
+import { summarySchema, threadRequestSchema, threadSummaryResultSchema } from './state';
+export {
+  summarySchema,
+  threadIdSchema,
+  threadRequestSchema,
+  threadStateSchema,
+  type Summary,
+  type ThreadState,
+} from './state';
 
 const binary = z.object({ binaryPath: z.string().max(4096).nullable() }).strict();
 const etag = z.string().max(1024).nullable();
 const sessionId = z.string().regex(/^[A-Za-z0-9_-]{1,160}$/);
-export const summarySchema = z
-  .object({
-    callCount: z.number().int().nonnegative(),
-    compactionCount: z.number().int().nonnegative(),
-    latestInputTokens: z.number().int().nonnegative().safe().nullable(),
-    peakInputTokens: z.number().int().nonnegative().safe().nullable(),
-    series: z.array(z.number().int().nonnegative().safe()).max(60),
-    partial: z.boolean(),
-  })
-  .strict();
-export type Summary = z.infer<typeof summarySchema>;
 export const errorSchema = z
   .object({
     status: z.literal('error'),
@@ -39,32 +35,8 @@ const analysisInput = binary.extend({ sessionId, ifNoneMatch: etag }).strict();
 const notModified = z.object({ status: z.literal('notModified'), etag: z.string() }).strict();
 const transferId = z.string().uuid();
 
-export const threadRequestSchema = z
-  .object({ threadId: threadIdSchema, ifNoneMatch: etag })
-  .strict();
-const usageSchema = z
-  .object({
-    usedTokens: z.number().nonnegative(),
-    contextWindowTokens: z.number().nonnegative(),
-  })
-  .strict()
-  .nullable();
 export const rpcContract = defineRpcContract({
-  threadSummary: {
-    input: threadRequestSchema,
-    output: z.union([
-      z
-        .object({
-          state: z.literal('ok'),
-          etag: z.string(),
-          summary: summarySchema,
-          usage: usageSchema,
-        })
-        .strict(),
-      z.object({ state: z.literal('notModified'), etag: z.string(), usage: usageSchema }).strict(),
-      threadStateSchema,
-    ]),
-  },
+  threadSummary: { input: threadRequestSchema, output: threadSummaryResultSchema },
 });
 
 export const hostContract = defineRpcContract({

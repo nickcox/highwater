@@ -26,3 +26,36 @@ export const threadStateSchema = z.discriminatedUnion('state', [
     .strict(),
 ]);
 export type ThreadState = z.infer<typeof threadStateSchema>;
+
+export const summarySchema = z
+  .object({
+    callCount: z.number().int().nonnegative(),
+    compactionCount: z.number().int().nonnegative(),
+    latestInputTokens: z.number().int().nonnegative().safe().nullable(),
+    peakInputTokens: z.number().int().nonnegative().safe().nullable(),
+    series: z.array(z.number().int().nonnegative().safe()).max(60),
+    partial: z.boolean(),
+  })
+  .strict();
+export type Summary = z.infer<typeof summarySchema>;
+const usageSchema = z
+  .object({ usedTokens: z.number().nonnegative(), contextWindowTokens: z.number().nonnegative() })
+  .strict()
+  .nullable();
+export const threadRequestSchema = z
+  .object({ threadId: threadIdSchema, ifNoneMatch: z.string().max(1024).nullable() })
+  .strict();
+export const threadSummaryResultSchema = z.union([
+  z
+    .object({
+      state: z.literal('ok'),
+      etag: z.string(),
+      summary: summarySchema,
+      usage: usageSchema,
+    })
+    .strict(),
+  z.object({ state: z.literal('notModified'), etag: z.string(), usage: usageSchema }).strict(),
+  threadStateSchema,
+]);
+export type ThreadSummaryResult = z.infer<typeof threadSummaryResultSchema>;
+export type ThreadSummaryData = Extract<ThreadSummaryResult, { state: 'ok' }>;

@@ -132,6 +132,59 @@ describe('Context tab', () => {
     expect(target(b).shadowRoot?.textContent).toContain(`/tmp/${secondId}`);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it('shares row/tab refreshes and stops transferring analyses when only the row remains', async () => {
+    const threadId = `thr_ui${++serial}`;
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) =>
+      String(input).includes('/rpc/')
+        ? Response.json({
+            ok: true,
+            result: {
+              state: 'ok',
+              etag: '"v1"',
+              summary: {
+                callCount: 3,
+                compactionCount: 1,
+                latestInputTokens: 560,
+                peakInputTokens: 600,
+                series: [600, 550, 560],
+                partial: false,
+              },
+              usage: { usedTokens: 62400, contextWindowTokens: 200000 },
+            },
+          })
+        : Response.json(fixture, { headers: { etag: '"v1"' } }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    const captured = await loadPluginApp(app);
+    const row = renderSlot(
+      captured.threadContextCardRows[0],
+      { threadId, projectId: 'proj_test', environment: null },
+      { pluginId: 'highwater-test' },
+    );
+    slots.push(row);
+    const tab = await mount({ threadId });
+    await ready(tab);
+    expect(await row.findByText('3 calls · 1 compaction')).toBeTruthy();
+    expect(target(tab).shadowRoot?.textContent).toMatch(/Model calls3/);
+    expect(
+      fetcher.mock.calls.filter(([url]) => String(url).includes('/http/analysis')),
+    ).toHaveLength(1);
+    expect(
+      fetcher.mock.calls.filter(([url]) => String(url).includes('/rpc/threadSummary')),
+    ).toHaveLength(1);
+    tab.lifecycle.unmount();
+    await row.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
+    await waitFor(
+      () =>
+        expect(
+          fetcher.mock.calls.filter(([url]) => String(url).includes('/rpc/threadSummary')),
+        ).toHaveLength(2),
+      { timeout: 4000 },
+    );
+    expect(
+      fetcher.mock.calls.filter(([url]) => String(url).includes('/http/analysis')),
+    ).toHaveLength(1);
+  });
   it('does no work for a hidden tab', async () => {
     const fetcher = vi.fn<typeof fetch>();
     vi.stubGlobal('fetch', fetcher);

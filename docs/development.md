@@ -66,7 +66,7 @@ Display preferences use the supplied storage key. Theme changes update only the 
 
 ## bb host package
 
-`integrations/bb/` is an independent package with its own lockfile and development dependencies. It contains the embeddable vendor module, host entry and server entry. The server resolves thread identities, serves analyses and summaries, and publishes update signals; the app entry adds a Context action tab. The compact Context row is not implemented yet. See [its development guide](../integrations/bb/README.md) for the implemented behaviour and limits.
+`integrations/bb/` is an independent package with its own lockfile and development dependencies. It contains the embeddable vendor module, host entry and server entry. The server resolves thread identities, serves analyses and summaries, and publishes update signals; the app entry adds a Context action tab. The app also registers a Context card row and a narrow-pane segment, using the same scheduler and the summary RPC. See [its development guide](../integrations/bb/README.md) for the implemented behaviour and limits.
 
 `scripts/check-bb-plugin.sh` installs the frontend dependencies, checks the vendor module, builds debug and release Highwater binaries, installs the plugin's dependencies, checks formatting and types, runs unit, server contract, UI slot, scheduler and real-binary host/server round-trip tests, then builds the plugin with its pinned bb toolchain. Tests create only disposable fixtures under the repository's ignored `target/` directory. The ordinary repository check does not require bb tooling; `--full` runs this additional script. A separate CI job exercises it on Linux and macOS.
 

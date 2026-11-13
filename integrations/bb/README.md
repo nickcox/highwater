@@ -1,6 +1,6 @@
 # Highwater bb plugin
 
-**In development.** The Context tab works for Pi and Claude Code threads. It uses the shared Highwater session view and updates from bb thread events. The compact Context row is not implemented yet.
+**In development.** The Context tab works for Pi and Claude Code threads. It uses the shared Highwater session view and updates from bb thread events. A Context row in the thread card, or a segment above the composer in narrow panes, shows a small summary and opens the tab.
 
 The plugin runs a private Highwater server on the agent's machine, reads its catalogue and analyses through the existing HTTP API, and prepares compressed transfers and small summaries for bb. It does not read or modify session files itself.
 
@@ -13,6 +13,14 @@ The view follows bb's light or dark theme. It only requests analyses while visib
 Refreshes start no more than once every two seconds, and no sooner than five times the previous fetch/JSON cycle duration. Signals received during a request are retained. Idle queues a final refresh after at least one second, subject to the same rate limit. Large sessions can therefore update more slowly. New session files get at most three automatic retries.
 
 Analyses contain session content and travel through bb. The current development build requires Highwater on the agent machine's PATH or the binary override below. Automatic binary provisioning is still planned for the release package.
+
+## Context row
+
+The row shows model calls, compactions, a sparkline of reported input tokens, and bb's current context usage. The token ratio comes from bb, not from Highwater's last model call. Missing usage is labelled unavailable; missing reported points are not drawn as zero. Partial reconstruction is labelled partial.
+
+Select **Context** to open its tab. The card row and narrow-pane segment share the same data, and the segment hides while bb shows the card. Unsupported agents and threads with no session show neither. Missing binaries and other failures show a short message that opens the tab for details.
+
+With the tab closed or hidden, only the small summary RPC response is sent to the browser. With both visible, one scheduler starts analysis and summary requests together; the host shares analysis work. Each response keeps its own ETag, and bb usage is refreshed even when the analysis is unchanged. Losing the last tab or row subscriber cancels only the request that is no longer needed.
 
 ## Development
 

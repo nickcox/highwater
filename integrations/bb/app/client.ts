@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { threadIdSchema, threadStateSchema, type ThreadState } from '../state';
+import {
+  threadIdSchema,
+  threadStateSchema,
+  threadRequestSchema,
+  threadSummaryResultSchema,
+  type ThreadState,
+  type ThreadSummaryResult,
+} from '../state';
 import type { AnalysisFetchResult } from '../vendor/highwater-embed';
 
 export class ThreadStateError extends Error {
@@ -10,8 +17,55 @@ export class ThreadStateError extends Error {
   }
 }
 const errorBody = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+const summaryEnvelope = z.object({ ok: z.literal(true), result: threadSummaryResultSchema });
 const failure = (httpStatus: number, code: string, message: string) =>
   new ThreadStateError({ state: 'error', httpStatus, code, message });
+
+/** The public RPC wire route is used because useRpc in SDK 0.6.132 has no AbortSignal. */
+export async function fetchThreadSummary(
+  pluginId: string,
+  threadId: string,
+  signal: AbortSignal,
+  etag: string | null,
+  fetcher: typeof fetch = fetch,
+): Promise<ThreadSummaryResult> {
+  const input = threadRequestSchema.parse({ threadId, ifNoneMatch: etag });
+  const response = await fetcher(
+    `/api/v1/plugins/${encodeURIComponent(pluginId)}/rpc/threadSummary`,
+    {
+      method: 'POST',
+      signal,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw failure(
+      502,
+      'invalidResponse',
+      'bb returned an unreadable Highwater summary. Retry the request.',
+    );
+  }
+  const parsed = summaryEnvelope.safeParse(body);
+  if (response.status === 200 && parsed.success) return parsed.data.result;
+  const error = errorBody.safeParse(body);
+  if (error.success)
+    throw failure(
+      response.status >= 400 ? response.status : 502,
+      error.data.error.code,
+      error.data.error.message,
+    );
+  throw failure(
+    502,
+    'invalidResponse',
+    'bb returned an invalid Highwater summary. Retry the request.',
+  );
+}
 
 export async function fetchThreadAnalysis(
   pluginId: string,
