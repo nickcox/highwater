@@ -233,7 +233,7 @@ describe.each(binaries)('host RPC with real binary %s', (binary) => {
     await expect(
       harness.experimental_call('findSession', {
         binaryPath,
-        harness: 'codex' as 'pi',
+        harness: 'opencode' as 'pi',
         providerThreadId: 'not-enabled',
       }),
     ).rejects.toThrow();

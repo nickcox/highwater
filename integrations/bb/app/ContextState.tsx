@@ -8,7 +8,7 @@ export function stateMessage(state: ThreadState): { title: string; detail: strin
     case 'unsupportedAgent':
       return {
         title: 'Agent not supported',
-        detail: `Highwater currently supports Pi and Claude Code, not ${state.providerId}.`,
+        detail: `Highwater currently supports Pi, Claude Code and Codex, not ${state.providerId}.`,
       };
     case 'noEnvironment':
       return {

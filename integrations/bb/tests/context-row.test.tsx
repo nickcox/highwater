@@ -130,7 +130,7 @@ describe('Context row and segment', () => {
       const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
         Response.json({
           ok: true,
-          result: state === 'unsupportedAgent' ? { state, providerId: 'codex' } : { state },
+          result: state === 'unsupportedAgent' ? { state, providerId: 'opencode' } : { state },
         }),
       );
       vi.stubGlobal('fetch', fetcher);
@@ -161,7 +161,7 @@ describe('Context row and segment', () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockImplementation(async () =>
-        Response.json({ ok: true, result: { state: 'unsupportedAgent', providerId: 'codex' } }),
+        Response.json({ ok: true, result: { state: 'unsupportedAgent', providerId: 'opencode' } }),
       );
     vi.stubGlobal('fetch', fetcher);
     const threadId = `thr_row${++serial}`;

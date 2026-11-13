@@ -22,15 +22,26 @@ function modifiedNanos(entry: CatalogueEntry): bigint {
 
 export function matchSession(
   entries: CatalogueEntry[],
-  harness: 'pi' | 'claude-code',
+  harness: 'pi' | 'claude-code' | 'codex',
   providerThreadId: string,
 ): string | null {
+  if (
+    harness === 'codex' &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(providerThreadId)
+  )
+    return null;
   const filename = `${harness === 'pi' ? providerThreadId.replace(/[^A-Za-z0-9._-]/g, '_') : providerThreadId}.jsonl`;
+  const matchesName = (name: string): boolean =>
+    harness === 'codex'
+      ? name.startsWith('rollout-') &&
+        (name.toLowerCase().endsWith(`-${filename.toLowerCase()}`) ||
+          name.toLowerCase().endsWith(`-${filename.toLowerCase()}.zst`))
+      : name === filename;
   return (
     entries
       .filter(
         (entry) =>
-          entry.harness === harness && entry.parentReference == null && entry.fileName === filename,
+          entry.harness === harness && entry.parentReference == null && matchesName(entry.fileName),
       )
       .sort((a, b) => {
         const left = modifiedNanos(a),

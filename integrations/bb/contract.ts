@@ -44,7 +44,7 @@ export const hostContract = defineRpcContract({
   findSession: {
     input: binary
       .extend({
-        harness: z.enum(['pi', 'claude-code']),
+        harness: z.enum(['pi', 'claude-code', 'codex']),
         providerThreadId: z.string().min(1).max(256),
       })
       .strict(),

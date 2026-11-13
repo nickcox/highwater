@@ -195,7 +195,7 @@ describe('Context tab', () => {
   });
   const cases: [ThreadState, string][] = [
     [{ state: 'unknownThread' }, 'Thread not found'],
-    [{ state: 'unsupportedAgent', providerId: 'codex' }, 'Agent not supported'],
+    [{ state: 'unsupportedAgent', providerId: 'opencode' }, 'Agent not supported'],
     [{ state: 'noEnvironment' }, 'No machine assigned'],
     [{ state: 'noSession' }, 'No session yet'],
     [{ state: 'binaryMissing' }, 'Highwater not installed'],
@@ -283,6 +283,24 @@ describe('Context tab', () => {
     );
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it.each([
+    [413, 'analysisTooLarge', 'Highwater response exceeds the 134217728-byte limit.'],
+    [504, 'analysisTimeout', 'Highwater did not respond before the request timed out.'],
+  ] as const)(
+    'shows the limit message and Retry for %s instead of mounting a broken chart',
+    async (status, code, message) => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValue(Response.json({ error: { code, message } }, { status })),
+      );
+      const slot = await mount();
+      expect(await slot.findByText(message)).toBeTruthy();
+      expect(slot.getByRole('button', { name: 'Retry' })).toBeTruthy();
+      expect(target(slot).shadowRoot).toBeNull();
+    },
+  );
   it('uses Retry to recover from a missing binary', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

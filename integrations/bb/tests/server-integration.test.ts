@@ -7,11 +7,11 @@ import { experimental_createHostEntryHarness } from '@get-bb/plugin-sdk/testing/
 import { hostContract } from '../contract';
 import { createHighwaterEntry } from '../host';
 import plugin from '../server';
-import { binaries, claudeFixtures, tempDirectory, writePi } from './helpers';
+import { binaries, claudeFixtures, codexFixtures, tempDirectory, writePi } from './helpers';
 
 for (const binaryPath of binaries) {
   describe(`server and real host: ${binaryPath}`, () => {
-    it.each(['pi', 'claude-code'])(
+    it.each(['pi', 'claude-code', 'codex'])(
       'serves a %s analysis and summary through the complete contracts',
       async (providerId) => {
         const home = await tempDirectory();
@@ -39,7 +39,14 @@ for (const binaryPath of binaries) {
                     createdAt: 1,
                     scope: { kind: 'thread' },
                     type: 'thread/identity',
-                    data: { providerThreadId: providerId === 'pi' ? 'probe-main' : 'simple' },
+                    data: {
+                      providerThreadId:
+                        providerId === 'pi'
+                          ? 'probe-main'
+                          : providerId === 'claude-code'
+                            ? 'simple'
+                            : '01a10000-0000-7000-8000-000000000001',
+                    },
                   },
                 ],
               },
@@ -67,6 +74,7 @@ for (const binaryPath of binaries) {
             records.map((record) => JSON.stringify(record)).join('\n') + '\n',
           );
           await claudeFixtures(home);
+          await codexFixtures(home);
           plugin(server.bb);
           const response = await server.harness.behavior.fetchHttp(
             'GET',

@@ -106,8 +106,8 @@ describe('thread resolution states', () => {
     [
       'unsupportedAgent',
       ({ harness }) =>
-        harness.sdk.stub('threads.get', async () => makeThreadResponse({ providerId: 'codex' })),
-      { state: 'unsupportedAgent', providerId: 'codex' },
+        harness.sdk.stub('threads.get', async () => makeThreadResponse({ providerId: 'opencode' })),
+      { state: 'unsupportedAgent', providerId: 'opencode' },
     ],
     [
       'noEnvironment',

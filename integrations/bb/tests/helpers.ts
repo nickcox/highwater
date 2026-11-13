@@ -44,6 +44,9 @@ export async function claudeFixtures(home: string): Promise<void> {
     recursive: true,
   });
 }
+export async function codexFixtures(home: string): Promise<void> {
+  await cp(join(repository, 'fixtures/codex/home'), join(home, '.codex'), { recursive: true });
+}
 export const testServer = (generation = 1): HighwaterServer => ({
   baseUrl: 'http://127.0.0.1:12345',
   generation,

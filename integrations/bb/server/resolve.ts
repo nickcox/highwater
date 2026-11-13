@@ -5,7 +5,7 @@ export type HighwaterHost = ExperimentalHostClient<typeof hostContract>;
 export interface ResolvedSession {
   state: 'resolved';
   hostId: string;
-  harness: 'pi' | 'claude-code';
+  harness: 'pi' | 'claude-code' | 'codex';
   providerThreadId: string;
   sessionId: string;
   binaryPath: string | null;
@@ -32,7 +32,7 @@ export async function resolveThread(
   });
   if (!thread) return { state: 'unknownThread' };
   const harness = thread.providerId;
-  if (harness !== 'pi' && harness !== 'claude-code')
+  if (harness !== 'pi' && harness !== 'claude-code' && harness !== 'codex')
     return { state: 'unsupportedAgent', providerId: harness };
   if (!thread.environmentId) return { state: 'noEnvironment' };
 

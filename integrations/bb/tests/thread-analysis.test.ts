@@ -150,7 +150,7 @@ describe('analysis HTTP client', () => {
   });
   it.each([
     { state: 'noSession' },
-    { state: 'unsupportedAgent', providerId: 'codex' },
+    { state: 'unsupportedAgent', providerId: 'opencode' },
     { state: 'sessionNotFound', providerThreadId: 'native' },
   ])('validates resolution states', async (state) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(state, { status: 409 }));

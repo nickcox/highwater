@@ -1,4 +1,4 @@
-Open a Pi or Claude Code thread's right panel and choose **Context** from New tab. Inspect the session summary, Context River, Composition, individual calls and items, and context lifespans without leaving the conversation.
+Open a Pi, Claude Code or Codex thread's right panel and choose **Context** from New tab. Inspect the session summary, Context River, Composition, individual calls and items, and context lifespans without leaving the conversation.
 
 ## Live context view
 
@@ -10,7 +10,7 @@ The Context row shows call and compaction counts, a small history chart and bb's
 
 ## Development requirements
 
-This plugin is still in development. It currently needs a compatible Highwater binary on the agent machine's PATH, or an explicit path in the Highwater binary setting. Automatic binary provisioning is planned but not implemented. Codex is not supported yet.
+This plugin is still in development. It currently needs a compatible Highwater binary on the agent machine's PATH, or an explicit path in the Highwater binary setting. Automatic binary provisioning is planned but not implemented.
 
 Local macOS use is verified. Windows and remote access are not validated. Large sessions update less frequently because refreshes are limited by analysis time.
 
