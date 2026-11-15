@@ -124,13 +124,16 @@ describe('per-thread analysis store', () => {
 describe('analysis HTTP client', () => {
   it('uses only the plugin-scoped thread route, credentials, cancellation and a conditional tag', async () => {
     const signal = new AbortController().signal;
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(new Response('{"schemaVersion":1}', { headers: { etag: '"v2"' } }));
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('{"schemaVersion":1}', {
+        headers: { etag: '"v2"', 'x-highwater-version': '0.5.2' },
+      }),
+    );
     expect(await fetchThreadAnalysis('highwater', 'thr_test1', signal, '"v1"', fetcher)).toEqual({
       status: 'ok',
       analysis: { schemaVersion: 1 },
       etag: '"v2"',
+      version: '0.5.2',
     });
     expect(fetcher).toHaveBeenCalledWith(
       '/api/v1/plugins/highwater/http/analysis?threadId=thr_test1',
@@ -146,7 +149,7 @@ describe('analysis HTTP client', () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 304 }));
     expect(
       await fetchThreadAnalysis('copy', 'thr_test1', new AbortController().signal, '"v1"', fetcher),
-    ).toEqual({ status: 'notModified', etag: '"v1"' });
+    ).toEqual({ status: 'notModified', etag: '"v1"', version: null });
   });
   it.each([
     { state: 'noSession' },

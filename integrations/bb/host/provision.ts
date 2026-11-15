@@ -2,16 +2,15 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { chmod, lstat, mkdir, mkdtemp, open, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import semver from 'semver';
 import pinned from './binary-release.json';
 import { ARCHIVE_LIMIT, readReleaseArchive } from './archive';
 import { waitFor } from './http';
 
-export type BinaryRelease = (typeof pinned.releases)[number];
+export type BinaryRelease = typeof pinned;
 export interface ProvisionOptions {
   platform?: string;
   arch?: string;
-  releases?: BinaryRelease[];
+  release?: BinaryRelease;
   fetcher?: typeof fetch;
   timeoutMs?: number;
   validate?: (path: string, version: string, signal: AbortSignal) => Promise<void>;
@@ -22,15 +21,14 @@ const allowedHosts = new Set([
   'release-assets.githubusercontent.com',
   'objects.githubusercontent.com',
 ]);
-export const pinnedRelease = pinned.releases[0];
+export const pinnedRelease: BinaryRelease = pinned;
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 
-/** Only release-pinned digests are trusted, including for previously cached versions. */
+/** Only the pinned release's digests are trusted, including for cached files. */
 export class BinaryProvisioner {
   private readonly pending = new Map<string, Promise<string>>();
   constructor(
     private readonly dataDir: string,
-    private readonly accepted: string,
     private readonly options: ProvisionOptions = {},
   ) {}
 
@@ -38,17 +36,15 @@ export class BinaryProvisioner {
   async get(signal: AbortSignal): Promise<string> {
     signal.throwIfAborted();
     const platform = `${this.options.platform ?? process.platform}-${this.options.arch ?? process.arch}`;
-    const releases = (this.options.releases ?? pinned.releases).filter(
-      (r) => semver.satisfies(r.version, this.accepted) && platform in r.platforms,
-    );
-    if (!releases.length)
+    const release = this.options.release ?? pinnedRelease;
+    if (!(platform in release.platforms))
       throw new Error(
-        `No pinned Highwater binary is available for ${platform}. Set Highwater binary to an explicit compatible executable.`,
+        `No pinned Highwater binary is available for ${platform}. Set Highwater binary to an explicit executable.`,
       );
-    const key = JSON.stringify([this.dataDir, platform, releases]);
+    const key = JSON.stringify([this.dataDir, platform, release]);
     let work = this.pending.get(key);
     if (!work) {
-      work = this.ensure(platform, releases, signal);
+      work = this.ensure(platform, release, signal);
       this.pending.set(key, work);
       void work
         .finally(() => {
@@ -153,23 +149,19 @@ export class BinaryProvisioner {
   }
   private async ensure(
     platform: string,
-    releases: BinaryRelease[],
+    release: BinaryRelease,
     signal: AbortSignal,
   ): Promise<string> {
-    const current = await this.cached(platform, releases[0], signal);
+    const current = await this.cached(platform, release, signal);
     if (current) return current;
     const bounded = AbortSignal.any([
       signal,
       AbortSignal.timeout(this.options.timeoutMs ?? 20_000),
     ]);
     try {
-      return await this.install(platform, releases[0], bounded);
+      return await this.install(platform, release, bounded);
     } catch (error) {
       signal.throwIfAborted();
-      for (const previous of releases.slice(1)) {
-        const cached = await this.cached(platform, previous, signal);
-        if (cached) return cached;
-      }
       const detail = bounded.aborted
         ? 'The download or installation timed out.'
         : error instanceof Error

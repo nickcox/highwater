@@ -193,7 +193,7 @@ describe.each(binaries)('host RPC with real binary %s', (binary) => {
     const claudeInput = { binaryPath, sessionId: claude.sessionId, ifNoneMatch: null };
     expect(await harness.experimental_call('summary', claudeInput)).toMatchObject({
       status: 'ok',
-      summary: { partial: true },
+      summary: { compactionPoints: expect.any(Array) },
     });
     const claudeAnalysis = await harness.experimental_call('openAnalysis', claudeInput);
     expect(claudeAnalysis.status).toBe('ok');

@@ -5,11 +5,14 @@ import { loadPluginApp, renderSlot } from '@get-bb/plugin-sdk/testing/app';
 import app from '../app';
 import {
   ContextSegment,
+  forecast,
+  GROWTH_EXPLANATION,
   formatTokens,
   sparklinePoints,
   useContextSegmentVisible,
 } from '../app/ContextRow';
 import type { ThreadState } from '../state';
+import { wholeText } from './helpers';
 
 const metrics = {
   callCount: 84,
@@ -17,7 +20,8 @@ const metrics = {
   latestInputTokens: 99000,
   peakInputTokens: 120000,
   series: [20, 100, 40],
-  partial: false,
+  compactionPoints: [1],
+  recentGrowth: 1200,
 };
 const ok = (
   usage: { usedTokens: number; contextWindowTokens: number } | null = {
@@ -71,17 +75,52 @@ it.each([
 ])('formats %s tokens as %s', (value, expected) => {
   expect(formatTokens(value as number)).toBe(expected);
 });
-it('bounds sparkline geometry, including zero and single-point histories', () => {
-  expect(sparklinePoints([0, 0])).toEqual([
-    [1, 9],
-    [63, 9],
+it('bounds sparkline geometry against the given maximum, including zero and single points', () => {
+  expect(sparklinePoints([0, 0], 0)).toEqual([
+    [1, 17],
+    [63, 17],
   ]);
-  expect(sparklinePoints([5])).toEqual([[32, 1]]);
-  expect(sparklinePoints([20, 100, 40])).toEqual([
+  expect(sparklinePoints([5], 5)).toEqual([[32, 1]]);
+  expect(sparklinePoints([20, 100, 40], 100)).toEqual([
     [1, 13.8],
     [32, 1],
     [63, 10.6],
   ]);
+  // Against a window twice the peak, the peak reaches only halfway up.
+  expect(sparklinePoints([100], 200)).toEqual([[32, 9]]);
+});
+
+it('leaves out compactions when there are none', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>().mockImplementation(async () =>
+      Response.json({
+        ok: true,
+        result: {
+          ...ok().result,
+          summary: { ...metrics, compactionCount: 0, compactionPoints: [] },
+        },
+      }),
+    ),
+  );
+  const slot = await mount('card');
+  expect(await slot.findByText(wholeText('84 calls · input +1.2k/call'))).toBeTruthy();
+});
+it('estimates calls until the window is full only from a positive recent rate', () => {
+  const data = (recentGrowth: number | null, usedTokens = 62400) => ({
+    state: 'ok' as const,
+    etag: '"v1"',
+    summary: { ...metrics, recentGrowth },
+    usage: { usedTokens, contextWindowTokens: 200000 },
+  });
+  // (200,000 − 62,400) / 1,200 = 114.7: 115 calls, shown to the nearest 10.
+  expect(forecast(data(1200))).toBe(' Full in about 120 calls at the recent rate.');
+  // Below 20 calls the exact number is shown.
+  expect(forecast(data(1200, 190000))).toBe(' Full in about 9 calls at the recent rate.');
+  expect(forecast(data(0))).toBe('');
+  expect(forecast(data(-300))).toBe('');
+  expect(forecast(data(null))).toBe('');
+  expect(forecast(data(1200, 200000))).toBe('');
 });
 
 describe('Context row and segment', () => {
@@ -91,9 +130,24 @@ describe('Context row and segment', () => {
       const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(ok()));
       vi.stubGlobal('fetch', fetcher);
       const slot = await mount(kind);
-      expect(await slot.findByText('84 calls · 1 compaction')).toBeTruthy();
-      expect(slot.getByText('62.4k / 200k')).toBeTruthy();
-      expect(slot.getByRole('img', { name: 'Reported input tokens per model call' })).toBeTruthy();
+      expect(
+        await slot.findByText(wholeText('84 calls · 1 compaction · input +1.2k/call')),
+      ).toBeTruthy();
+      expect(slot.getByText(kind === 'card' ? '62.4k / 200k · 31%' : '31%')).toBeTruthy();
+      const chart = slot.getByRole('img', {
+        name: 'Reported input tokens per model call, against the context window',
+      });
+      expect(chart.querySelector('[data-part="window"]')).not.toBeNull();
+      expect(chart.querySelectorAll('[data-part="compaction"]')).toHaveLength(1);
+      expect(chart.querySelector('[data-part="latest"]')).not.toBeNull();
+      expect(chart.querySelector('title')?.textContent).toBe(
+        'Input per call across the session. Dashed line: context window.',
+      );
+      expect(slot.getByText('input +1.2k/call')).toHaveProperty('title', GROWTH_EXPLANATION);
+      if (kind === 'banner')
+        expect(slot.container.querySelector('[title^="62k of"]')?.getAttribute('title')).toBe(
+          '62k of 200k tokens (31%). Full in about 120 calls at the recent rate.',
+        );
       // The displayed current usage is bb's 62.4k, not Highwater's 99k last reported input.
       expect(slot.queryByText('99k / 200k')).toBeNull();
       fireEvent.click(slot.getByRole('button', { name: /Context/ }));
@@ -152,9 +206,15 @@ describe('Context row and segment', () => {
     const slot = await mount('banner', threadId);
     await waitFor(() => expect(slot.container.textContent).toBe(''));
     await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
-    await waitFor(() => expect(slot.getByText('84 calls · 1 compaction')).toBeTruthy(), {
-      timeout: 4000,
-    });
+    await waitFor(
+      () =>
+        expect(
+          slot.getByText(wholeText('84 calls · 1 compaction · input +1.2k/call')),
+        ).toBeTruthy(),
+      {
+        timeout: 4000,
+      },
+    );
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('stops redundant realtime reads once an immutable unsupported provider is known', async () => {
@@ -193,7 +253,7 @@ describe('Context row and segment', () => {
         vi.fn<typeof fetch>().mockImplementation(async () => Response.json(ok(usage))),
       );
       const slot = await mount();
-      expect(await slot.findByText(usage ? '0 / 200k' : 'Usage unavailable')).toBeTruthy();
+      expect(await slot.findByText(usage ? '0 / 200k · 0%' : 'Usage unavailable')).toBeTruthy();
     },
   );
   it('does not draw a fabricated chart when reported token points are missing', async () => {
@@ -204,21 +264,23 @@ describe('Context row and segment', () => {
           ok: true,
           result: {
             ...ok().result,
-            summary: { ...metrics, series: [], partial: true, latestInputTokens: null },
+            summary: {
+              ...metrics,
+              series: [],
+              compactionPoints: [],
+              recentGrowth: null,
+              latestInputTokens: null,
+            },
           },
         }),
       ),
     );
     const slot = await mount();
-    expect(await slot.findByText('84 calls · 1 compaction · partial')).toBeTruthy();
-    expect(slot.queryByRole('img', { name: 'Reported input tokens per model call' })).toBeNull();
+    expect(await slot.findByText(wholeText('84 calls · 1 compaction'))).toBeTruthy();
+    expect(slot.queryByRole('img', { name: /^Reported input tokens per model call/ })).toBeNull();
   });
   it.each([
     [{ state: 'noEnvironment' }, 'No machine assigned'],
-    [
-      { state: 'unsupportedVersion', version: '9.0.0', accepted: '>=0.5.0 <0.6.0' },
-      'Highwater version not supported',
-    ],
     [
       { state: 'error', httpStatus: 503, code: 'busy', message: 'Please retry' },
       'Analysis could not be updated',

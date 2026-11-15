@@ -24,7 +24,8 @@ function entry(key: string, bytes = 60): AnalysisEntry {
       latestInputTokens: null,
       peakInputTokens: null,
       series: [],
-      partial: false,
+      compactionPoints: [],
+      recentGrowth: null,
     },
   };
 }

@@ -325,16 +325,16 @@ describe('ContextLifespans long sessions', () => {
   it('renders matching rows a page at a time', async () => {
     const indexed = indexTestAnalysis(compositionScenario(220));
     const total = indexed.analysis.contextItems.length;
-    expect(total).toBeGreaterThan(200);
+    expect(total).toBeGreaterThan(100);
     render(ContextLifespans, {
       props: { indexed, onSelectItem: vi.fn(), onHoverItem: emptyHover },
     });
     await expandLifespans();
-    expect(document.querySelectorAll('[data-lifespan-item-id]')).toHaveLength(200);
-    expect(document.querySelector('.more-rows')).toHaveTextContent(`Showing 200 of ${total} items`);
-    await fireEvent.click(screen.getByRole('button', { name: `Show ${total - 200} more` }));
-    expect(document.querySelectorAll('[data-lifespan-item-id]')).toHaveLength(total);
-    expect(document.querySelector('.more-rows')).toBeNull();
+    expect(document.querySelectorAll('[data-lifespan-item-id]')).toHaveLength(50);
+    expect(document.querySelector('.more-rows')).toHaveTextContent(`Showing 50 of ${total} items`);
+    await fireEvent.click(screen.getByRole('button', { name: 'Show 50 more' }));
+    expect(document.querySelectorAll('[data-lifespan-item-id]')).toHaveLength(100);
+    expect(document.querySelector('.more-rows')).toHaveTextContent(`Showing 100 of ${total} items`);
   });
 
   it('extends the page to reach a requested item beyond it', async () => {

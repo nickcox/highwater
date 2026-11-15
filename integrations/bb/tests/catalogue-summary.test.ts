@@ -87,7 +87,6 @@ describe('summary', () => {
       summariseAnalysis({
         ...analysis([0, '45', null]),
         compactions: [{}],
-        reconstruction: { status: 'partial' },
       }),
     ).toEqual({
       callCount: 3,
@@ -95,15 +94,30 @@ describe('summary', () => {
       latestInputTokens: null,
       peakInputTokens: 45,
       series: [0, 45],
-      partial: true,
+      compactionPoints: [],
+      recentGrowth: 45,
     });
     expect(summariseAnalysis(analysis([]))).toMatchObject({
       callCount: 0,
       series: [],
       latestInputTokens: null,
       peakInputTokens: null,
-      partial: false,
+      compactionPoints: [],
+      recentGrowth: null,
     });
+  });
+  it('marks compactions in the series and measures growth since the latest one', () => {
+    const tokens = [100, 300, 600, 900, 200, 260, 380, 400, 700];
+    const input = analysis(tokens);
+    (input.modelCalls[4] as { compactionBefore?: string }).compactionBefore = 'c1';
+    const summary = summariseAnalysis({ ...input, compactions: [{}] });
+    expect(summary.compactionPoints).toEqual([4]);
+    // Changes since the compaction: +60, +120, +20, +300; the median is (60 + 120) / 2.
+    expect(summary.recentGrowth).toBe(90);
+  });
+  it('uses at most the last ten changes for growth', () => {
+    const tokens = [...Array.from({ length: 20 }, (_, i) => i * 1000), 19500];
+    expect(summariseAnalysis(analysis(tokens)).recentGrowth).toBe(1000);
   });
   it('keeps the highest reported value per call group in a series of at most 60 points', () => {
     const tokens = Array.from({ length: 600 }, (_, i) => (i === 149 ? 9000 : i));

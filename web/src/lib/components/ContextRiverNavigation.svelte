@@ -4,6 +4,7 @@
   import type { RiverViewportStatus } from '../context-river/viewport';
   import { stepCallTarget } from '../context-river/viewport';
   import RiverCallJump from './RiverCallJump.svelte';
+  import CompactMenu from './CompactMenu.svelte';
   let {
     viewport,
     callIndices,
@@ -15,6 +16,7 @@
     onZoomIn,
     onZoomOut,
     isVisible = true,
+    compact = false,
   }: {
     viewport: RiverViewportStatus;
     callIndices: number[];
@@ -26,6 +28,8 @@
     onZoomIn: () => void;
     onZoomOut: () => void;
     isVisible?: boolean;
+    /** One row: the step buttons and range, with the other controls in a menu. */
+    compact?: boolean;
   } = $props();
   let jumpMessage = $state('');
   let noCalls = $derived(callIndices.length === 0);
@@ -64,66 +68,85 @@
   );
 </script>
 
-<div class="viewport-navigation" role="group" aria-label="Context River navigation">
-  <div class="viewport-status">
-    <span class="range" aria-live="polite" data-testid="visible-call-range">{rangeText}</span>
-  </div>
-  <div class="controls" role="group" aria-label="Chart zoom and navigation">
-    <button
-      type="button"
-      class="step-call"
-      bind:this={previousButton}
-      aria-label="Previous call"
-      aria-keyshortcuts="ArrowLeft h"
-      title="Previous call (← / h)"
-      disabled={previous === null || !isVisible}
-      onclick={() => previous !== null && onSelectCall(previous)}>‹</button
-    >
-    <button
-      type="button"
-      class="step-call"
-      bind:this={nextButton}
-      aria-label="Next call"
-      aria-keyshortcuts="ArrowRight l"
-      title="Next call (→ / l)"
-      disabled={next === null || !isVisible}
-      onclick={() => next !== null && onSelectCall(next)}>›</button
-    >
-    <span class="zoom-level">Zoom {viewport.zoomFactor.toFixed(1)}×</span>
-    <button
-      type="button"
-      aria-label="Zoom out"
-      title="Zoom out"
-      disabled={!viewport.ready || noCalls || !viewport.canZoomOut}
-      onclick={onZoomOut}>−</button
-    >
-    <button
-      type="button"
-      aria-label="Zoom in"
-      title="Zoom in"
-      disabled={!viewport.ready || noCalls || !viewport.canZoomIn}
-      onclick={onZoomIn}>+</button
-    >
-    <button
-      type="button"
-      aria-label="Fit all calls"
-      title="Fit all calls"
-      disabled={!viewport.ready || noCalls || viewport.isFitAll}
-      onclick={onFitAll}>Fit all</button
-    >
-    <button
-      type="button"
-      disabled={!viewport.ready || noCalls || !viewport.hasOverflow}
-      onclick={onLatest}>Latest</button
-    >
-    <RiverCallJump
-      {callIndices}
-      ready={viewport.ready && isVisible}
-      {onJumpToCall}
-      bind:message={jumpMessage}
-      hideMessage={true}
-    />
-  </div>
+{#snippet previousStep()}
+  <button
+    type="button"
+    class="step-call"
+    bind:this={previousButton}
+    aria-label="Previous call"
+    aria-keyshortcuts="ArrowLeft h"
+    title="Previous call (← / h)"
+    disabled={previous === null || !isVisible}
+    onclick={() => previous !== null && onSelectCall(previous)}>‹</button
+  >
+{/snippet}
+{#snippet nextStep()}
+  <button
+    type="button"
+    class="step-call"
+    bind:this={nextButton}
+    aria-label="Next call"
+    aria-keyshortcuts="ArrowRight l"
+    title="Next call (→ / l)"
+    disabled={next === null || !isVisible}
+    onclick={() => next !== null && onSelectCall(next)}>›</button
+  >
+{/snippet}
+{#snippet secondaryControls()}
+  <span class="zoom-level">Zoom {viewport.zoomFactor.toFixed(1)}×</span>
+  <button
+    type="button"
+    aria-label="Zoom out"
+    title="Zoom out"
+    disabled={!viewport.ready || noCalls || !viewport.canZoomOut}
+    onclick={onZoomOut}>−</button
+  >
+  <button
+    type="button"
+    aria-label="Zoom in"
+    title="Zoom in"
+    disabled={!viewport.ready || noCalls || !viewport.canZoomIn}
+    onclick={onZoomIn}>+</button
+  >
+  <button
+    type="button"
+    aria-label="Fit all calls"
+    title="Fit all calls"
+    disabled={!viewport.ready || noCalls || viewport.isFitAll}
+    onclick={onFitAll}>Fit all</button
+  >
+  <button
+    type="button"
+    disabled={!viewport.ready || noCalls || !viewport.hasOverflow}
+    onclick={onLatest}>Latest</button
+  >
+  <RiverCallJump
+    {callIndices}
+    ready={viewport.ready && isVisible}
+    {onJumpToCall}
+    bind:message={jumpMessage}
+    hideMessage={true}
+  />
+{/snippet}
+
+<div class="viewport-navigation" class:compact role="group" aria-label="Context River navigation">
+  {#if compact}
+    <div class="controls" role="group" aria-label="Chart zoom and navigation">
+      {@render previousStep()}
+      <span class="range" aria-live="polite" data-testid="visible-call-range">{rangeText}</span>
+      {@render nextStep()}
+      <CompactMenu label="More">{@render secondaryControls()}</CompactMenu>
+    </div>
+  {:else}
+    <div class="viewport-status">
+      <span class="range" aria-live="polite" data-testid="visible-call-range">{rangeText}</span>
+    </div>
+    <div class="controls" role="group" aria-label="Chart zoom and navigation">
+      {@render previousStep()}
+      {@render nextStep()}
+      {@render secondaryControls()}
+    </div>
+  {/if}
   {#if jumpMessage}<p class="jump-message" role="status">{jumpMessage}</p>{/if}
 </div>
 
@@ -144,7 +167,7 @@
     align-items: center;
     gap: 4px 12px;
     min-width: 0;
-    min-height: 32px;
+    min-height: var(--control-size);
   }
   .range {
     color: var(--text);
@@ -168,10 +191,10 @@
     font-size: var(--text-sm);
   }
   .step-call {
-    width: 32px;
-    height: 32px;
+    width: var(--control-size);
+    height: var(--control-size);
     padding: 0;
-    flex: 0 0 32px;
+    flex: 0 0 var(--control-size);
     font-size: 22px;
     line-height: 1;
   }
@@ -179,6 +202,23 @@
     color: var(--secondary);
     font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
+  }
+  .compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .compact .controls {
+    grid-column: 1;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+  .compact .range {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .compact :global(.compact-menu) {
+    margin-left: auto;
   }
   @container highwater (max-width: 760px) {
     .viewport-navigation {

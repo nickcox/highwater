@@ -27,11 +27,6 @@ export function stateMessage(state: ThreadState): { title: string; detail: strin
         detail:
           'The explicit Highwater binary could not be found. Correct its path, or clear the setting to download the pinned release automatically.',
       };
-    case 'unsupportedVersion':
-      return {
-        title: 'Highwater version not supported',
-        detail: `Found ${state.version}. This plugin requires ${state.accepted}. Choose a compatible binary in the plugin settings.`,
-      };
     case 'startFailed':
       return { title: 'Highwater could not start', detail: state.message };
     case 'sessionNotFound':

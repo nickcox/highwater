@@ -26,8 +26,16 @@ const browserStorage: StorageAccess = () =>
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export function parsePresentationPreferences(raw: string | null): PresentationPreferences {
-  const result = defaultPresentationPreferences();
+/** Stored values override `base`, which a host can use to choose different starting values. */
+export function parsePresentationPreferences(
+  raw: string | null,
+  base: PresentationPreferences = defaultPresentationPreferences(),
+): PresentationPreferences {
+  const result: PresentationPreferences = {
+    version: 1,
+    river: { ...base.river },
+    economics: { ...base.economics },
+  };
   if (!raw || raw.length > 4096) return result;
   try {
     const value: unknown = JSON.parse(raw);
@@ -55,11 +63,12 @@ export function parsePresentationPreferences(raw: string | null): PresentationPr
 export function readPresentationPreferences(
   access: StorageAccess = browserStorage,
   key: string = PRESENTATION_KEY,
+  base: PresentationPreferences = defaultPresentationPreferences(),
 ): PresentationPreferences {
   try {
-    return parsePresentationPreferences(access()?.getItem(key) ?? null);
+    return parsePresentationPreferences(access()?.getItem(key) ?? null, base);
   } catch {
-    return defaultPresentationPreferences();
+    return parsePresentationPreferences(null, base);
   }
 }
 

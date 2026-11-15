@@ -112,15 +112,14 @@ async function fixture(
   };
   return { release, archive, bytes, root, executable };
 }
-const range = '>=0.5.0 <0.6.0';
 function downloader(bytes: Buffer) {
   return vi.fn<typeof fetch>().mockImplementation(async () => new Response(new Uint8Array(bytes)));
 }
-function provisioner(home: string, releases: BinaryRelease[], fetcher: typeof fetch, extra = {}) {
-  return new BinaryProvisioner(home, range, {
+function provisioner(home: string, release: BinaryRelease, fetcher: typeof fetch, extra = {}) {
+  return new BinaryProvisioner(home, {
     platform: 'linux',
     arch: 'x64',
-    releases,
+    release,
     fetcher,
     ...extra,
   });
@@ -139,7 +138,7 @@ describe('binary provisioning', () => {
       );
       const fetcher = downloader(f.archive);
       const [os, arch] = platform.split('-');
-      const p = provisioner(home, [f.release], fetcher, { platform: os, arch });
+      const p = provisioner(home, f.release, fetcher, { platform: os, arch });
       const paths = await Promise.all(Array.from({ length: 4 }, () => p.get(signal())));
       expect(new Set(paths).size).toBe(1);
       expect(fetcher).toHaveBeenCalledTimes(1);
@@ -153,7 +152,7 @@ describe('binary provisioning', () => {
   );
   it('rejects unsupported platforms without a request', async () => {
     const fetcher = downloader(Buffer.alloc(0));
-    const p = provisioner(await directory(), [pinnedRelease], fetcher, {
+    const p = provisioner(await directory(), pinnedRelease, fetcher, {
       platform: 'linux',
       arch: 'arm',
     });
@@ -185,7 +184,7 @@ describe('binary provisioning', () => {
         }),
       );
       const home = await directory();
-      await expect(provisioner(home, [f.release], fetcher).get(signal())).rejects.toThrow(
+      await expect(provisioner(home, f.release, fetcher).get(signal())).rejects.toThrow(
         'could not be provisioned',
       );
       expect(await readdir(home)).toEqual([]);
@@ -202,7 +201,7 @@ describe('binary provisioning', () => {
         }),
       )
       .mockResolvedValueOnce(new Response(new Uint8Array(f.archive)));
-    await provisioner(await directory(), [f.release], fetcher).get(signal());
+    await provisioner(await directory(), f.release, fetcher).get(signal());
     expect(fetcher.mock.calls[1][0]).toBe('https://release-assets.githubusercontent.com/fixture');
     for (const url of [
       'http://github.com/file',
@@ -213,7 +212,7 @@ describe('binary provisioning', () => {
       const bad = vi
         .fn<typeof fetch>()
         .mockResolvedValue(new Response(null, { status: 302, headers: { location: url } }));
-      await expect(provisioner(await directory(), [f.release], bad).get(signal())).rejects.toThrow(
+      await expect(provisioner(await directory(), f.release, bad).get(signal())).rejects.toThrow(
         'Untrusted',
       );
       expect(bad).toHaveBeenCalledTimes(1);
@@ -223,7 +222,7 @@ describe('binary provisioning', () => {
       .mockResolvedValue(
         new Response(null, { status: 302, headers: { location: 'https://github.com/again' } }),
       );
-    await expect(provisioner(await directory(), [f.release], loop).get(signal())).rejects.toThrow(
+    await expect(provisioner(await directory(), f.release, loop).get(signal())).rejects.toThrow(
       'redirect limit',
     );
     expect(loop).toHaveBeenCalledTimes(4);
@@ -232,7 +231,7 @@ describe('binary provisioning', () => {
     const f = await fixture();
     const never = vi.fn<typeof fetch>().mockImplementation(() => new Promise(() => {}));
     await expect(
-      provisioner(await directory(), [f.release], never, { timeoutMs: 20 }).get(signal()),
+      provisioner(await directory(), f.release, never, { timeoutMs: 20 }).get(signal()),
     ).rejects.toThrow('timed out');
     let cancelled = false;
     const stream = new ReadableStream<Uint8Array>({
@@ -242,7 +241,7 @@ describe('binary provisioning', () => {
     });
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(stream));
     const controller = new AbortController();
-    const work = provisioner(await directory(), [f.release], fetcher).get(controller.signal);
+    const work = provisioner(await directory(), f.release, fetcher).get(controller.signal);
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
     controller.abort();
     await expect(work).rejects.toThrow();
@@ -253,7 +252,7 @@ describe('binary provisioning', () => {
     const f = await fixture();
     const owner = new AbortController();
     let entered = false;
-    const p = provisioner(home, [f.release], downloader(f.archive), {
+    const p = provisioner(home, f.release, downloader(f.archive), {
       validate: async (_path: string, _version: string, signal: AbortSignal) => {
         entered = true;
         await new Promise<void>((_resolve, reject) =>
@@ -275,7 +274,7 @@ describe('binary provisioning', () => {
     const home = await directory();
     const f = await fixture();
     const fetcher = downloader(f.archive);
-    const p = provisioner(home, [f.release], fetcher);
+    const p = provisioner(home, f.release, fetcher);
     const path = await p.get(signal());
     await writeFile(path, Buffer.alloc(f.bytes.length));
     await p.get(signal());
@@ -290,33 +289,24 @@ describe('binary provisioning', () => {
       expect((await lstat(path)).isSymbolicLink()).toBe(false);
     }
   });
-  it('keeps a previous trusted release usable when an upgrade download or validation fails', async () => {
+  it('does not fall back to an older cached release when the pinned release fails', async () => {
     const home = await directory();
     const old = await fixture();
-    const oldPath = await provisioner(home, [old.release], downloader(old.archive)).get(signal());
+    await provisioner(home, old.release, downloader(old.archive)).get(signal());
     const latest = await fixture('0.5.2');
-    expect(
-      await provisioner(
+    await expect(
+      provisioner(
         home,
-        [latest.release, old.release],
+        latest.release,
         vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')),
       ).get(signal()),
-    ).toBe(oldPath);
-    expect(
-      await provisioner(home, [latest.release, old.release], downloader(latest.archive), {
+    ).rejects.toThrow('could not be provisioned');
+    await expect(
+      provisioner(home, latest.release, downloader(latest.archive), {
         validate: async () => {
           throw new Error('bad executable version');
         },
       }).get(signal()),
-    ).toBe(oldPath);
-    expect(await readFile(oldPath)).toEqual(old.bytes);
-    await writeFile(oldPath, 'untrusted');
-    await expect(
-      provisioner(
-        home,
-        [latest.release, old.release],
-        vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')),
-      ).get(signal()),
     ).rejects.toThrow('could not be provisioned');
     const contents = await readdir(join(home, 'binaries', '0.5.2'));
     expect(contents.some((n) => n.startsWith('.install-'))).toBe(false);
@@ -340,7 +330,7 @@ describe('binary provisioning', () => {
       dataDir: join(home, 'data'),
       home,
       env: { PATH: join(home, 'no-tools') },
-      provisioning: { releases: [f.release], fetcher },
+      provisioning: { release: f.release, fetcher },
     });
     processes.push(p);
     const abort = new AbortController();

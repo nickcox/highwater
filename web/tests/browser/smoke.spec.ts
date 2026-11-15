@@ -566,8 +566,8 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   expect(collapsedHeight).toBeLessThan(5000);
   await summary.click();
   // Long lists render a page of rows at a time.
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(200);
-  await expect(page.locator('.more-rows')).toContainText('Showing 200 of 1,100 items');
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(50);
+  await expect(page.locator('.more-rows')).toContainText('Showing 50 of 1,100 items');
   expect(
     await page.locator('[data-lifespan-item-id="composition-item-010"] .item-label').textContent(),
   ).toBe('Read · alpha/src/config.ts');
@@ -578,10 +578,10 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   const expandedHeight = await page.evaluate(() => document.documentElement.scrollHeight);
   expect(expandedHeight).toBeGreaterThan(collapsedHeight);
 
-  await page.getByRole('button', { name: 'Show 200 more' }).click();
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(400);
+  await page.getByRole('button', { name: 'Show 50 more' }).click();
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(100);
   await page.getByRole('combobox', { name: 'Sort items' }).selectOption('firstAppearance');
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(200);
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(50);
   await page.getByRole('combobox', { name: 'Sort items' }).selectOption('tokenTurns');
 
   const search = page.getByRole('searchbox', { name: 'Search items' });
@@ -589,7 +589,7 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   await expect(page.locator('.lifespan-panel .row')).toHaveCount(1);
   await expect(page.locator('.result-count')).toHaveText('1 of 1,100 items');
   await page.getByRole('button', { name: 'Clear filters' }).click();
-  await expect(page.locator('.lifespan-panel .row')).toHaveCount(200);
+  await expect(page.locator('.lifespan-panel .row')).toHaveCount(50);
 
   await page.getByRole('tab', { name: 'Composition' }).click();
   await expect(
@@ -612,7 +612,7 @@ test('cumulative Composition, Find in lifespans, and collapsed dense browsing st
   await resetAndFind.click();
   await expect(selectedRow).toBeFocused();
   // Finding an item extends the rendered page far enough to include it.
-  expect(await page.locator('.lifespan-panel .row').count()).toBeGreaterThanOrEqual(200);
+  expect(await page.locator('.lifespan-panel .row').count()).toBeGreaterThan(50);
 
   await page.getByRole('tab', { name: 'Composition' }).click();
   await list.focus();
@@ -2053,6 +2053,8 @@ test('vertical scale controls explain local ribbon heights and keep the axis anc
     await captureBaselineState(page, scaleScreenshotDirectory, 'visible-scale-long-session');
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  // A narrow view keeps the scale toggles in the View menu.
+  await page.locator('summary', { hasText: 'View' }).click();
   await expect(page.getByRole('button', { name: 'Visible calls' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole('button', { name: 'Session scale' }).click();
@@ -2072,6 +2074,8 @@ test('Go to call remains with the zoom controls without overflow across toolbar 
   for (const width of [1440, 800, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const controls = page.getByRole('group', { name: 'Chart zoom and navigation' });
+    // A narrow view keeps Go to call in the More menu.
+    if (width < 520) await page.locator('summary', { hasText: 'More' }).click();
     const input = controls.getByLabel('Call number');
     await expect(input).toBeVisible();
     await expect(controls.getByRole('button', { name: 'Go', exact: true })).toBeEnabled();
@@ -2126,6 +2130,8 @@ test('navigation controls keep their slot when the visible-range status changes'
   expect(Math.abs(controlsAfterHelp!.y - controlsBeforeHelp!.y)).toBeLessThan(1);
   await helpTrigger.click();
   await page.setViewportSize({ width: 390, height: 844 });
+  // A narrow view keeps zoom and Fit all in the More menu, which stays open while zooming.
+  await page.locator('summary', { hasText: 'More' }).click();
   await page.getByRole('button', { name: 'Fit all calls' }).click();
   await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.0×');
   await zoomAndCheckStablePosition();

@@ -6,7 +6,8 @@ import { repository } from './helpers';
 import { experimental_scanPublicSdkOnly } from '@get-bb/plugin-sdk/testing';
 import manifest from '../package.json';
 import { hostContract } from '../contract';
-import { ACCEPTED_VERSIONS } from '../host/process';
+import semver from 'semver';
+import pinned from '../host/binary-release.json';
 
 describe('package boundaries', () => {
   it('uses public SDK imports and no private bb packages', async () => {
@@ -23,11 +24,11 @@ describe('package boundaries', () => {
     expect(result.violations).toEqual([]);
     expect(result.privateDependencies).toEqual([]);
   });
-  it('declares only implemented entries, no agent skills and the current version range', () => {
+  it('declares only implemented entries, no agent skills and a released binary pin', () => {
     expect(manifest.bb.skills).toEqual([]);
     expect(manifest.bb.app).toBe('./app.tsx');
-    const [major, minor] = manifest.version.split('.').map(Number);
-    expect(ACCEPTED_VERSIONS).toBe(`>=${major}.${minor}.0 <${major}.${minor + 1}.0`);
+    // Between a Highwater release and its plugin tag, the pin is the previous release.
+    expect(semver.lte(pinned.version, manifest.version)).toBe(true);
     const cargoVersion = /^version = "([^"]+)"/m.exec(
       readFileSync(join(repository, 'Cargo.toml'), 'utf8'),
     )?.[1];

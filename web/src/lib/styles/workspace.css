@@ -14,6 +14,13 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+  /* Control and panel sizes; the embed's compact density overrides these. */
+  --control-padding: 7px 9px;
+  --control-size: 32px;
+  --toggle-height: 30px;
+  --toggle-padding: 4px 9px;
+  --panel-padding: 15px;
+  --panel-gap: 14px;
 }
 * {
   box-sizing: border-box;
@@ -25,7 +32,7 @@ select {
   border: 1px solid var(--control-border);
   color: var(--text);
   border-radius: var(--control-radius);
-  padding: 7px 9px;
+  padding: var(--control-padding);
 }
 button {
   cursor: pointer;
@@ -66,8 +73,8 @@ summary:focus-visible {
   font-weight: 650;
 }
 .toggle-group > button {
-  min-height: 30px;
-  padding: 4px 9px;
+  min-height: var(--toggle-height);
+  padding: var(--toggle-padding);
   border: 1px solid var(--separator);
   background-color: var(--surface);
   color: var(--text);

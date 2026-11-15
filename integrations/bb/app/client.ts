@@ -7,7 +7,6 @@ import {
   type ThreadState,
   type ThreadSummaryResult,
 } from '../state';
-import type { AnalysisFetchResult } from '../vendor/highwater-embed';
 
 export class ThreadStateError extends Error {
   constructor(readonly detail: ThreadState) {
@@ -16,6 +15,10 @@ export class ThreadStateError extends Error {
     );
   }
 }
+/** The analysis with the Highwater version that produced it, when bb reported one. */
+export type ThreadAnalysisResult =
+  | { status: 'ok'; analysis: unknown; etag: string | null; version?: string | null }
+  | { status: 'notModified'; etag: string | null; version?: string | null };
 const errorBody = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 const summaryEnvelope = z.object({ ok: z.literal(true), result: threadSummaryResultSchema });
 const failure = (httpStatus: number, code: string, message: string) =>
@@ -73,7 +76,7 @@ export async function fetchThreadAnalysis(
   signal: AbortSignal,
   etag: string | null,
   fetcher: typeof fetch = fetch,
-): Promise<AnalysisFetchResult> {
+): Promise<ThreadAnalysisResult> {
   threadIdSchema.parse(threadId);
   const response = await fetcher(
     `/api/v1/plugins/${encodeURIComponent(pluginId)}/http/analysis?threadId=${encodeURIComponent(threadId)}`,
@@ -85,7 +88,8 @@ export async function fetchThreadAnalysis(
     },
   );
   const nextEtag = response.headers.get('etag');
-  if (response.status === 304) return { status: 'notModified', etag: nextEtag ?? etag };
+  const version = response.headers.get('x-highwater-version');
+  if (response.status === 304) return { status: 'notModified', etag: nextEtag ?? etag, version };
   let body: unknown;
   try {
     body = await response.json();
@@ -96,7 +100,7 @@ export async function fetchThreadAnalysis(
       'bb returned an unreadable Highwater response. Retry the request.',
     );
   }
-  if (response.status === 200) return { status: 'ok', analysis: body, etag: nextEtag };
+  if (response.status === 200) return { status: 'ok', analysis: body, etag: nextEtag, version };
   if (response.status === 409) {
     const state = threadStateSchema.safeParse(body);
     if (state.success) throw new ThreadStateError(state.data);

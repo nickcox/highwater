@@ -29,10 +29,13 @@
     indexed,
     sessionId = null,
     sessions = [],
+    compact = false,
   }: {
     indexed: IndexedAnalysis;
     sessionId?: string | null;
     sessions?: readonly SessionListItem[];
+    /** The four main figures on one line. */
+    compact?: boolean;
   } = $props();
 
   let listed = $derived(sessions.find((candidate) => candidate.id === sessionId));
@@ -97,43 +100,56 @@
 </script>
 
 <section class="summary" aria-label="Session summary">
-  <div class="primary-metrics">
-    <div><span>Model calls</span><b>{formatInteger(analysis.modelCalls.length)}</b></div>
-    <div><span>Context items</span><b>{formatInteger(analysis.contextItems.length)}</b></div>
-    <div>
-      <span>Peak calculated context</span>
-      <b
+  {#if compact}
+    <p class="compact-metrics" title={cost ? `${cost.label}: ${cost.note}` : undefined}>
+      <span>{formatInteger(analysis.modelCalls.length)} calls</span>
+      <span>{formatInteger(analysis.contextItems.length)} items</span>
+      <span
         >{session.peakCalculatedVisibleTokens === null
-          ? 'Unknown'
-          : formatWeight(session.peakCalculatedVisibleTokens, 'calculatedTokens')}</b
+          ? 'Peak unknown'
+          : `${formatMetric(session.peakCalculatedVisibleTokens)} peak`}</span
       >
-    </div>
-    <div class="cost-metric">
-      {#if cost}
-        <span
-          >{cost.label}<InfoPopover id="session-cost-note" label="How the cost is worked out"
-            >{cost.title}
-            <span class="price-source"
-              >Prices from models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
-                0,
-                10,
-              )}){#if priceData.amendmentsImportedFrom}, with corrections from model-prices {priceData.amendmentsImportedFrom.slice(
-                  0,
-                  7,
-                )}{/if}.</span
-            ></InfoPopover
-          ></span
+      <span>{cost ? cost.value : 'Cost unknown'}</span>
+    </p>
+  {:else}
+    <div class="primary-metrics">
+      <div><span>Model calls</span><b>{formatInteger(analysis.modelCalls.length)}</b></div>
+      <div><span>Context items</span><b>{formatInteger(analysis.contextItems.length)}</b></div>
+      <div>
+        <span>Peak calculated context</span>
+        <b
+          >{session.peakCalculatedVisibleTokens === null
+            ? 'Unknown'
+            : formatWeight(session.peakCalculatedVisibleTokens, 'calculatedTokens')}</b
         >
-        <b>{cost.value}</b>
-        <small class="metric-note">{cost.note}{costCoverage ? ` · ${costCoverage}` : ''}</small>
-        {#if cost.split}<small class="metric-note">{cost.split}</small>{/if}
-      {:else}
-        <span>Cost</span>
-        <b title="No call in this session has a known or estimated cost.">Unknown</b>
-        {#if costCoverage}<small class="metric-note">{costCoverage}</small>{/if}
-      {/if}
+      </div>
+      <div class="cost-metric">
+        {#if cost}
+          <span
+            >{cost.label}<InfoPopover id="session-cost-note" label="How the cost is worked out"
+              >{cost.title}
+              <span class="price-source"
+                >Prices from models.dev {priceData.modelsDevCommit.slice(0, 7)} ({priceData.modelsDevCommittedAt.slice(
+                  0,
+                  10,
+                )}){#if priceData.amendmentsImportedFrom}, with corrections from model-prices {priceData.amendmentsImportedFrom.slice(
+                    0,
+                    7,
+                  )}{/if}.</span
+              ></InfoPopover
+            ></span
+          >
+          <b>{cost.value}</b>
+          <small class="metric-note">{cost.note}{costCoverage ? ` · ${costCoverage}` : ''}</small>
+          {#if cost.split}<small class="metric-note">{cost.split}</small>{/if}
+        {:else}
+          <span>Cost</span>
+          <b title="No call in this session has a known or estimated cost.">Unknown</b>
+          {#if costCoverage}<small class="metric-note">{costCoverage}</small>{/if}
+        {/if}
+      </div>
     </div>
-  </div>
+  {/if}
 
   <div class="session-status">
     <!-- One indicator for how far the token estimates can be trusted; its note explains why. -->
@@ -419,6 +435,21 @@
     margin-top: 16px;
     min-width: 0;
   }
+  .compact-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 0;
+    margin: 0 0 4px;
+    color: var(--text-strong);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .compact-metrics span:not(:last-child)::after {
+    content: '·';
+    margin: 0 6px;
+    color: var(--secondary);
+    font-weight: 400;
+  }
   .primary-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -554,10 +585,9 @@
     overflow-wrap: anywhere;
     color: var(--secondary);
   }
+  /* Narrower views show the figures on one line instead (see SessionView), so the four
+     figures stay in one row whenever they are shown separately. */
   @container highwater (max-width: 800px) {
-    .primary-metrics {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
     .detail-columns {
       grid-template-columns: 1fr;
     }

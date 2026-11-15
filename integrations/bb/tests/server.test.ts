@@ -142,16 +142,6 @@ describe('thread resolution states', () => {
       { state: 'binaryMissing' },
     ],
     [
-      'unsupportedVersion',
-      ({ driver }) =>
-        driver.mockImplementation(async () => ({
-          state: 'unsupportedVersion',
-          version: '9.0.0',
-          accepted: '>=0.5.0 <0.6.0',
-        })),
-      { state: 'unsupportedVersion', version: '9.0.0', accepted: '>=0.5.0 <0.6.0' },
-    ],
-    [
       'startFailed',
       ({ driver }) =>
         driver.mockImplementation(async () => ({ state: 'failed', message: 'could not start' })),
@@ -321,6 +311,7 @@ describe('analysis HTTP route', () => {
     expect(response.headers.get('content-encoding')).toBe('gzip');
     expect(response.headers.get('etag')).toBe('"v1"');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-highwater-version')).toBe('0.5.1');
     expect(JSON.parse(gunzipSync(Buffer.from(await response.arrayBuffer())).toString())).toEqual(
       payload,
     );

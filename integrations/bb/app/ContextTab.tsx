@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { experimental_useCodeTheme, experimental_useTabVisible } from '@get-bb/plugin-sdk/app';
-import { mountHighwater, type HighwaterEmbed } from '../vendor/highwater-embed';
+import { mountHighwater, sectionPresets, type HighwaterEmbed } from '../vendor/highwater-embed';
 import { useThreadAnalysis } from './use-thread-analysis';
 import { ContextState } from './ContextState';
+import pinned from '../host/binary-release.json';
 
 export function ContextTab({ threadId }: { threadId: string }) {
   const visible = experimental_useTabVisible();
@@ -12,6 +13,7 @@ export function ContextTab({ threadId }: { threadId: string }) {
   const view = useRef<HighwaterEmbed | null>(null);
   const refreshedCycle = useRef(0);
   const hasAnalysis = snapshot.analysis !== null;
+  const version = snapshot.analysis?.version ?? null;
   const theme = useRef(mode);
   theme.current = mode;
 
@@ -22,6 +24,10 @@ export function ContextTab({ threadId }: { threadId: string }) {
       target: target.current,
       preferencesKey: `${pluginId}.highwater.presentation.v1`,
       theme: theme.current,
+      sections: sectionPresets.panel,
+      density: 'compact',
+      // Following shows recent calls, so scale the River to them.
+      defaultVerticalScale: 'visible',
       loadAnalysis: async (signal, etag) => {
         try {
           return await thread.read(signal, etag, deliveredRevision);
@@ -59,6 +65,12 @@ export function ContextTab({ threadId }: { threadId: string }) {
           previous={hasAnalysis}
           retry={() => thread.request({ retry: true })}
         />
+      )}
+      {version !== null && version !== pinned.version && (
+        <p className="px-3 pt-3 text-xs text-muted-foreground" role="note">
+          Using Highwater {version} from the Highwater binary setting. This plugin was built for{' '}
+          {pinned.version}, so some views may not work.
+        </p>
       )}
       <div ref={target} hidden={!hasAnalysis} />
     </div>

@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/svelte';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { describe, expect, it } from 'vitest';
 import { costAssessmentOf, costSummaryFor, testAnalysis } from '../context-river/test-data';
+import { formatInteger } from '../context-river/format';
 import SessionSummary from './SessionSummary.svelte';
 
 describe('SessionSummary', () => {
@@ -221,5 +222,21 @@ describe('SessionSummary related sessions', () => {
       within(relations as HTMLElement).getByRole('link', { name: 'Parent task' }),
     ).toHaveAttribute('href', '#session=parent&child=child-1');
     expect(relations.querySelector('details')).toBeNull();
+  });
+});
+
+describe('SessionSummary in a narrow view', () => {
+  it('puts the four main figures on one line', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const { container } = render(SessionSummary, { props: { indexed, compact: true } });
+    expect(container.querySelector('.primary-metrics')).toBeNull();
+    const parts = [...container.querySelectorAll('.compact-metrics span')].map(
+      (part) => part.textContent,
+    );
+    expect(parts).toHaveLength(4);
+    expect(parts[0]).toBe(`${formatInteger(indexed.analysis.modelCalls.length)} calls`);
+    expect(parts[1]).toBe(`${formatInteger(indexed.analysis.contextItems.length)} items`);
+    expect(parts[2]).toMatch(/ peak$|^Peak unknown$/);
+    expect(container.querySelector('details.session-details')).not.toBeNull();
   });
 });

@@ -31,6 +31,7 @@
     onRevealInRiver = () => {},
     onViewDetails = () => {},
     onFindInLifespans = () => {},
+    compact = false,
   }: {
     indexed: IndexedAnalysis;
     pinnedCallIndex?: number | null;
@@ -45,6 +46,8 @@
     onRevealInRiver?: (id: string) => void;
     onViewDetails?: () => void;
     onFindInLifespans?: (id: string) => void;
+    /** Narrow views open in List, which shows every item; the user's own choice is kept. */
+    compact?: boolean;
   } = $props();
 
   let host: HTMLElement | undefined = $state();
@@ -52,7 +55,8 @@
   let helpDisclosure: HTMLDetailsElement | null = $state(null);
   let width = $state(800);
   const height = 360;
-  let preferredPresentation: 'treemap' | 'list' = $state('treemap');
+  let chosenPresentation = $state<'treemap' | 'list' | null>(null);
+  let preferredPresentation = $derived(chosenPresentation ?? (compact ? 'list' : 'treemap'));
   let activeItemId: string | null = $state(null);
   const projectionCache = createCompositionProjectionCache();
 
@@ -242,7 +246,7 @@
   }
 
   function setPresentation(mode: 'treemap' | 'list'): void {
-    preferredPresentation = mode;
+    chosenPresentation = mode;
   }
 
   function setScope(nextScope: CompositionScope): void {
@@ -1009,7 +1013,7 @@
     gap: 8px 14px;
     min-height: 46px;
     margin-top: 9px;
-    padding: 7px 9px;
+    padding: var(--control-padding);
     border: 1px solid var(--separator);
     border-radius: var(--control-radius);
     background: var(--plot);

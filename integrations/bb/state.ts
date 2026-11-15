@@ -11,9 +11,6 @@ export const threadStateSchema = z.discriminatedUnion('state', [
   z.object({ state: z.literal('noEnvironment') }).strict(),
   z.object({ state: z.literal('noSession') }).strict(),
   z.object({ state: z.literal('binaryMissing') }).strict(),
-  z
-    .object({ state: z.literal('unsupportedVersion'), version: z.string(), accepted: z.string() })
-    .strict(),
   z.object({ state: z.literal('startFailed'), message: z.string() }).strict(),
   z.object({ state: z.literal('sessionNotFound'), providerThreadId: z.string() }).strict(),
   z
@@ -34,7 +31,10 @@ export const summarySchema = z
     latestInputTokens: z.number().int().nonnegative().safe().nullable(),
     peakInputTokens: z.number().int().nonnegative().safe().nullable(),
     series: z.array(z.number().int().nonnegative().safe()).max(60),
-    partial: z.boolean(),
+    /** Positions in `series` whose calls include the first call after a compaction. */
+    compactionPoints: z.array(z.number().int().nonnegative()).max(60),
+    /** Median change in reported input per call, over recent calls since the last compaction. */
+    recentGrowth: z.number().int().safe().nullable(),
   })
   .strict();
 export type Summary = z.infer<typeof summarySchema>;

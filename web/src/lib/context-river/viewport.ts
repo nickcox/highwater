@@ -25,6 +25,8 @@ export interface RiverViewportStatus extends VisibleCallRange {
 
 export type RiverNavigationCommand =
   | { id: number; kind: 'latest' }
+  /** The latest calls that fit at `minCallSpacing` pixels each, or the whole session if all fit. */
+  | { id: number; kind: 'recent'; minCallSpacing: number }
   | { id: number; kind: 'fit' }
   | { id: number; kind: 'zoom-in' }
   | { id: number; kind: 'zoom-out' }

@@ -3,13 +3,10 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import semver from 'semver';
-import manifest from '../package.json';
 import type { HostStatus } from '../contract';
-import { BinaryProvisioner, type ProvisionOptions } from './provision';
+import { BinaryProvisioner, pinnedRelease, type ProvisionOptions } from './provision';
 import { HostFailure, waitFor, type HighwaterServer } from './http';
 
-const version = semver.parse(manifest.version)!;
-export const ACCEPTED_VERSIONS = `>=${version.major}.${version.minor}.0 <${version.major}.${version.minor + 1}.0`;
 export interface ProcessOptions {
   dataDir: string;
   home?: string;
@@ -25,11 +22,7 @@ export class ProcessUnavailable extends HostFailure {
     super(
       503,
       state.state === 'missing' ? 'binaryMissing' : state.state,
-      state.state === 'missing'
-        ? 'Highwater is not installed on this machine.'
-        : state.state === 'unsupportedVersion'
-          ? `Highwater ${state.version} is unsupported; expected ${state.accepted}.`
-          : state.message,
+      state.state === 'missing' ? 'Highwater is not installed on this machine.' : state.message,
     );
   }
 }
@@ -63,11 +56,11 @@ export class HighwaterProcess {
   constructor(private readonly options: ProcessOptions) {
     this.env = options.env ?? process.env;
     this.home = options.home ?? homedir();
-    this.provisioner = new BinaryProvisioner(options.dataDir, ACCEPTED_VERSIONS, {
+    this.provisioner = new BinaryProvisioner(options.dataDir, {
       ...options.provisioning,
       validate: async (path, version, signal) => {
         const found = await this.probe(path, signal);
-        if (found !== version || !semver.satisfies(found, ACCEPTED_VERSIONS))
+        if (found !== version)
           throw new Error(`Downloaded Highwater reports ${found}, not pinned version ${version}.`);
       },
     });
@@ -137,13 +130,10 @@ export class HighwaterProcess {
     try {
       const binary = override ?? (await this.provisioner.get(this.lifetime.signal));
       const found = await this.probe(binary);
-      if (!semver.satisfies(found, ACCEPTED_VERSIONS)) {
-        throw new ProcessUnavailable({
-          state: 'unsupportedVersion',
-          version: found,
-          accepted: ACCEPTED_VERSIONS,
-        });
-      }
+      // An explicit override may be any version; the Context tab says when it differs from the pin.
+      const expected = (this.options.provisioning?.release ?? pinnedRelease).version;
+      if (!override && found !== expected)
+        throw new Error(`Cached Highwater reports ${found}, not pinned version ${expected}.`);
       if (this.closed) throw new Error('The Highwater host has been disposed.');
       const server = await this.start(binary, args, found, key);
       this.failures = 0;

@@ -87,13 +87,11 @@ def main():
         print(platform, digest, sha(payload))
     release_pin = {"version": version, "platforms": platforms}
     destination = PACKAGE / "host/binary-release.json"
-    old = json.loads(destination.read_text()) if destination.exists() else {"releases": []}
-    previous = old.get("releases", [old] if "version" in old else [])
-    for pin in previous:
-        if pin["version"] == version and pin != release_pin:
-            raise ValueError("Existing pins changed for the same version; investigate the release")
-    manifest = {"releases": [release_pin] + [pin for pin in previous if pin["version"] != version]}
-    destination.write_text(json.dumps(manifest, indent=2) + "\n")
+    old = json.loads(destination.read_text()) if destination.exists() else None
+    if old and old["version"] == version and old != release_pin:
+        raise ValueError("Existing pins changed for the same version; investigate the release")
+    # The plugin uses only the release it pins; older pins are not kept.
+    destination.write_text(json.dumps(release_pin, indent=2) + "\n")
     print(f"Review {destination}, including the release provenance, before committing.")
 
 if __name__ == "__main__":

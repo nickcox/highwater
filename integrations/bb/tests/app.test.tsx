@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { act, waitFor, fireEvent } from '@testing-library/react';
 import { loadPluginApp, renderSlot } from '@get-bb/plugin-sdk/testing/app';
 import app from '../app';
-import { repository, deferred } from './helpers';
+import { repository, deferred, wholeText } from './helpers';
 import type { ThreadState } from '../state';
+import pinned from '../host/binary-release.json';
 import type {
   ExperimentalThreadActionTabProps,
   ExperimentalTabRegistration,
@@ -101,6 +102,44 @@ describe('Context tab', () => {
       expect(slot.inspection.rpcCalls).toHaveLength(0);
     },
   );
+  it('shows the latest call before the chart', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () => Response.json(fixture, { headers: { etag: '"v1"' } })),
+    );
+    const slot = await mount();
+    await ready(slot);
+    const root = target(slot).shadowRoot!;
+    await waitFor(() =>
+      expect(root.getElementById('call-overview-heading')?.textContent).toContain('Latest call'),
+    );
+    const sections = [...root.querySelectorAll('.exploration-grid > *')].map(
+      (node) => node.className.split(' ')[0],
+    );
+    expect(sections.indexOf('call-section')).toBeLessThan(sections.indexOf('panel'));
+  });
+  it('says when an explicit binary is a different version from the pin', async () => {
+    let version = '9.9.9';
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () =>
+          Response.json(fixture, { headers: { etag: '"v1"', 'x-highwater-version': version } }),
+        ),
+    );
+    const slot = await mount();
+    await ready(slot);
+    expect(slot.getByRole('note').textContent).toBe(
+      `Using Highwater 9.9.9 from the Highwater binary setting. This plugin was built for ${pinned.version}, so some views may not work.`,
+    );
+    version = pinned.version;
+    const matching = await mount();
+    await ready(matching);
+    expect(matching.container.querySelector('[role="note"]')).toBeNull();
+  });
   it('shares a single analysis request between two views of the same thread', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -147,7 +186,8 @@ describe('Context tab', () => {
                 latestInputTokens: 560,
                 peakInputTokens: 600,
                 series: [600, 550, 560],
-                partial: false,
+                compactionPoints: [],
+                recentGrowth: null,
               },
               usage: { usedTokens: 62400, contextWindowTokens: 200000 },
             },
@@ -164,7 +204,7 @@ describe('Context tab', () => {
     slots.push(row);
     const tab = await mount({ threadId });
     await ready(tab);
-    expect(await row.findByText('3 calls · 1 compaction')).toBeTruthy();
+    expect(await row.findByText(wholeText('3 calls · 1 compaction'))).toBeTruthy();
     expect(target(tab).shadowRoot?.textContent).toMatch(/Model calls3/);
     expect(
       fetcher.mock.calls.filter(([url]) => String(url).includes('/http/analysis')),
@@ -199,10 +239,6 @@ describe('Context tab', () => {
     [{ state: 'noEnvironment' }, 'No machine assigned'],
     [{ state: 'noSession' }, 'No session yet'],
     [{ state: 'binaryMissing' }, 'Highwater binary not found'],
-    [
-      { state: 'unsupportedVersion', version: '9.0.0', accepted: '>=0.5.0 <0.6.0' },
-      'Highwater version not supported',
-    ],
     [{ state: 'startFailed', message: 'Failed to launch' }, 'Highwater could not start'],
     [{ state: 'sessionNotFound', providerThreadId: 'native-session' }, 'Session file not found'],
     [

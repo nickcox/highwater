@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { testAnalysis } from '../context-river/test-data';
-import { itemContributions } from './item-contribution';
+import { changeTokens, itemContributions, largestFirst } from './item-contribution';
 
 function fixture() {
   const indexed = indexTestAnalysis(testAnalysis());
@@ -78,5 +78,31 @@ describe('change-group contribution shares', () => {
     indexed.itemById.get('a')!.tokenEstimates[0].tokens = Number.MAX_SAFE_INTEGER;
     expect(itemContributions(indexed, ['a', 'retained'], call, 'added').get('a')!.share).toBeNull();
     expect(itemContributions(indexed, [], call, 'added').size).toBe(0);
+  });
+});
+
+describe('change-group token totals', () => {
+  it('totals complete estimates and orders items largest first', () => {
+    const { indexed, call } = fixture();
+    const change = changeTokens(indexed, ['a', 'retained'], call);
+    expect(change).toMatchObject({ total: 100, complete: true });
+    expect(change.items.get('a')).toEqual({ tokens: 25, partial: false });
+    expect(largestFirst(['a', 'retained'], change.items)).toEqual(['retained', 'a']);
+  });
+  it('marks a total partial when an item has no complete estimate, and puts unknown sizes last', () => {
+    const { indexed, call } = fixture();
+    indexed.itemById.get('retained')!.tokenEstimates[0].coverage = 'unavailable';
+    const change = changeTokens(indexed, ['retained', 'a', 'missing-item'], call);
+    expect(change).toMatchObject({ total: 25, complete: false });
+    expect(change.items.get('retained')).toEqual({ tokens: null, partial: true });
+    expect(largestFirst(['retained', 'a', 'missing-item'], change.items)).toEqual([
+      'a',
+      'retained',
+      'missing-item',
+    ]);
+  });
+  it('has no estimates without a baseline call', () => {
+    const { indexed } = fixture();
+    expect(changeTokens(indexed, ['a'], null)).toMatchObject({ total: 0, complete: false });
   });
 });

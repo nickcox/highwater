@@ -9,6 +9,8 @@ export interface ResolvedSession {
   providerThreadId: string;
   sessionId: string;
   binaryPath: string | null;
+  /** The running Highwater version, which can differ from the pin only with an explicit binary. */
+  version: string;
 }
 export function hostErrorState(error: HostErrorResult): ThreadState {
   return { state: 'error', httpStatus: error.httpStatus, code: error.code, message: error.message };
@@ -85,8 +87,6 @@ export async function resolveThread(
   switch (status.state) {
     case 'missing':
       return { state: 'binaryMissing' };
-    case 'unsupportedVersion':
-      return { state: 'unsupportedVersion', version: status.version, accepted: status.accepted };
     case 'failed':
       return { state: 'startFailed', message: status.message };
   }
@@ -100,5 +100,6 @@ export async function resolveThread(
     providerThreadId,
     sessionId: found.sessionId,
     binaryPath,
+    version: status.version,
   };
 }

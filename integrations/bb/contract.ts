@@ -25,9 +25,6 @@ export type HostErrorResult = z.infer<typeof errorSchema>;
 export const statusSchema = z.discriminatedUnion('state', [
   z.object({ state: z.literal('ready'), version: z.string() }).strict(),
   z.object({ state: z.literal('missing') }).strict(),
-  z
-    .object({ state: z.literal('unsupportedVersion'), version: z.string(), accepted: z.string() })
-    .strict(),
   z.object({ state: z.literal('failed'), message: z.string() }).strict(),
 ]);
 export type HostStatus = z.infer<typeof statusSchema>;

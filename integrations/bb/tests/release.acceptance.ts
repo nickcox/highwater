@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { BinaryProvisioner, pinnedRelease } from '../host/provision';
 import { HighwaterProcess } from '../host/process';
-import { ACCEPTED_VERSIONS } from '../host/process';
 import { tempDirectory, writePi } from './helpers';
 
 const directories: string[] = [];
@@ -20,7 +19,7 @@ it.each(Object.keys(pinnedRelease.platforms))(
     const home = await tempDirectory();
     directories.push(home);
     const [os, arch] = platform.split('-');
-    const provisioner = new BinaryProvisioner(home, ACCEPTED_VERSIONS, { platform: os, arch });
+    const provisioner = new BinaryProvisioner(home, { platform: os, arch });
     const binary = await provisioner.get(new AbortController().signal);
     expect((await readFile(binary)).length).toBe(
       pinnedRelease.platforms[platform as keyof typeof pinnedRelease.platforms].binaryBytes,

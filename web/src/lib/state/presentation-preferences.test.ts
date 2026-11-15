@@ -70,3 +70,16 @@ describe('presentation preferences', () => {
     expect(JSON.parse(storage.setItem.mock.calls[1][1])).toEqual(defaultPresentationPreferences());
   });
 });
+
+describe('host starting values', () => {
+  it('uses them until a value is stored, and a stored value always wins', () => {
+    const base = defaultPresentationPreferences();
+    base.river.verticalScale = 'visible';
+    expect(parsePresentationPreferences(null, base).river.verticalScale).toBe('visible');
+    const stored = JSON.stringify({ version: 1, river: { verticalScale: 'session' } });
+    expect(parsePresentationPreferences(stored, base).river.verticalScale).toBe('session');
+    // The starting values are copied, not shared.
+    parsePresentationPreferences(null, base).river.verticalScale = 'session';
+    expect(base.river.verticalScale).toBe('visible');
+  });
+});

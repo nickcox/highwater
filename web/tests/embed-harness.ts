@@ -1,6 +1,7 @@
 import type {
   HighwaterEmbed,
   HighwaterEmbedOptions,
+  SectionId,
 } from '../../integrations/bb/vendor/highwater-embed';
 import type { WireSessionAnalysis } from '../src/lib/types';
 
@@ -16,6 +17,12 @@ export interface EmbedHarness {
 declare global {
   interface Window {
     highwaterPayload: WireSessionAnalysis;
+    /** Optional section order for the first view. */
+    highwaterSections?: SectionId[];
+    /** Optional density for the first view. */
+    highwaterDensity?: 'standard' | 'compact';
+    /** Optional starting vertical scale for the first view. */
+    highwaterVerticalScale?: 'session' | 'visible';
     highwaterHarness: EmbedHarness;
   }
 }
@@ -42,6 +49,9 @@ const view = mountHighwater({
   theme,
   preferencesKey: 'test.highwater.presentation',
   loadAnalysis,
+  sections: window.highwaterSections,
+  density: window.highwaterDensity,
+  defaultVerticalScale: window.highwaterVerticalScale,
 });
 window.highwaterHarness = {
   replace(next) {

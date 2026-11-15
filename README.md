@@ -11,7 +11,7 @@ Highwater shows how a coding agent's context window fills up over a session. It 
 
 Standalone Highwater runs locally: it serves its interface on `127.0.0.1` and reads session files without changing them. The optional bb plugin sends analyses through your bb server to your client, not to another analysis service.
 
-## bb plugin (unreleased)
+## bb plugin (experimental)
 
 The [bb plugin](integrations/bb/README.md) adds a live **Context** tab and a compact context summary to Pi, Claude Code and Codex threads. It downloads a pinned, checksum-verified Highwater binary on the agent's machine when first needed; no separate Highwater installation is required. Cached binaries work offline. See the plugin guide for installation, platform validation and limits.
 

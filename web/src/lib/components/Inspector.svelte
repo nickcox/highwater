@@ -110,7 +110,7 @@
     background: var(--surface);
     border: 0;
     border-radius: var(--radius);
-    padding: 15px;
+    padding: var(--panel-padding);
     margin-top: 0;
     min-width: 0;
   }

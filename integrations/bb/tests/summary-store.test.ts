@@ -11,7 +11,8 @@ const metrics = {
   latestInputTokens: 62400,
   peakInputTokens: 90000,
   series: [10, 20, 5],
-  partial: false,
+  compactionPoints: [],
+  recentGrowth: null,
 };
 const summary = (etag = '"v1"', usedTokens = 62400): ThreadSummaryResult => ({
   state: 'ok',

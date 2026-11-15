@@ -75,3 +75,10 @@ export function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
+/** Matches the innermost element whose whole text is `text`, even when split across spans. */
+export function wholeText(text: string) {
+  return (_: string, element: Element | null) =>
+    element?.textContent === text &&
+    [...element.children].every((child) => child.textContent !== text);
+}

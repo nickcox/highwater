@@ -22,7 +22,7 @@ export default definePluginApp((app) => {
     context: { kind: 'thread' },
     availability: 'action',
     title: 'Context',
-    icon: 'ChartNoAxesCombined',
+    icon: 'highwater/gauge',
     layout: 'flush',
     component: ContextTab,
   });

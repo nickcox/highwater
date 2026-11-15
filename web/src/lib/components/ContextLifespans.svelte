@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CompactMenu from './CompactMenu.svelte';
   import { onDestroy, tick } from 'svelte';
   import type { ContextItem, ContextItemKind, IndexedAnalysis, PresenceRange } from '../types';
   import { conciseLifespanLabels, displayItemLabel } from '../item-label';
@@ -24,6 +25,7 @@
     onSelectItem,
     onHoverItem,
     findRequest = null,
+    compact = false,
   }: {
     indexed: IndexedAnalysis;
     selectedItemId?: string | null;
@@ -31,6 +33,8 @@
     onSelectItem: (id: string, callIndex?: number) => void;
     onHoverItem: (id: string | null, event?: PointerEvent) => void;
     findRequest?: { requestId: number; itemId: string } | null;
+    /** Put the search, kind, sort and scope controls in one menu. */
+    compact?: boolean;
   } = $props();
 
   const KIND_ORDER: ContextItemKind[] = [
@@ -49,7 +53,7 @@
   const SEARCH_LIMIT = 120;
   // Rendering every row of a long session adds tens of thousands of elements;
   // show matching rows a page at a time.
-  const ROW_PAGE_SIZE = 200;
+  const ROW_PAGE_SIZE = 50;
 
   let searchText = $state('');
   let selectedKind = $state<ContextItemKind | 'all'>('all');
@@ -128,6 +132,9 @@
   let hiddenRowCount = $derived(visibleItems.length - renderedItems.length);
   let availableKinds = $derived(
     KIND_ORDER.filter((kind) => allItems.some((item) => item.kind === kind)),
+  );
+  let activeFilterCount = $derived(
+    (searchNeedle ? 1 : 0) + (selectedKind !== 'all' ? 1 : 0) + (scope !== 'all' ? 1 : 0),
   );
   let filtersActive = $derived(
     searchNeedle.length > 0 || selectedKind !== 'all' || scope !== 'all',
@@ -378,48 +385,61 @@
     </summary>
     {#if expanded}
       <div class="lifespan-content">
-        <div class="browse-controls" role="group" aria-label="Filter and sort context items">
-          <label class="search-field" for="lifespan-search">
-            <span id="lifespan-search-label">Search items</span>
-            <input
-              id="lifespan-search"
-              aria-labelledby="lifespan-search-label"
-              type="search"
-              maxlength={SEARCH_LIMIT}
-              placeholder="Label or preview"
-              bind:value={searchText}
-            />
-          </label>
-          <label class="browse-field kind-field" for="lifespan-kind">
-            <span>Kind</span>
-            <select id="lifespan-kind" aria-label="Filter by kind" bind:value={selectedKind}>
-              <option value="all">All kinds</option>
-              {#each availableKinds as kind (kind)}<option value={kind}>{kindLabel(kind)}</option
-                >{/each}
-            </select>
-          </label>
-          <label class="browse-field sort-field" for="lifespan-sort">
-            <span>Sort by</span>
-            <select id="lifespan-sort" aria-label="Sort items" bind:value={sortMode}>
-              <option value="tokenTurns">Token-turn exposure</option>
-              <option value="size" disabled={sizeProfileId === null}>Size (tokens)</option>
-              <option value="firstAppearance">First appearance</option>
-              <option value="presenceCount">Lifetime (calls present)</option>
-            </select>
-          </label>
-          <label class="browse-field scope-field" for="lifespan-scope">
-            <span>Scope</span>
-            <select id="lifespan-scope" aria-label="Scope context items" bind:value={scope}>
-              <option value="all">Whole session</option>
-              <option value="presentAtPin" disabled={pinnedCallIndex === null}>
-                Present at call {pinnedCallIndex ?? '(pin a call first)'}
-              </option>
-            </select>
-          </label>
-          {#if filtersActive}<button class="clear-filters" type="button" onclick={clearFilters}
-              >Clear filters</button
-            >{/if}
-        </div>
+        {#snippet browseControls()}
+          <div class="browse-controls" role="group" aria-label="Filter and sort context items">
+            <label class="search-field" for="lifespan-search">
+              <span id="lifespan-search-label">Search items</span>
+              <input
+                id="lifespan-search"
+                aria-labelledby="lifespan-search-label"
+                type="search"
+                maxlength={SEARCH_LIMIT}
+                placeholder="Label or preview"
+                bind:value={searchText}
+              />
+            </label>
+            <label class="browse-field kind-field" for="lifespan-kind">
+              <span>Kind</span>
+              <select id="lifespan-kind" aria-label="Filter by kind" bind:value={selectedKind}>
+                <option value="all">All kinds</option>
+                {#each availableKinds as kind (kind)}<option value={kind}>{kindLabel(kind)}</option
+                  >{/each}
+              </select>
+            </label>
+            <label class="browse-field sort-field" for="lifespan-sort">
+              <span>Sort by</span>
+              <select id="lifespan-sort" aria-label="Sort items" bind:value={sortMode}>
+                <option value="tokenTurns">Token-turn exposure</option>
+                <option value="size" disabled={sizeProfileId === null}>Size (tokens)</option>
+                <option value="firstAppearance">First appearance</option>
+                <option value="presenceCount">Lifetime (calls present)</option>
+              </select>
+            </label>
+            <label class="browse-field scope-field" for="lifespan-scope">
+              <span>Scope</span>
+              <select id="lifespan-scope" aria-label="Scope context items" bind:value={scope}>
+                <option value="all">Whole session</option>
+                <option value="presentAtPin" disabled={pinnedCallIndex === null}>
+                  Present at call {pinnedCallIndex ?? '(pin a call first)'}
+                </option>
+              </select>
+            </label>
+            {#if filtersActive}<button class="clear-filters" type="button" onclick={clearFilters}
+                >Clear filters</button
+              >{/if}
+          </div>
+        {/snippet}
+        {#if compact}
+          <div class="compact-browse">
+            <CompactMenu
+              label={activeFilterCount > 0
+                ? `Filter and sort (${activeFilterCount})`
+                : 'Filter and sort'}>{@render browseControls()}</CompactMenu
+            >
+          </div>
+        {:else}
+          {@render browseControls()}
+        {/if}
         <div class="lifespan-scope-status">
           <span
             >Scope: <strong
@@ -1065,6 +1085,38 @@
     .result-count {
       white-space: normal;
       text-align: right;
+    }
+  }
+  .compact-browse {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+  }
+  .compact-browse .browse-controls {
+    width: min(300px, calc(100cqw - 48px));
+  }
+  /* Narrow views: each item's full label on its own line above a full-width bar. */
+  @container highwater (max-width: 520px) {
+    .axis-row,
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .axis-title {
+      display: none;
+    }
+    .row .label {
+      min-width: 0;
+    }
+    /* Two lines at most; the full label is the row's tooltip and in the item details. */
+    .row .item-label {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      overflow: hidden;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-align: left;
     }
   }
   @media (prefers-reduced-motion: reduce) {

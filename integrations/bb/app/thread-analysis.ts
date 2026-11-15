@@ -1,13 +1,18 @@
 import type { AnalysisFetchResult } from '../vendor/highwater-embed';
 import type { ThreadState, ThreadSummaryData, ThreadSummaryResult } from '../state';
-import { fetchThreadAnalysis, fetchThreadSummary, ThreadStateError } from './client';
+import {
+  fetchThreadAnalysis,
+  fetchThreadSummary,
+  ThreadStateError,
+  type ThreadAnalysisResult,
+} from './client';
 import { RefreshScheduler } from './scheduler';
 
 export type Interest = 'analysis' | 'summary';
 export interface ThreadSnapshot {
   cycle: number;
   revision: number;
-  analysis: { analysis: unknown; etag: string | null } | null;
+  analysis: { analysis: unknown; etag: string | null; version: string | null } | null;
   state: ThreadState | null;
   loading: boolean;
   summary: ThreadSummaryData | null;
@@ -51,7 +56,7 @@ export class ThreadAnalysis {
   private disposed = false;
   private epoch = 0;
   constructor(
-    private readonly load: Loader<AnalysisFetchResult>,
+    private readonly load: Loader<ThreadAnalysisResult>,
     private readonly release: () => void = () => {},
     private readonly loadSummary?: Loader<ThreadSummaryResult>,
   ) {
@@ -98,12 +103,17 @@ export class ThreadAnalysis {
           patch.revision = this.snapshot.revision + 1;
           if ('state' in a) patch.state = a.state;
           else if (a.result.status === 'ok') {
-            patch.analysis = { analysis: a.result.analysis, etag: a.result.etag };
+            patch.analysis = {
+              analysis: a.result.analysis,
+              etag: a.result.etag,
+              version: a.result.version ?? null,
+            };
             patch.state = null;
           } else if (this.snapshot.analysis) {
             patch.analysis = {
               ...this.snapshot.analysis,
               etag: a.result.etag ?? this.snapshot.analysis.etag,
+              version: a.result.version ?? this.snapshot.analysis.version,
             };
             patch.state = null;
           } else
@@ -164,7 +174,7 @@ export class ThreadAnalysis {
   private count(interest: Interest): number {
     return [...this.listeners.values()].filter((value) => value === interest).length;
   }
-  private async fetchPart<T extends AnalysisFetchResult | ThreadSummaryResult>(
+  private async fetchPart<T extends ThreadAnalysisResult | ThreadSummaryResult>(
     interest: Interest,
     batch: AbortSignal,
     load: Loader<T>,
@@ -261,7 +271,7 @@ export class ThreadAnalysis {
     if (!data) throw new Error('No current Highwater analysis.');
     return etag !== null && etag === data.etag
       ? { status: 'notModified', etag: data.etag }
-      : { status: 'ok', ...data };
+      : { status: 'ok', analysis: data.analysis, etag: data.etag };
   }
 }
 

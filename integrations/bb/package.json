@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-highwater",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -9,10 +9,13 @@
     "bbPluginSdk": ">=0.6.132"
   },
   "bb": {
-    "name": "Highwater",
+    "name": "Highwater [Experimental]",
     "description": "See how a coding-agent thread uses its context window, call by call.",
     "branding": {
-      "icon": "./assets/icon.svg"
+      "icon": "./assets/icon.svg",
+      "experimental_icons": {
+        "gauge": "./assets/gauge.svg"
+      }
     },
     "server": "./server.ts",
     "host": "./host.ts",

@@ -3,8 +3,11 @@
   let {
     isVisible = true,
     source,
+    compact = false,
   }: {
     isVisible?: boolean;
+    /** Show the trigger as a small "?" button; its accessible name is unchanged. */
+    compact?: boolean;
     /** The session's source; the System and tools section is about Pi sessions only. */
     source: string;
   } = $props();
@@ -82,9 +85,11 @@
     aria-label="Chart help"
     aria-expanded={expanded}
     aria-controls="chart-help-popover"
+    title="Chart help"
+    class:compact
     onclick={toggleHelp}
   >
-    Chart help
+    {compact ? '?' : 'Chart help'}
   </button>
   <div
     id="chart-help-popover"
@@ -132,7 +137,7 @@
     display: flex;
     align-items: center;
     gap: 6px 12px;
-    min-height: 30px;
+    min-height: var(--toggle-height);
     color: var(--secondary);
     font-size: var(--text-sm);
   }

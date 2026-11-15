@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+  import CompactMenu from '../components/CompactMenu.svelte';
   const mergeId = `compaction-merge-${nextMergeId++}`;
   import { onMount, untrack } from 'svelte';
   import { domRoot } from '../dom-root';
@@ -98,6 +99,7 @@
     onEmptyClick,
     onEscape,
     consumeUnhandledEscape = true,
+    compact = false,
     preferences = defaultPresentationPreferences(),
     onPreferencesChange = () => {},
   }: {
@@ -118,6 +120,8 @@
     onEmptyClick: (index: number) => void;
     onEscape: () => void | boolean;
     consumeUnhandledEscape?: boolean;
+    /** Put the scale and display toggles in a menu. */
+    compact?: boolean;
     preferences?: PresentationPreferences;
     onPreferencesChange?: (value: PresentationPreferences) => void;
   } = $props();
@@ -954,6 +958,17 @@
       zoomToCallRange(command.startCallIndex, command.endCallIndex);
       return;
     }
+    if (command.kind === 'recent') {
+      const calls = indexed.analysis.modelCalls;
+      const fitting = Math.max(2, Math.floor(fitInnerWidth / command.minCallSpacing) + 1);
+      if (calls.length <= fitting) {
+        requestedRange = null;
+        setCallSpacing(null);
+        return;
+      }
+      zoomToCallRange(calls[calls.length - fitting].index, calls[calls.length - 1].index);
+      return;
+    }
   }
 
   function viewBoxX(clientX: number): number {
@@ -1410,7 +1425,7 @@
   }
 </script>
 
-<div class="vertical-scale-controls">
+{#snippet viewToggles()}
   <div class="toggle-group" role="group" aria-label="Vertical scale">
     <span class="toggle-label">Vertical scale</span>
     <button
@@ -1437,7 +1452,14 @@
       onclick={() => setDisplay('itemTypes')}>Item types</button
     >
   </div>
-</div>
+{/snippet}
+{#if compact}
+  <div class="vertical-scale-controls compact">
+    <CompactMenu label="View">{@render viewToggles()}</CompactMenu>
+  </div>
+{:else}
+  <div class="vertical-scale-controls">{@render viewToggles()}</div>
+{/if}
 <div class="chart-frame" style:--plot-left={`${margin.left}px`}>
   <div class="chart-plot" bind:this={chartPlot}>
     <div
@@ -1961,6 +1983,11 @@
 </div>
 
 <style>
+  .vertical-scale-controls.compact {
+    display: flex;
+    justify-content: flex-end;
+    margin: -6px 0 6px;
+  }
   .vertical-scale-controls {
     display: flex;
     flex-wrap: wrap;

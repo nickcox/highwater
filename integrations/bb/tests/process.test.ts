@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ACCEPTED_VERSIONS, HighwaterProcess } from '../host/process';
+import { HighwaterProcess } from '../host/process';
 import { binaries, claudeFixtures, tempDirectory, writePi, expectedVersion } from './helpers';
 
 const processes: HighwaterProcess[] = [];
@@ -80,18 +80,22 @@ describe('process states', () => {
     expect(() => process.kill(pid!, 0)).toThrow();
   });
   it.skipIf(process.platform === 'win32')(
-    'rejects unsupported and malformed versions without starting a server',
+    'runs an explicit binary of another version and rejects malformed versions',
     async () => {
       const { home, value } = await setup();
-      const path = await executable(home, 'console.log("highwater 0.99.0");');
-      expect(await value.status(path)).toEqual({
-        state: 'unsupportedVersion',
-        version: '0.99.0',
-        accepted: ACCEPTED_VERSIONS,
-      });
-      expect(value.pid).toBeUndefined();
-      await writeFile(path, `#!${process.execPath}\nconsole.log("not a version");\n`);
-      expect(await value.status(path)).toMatchObject({ state: 'failed' });
+      const path = await executable(
+        home,
+        `if (process.argv.includes('--version')) console.log('highwater 0.99.0');
+else require('node:http').createServer().listen(0, '127.0.0.1', function () {
+  console.log('Listening on http://127.0.0.1:' + this.address().port);
+});`,
+      );
+      expect(await value.status(path)).toEqual({ state: 'ready', version: '0.99.0' });
+      expect(value.pid).toBeDefined();
+      const malformed = join(home, 'malformed-highwater');
+      await writeFile(malformed, `#!${process.execPath}\nconsole.log("not a version");\n`);
+      await chmod(malformed, 0o700);
+      expect(await value.status(malformed)).toMatchObject({ state: 'failed' });
     },
   );
   it.skipIf(process.platform === 'win32')(

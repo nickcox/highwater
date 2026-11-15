@@ -13,6 +13,8 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
       type: 'string',
       default: '',
       label: 'Highwater binary',
+      description:
+        'Leave empty to download the Highwater release this plugin was built for. An explicit executable should be the same version; another version runs with a notice.',
       experimental_schema: z.string().max(4096),
     },
   });
@@ -74,7 +76,11 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
         );
         signal.throwIfAborted();
         if (result.status === 'error') return jsonState(hostErrorState(result));
-        const headers = { ...responseHeaders, etag: result.etag };
+        const headers = {
+          ...responseHeaders,
+          etag: result.etag,
+          'x-highwater-version': session.version,
+        };
         if (result.status === 'notModified') return new Response(null, { status: 304, headers });
         return new Response(result.bytes, {
           headers: { ...headers, 'content-type': 'application/json', 'content-encoding': 'gzip' },

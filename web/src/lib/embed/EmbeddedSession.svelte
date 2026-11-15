@@ -3,22 +3,34 @@
   import SessionView from '../components/SessionView.svelte';
   import { createAnalysisController, type AnalysisLoader } from './analysis-controller';
   import {
+    defaultPresentationPreferences,
     readPresentationPreferences,
     writePresentationPreferences,
     type PresentationPreferences,
   } from '../state/presentation-preferences';
+  import type { SectionId } from '../state/session-sections';
 
-  let { loadAnalysis, preferencesKey }: { loadAnalysis: AnalysisLoader; preferencesKey: string } =
-    $props();
+  let {
+    loadAnalysis,
+    preferencesKey,
+    sections,
+    defaultVerticalScale = 'session',
+  }: {
+    loadAnalysis: AnalysisLoader;
+    preferencesKey: string;
+    sections?: readonly SectionId[];
+    defaultVerticalScale?: 'session' | 'visible';
+  } = $props();
   // The loader and storage namespace belong to this mount and do not change during its lifetime.
   const controller = createAnalysisController((signal, etag) =>
     untrack(() => loadAnalysis(signal, etag)),
   );
   let presentation = $state.raw<PresentationPreferences>(
-    readPresentationPreferences(
-      undefined,
-      untrack(() => preferencesKey),
-    ),
+    untrack(() => {
+      const base = defaultPresentationPreferences();
+      base.river.verticalScale = defaultVerticalScale;
+      return readPresentationPreferences(undefined, preferencesKey, base);
+    }),
   );
   let following = $state(true);
   let previousRevision = 0;
@@ -64,7 +76,15 @@
 
 <div class="embedded-session">
   <header>
-    <button type="button" aria-pressed={following} onclick={followLatest}>Follow latest</button>
+    <button
+      type="button"
+      class="follow"
+      aria-pressed={following}
+      title={following
+        ? 'Following new calls. Select to stop following.'
+        : 'Select to follow new calls.'}
+      onclick={() => (following ? pin() : followLatest())}>Follow latest</button
+    >
     <span role="status"
       >{$controller.loading ? 'Updating…' : $controller.error ? 'Update failed' : 'Live'}</span
     >
@@ -85,6 +105,8 @@
       keyboardScope="root"
       onPreferencesChange={savePreferences}
       onPin={pin}
+      {sections}
+      {following}
     />
   {:else if $controller.loading}
     <p>Analysing session…</p>
@@ -101,6 +123,11 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
+  }
+  .follow[aria-pressed='true'] {
+    border-color: var(--accent);
+    background-color: var(--action);
+    color: var(--active-text);
   }
   header span {
     color: var(--secondary);

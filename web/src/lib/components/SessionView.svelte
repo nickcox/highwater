@@ -21,6 +21,13 @@
   import SessionSummary from './SessionSummary.svelte';
   import ChartHelp from './ChartHelp.svelte';
   import ContextRiver from '../context-river/ContextRiver.svelte';
+  import CallOverview from './CallOverview.svelte';
+  import {
+    normaliseSections,
+    STANDARD_SECTIONS,
+    wideSectionPlacement,
+    type SectionId,
+  } from '../state/session-sections';
 
   let {
     indexed,
@@ -35,6 +42,8 @@
     keyboardScope = 'window',
     keyboardOwner,
     onPin = () => {},
+    sections = STANDARD_SECTIONS,
+    following = false,
   }: {
     indexed: IndexedAnalysis;
     sessions?: SessionListItem[];
@@ -47,8 +56,21 @@
     copyDisabled?: boolean;
     keyboardScope?: 'window' | 'root';
     keyboardOwner?: HTMLElement;
+    /** Called when the user changes the pinned call, including clearing it. */
     onPin?: () => void;
+    /** The order of the view's sections; the order is fixed for the life of the view. */
+    sections?: readonly SectionId[];
+    /** Whether the host is following the latest call, which the call section names. */
+    following?: boolean;
   } = $props();
+  const orderedSections = normaliseSections(untrack(() => sections));
+  const wide = wideSectionPlacement(orderedSections);
+  // While following with a call section, the newest call stays pinned: clearing affects the item.
+  let keepPin = $derived(following && orderedSections.includes('call'));
+  function sectionStyle(id: SectionId): string {
+    const place = wide.get(id)!;
+    return `--wide-column:${place.column};--wide-row:${place.row}`;
+  }
   let sessionId = $derived(sessionReference ?? indexed.analysis.session.id);
   let itemSections = $state.raw(inspectorSections());
   let callSections = $state.raw(inspectorSections());
@@ -88,6 +110,19 @@
   let riverSelectionVisibility = $state.raw<{ itemId: string; visible: boolean } | null>(null);
   let hoverCardHost = $state<HTMLDivElement | null>(null);
   let hoverCardPosition = $state.raw<{ left: number; top: number } | null>(null);
+  // Narrow views put secondary controls in menus. A view that has not been measured (as in
+  // tests without layout) keeps the full controls. Leaving needs 20px more than entering, so a
+  // scrollbar that appears or disappears with the layout change cannot switch it back.
+  // The one-line summary and the call overview's single column suit wider views than the menus
+  // do, so they share their own limit and change together.
+  let compact = $state(false);
+  let compactSummary = $state(false);
+  function measureWidth(width: number): void {
+    const next = width > 0 && (compact ? width <= 540 : width <= 520);
+    if (next !== compact) compact = next;
+    const summary = width > 0 && (compactSummary ? width <= 780 : width <= 760);
+    if (summary !== compactSummary) compactSummary = summary;
+  }
 
   function deferRiver(sessionId: string | null): void {
     if (sessionId === riverSessionId) return;
@@ -246,8 +281,20 @@
   let disposed = false;
   onMount(() => {
     if (keyboardScope === 'window') window.addEventListener('keydown', handleWindowKey);
+    const widthObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(([entry]) => {
+            // Change the layout after this observation, not during it.
+            const width = entry.contentRect.width;
+            requestAnimationFrame(() => {
+              if (!disposed) measureWidth(width);
+            });
+          });
+    widthObserver?.observe(appRoot);
     return () => {
       disposed = true;
+      widthObserver?.disconnect();
       if (keyboardScope === 'window') window.removeEventListener('keydown', handleWindowKey);
     };
   });
@@ -275,8 +322,41 @@
     return true;
   }
 
+  /** Show the latest call, and pin it when the view has a call section to show it in. */
   export function followLatest(): void {
+    const latest = callIndices[callIndices.length - 1] as number | undefined;
+    if (latest !== undefined && orderedSections.includes('call')) {
+      interaction = { ...interaction, pinnedCallIndex: latest };
+      compositionEndpointNotice = '';
+      // Beside a live thread, recent calls matter most: show those at a readable width.
+      urlNavigationRevision += 1;
+      navigationCommand = { id: ++navigationCommandId, kind: 'recent', minCallSpacing: 4 };
+      return;
+    }
     navigate('latest');
+  }
+
+  function unpinCall(): void {
+    onPin();
+    interaction = { ...interaction, pinnedCallIndex: null };
+  }
+
+  function viewCallDetails(): void {
+    void tick().then(() => {
+      const heading = domRoot(appRoot).getElementById('pinned-call-summary');
+      heading?.scrollIntoView({ block: 'start' });
+      heading?.focus({ preventScroll: true });
+    });
+  }
+
+  function showComposition(): void {
+    visualizationView = 'composition';
+    compositionScope = 'atCall';
+    void tick().then(() => {
+      const tab = domRoot(appRoot).getElementById('composition-tab');
+      tab?.scrollIntoView({ block: 'start' });
+      tab?.focus({ preventScroll: true });
+    });
   }
 
   function navigationSettled(id: number): void {
@@ -400,6 +480,11 @@
   }
 
   function clearSelection(): void {
+    if (keepPin) {
+      selectItem(null);
+      return;
+    }
+    onPin();
     interaction = resetInteraction();
     compositionEndpointNotice = '';
     navigationCommand = null;
@@ -503,8 +588,10 @@
       return true;
     }
     if (riverComponent?.dismissEconomics()) return true;
-    if (interaction.selectedItemId !== null || interaction.pinnedCallIndex !== null) {
+    if (interaction.selectedItemId !== null || (interaction.pinnedCallIndex !== null && !keepPin)) {
+      const pinned = interaction.pinnedCallIndex;
       interaction = escapeInteraction(interaction);
+      if (interaction.pinnedCallIndex !== pinned) onPin();
       if (
         navigationCommand?.kind === 'reveal-item' &&
         interaction.selectedItemId !== navigationCommand.itemId
@@ -594,212 +681,256 @@
   role="presentation"
   onkeydown={keyboardScope === 'root' ? handleWindowKey : undefined}
 >
-  {#key sessionId}<SessionSummary {indexed} {sessionId} {sessions} />{/key}
-
   <div class="exploration-grid" class:occupied={selectedItem !== null || pinnedCall !== null}>
-    <section class="panel river-panel">
-      <div class="panel-head">
-        <div>
-          <h2>{explorationTitle}</h2>
-          {#if visualizationView === 'river'}
-            <ChartHelp
-              isVisible={visualizationView === 'river'}
-              source={indexed.analysis.session.source}
-            />
-          {/if}
+    {#each orderedSections as id (id)}
+      {#if id === 'summary'}
+        <div class="summary-section" style={sectionStyle(id)}>
+          {#key sessionId}<SessionSummary
+              {indexed}
+              {sessionId}
+              {sessions}
+              compact={compactSummary}
+            />{/key}
         </div>
-        <div class="panel-actions">
-          {#if onCopyViewLink}
-            <button type="button" onclick={onCopyViewLink} disabled={copyDisabled}
-              >Copy view link</button
-            >
-          {/if}
-          <a
-            class="mobile-view-details"
-            href="#selected-item-summary"
-            onclick={(event) => {
-              event.preventDefault();
+      {:else if id === 'call'}
+        <div class="call-section" style={sectionStyle(id)}>
+          <CallOverview
+            {indexed}
+            call={pinnedCall}
+            {following}
+            twoColumns={!compactSummary}
+            onSelectItem={(id) => {
+              selectItem(id);
               viewSelectedItemDetails();
-            }}>View details</a
-          >
-          <button
-            type="button"
-            aria-label="Clear selected item and pinned call"
-            title="Clears the selected item and pinned call"
-            disabled={interaction.selectedItemId === null && interaction.pinnedCallIndex === null}
-            onclick={clearSelection}>Clear selection</button
-          >
+            }}
+            onViewDetails={viewCallDetails}
+            onShowComposition={showComposition}
+          />
         </div>
-      </div>
-
-      <div class="visualization-tabs" role="tablist" aria-label="Context visualization">
-        <button
-          id="river-tab"
-          type="button"
-          role="tab"
-          aria-selected={visualizationView === 'river'}
-          aria-controls="river-panel"
-          tabindex={visualizationView === 'river' ? 0 : -1}
-          onclick={() => (visualizationView = 'river')}
-          onkeydown={handleVisualizationTabKeydown}>River</button
-        >
-        <button
-          id="composition-tab"
-          type="button"
-          role="tab"
-          aria-selected={visualizationView === 'composition'}
-          aria-controls="composition-panel"
-          tabindex={visualizationView === 'composition' ? 0 : -1}
-          onclick={() => (visualizationView = 'composition')}
-          onkeydown={handleVisualizationTabKeydown}>Composition</button
-        >
-      </div>
-
-      <div
-        id="river-panel"
-        class="visualization-panel"
-        role="tabpanel"
-        aria-labelledby="river-tab"
-        tabindex="0"
-        hidden={visualizationView !== 'river'}
-      >
-        {#if indexed.analysis.modelCalls.length > 0}
-          {#key sessionId}
-            <ContextRiverNavigation
-              isVisible={visualizationView === 'river'}
-              viewport={viewportStatus}
-              {callIndices}
-              pinnedCallIndex={interaction.pinnedCallIndex}
-              onSelectCall={stepToCall}
-              onLatest={() => navigate('latest')}
-              onFitAll={() => navigate('fit')}
-              onZoomIn={() => navigate('zoom-in')}
-              onZoomOut={() => navigate('zoom-out')}
-            />
-          {/key}
-          <div class="chart-area">
-            {#if riverSessionId !== sessionId}
-              <p class="river-pending" role="status">Drawing the River…</p>
-            {:else}
-              {#key sessionId}
-                <ContextRiver
-                  bind:this={riverComponent}
-                  {indexed}
-                  preferences={presentation}
-                  onPreferencesChange={updatePresentation}
-                  pinnedCallIndex={interaction.pinnedCallIndex}
-                  hoveredCallIndex={interaction.hoveredCallIndex}
-                  selectedItemId={interaction.selectedItemId}
-                  hoveredItemId={interaction.hoveredItemId}
-                  {navigationCommand}
+      {:else if id === 'chart'}
+        <section class="panel river-panel" style={sectionStyle(id)}>
+          <div class="panel-head">
+            <div>
+              <h2>{explorationTitle}</h2>
+              {#if visualizationView === 'river'}
+                <ChartHelp
                   isVisible={visualizationView === 'river'}
-                  onViewportChange={updateViewport}
-                  onNavigationSettled={navigationSettled}
-                  onSelectionVisibility={updateSelectionVisibility}
-                  onHoverCall={hoverCall}
-                  onPinCall={pinCall}
-                  onHoverItem={hoverItem}
-                  onSelectItem={selectItem}
-                  onEmptyClick={emptyClick}
-                  onEscape={handleEscape}
-                  consumeUnhandledEscape={keyboardScope === 'window'}
+                  source={indexed.analysis.session.source}
+                  {compact}
+                />
+              {/if}
+            </div>
+            <div class="panel-actions">
+              {#if onCopyViewLink}
+                <button
+                  type="button"
+                  aria-label="Copy view link"
+                  onclick={onCopyViewLink}
+                  disabled={copyDisabled}>{compact ? 'Copy link' : 'Copy view link'}</button
+                >
+              {/if}
+              <a
+                class="mobile-view-details"
+                href="#selected-item-summary"
+                aria-label="View details"
+                onclick={(event) => {
+                  event.preventDefault();
+                  viewSelectedItemDetails();
+                }}>{compact ? 'Details' : 'View details'}</a
+              >
+              <button
+                type="button"
+                aria-label={keepPin ? 'Clear selected item' : 'Clear selected item and pinned call'}
+                title={keepPin
+                  ? 'Clears the selected item. The latest call stays pinned while following.'
+                  : 'Clears the selected item and pinned call'}
+                disabled={interaction.selectedItemId === null &&
+                  (keepPin || interaction.pinnedCallIndex === null)}
+                onclick={clearSelection}>{compact ? 'Clear' : 'Clear selection'}</button
+              >
+            </div>
+          </div>
+
+          <div class="visualization-tabs" role="tablist" aria-label="Context visualization">
+            <button
+              id="river-tab"
+              type="button"
+              role="tab"
+              aria-selected={visualizationView === 'river'}
+              aria-controls="river-panel"
+              tabindex={visualizationView === 'river' ? 0 : -1}
+              onclick={() => (visualizationView = 'river')}
+              onkeydown={handleVisualizationTabKeydown}>River</button
+            >
+            <button
+              id="composition-tab"
+              type="button"
+              role="tab"
+              aria-selected={visualizationView === 'composition'}
+              aria-controls="composition-panel"
+              tabindex={visualizationView === 'composition' ? 0 : -1}
+              onclick={() => (visualizationView = 'composition')}
+              onkeydown={handleVisualizationTabKeydown}>Composition</button
+            >
+          </div>
+
+          <div
+            id="river-panel"
+            class="visualization-panel"
+            role="tabpanel"
+            aria-labelledby="river-tab"
+            tabindex="0"
+            hidden={visualizationView !== 'river'}
+          >
+            {#if indexed.analysis.modelCalls.length > 0}
+              {#key sessionId}
+                <ContextRiverNavigation
+                  {compact}
+                  isVisible={visualizationView === 'river'}
+                  viewport={viewportStatus}
+                  {callIndices}
+                  pinnedCallIndex={interaction.pinnedCallIndex}
+                  onSelectCall={stepToCall}
+                  onLatest={() => navigate('latest')}
+                  onFitAll={() => navigate('fit')}
+                  onZoomIn={() => navigate('zoom-in')}
+                  onZoomOut={() => navigate('zoom-out')}
                 />
               {/key}
-            {/if}
-            {#if selectedItemOutsideRiver && selectedItem}
-              <div class="selection-location-note" role="status">
-                <span>The selected item has no presence in the current River view.</span>
-                <button type="button" onclick={() => revealItemInRiver(selectedItem.id)}>
-                  Reveal in River
-                </button>
-                <button type="button" onclick={() => selectItem(null)}>Clear item</button>
+              <div class="chart-area">
+                {#if riverSessionId !== sessionId}
+                  <p class="river-pending" role="status">Drawing the River…</p>
+                {:else}
+                  {#key sessionId}
+                    <ContextRiver
+                      bind:this={riverComponent}
+                      {indexed}
+                      preferences={presentation}
+                      onPreferencesChange={updatePresentation}
+                      pinnedCallIndex={interaction.pinnedCallIndex}
+                      hoveredCallIndex={interaction.hoveredCallIndex}
+                      selectedItemId={interaction.selectedItemId}
+                      hoveredItemId={interaction.hoveredItemId}
+                      {navigationCommand}
+                      isVisible={visualizationView === 'river'}
+                      onViewportChange={updateViewport}
+                      onNavigationSettled={navigationSettled}
+                      onSelectionVisibility={updateSelectionVisibility}
+                      onHoverCall={hoverCall}
+                      onPinCall={pinCall}
+                      onHoverItem={hoverItem}
+                      onSelectItem={selectItem}
+                      onEmptyClick={emptyClick}
+                      onEscape={handleEscape}
+                      consumeUnhandledEscape={keyboardScope === 'window'}
+                      {compact}
+                    />
+                  {/key}
+                {/if}
+                {#if selectedItemOutsideRiver && selectedItem}
+                  <div class="selection-location-note" role="status">
+                    <span>The selected item has no presence in the current River view.</span>
+                    <button type="button" onclick={() => revealItemInRiver(selectedItem.id)}>
+                      Reveal in River
+                    </button>
+                    <button type="button" onclick={() => selectItem(null)}>Clear item</button>
+                  </div>
+                {/if}
+                {#if hoveredItem && interaction.selectedItemId !== interaction.hoveredItemId}
+                  <div
+                    class="item-hover-position"
+                    bind:this={hoverCardHost}
+                    style={`left:${hoverCardPosition?.left ?? 12}px;top:${hoverCardPosition?.top ?? 12}px`}
+                  >
+                    <ItemHoverCard item={hoveredItem} {indexed} />
+                  </div>
+                {/if}
               </div>
-            {/if}
-            {#if hoveredItem && interaction.selectedItemId !== interaction.hoveredItemId}
-              <div
-                class="item-hover-position"
-                bind:this={hoverCardHost}
-                style={`left:${hoverCardPosition?.left ?? 12}px;top:${hoverCardPosition?.top ?? 12}px`}
-              >
-                <ItemHoverCard item={hoveredItem} {indexed} />
+            {:else}
+              <div class="no-model-calls">
+                <h3>No model calls</h3>
+                <p>
+                  This session has no completed assistant model responses on its current branch.
+                </p>
+                <p>
+                  Terminal compaction summaries, if present, remain available in Context lifespans.
+                </p>
               </div>
             {/if}
           </div>
-        {:else}
-          <div class="no-model-calls">
-            <h3>No model calls</h3>
-            <p>This session has no completed assistant model responses on its current branch.</p>
-            <p>Terminal compaction summaries, if present, remain available in Context lifespans.</p>
-          </div>
-        {/if}
-      </div>
 
-      <div
-        id="composition-panel"
-        class="visualization-panel"
-        role="tabpanel"
-        aria-labelledby="composition-tab"
-        tabindex="0"
-        hidden={visualizationView !== 'composition'}
-      >
-        {#key sessionId}
-          <CallComposition
+          <div
+            id="composition-panel"
+            class="visualization-panel"
+            role="tabpanel"
+            aria-labelledby="composition-tab"
+            tabindex="0"
+            hidden={visualizationView !== 'composition'}
+          >
+            {#key sessionId}
+              <CallComposition
+                {indexed}
+                pinnedCallIndex={interaction.pinnedCallIndex}
+                selectedItemId={interaction.selectedItemId}
+                isVisible={visualizationView === 'composition'}
+                scope={compositionScope}
+                endpointNotice={compositionEndpointNotice}
+                onScopeChange={setCompositionScope}
+                onPinCall={pinCall}
+                onUnpinCall={unpinCall}
+                onSelectItem={selectItem}
+                onRevealInRiver={revealItemInRiver}
+                onViewDetails={viewSelectedItemDetails}
+                onFindInLifespans={findItemInLifespans}
+                {compact}
+              />
+            {/key}
+          </div>
+        </section>
+      {:else if id === 'details'}
+        <aside
+          id="inspector"
+          class="inspector-column"
+          style={sectionStyle(id)}
+          class:beside={wide.get('details')?.column === '2'}
+          class:empty={!pinnedCall && !selectedItem}
+          aria-label="Inspector"
+          tabindex="-1"
+        >
+          <Inspector
             {indexed}
+            {sessions}
+            {pinnedCall}
+            {selectedItem}
+            {callSections}
+            {itemSections}
             pinnedCallIndex={interaction.pinnedCallIndex}
-            selectedItemId={interaction.selectedItemId}
-            isVisible={visualizationView === 'composition'}
-            scope={compositionScope}
-            endpointNotice={compositionEndpointNotice}
-            onScopeChange={setCompositionScope}
-            onPinCall={pinCall}
-            onUnpinCall={() => (interaction = { ...interaction, pinnedCallIndex: null })}
+            hoveredCallIndex={interaction.hoveredCallIndex}
+            hasCalls={callIndices.length > 0}
+            onClosePinnedCall={unpinCall}
+            onCloseItem={() => selectItem(null)}
             onSelectItem={selectItem}
+            onPinCall={pinCall}
+            onInspectCall={inspectCall}
             onRevealInRiver={revealItemInRiver}
-            onViewDetails={viewSelectedItemDetails}
-            onFindInLifespans={findItemInLifespans}
           />
-        {/key}
-      </div>
-    </section>
-
-    <aside
-      id="inspector"
-      class="inspector-column"
-      class:empty={!pinnedCall && !selectedItem}
-      aria-label="Inspector"
-      tabindex="-1"
-    >
-      <Inspector
-        {indexed}
-        {sessions}
-        {pinnedCall}
-        {selectedItem}
-        {callSections}
-        {itemSections}
-        pinnedCallIndex={interaction.pinnedCallIndex}
-        hoveredCallIndex={interaction.hoveredCallIndex}
-        hasCalls={callIndices.length > 0}
-        onClosePinnedCall={() => (interaction = { ...interaction, pinnedCallIndex: null })}
-        onCloseItem={() => selectItem(null)}
-        onSelectItem={selectItem}
-        onPinCall={pinCall}
-        onInspectCall={inspectCall}
-        onRevealInRiver={revealItemInRiver}
-      />
-    </aside>
-
-    <section class="panel lifespan-panel">
-      {#key sessionId}
-        <ContextLifespans
-          {indexed}
-          selectedItemId={interaction.selectedItemId}
-          pinnedCallIndex={interaction.pinnedCallIndex}
-          onSelectItem={selectLifespanItem}
-          onHoverItem={hoverItem}
-          findRequest={findInLifespansRequest}
-        />
-      {/key}
-    </section>
+        </aside>
+      {:else if id === 'lifespans'}
+        <section class="panel lifespan-panel" style={sectionStyle(id)}>
+          {#key sessionId}
+            <ContextLifespans
+              {indexed}
+              selectedItemId={interaction.selectedItemId}
+              pinnedCallIndex={interaction.pinnedCallIndex}
+              onSelectItem={selectLifespanItem}
+              onHoverItem={hoverItem}
+              findRequest={findInLifespansRequest}
+              {compact}
+            />
+          {/key}
+        </section>
+      {/if}
+    {/each}
   </div>
 </div>
 
@@ -808,7 +939,7 @@
     background: var(--surface);
     border: 0;
     border-radius: var(--radius);
-    padding: 15px;
+    padding: var(--panel-padding);
     margin-top: 14px;
     min-width: 0;
   }
@@ -841,7 +972,7 @@
   }
   .mobile-view-details {
     display: none;
-    padding: 7px 9px;
+    padding: var(--control-padding);
     border: 1px solid var(--separator);
     border-radius: var(--control-radius);
     background: var(--surface);
@@ -858,33 +989,38 @@
   :global(.selected-item-summary) {
     scroll-margin: 16px;
   }
+  /* Sections follow their order in one column. A wide view with a selection places them with the
+     positions from wideSectionPlacement, which put the details in a second column. */
   .exploration-grid {
     display: grid;
     min-width: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto;
     align-items: start;
-    gap: 14px;
-    margin-top: 14px;
+    gap: var(--panel-gap);
   }
-  .exploration-grid.occupied {
-    grid-template-columns: minmax(0, 1fr) 320px;
-  }
-  .inspector-column.empty {
+  .exploration-grid > * {
     grid-column: 1;
-    grid-row: 2;
-    position: static;
-    max-height: none;
-    overflow: visible;
-  }
-  .exploration-grid:not(.occupied) .lifespan-panel {
-    grid-row: 3;
-  }
-  .river-panel {
-    grid-column: 1;
-    grid-row: 1;
     min-width: 0;
     margin-top: 0;
+  }
+  @container highwater (min-width: 1051px) {
+    .exploration-grid.occupied {
+      grid-template-columns: minmax(0, 1fr) 320px;
+    }
+    .exploration-grid.occupied > * {
+      grid-column: var(--wide-column);
+      grid-row: var(--wide-row);
+    }
+    .exploration-grid.occupied > .inspector-column.beside {
+      position: sticky;
+      top: 16px;
+      max-height: calc(100vh - 32px);
+      max-height: calc(100dvh - 32px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-color: var(--control-border) var(--plot);
+      scrollbar-width: thin;
+    }
   }
   .visualization-tabs {
     display: flex;
@@ -927,25 +1063,9 @@
   }
   .inspector-column {
     display: grid;
-    grid-column: 2;
-    grid-row: 1 / span 2;
     align-self: start;
-    gap: 14px;
-    position: sticky;
-    top: 16px;
-    max-height: calc(100vh - 32px);
-    max-height: calc(100dvh - 32px);
+    gap: var(--panel-gap);
     min-width: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-color: var(--control-border) var(--plot);
-    scrollbar-width: thin;
-  }
-  .lifespan-panel {
-    grid-column: 1;
-    grid-row: 2;
-    min-width: 0;
-    margin-top: 0;
   }
   .chart-area {
     position: relative;
@@ -975,22 +1095,6 @@
     .mobile-view-details {
       display: inline-flex;
       align-items: center;
-    }
-    .exploration-grid,
-    .exploration-grid.occupied {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto;
-    }
-    .river-panel,
-    .inspector-column,
-    .lifespan-panel {
-      grid-column: 1;
-      grid-row: auto;
-    }
-    .inspector-column {
-      position: static;
-      max-height: none;
-      overflow: visible;
     }
   }
   @container highwater (max-width: 850px) {
