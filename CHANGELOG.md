@@ -1,9 +1,11 @@
 # Changelog
 
-## 0.5.2 – 2026-11-14
+## 0.5.2 – 2026-11-16
 
 - In a window 760 pixels wide or less, the viewer shows the session summary on one line. At 520 pixels or less it also keeps less-used chart controls in **More** and **View** menus, so the chart starts higher up, opens Composition in **List**, and gives Context lifespans full-width labels and a **Filter and sort** menu.
 - Context lifespans shows 50 items at a time instead of 200.
+- Chart help has a close button, and closes on Escape or a click outside it.
+- The chart's legends stay in view when a zoomed chart is scrolled, instead of scrolling away with the first call.
 - The viewer has Light, Dark and Auto themes, chosen above the session picker and remembered between visits. Auto follows the system setting. Chart colours are adjusted for each theme, and each item keeps its colour when the theme changes.
 - Add an optional bb plugin with a live Context tab and compact summary for Pi, Claude Code and Codex threads. It reuses the standalone session view, follows bb's theme, and preserves selections across updates to the same session. A Latest call panel above the chart summarises the newest call: its input and change since the previous call, cost, added and dropped items, tools and largest items in context.
 - Provision a pinned Highwater binary automatically on the agent machine, verifying archive and executable checksums before use. Cache it privately for offline use, and allow an explicit binary override. Plugin releases are tagged `bb-plugin-vX.Y.Z` and use the Highwater binary of the same version. Analyses travel through the user's bb server to their client.
