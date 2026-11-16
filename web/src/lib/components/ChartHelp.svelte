@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   let {
     isVisible = true,
     source,
@@ -15,6 +15,7 @@
   let container: HTMLDivElement | null = null;
   let trigger: HTMLButtonElement | null = $state(null);
   let popover: HTMLDivElement | null = $state(null);
+  let closeButton: HTMLButtonElement | null = $state(null);
   let popoverStyle = $state('');
   let expanded = $state(false);
 
@@ -30,13 +31,14 @@
   function placePopover(): void {
     if (!expanded || !trigger || !popover) return;
     const margin = 12;
-    const width = Math.min(480, Math.max(0, window.innerWidth - margin * 2));
+    // Stay within the session view, which in bb is a side panel narrower than the window.
+    const view = trigger.closest('.session-view')?.getBoundingClientRect();
+    const minLeft = Math.max(0, view?.left ?? 0) + margin;
+    const maxRight = Math.min(window.innerWidth, view?.right ?? window.innerWidth) - margin;
+    const width = Math.min(480, Math.max(0, maxRight - minLeft));
     const height = Math.min(popover.scrollHeight, Math.max(0, window.innerHeight - margin * 2));
     const triggerBounds = trigger.getBoundingClientRect();
-    const left = Math.max(
-      margin,
-      Math.min(triggerBounds.right - width, window.innerWidth - width - margin),
-    );
+    const left = Math.max(minLeft, Math.min(triggerBounds.right - width, maxRight - width));
     const below = triggerBounds.bottom + 8;
     const top =
       below + height <= window.innerHeight - margin
@@ -53,25 +55,32 @@
 
   function toggleHelp(): void {
     if (expanded) close();
-    else expanded = true;
-  }
-
-  function handleKeyDown(event: KeyboardEvent): void {
-    if (
-      event.key === 'Escape' &&
-      expanded &&
-      event.target instanceof Node &&
-      container?.contains(event.target)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      close();
+    else {
+      expanded = true;
+      // Focus the close button so the help is reachable from the keyboard.
+      void tick().then(() => closeButton?.focus({ preventScroll: true }));
     }
   }
 
-  onMount(() => {
-    container?.addEventListener('keydown', handleKeyDown);
-    return () => container?.removeEventListener('keydown', handleKeyDown);
+  // While open, Escape closes the help wherever focus is, before anything else handles it, and a
+  // press outside the help or its button closes it.
+  $effect(() => {
+    if (!expanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    const onPointer = (event: PointerEvent) => {
+      if (container && !event.composedPath().includes(container)) close(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onPointer, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onPointer, true);
+    };
   });
 </script>
 
@@ -101,7 +110,17 @@
     hidden={!expanded}
     style={popoverStyle}
   >
-    <h3 id="chart-help-title">Chart help</h3>
+    <div class="help-heading">
+      <h3 id="chart-help-title">Chart help</h3>
+      <button
+        bind:this={closeButton}
+        type="button"
+        class="help-close"
+        aria-label="Close help"
+        title="Close (Esc)"
+        onclick={() => close()}>×</button
+      >
+    </div>
     <h4>Navigate the river</h4>
     <ul>
       <li>Drag across a range to zoom; scroll horizontally or Shift-drag to pan.</li>
@@ -153,6 +172,25 @@
   }
   .help-trigger:hover {
     background: var(--surface-raised);
+  }
+  .help-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .help-heading h3 {
+    margin: 0;
+  }
+  .help-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-size);
+    height: var(--control-size);
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
   }
   .help-popover {
     position: fixed;

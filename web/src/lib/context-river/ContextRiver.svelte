@@ -2001,13 +2001,18 @@
     position: relative;
     max-width: 100%;
   }
+  /* The legends sit in the chart's horizontal scroller; sticky, like the Cache & cost header,
+     they stay in view while a zoomed chart is scrolled, starting where the plot does. */
   .group-type-legend {
+    position: sticky;
+    left: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 5px 12px;
-    /* Legends start where the plot does, under the first call. */
-    margin: 6px 0 0 var(--plot-left);
+    width: 100%;
+    margin: 6px 0 0;
+    padding-left: var(--plot-left);
     color: var(--text);
     font-size: var(--text-sm);
   }
@@ -2187,6 +2192,9 @@
     pointer-events: none;
   }
   .input-reference-legend {
+    position: sticky;
+    left: 0;
+    width: 100%;
     display: flex;
     flex-wrap: wrap;
     align-items: center;

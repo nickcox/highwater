@@ -467,3 +467,72 @@ test('a host can start the River on Visible calls, and a stored choice wins', as
     'true',
   );
 });
+
+test('chart help in a narrow panel closes with its button, Escape or an outside click', async ({
+  page,
+}) => {
+  await open(page, ['summary', 'call', 'chart', 'details', 'lifespans'], 'compact');
+  await page.setViewportSize({ width: 1200, height: 900 });
+  const app = page.locator('#embed');
+  await app.evaluate((el) => {
+    el.style.width = '420px';
+  });
+  const trigger = app.getByRole('button', { name: 'Chart help' });
+  const help = app.getByRole('group', { name: 'Chart help' });
+  const closeButton = app.getByRole('button', { name: 'Close help' });
+
+  await trigger.click();
+  await expect(help).toBeVisible();
+  await expect(closeButton).toBeFocused();
+  const panel = (await app.boundingBox())!;
+  const popover = (await app.locator('.help-popover').boundingBox())!;
+  expect(popover.x).toBeGreaterThanOrEqual(panel.x);
+  expect(popover.x + popover.width).toBeLessThanOrEqual(panel.x + panel.width);
+  await closeButton.click();
+  await expect(help).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await app.getByRole('tab', { name: 'River', exact: true }).focus();
+  await page.keyboard.press('Escape');
+  await expect(help).toBeHidden();
+
+  await trigger.click();
+  await page.mouse.click(panel.x + panel.width + 100, 400);
+  await expect(help).toBeHidden();
+});
+
+test('legends stay in view while a zoomed chart is scrolled to recent calls', async ({ page }) => {
+  await open(page, ['summary', 'call', 'chart', 'details', 'lifespans'], 'compact');
+  await page.setViewportSize({ width: 460, height: 900 });
+  const app = page.locator('#embed');
+  await app.evaluate((el) => {
+    el.style.width = '420px';
+  });
+  // Reported input on every call gives the input reference legend something to compare.
+  const long = sessionScenario('longSession');
+  for (const call of long.modelCalls) {
+    call.reportedPromptTokens = (call.tokenAnalysis.calculatedVisibleTokens ?? 0) + 1000;
+    call.reportedUsageCompleteness = 'complete';
+    call.usage = { ...call.usage, input: call.reportedPromptTokens, cacheRead: 0, cacheWrite: 0 };
+  }
+  await page.evaluate(
+    (analysis) => window.highwaterHarness.replace(analysis),
+    toWireAnalysis(long),
+  );
+  const scroller = app.locator('.river-scroll');
+  // Following a long session zooms to its recent calls, scrolled to the right.
+  await expect.poll(() => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const inView = async (selector: string) => {
+    const area = (await scroller.boundingBox())!;
+    const legend = (await app.locator(selector).boundingBox())!;
+    return legend.x >= area.x - 1 && legend.x + legend.width <= area.x + area.width + 1;
+  };
+  await expect(app.locator('.input-reference-legend')).toBeVisible();
+  expect(await inView('.input-reference-legend')).toBe(true);
+  await app.locator('summary', { hasText: 'View' }).click();
+  await app.getByRole('button', { name: 'Item types', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(app.locator('.group-type-legend')).toBeVisible();
+  expect(await inView('.group-type-legend')).toBe(true);
+});
