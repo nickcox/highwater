@@ -242,14 +242,17 @@ for (const width of [390, 850, 1100, 1280, 1440]) {
     const heading = await page
       .getByRole('heading', { name: 'Highwater', exact: true })
       .boundingBox();
-    expect(toggle!.x + toggle!.width).toBeGreaterThan(width - 35);
-    if (width >= 390) expect(toggle!.y).toBeLessThan(heading!.y + heading!.height);
     const sessionPicker = await page.locator('.session-controls .picker').boundingBox();
-    expect(sessionPicker!.y).toBeGreaterThanOrEqual(toggle!.y + toggle!.height + 8);
-    expect(
-      Math.abs(sessionPicker!.x + sessionPicker!.width - toggle!.x - toggle!.width),
-    ).toBeLessThanOrEqual(1);
-    expect(sessionPicker!.width).toBeCloseTo(Math.min(600, width - (width <= 850 ? 32 : 52)), 0);
+    const right = (box: { x: number; width: number }) => box.x + box.width;
+    const bottom = (box: { y: number; height: number }) => box.y + box.height;
+    const middle = (box: { y: number; height: number }) => box.y + box.height / 2;
+    // The theme icons end at the header's right edge, on the title's row.
+    expect(Math.abs(right(toggle!) - (width - (width <= 850 ? 16 : 26)))).toBeLessThanOrEqual(2);
+    expect(Math.abs(middle(toggle!) - middle(heading!))).toBeLessThanOrEqual(6);
+    // The picker has its own row below the title, from the left edge, at most 960px wide.
+    expect(sessionPicker!.y).toBeGreaterThanOrEqual(bottom(heading!));
+    expect(Math.abs(sessionPicker!.x - heading!.x)).toBeLessThanOrEqual(2);
+    expect(sessionPicker!.width).toBeCloseTo(Math.min(960, width - (width <= 850 ? 32 : 52)), 0);
     for (const palette of paletteList) {
       await selectTheme(page, palette.id);
       await expect(page.getByRole('combobox', { name: 'Session' })).toBeVisible();

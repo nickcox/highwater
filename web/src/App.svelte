@@ -290,23 +290,25 @@
         </svg>
         Highwater
       </h1>
-      <!-- Refresh sits at the end of the status line, so it does not add a row to the header. -->
-      <div class="status-row">
-        <p class="live-status">
-          <span data-testid="live-status">Live updates: {$sessionController.liveStatus}</span
-          >{#if selectedSessionDetail}<span class="session-detail" title={selectedSessionDetail}
-              >{' · '}{selectedSessionDetail}</span
-            >{/if}
-        </p>
-        {#if ($sessionController.liveStatus !== 'live' || $sessionController.sessions.length === 0) && !$sessionController.catalogueWarning && !$sessionController.analysisWarning && !$sessionController.sessionListError && !$sessionController.analysisError}
-          <button type="button" class="status-refresh" onclick={() => sessionController.retry()}
-            >Refresh</button
-          >
+      <div class="title-status">
+        <!-- Refresh sits at the end of the status line, so it does not add a row to the header. -->
+        <div class="status-row">
+          <p class="live-status">
+            <span data-testid="live-status">Live updates: {$sessionController.liveStatus}</span
+            >{#if selectedSessionDetail}<span class="session-detail" title={selectedSessionDetail}
+                >{' · '}{selectedSessionDetail}</span
+              >{/if}
+          </p>
+          {#if ($sessionController.liveStatus !== 'live' || $sessionController.sessions.length === 0) && !$sessionController.catalogueWarning && !$sessionController.analysisWarning && !$sessionController.sessionListError && !$sessionController.analysisError}
+            <button type="button" class="status-refresh" onclick={() => sessionController.retry()}
+              >Refresh</button
+            >
+          {/if}
+        </div>
+        {#if $sessionController.refreshing && !$sessionController.loading}
+          <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
         {/if}
       </div>
-      {#if $sessionController.refreshing && !$sessionController.loading}
-        <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
-      {/if}
     </div>
     <div class="theme-controls"><ThemeSelector /></div>
     {#if $sessionController.sessions.length > 0}
@@ -391,27 +393,36 @@
     margin: 0 auto;
     padding: 26px;
   }
+  /* The title with the theme icons at the right, the session picker on its own row below, and
+     the status line describing the chosen session under the picker. The title block's children
+     are placed in the header grid directly. */
   .titlebar {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) minmax(320px, 600px);
-    align-items: start;
-    gap: 8px 24px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title theme'
+      'picker picker'
+      'status status';
+    align-items: center;
+    gap: 10px 24px;
     min-width: 0;
   }
   .title-summary {
-    grid-column: 1;
-    grid-row: 1 / span 2;
+    display: contents;
+  }
+  .title-summary > h1 {
+    grid-area: title;
+  }
+  .title-status {
+    grid-area: status;
+    min-width: 0;
   }
   .session-controls {
-    grid-column: 2;
-    grid-row: 2;
-    width: min(600px, 100%);
-    justify-self: end;
+    grid-area: picker;
+    width: min(960px, 100%);
   }
   .theme-controls {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
+    grid-area: theme;
   }
   .titlebar > * {
     min-width: 0;
@@ -496,27 +507,18 @@
     main {
       padding: 16px;
     }
-    .titlebar {
-      grid-template-columns: minmax(0, 1fr) auto;
-      row-gap: 16px;
-    }
-    .title-summary {
-      grid-row: 1;
-    }
-    .session-controls {
-      grid-column: 1 / -1;
-    }
   }
   @container highwater (max-width: 380px) {
     .titlebar {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        'title'
+        'theme'
+        'picker'
+        'status';
     }
     .theme-controls {
-      grid-column: 1;
-      grid-row: 2;
-    }
-    .session-controls {
-      grid-row: 3;
+      justify-self: start;
     }
   }
 </style>

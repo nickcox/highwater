@@ -24,7 +24,7 @@ Analyses include session previews and travel through the bb server to your clien
 
 ## Theme
 
-Use the **Light / Dark / Auto** toggle above the session picker at the top right to choose the appearance. Auto is the default and follows changes to your operating system appearance. Dark and Light stay selected regardless of the system setting.
+Use the three icons at the top right to choose the appearance: the sun for Light, the moon for Dark and the half-filled circle for Auto. Auto is the default and follows changes to your operating system appearance. Dark and Light stay selected regardless of the system setting.
 
 Your choice is saved in this browser for future visits. It does not change the session, selected item, pinned call or chart position, and is not included in shared view links. If the browser blocks local storage, the choice still works for the current visit.
 

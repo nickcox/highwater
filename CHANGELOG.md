@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A tidier header: the title with the theme choice at the right, then the harness and session menus with **Child sessions** on their own row, then the status line. The menus' labels are read out to screen readers but no longer shown, and Light, Dark and Auto are three small icons (sun, moon and half-filled circle).
+
 ## 0.5.2 – 2026-11-16
 
 - In a window 760 pixels wide or less, the viewer shows the session summary on one line. At 520 pixels or less it also keeps less-used chart controls in **More** and **View** menus, so the chart starts higher up, opens Composition in **List**, and gives Context lifespans full-width labels and a **Filter and sort** menu.

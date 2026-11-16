@@ -121,8 +121,9 @@
 </script>
 
 <div class="picker" bind:this={pickerRoot}>
-  <label
-    >Harness
+  <!-- The menus explain themselves, so their labels are for screen readers only. -->
+  <label class="harness-field"
+    ><span class="visually-hidden">Harness</span>
     <select bind:value={harness}>
       <option value="all">All harnesses</option>
       <option value="pi">Pi</option>
@@ -133,13 +134,7 @@
     </select>
   </label>
   <div class="session-field">
-    <!-- The option shares the label's row, so it adds no height above the River. -->
-    <div class="session-heading">
-      <label for={`${id}-input`}>Session</label>
-      <label class="include-children"
-        ><input type="checkbox" bind:checked={includeChildren} /><span>Child sessions</span></label
-      >
-    </div>
+    <label class="visually-hidden" for={`${id}-input`}>Session</label>
     <input
       id={`${id}-input`}
       type="text"
@@ -186,6 +181,9 @@
       </ul>
     {/if}
   </div>
+  <label class="include-children"
+    ><input type="checkbox" bind:checked={includeChildren} /><span>Child sessions</span></label
+  >
   {#if choices.length === 0}<p role="status">
       No sessions match these filters. The open session is unchanged.
     </p>{/if}
@@ -196,11 +194,42 @@
     /* The list spans both columns, so labels have room on narrow screens. */
     position: relative;
     display: grid;
-    grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
-    align-items: start;
-    gap: 8px 16px;
-    width: min(600px, 100%);
+    grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) auto;
+    grid-template-areas: 'harness session children';
+    align-items: center;
+    gap: 8px 12px;
+    width: 100%;
     min-width: 0;
+  }
+  .harness-field {
+    grid-area: harness;
+  }
+  .session-field {
+    grid-area: session;
+  }
+  .picker > p {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  /* Narrow headers: the two menus keep their shared row, and Child sessions moves below. */
+  @container highwater (max-width: 600px) {
+    .picker {
+      grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
+      grid-template-areas:
+        'harness session'
+        'children children';
+    }
+    .include-children {
+      justify-self: end;
+    }
   }
   label,
   .session-field {
@@ -252,21 +281,15 @@
     background: var(--surface);
     box-shadow: 0 8px 24px var(--shadow);
   }
-  .session-heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    white-space: nowrap;
-  }
   /* On a narrow screen the option's text is shortened rather than wrapped, so the Session field
      stays level with the Harness field. */
   .include-children {
+    grid-area: children;
     flex-direction: row;
     align-items: center;
     gap: 6px;
     overflow: hidden;
+    white-space: nowrap;
   }
   .include-children span {
     overflow: hidden;
