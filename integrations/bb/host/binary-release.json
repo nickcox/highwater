@@ -1,49 +1,49 @@
 {
-  "version": "0.5.1",
+  "version": "0.5.2",
   "platforms": {
     "darwin-arm64": {
       "target": "aarch64-apple-darwin",
       "format": "tar.gz",
-      "archiveSha256": "8e3dcd0a47cf13ac84e7cb074a351c850c335244ccb370fb915695b62f8d97a6",
-      "archiveBytes": 5790978,
-      "binarySha256": "e8d5146455767637678965014bb2aa485191997f9c8a930035b02d8cd8223a60",
-      "binaryBytes": 15149456,
+      "archiveSha256": "6372dca4eaf34a22d7aaaa1c6b624ca5b98b1371888630a45320263354ee1dce",
+      "archiveBytes": 5811569,
+      "binarySha256": "7a52508330297f639b89e72ac9106f94fd1543ff241e5aa8cba5aeb09c45175b",
+      "binaryBytes": 15225040,
       "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
     },
     "darwin-x64": {
       "target": "x86_64-apple-darwin",
       "format": "tar.gz",
-      "archiveSha256": "e9683730bb7b0e98a26221e40c438ecf5ba980cac58bd3f63c14045f6bfd1c63",
-      "archiveBytes": 5951968,
-      "binarySha256": "900eb02775ddb0e011b8379403da85dd7f6225ebe60bcbec4666e5a0bd1fee07",
-      "binaryBytes": 15475704,
+      "archiveSha256": "7601bb0aaa5162600f724fedb4441d71c41d272844a56da6ceb075a8aa09e890",
+      "archiveBytes": 5963677,
+      "binarySha256": "e012aa41171b4987124a0da719ab5bb71af7ef19cec3690badbb11094fb5e164",
+      "binaryBytes": 15544544,
       "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
     },
     "linux-arm64": {
       "target": "aarch64-unknown-linux-gnu",
       "format": "tar.gz",
-      "archiveSha256": "242da295bb63a8a9092b606fb8b7a4448a3aee4717f888f9beeb26e4d19cd9a2",
-      "archiveBytes": 6162723,
-      "binarySha256": "38001e5f000b042cc251ba3d7e9ebbb01fc7058c51d33c19234e271d934f2689",
-      "binaryBytes": 16596120,
+      "archiveSha256": "1a406f14a12345c72911d305e5fc935cdb71bc7afcdaaa9d82faa953b7fc5479",
+      "archiveBytes": 6180883,
+      "binarySha256": "d82df93090e827b057b2b184b1efed13d01e6fe6bbd16632adab4c5b6f79c9da",
+      "binaryBytes": 16670168,
       "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
     },
     "linux-x64": {
       "target": "x86_64-unknown-linux-gnu",
       "format": "tar.gz",
-      "archiveSha256": "8012c3a54dd703550278463312ef73123f0e11d82b2d680463e6efd133432ac7",
-      "archiveBytes": 6221397,
-      "binarySha256": "9ceed54667dc2067bfebf5804d46636c0fc7dd39f56e2be4b95a46eb74fc6ad6",
-      "binaryBytes": 17106880,
+      "archiveSha256": "30b35ff7c5f5f649de49e13e8fbfee620a21e74d010e1cf546ccae7967c1dfd4",
+      "archiveBytes": 6233410,
+      "binarySha256": "40bd1884dea865c3cc42885928bdced72dc84749f8b1d8d6cba3e141a3bf47af",
+      "binaryBytes": 17152360,
       "licenceSha256": "1bafc073e66be1dac7904d5f3d267df46aef5ddf4be98fb3dcb6b7a467db9ab9"
     },
     "win32-x64": {
       "target": "x86_64-pc-windows-msvc",
       "format": "zip",
-      "archiveSha256": "a4b23df551c9349ab0d0f4ec07e0de6fe55b5cb026fbcf6a20cebefd477675de",
-      "archiveBytes": 5470757,
-      "binarySha256": "6027b36dbfb1b426a9d52becf478d2214ffda2d6ebc817b3e59ab2148375b95a",
-      "binaryBytes": 14386176,
+      "archiveSha256": "fcc561861ca54a77f8669fc59ffa08b708145a7802b945a49341046250262895",
+      "archiveBytes": 5486809,
+      "binarySha256": "24ab6392631c0f0fe3cb09743abff26ffe9a576ca02d576c175503a5a1f58cef",
+      "binaryBytes": 14421504,
       "licenceSha256": "022a12fccb77514e825a2e6488057c3df5002d38f6c5cc43744574dfd564105c"
     }
   }
