@@ -5,6 +5,9 @@ import { mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// These tests change the shared fixture the server reads, so they run one at a time.
+test.describe.configure({ mode: 'default' });
+
 const database = process.env.HIGHWATER_OPENCODE_FIXTURE;
 
 async function checkDirectoryReplacement(page: import('@playwright/test').Page) {

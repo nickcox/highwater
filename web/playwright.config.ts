@@ -5,9 +5,11 @@ const baseURL = process.env.HIGHWATER_BROWSER_BASE_URL ?? 'http://127.0.0.1:4173
 
 export default defineConfig({
   testDir: './tests/browser',
-  fullyParallel: false,
+  fullyParallel: true,
   reporter: 'list',
   timeout: 30_000,
+  // A hang (seen under heavy machine load) fails the run instead of stalling it.
+  globalTimeout: 5 * 60_000,
   expect: { timeout: 5_000 },
   outputDir: '../.playwright/test-results',
   use: {

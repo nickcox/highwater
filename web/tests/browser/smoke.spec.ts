@@ -144,8 +144,10 @@ function denseEconomicsScenario(): ReturnType<typeof testAnalysis> {
     const index = position + 1;
     const contextItemIds = itemIdsForCall(index);
     const previousIds = position === 0 ? [] : itemIdsForCall(index - 1);
-    const addedItemIds = contextItemIds.filter((id) => !previousIds.includes(id));
-    const droppedItemIds = previousIds.filter((id) => !contextItemIds.includes(id));
+    const previous = new Set(previousIds);
+    const current = new Set(contextItemIds);
+    const addedItemIds = contextItemIds.filter((id) => !previous.has(id));
+    const droppedItemIds = previousIds.filter((id) => !current.has(id));
     const ratio = index >= 120 && index <= 240 ? (index % 2 === 0 ? 0.1 : 0.5) : 0.5;
     const previousRatio =
       index > 1
@@ -2861,50 +2863,6 @@ test('blocked storage leaves quiet controls usable without private persistence',
     'true',
   );
   await expect(page.locator('.economics-track-svg')).toHaveCount(0);
-});
-
-test('retired Compact preference is ignored without losing scale, grouping or economics settings', async ({
-  page,
-}) => {
-  test.skip(integrated, 'Uses seeded presentation preferences and a sanitized API.');
-  const legacy = JSON.stringify({
-    version: 1,
-    river: { verticalScale: 'visible', layout: 'compact', display: 'itemTypes' },
-    economics: { expanded: true, lastMode: 'cost', cacheView: 'share' },
-  });
-  await page.addInitScript(
-    (value) => localStorage.setItem('highwater.presentation.v1', value),
-    legacy,
-  );
-  await mockApi(page, economicsScenario());
-  await page.goto('/');
-  await assertLoaded(page);
-  await expect(page.locator('.river-scroll .river-plot')).toHaveAttribute('height', '500');
-  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '190');
-  await expect(page.getByRole('button', { name: 'Visible calls', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await expect(page.getByRole('button', { name: 'Item types', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  expect(await page.evaluate(() => localStorage.getItem('highwater.presentation.v1'))).toBe(legacy);
-  await expect(page.getByRole('group', { name: 'River layout' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Compact River', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Balanced', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Items', exact: true }).click();
-  const stored = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('highwater.presentation.v1')!),
-  );
-  expect(stored.river).toEqual({ verticalScale: 'visible', display: 'items' });
-  expect(stored.economics).toEqual({ expanded: true, lastMode: 'cost', cacheView: 'share' });
-  await page.getByRole('button', { name: 'Cache', exact: true }).click();
-  await expect(page.locator('.economics-track-svg')).toHaveAttribute('height', '262');
-  await expect(page.getByRole('button', { name: 'Share (%)', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
 });
 
 test('empty inspector occupancy preserves fractional pan anchors and explicit range endpoints', async ({

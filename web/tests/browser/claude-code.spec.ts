@@ -3,6 +3,9 @@ import { chooseSession } from './session-picker';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// These tests change the shared fixture the server reads, so they run one at a time.
+test.describe.configure({ mode: 'default' });
+
 const projects = process.env.HIGHWATER_CLAUDE_CODE_FIXTURE;
 
 interface Listed {
