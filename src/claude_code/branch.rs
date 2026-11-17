@@ -12,8 +12,9 @@ fn invalid(message: impl Into<String>) -> SourceError {
 pub(super) struct Branch {
     /// Record indexes on the active branch, in conversation order.
     pub indexes: Vec<usize>,
-    /// A compaction boundary's `logicalParentUuid` named the boundary or a record after it,
-    /// so the branch continued from the last record before the boundary instead.
+    /// A compaction boundary's `logicalParentUuid` named the boundary, a record after it or a
+    /// record not in the file, so the branch continued from the last record before the
+    /// boundary instead.
     pub repaired_compaction_link: bool,
 }
 
@@ -42,8 +43,11 @@ pub(super) fn select(records: &[Record]) -> Result<Branch, SourceError> {
         if let Some(parent) = record.parent() {
             children.entry(lookup(parent)?).or_default().push(index);
         }
+        // A boundary's logical parent may be missing; the walk below repairs that.
         if let Some(parent) = record.logical_parent() {
-            lookup(parent)?;
+            if !record.is_compact_boundary() {
+                lookup(parent)?;
+            }
         }
     }
     let mut acyclic = HashSet::new();
@@ -90,16 +94,17 @@ pub(super) fn select(records: &[Record]) -> Result<Branch, SourceError> {
         current = match record.parent() {
             Some(parent) => Some(lookup(parent)?),
             None if record.is_compact_boundary() => match record.logical_parent() {
-                Some(logical) => {
-                    let logical = lookup(logical)?;
-                    if descends_from(records, &lookup, logical, index)? {
-                        // Claude Code 2.1.287 can name a record written after the boundary.
-                        repaired_compaction_link = true;
-                        last_record_before(records, index)
-                    } else {
+                Some(logical) => match by_uuid.get(logical).copied() {
+                    // Claude Code 2.1.287 can name a record written after the boundary.
+                    Some(logical) if !descends_from(records, &lookup, logical, index)? => {
                         Some(logical)
                     }
-                }
+                    // Claude Code 2.1.304 can name a record that is not in the file.
+                    _ => {
+                        repaired_compaction_link = true;
+                        last_record_before(records, index)
+                    }
+                },
                 None => None,
             },
             None => None,

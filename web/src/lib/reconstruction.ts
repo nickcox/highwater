@@ -40,7 +40,7 @@ export const reconstructionLimitLabels: Record<string, string> = {
   traceRecordsUnreadable:
     "Copilot's trace database could not be read, so calls show only what the session file records.",
   repairedCompactionLink:
-    'A compaction marker named a later record as its predecessor; the conversation was continued from the record before the marker.',
+    'A compaction marker named a later or missing record as its predecessor; the conversation was continued from the record before the marker.',
 };
 
 /** Sources whose analyses must always carry a reconstruction coverage notice. */

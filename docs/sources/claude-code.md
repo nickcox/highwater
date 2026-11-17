@@ -2,7 +2,7 @@
 
 How Highwater reads Claude Code CLI transcripts. For the rules that apply to every source, such as tokenization and cost, see [data semantics](../data-semantics.md).
 
-Claude Code is not open source and its transcript format is not documented. The rules here come from transcripts written by versions 2.1.229 and 2.1.287 and from the synthetic fixtures in `fixtures/claude-code/`; other versions may record things differently.
+Claude Code is not open source and its transcript format is not documented. The rules here come from transcripts written by versions 2.1.229, 2.1.287 and 2.1.304 and from the synthetic fixtures in `fixtures/claude-code/`; other versions may record things differently.
 
 ## Where sessions are
 
@@ -32,11 +32,11 @@ Claude Code writes each content block of one API response as a separate `assista
 
 ## Active branch
 
-Duplicate UUIDs, cycles and missing parents fail the session. Then:
+Duplicate UUIDs, cycles and missing parents fail the session, except a boundary's missing `logicalParentUuid` (below). Then:
 
 1. **Leaf.** The active branch ends at the last-written `user` or `assistant` record with no `user` or `assistant` children. `system` and `attachment` records are never the leaf, because an `away_summary` is often the newest record. A rewind leaves the abandoned branch out. `last-prompt.leafUuid` is not used: it does not always point at the last record.
 2. **Walk.** `parentUuid` is followed from the leaf to the root.
-3. **Compaction.** A `compact_boundary` has no parent; the walk continues from its `logicalParentUuid`. A boundary whose `logicalParentUuid` names a record written after it (seen in 2.1.287) is read as continuing from the record before the boundary, with the limitation `repairedCompactionLink`.
+3. **Compaction.** A `compact_boundary` has no parent; the walk continues from its `logicalParentUuid`. A boundary whose `logicalParentUuid` names a record written after it (seen in 2.1.287), or a record that is not in the file (seen in 2.1.304 after `/compact`), is read as continuing from the record before the boundary, with the limitation `repairedCompactionLink`.
 4. **Parallel tool results.** When one response has several tool calls, the second call's record and the first call's `tool_result` both have the first call's record as their parent, so the result is off the chain. A tool result that is not on the chain, whose `tool_use_id` matches a tool call in a response on the chain, is placed after the last record of that response, in file order. A tool result whose call is not on the branch belongs to another branch and is left out.
 
 The rules are in `src/claude_code/branch.rs`, kept in one module so that a later way of showing several branches can replace it.

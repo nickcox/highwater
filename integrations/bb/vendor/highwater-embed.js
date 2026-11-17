@@ -5227,7 +5227,7 @@ var Cl = {
 	unrecordedRounds: "A request that was stopped or interrupted recorded its model calls as one, so its calls' context and output are not split.",
 	traceRecordsIncomplete: "Some calls have no Copilot trace record (Copilot keeps them for a few days), so they show only what the session file records: no per-call usage, timing, system prompt or tools.",
 	traceRecordsUnreadable: "Copilot's trace database could not be read, so calls show only what the session file records.",
-	repairedCompactionLink: "A compaction marker named a later record as its predecessor; the conversation was continued from the record before the marker."
+	repairedCompactionLink: "A compaction marker named a later or missing record as its predecessor; the conversation was continued from the record before the marker."
 }, wl = /* @__PURE__ */ new Set([
 	"opencode",
 	"claude-code",

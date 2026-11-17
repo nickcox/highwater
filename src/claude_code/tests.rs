@@ -519,6 +519,35 @@ fn a_boundary_naming_a_later_record_continues_from_the_record_before_it() {
     assert!(load_text(&looped).is_err());
 }
 
+/// Claude Code 2.1.304 can write a boundary whose `logicalParentUuid` names a record that
+/// is not in the file. The compaction fixture rewritten that way must give the same branch
+/// and retained items as the original.
+#[test]
+fn a_boundary_naming_a_missing_record_continues_from_the_record_before_it() {
+    let original = fs::read_to_string(fixture_root().join("-synthetic-project/compaction.jsonl"))
+        .expect("fixture");
+    let rewritten = original.replace(
+        r#""logicalParentUuid":"s6-s1""#,
+        r#""logicalParentUuid":"not-written""#,
+    );
+    assert_ne!(rewritten, original);
+    let before = load_text(&original).expect("original");
+    let after = load_text(&rewritten).expect("rewritten");
+    assert_eq!(after.selected_records, before.selected_records);
+    assert!(after
+        .limitations
+        .contains(&super::Limitation::RepairedCompactionLink));
+    let summary = |loaded: &super::Loaded| {
+        let compaction = &loaded.session.compactions[0];
+        (
+            compaction.retained_item_ids.clone(),
+            compaction.source_item_ids.clone(),
+            loaded.session.model_calls.len(),
+        )
+    };
+    assert_eq!(summary(&after), summary(&before));
+}
+
 #[test]
 fn invalid_graphs_are_rejected() {
     use crate::domain::SourceError::InvalidStructure;
