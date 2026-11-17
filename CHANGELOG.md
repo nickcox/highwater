@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.3 – 2026-11-17
 
 - Claude Code sessions compacted with `/compact` in Claude Code 2.1.304 open again. Their compaction marker points to a record that is not in the transcript, which made Highwater report "source session is invalid"; the conversation now continues from the record before the marker, with a notice.
 - A tidier header: the title with the theme choice at the right, then the harness and session menus with **Child sessions** on their own row, then the status line. The menus' labels are read out to screen readers but no longer shown, and Light, Dark and Auto are three small icons (sun, moon and half-filled circle).
