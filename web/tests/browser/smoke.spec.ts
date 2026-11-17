@@ -428,6 +428,8 @@ test('mocked app loads a session, selects an item, and navigates the chart', asy
     await captureBaselineState(page, screenshotDirectory, 'desktop-session-details-expanded');
     await page.setViewportSize({ width: 390, height: 844 });
     await captureBaselineState(page, screenshotDirectory, 'narrow-selected-pinned');
+    // Back to desktop width, where Zoom in is not inside the More menu.
+    await page.setViewportSize({ width: 1280, height: 900 });
   }
   // Selection never dims other ribbons; they keep their normal fill opacity.
   const otherRibbon = page.locator('.ribbon-group:not(.selected)').first();
@@ -3100,7 +3102,12 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
       width,
       height: width === 1440 ? 1000 : width === 390 ? 844 : 900,
     });
+    // A phone-width view keeps Latest in the More menu; waiting for the menu also waits for the
+    // narrow layout, which is applied in the frame after a resize.
+    const narrow = width <= 520;
+    if (narrow) await page.locator('summary', { hasText: 'More' }).click();
     await expect(page.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
+    if (narrow) await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
