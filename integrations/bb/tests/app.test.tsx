@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { act, waitFor, fireEvent } from '@testing-library/react';
 import { loadPluginApp, renderSlot } from '@get-bb/plugin-sdk/testing/app';
 import app from '../app';
-import { repository, deferred, wholeText } from './helpers';
+import { repository, deferred, skippableTimers, wholeText } from './helpers';
 import type { ThreadState } from '../state';
 import pinned from '../host/binary-release.json';
 import type {
@@ -47,6 +47,7 @@ afterEach(async () => {
     await Promise.resolve();
   });
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 async function mount(
   options: { threadId?: string; visible?: boolean; mode?: 'light' | 'dark' } = {},
@@ -172,6 +173,7 @@ describe('Context tab', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('shares row/tab refreshes and stops transferring analyses when only the row remains', async () => {
+    const skip = skippableTimers();
     const threadId = `thr_ui${++serial}`;
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) =>
       String(input).includes('/rpc/')
@@ -214,12 +216,11 @@ describe('Context tab', () => {
     ).toHaveLength(1);
     tab.lifecycle.unmount();
     await row.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
-    await waitFor(
-      () =>
-        expect(
-          fetcher.mock.calls.filter(([url]) => String(url).includes('/rpc/threadSummary')),
-        ).toHaveLength(2),
-      { timeout: 4000 },
+    await skip();
+    await waitFor(() =>
+      expect(
+        fetcher.mock.calls.filter(([url]) => String(url).includes('/rpc/threadSummary')),
+      ).toHaveLength(2),
     );
     expect(
       fetcher.mock.calls.filter(([url]) => String(url).includes('/http/analysis')),
@@ -271,6 +272,7 @@ describe('Context tab', () => {
     expect(target(slot).shadowRoot).toBeNull();
   });
   it('refreshes on this thread’s events and reconnect, without replacing the mounted view on a 304', async () => {
+    const skip = skippableTimers();
     const fetcher = vi
       .fn<typeof fetch>()
       .mockImplementation(async () =>
@@ -286,14 +288,17 @@ describe('Context tab', () => {
     await slot.behavior.emitRealtime('thread-advanced', { threadId: 'thr_other', idle: false });
     expect(fetcher).toHaveBeenCalledTimes(1);
     await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2), { timeout: 4000 });
+    await skip();
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
     expect(fetcher.mock.calls[1][1]?.headers).toEqual({ 'If-None-Match': '"v1"' });
     expect(target(slot).shadowRoot).toBe(root);
     await slot.behavior.setRealtimeConnectionState('reconnecting');
     await slot.behavior.setRealtimeConnectionState('connected');
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3), { timeout: 4000 });
+    await skip();
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
   });
   it('shows Updating while a shared fetch is in flight, then returns to Live', async () => {
+    const skip = skippableTimers();
     const pending = deferred<Response>();
     const fetcher = vi
       .fn<typeof fetch>()
@@ -304,12 +309,11 @@ describe('Context tab', () => {
     const slot = await mount({ threadId });
     await ready(slot);
     await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
-    await waitFor(
-      () =>
-        expect(target(slot).shadowRoot?.querySelector('header [role="status"]')?.textContent).toBe(
-          'Updating…',
-        ),
-      { timeout: 4000 },
+    await skip();
+    await waitFor(() =>
+      expect(target(slot).shadowRoot?.querySelector('header [role="status"]')?.textContent).toBe(
+        'Updating…',
+      ),
     );
     pending.resolve(new Response(null, { status: 304 }));
     await waitFor(() =>
@@ -338,6 +342,7 @@ describe('Context tab', () => {
     },
   );
   it('uses Retry to recover from a missing binary', async () => {
+    const skip = skippableTimers();
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ state: 'binaryMissing' }, { status: 409 }))
@@ -346,9 +351,8 @@ describe('Context tab', () => {
     const slot = await mount();
     await slot.findByText('Highwater binary not found');
     fireEvent.click(slot.getByRole('button', { name: 'Retry' }));
-    await waitFor(() => expect(target(slot).shadowRoot?.textContent).toContain('Context River'), {
-      timeout: 4000,
-    });
+    await skip();
+    await waitFor(() => expect(target(slot).shadowRoot?.textContent).toContain('Context River'));
   });
   it('destroys the view on unmount and cancels future refreshes', async () => {
     const fetcher = vi

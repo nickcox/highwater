@@ -1,9 +1,25 @@
 import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { vi } from 'vitest';
 import type { HighwaterServer } from '../host/http';
 import manifest from '../package.json';
 
 export const expectedVersion = manifest.version;
+
+/**
+ * Fake timers that still follow real time, so `waitFor` works, and a function that moves
+ * them on by the refresh scheduler's two-second gap instead of waiting for it. The gap
+ * itself is tested in scheduler.test.ts. Call `vi.useRealTimers()` after each test.
+ */
+export function skippableTimers(): (ms?: number) => Promise<void> {
+  vi.useFakeTimers({
+    shouldAdvanceTime: true,
+    toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'Date'],
+  });
+  return async (ms = 2000) => {
+    await vi.advanceTimersByTimeAsync(ms);
+  };
+}
 
 export const repository = resolve(import.meta.dirname, '../../..');
 const binaryName = process.platform === 'win32' ? 'highwater.exe' : 'highwater';

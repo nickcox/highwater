@@ -70,6 +70,7 @@
             pkgs.nodejs_24
             pkgs.python3
             pkgs.curl
+            pkgs.rsync
           ];
         };
       });

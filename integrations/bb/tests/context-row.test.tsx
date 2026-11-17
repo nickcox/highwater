@@ -12,7 +12,7 @@ import {
   useContextSegmentVisible,
 } from '../app/ContextRow';
 import type { ThreadState } from '../state';
-import { wholeText } from './helpers';
+import { skippableTimers, wholeText } from './helpers';
 
 const metrics = {
   callCount: 84,
@@ -37,6 +37,7 @@ afterEach(async () => {
     await Promise.resolve();
   });
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 async function mount(kind: 'card' | 'banner' = 'card', threadId = `thr_row${++serial}`) {
   const captured = await loadPluginApp(app);
@@ -197,6 +198,7 @@ describe('Context row and segment', () => {
     },
   );
   it('reveals a hidden no-session segment after the thread starts a session', async () => {
+    const skip = skippableTimers();
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ ok: true, result: { state: 'noSession' } }))
@@ -206,14 +208,9 @@ describe('Context row and segment', () => {
     const slot = await mount('banner', threadId);
     await waitFor(() => expect(slot.container.textContent).toBe(''));
     await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
-    await waitFor(
-      () =>
-        expect(
-          slot.getByText(wholeText('84 calls · 1 compaction · input +1.2k/call')),
-        ).toBeTruthy(),
-      {
-        timeout: 4000,
-      },
+    await skip();
+    await waitFor(() =>
+      expect(slot.getByText(wholeText('84 calls · 1 compaction · input +1.2k/call'))).toBeTruthy(),
     );
     expect(fetcher).toHaveBeenCalledTimes(2);
   });

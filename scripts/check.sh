@@ -13,7 +13,7 @@ for argument in "$@"; do
     *) printf 'Usage: scripts/check.sh [--full] [--skip-rust-checks]\n' >&2; exit 2 ;;
   esac
 done
-npm --prefix web ci
+scripts/npm-install.sh web
 scripts/check-embed.sh
 if [[ "$RUST_CHECKS" == 1 ]]; then
   cargo fmt --check
@@ -26,7 +26,7 @@ npm --prefix web run check
 npm --prefix web run test
 scripts/check-contract.sh
 # rust-embed must see the current frontend before the final release build.
-npm --prefix web run build
+scripts/build-web.sh
 export HIGHWATER_FRONTEND_BUILT=1
 cargo build --release --locked
 if [[ "$FULL" == 1 ]]; then

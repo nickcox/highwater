@@ -25,9 +25,9 @@ c.execute('PRAGMA journal_mode=WAL')
 c.close()
 PY
 # check.sh builds the frontend once and sets HIGHWATER_FRONTEND_BUILT, so the checks it runs do not
-# rebuild it; a rebuild rewrites web/dist, which makes Cargo rebuild the binary that embeds it.
+# build it again.
 if [[ "${HIGHWATER_FRONTEND_BUILT:-}" != 1 ]]; then
-  npm --prefix "$ROOT/web" run build
+  "$ROOT/scripts/build-web.sh"
 fi
 PROFILE="${HIGHWATER_BROWSER_BUILD_PROFILE:-debug}"
 case "$PROFILE" in

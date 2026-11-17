@@ -2,11 +2,11 @@
 
 ## Requirements
 
-Rust **1.88 or newer**, Node **24 LTS or newer**, npm, Bash, Python 3 and curl.
+Rust **1.88 or newer**, Node **24 LTS or newer**, npm, Bash, Python 3, curl and rsync.
 
 `Cargo.toml` declares the Rust minimum, and it is tested with 1.88.0: the locked dependencies include `ruzstd`, which needs 1.87, and the pinned `tiktoken` 4.1.2 uses let-chains, which need 1.88. A dependency change must keep this minimum, or raise it and test the new one; the Rust edition alone does not guarantee it.
 
-With Nix, `nix develop` opens a shell with Rust, Node 24, Python 3 and curl, and `nix build` builds the package from `flake.nix` and runs the Rust tests.
+With Nix, `nix develop` opens a shell with Rust, Node 24, Python 3, curl and rsync, and `nix build` builds the package from `flake.nix` and runs the Rust tests.
 
 ## Building
 
@@ -24,6 +24,8 @@ scripts/check-contract.sh
 rustup toolchain install 1.88.0 --profile minimal --component rustfmt --component clippy
 RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
+
+The checks install npm dependencies with `scripts/npm-install.sh`, which runs `npm ci` in CI and `npm install` locally, so an unchanged folder is not reinstalled. They build the frontend with `scripts/build-web.sh`, which replaces only the `web/dist/` files whose contents changed, so an unchanged frontend does not make Cargo rebuild the release binary.
 
 `.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full --skip-rust-checks` on Node 24, on GitHub Actions. It also runs the Rust tests on macOS and Windows, and builds the Nix package on Linux and macOS. Every check also runs locally.
 
