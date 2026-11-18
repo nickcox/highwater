@@ -109,8 +109,8 @@ fn an_app_session_has_one_call_per_assistant_turn() {
         session.working_directory.as_deref(),
         Some("/synthetic/project")
     );
-    // The subagent's call is left out.
-    assert_eq!(session.model_calls.len(), 4);
+    // The subagent's call is left out; call 4 is the compaction's own call.
+    assert_eq!(session.model_calls.len(), 5);
     assert_eq!(loaded.records, 34);
 
     assert_eq!(
@@ -161,7 +161,7 @@ fn usage_records_give_each_call_its_usage_cost_target_and_timing() {
         .collect();
     assert_eq!(failed, [("skill", false), ("view", true)]);
 
-    let last = &session.model_calls[3];
+    let last = &session.model_calls[4];
     assert_eq!(last.target.model.as_deref(), Some("claude-sonnet-5.5"));
     assert_eq!(last.target.api.as_deref(), Some("anthropic-messages"));
 }
@@ -175,7 +175,7 @@ fn reported_reasoning_is_kept_before_its_response() {
         .find(|item| item.kind == ContextItemKind::Thinking)
         .expect("thinking");
     assert_eq!(thinking.label, "Thinking · 40 reported tokens");
-    let ids = &session.model_calls[3].context_item_ids;
+    let ids = &session.model_calls[4].context_item_ids;
     let position = ids.iter().position(|id| *id == thinking.id).expect("kept");
     assert!(ids[position + 1].starts_with("copilot:response:"));
 }
@@ -186,15 +186,15 @@ fn a_compaction_keeps_the_last_messages_from_when_it_started() {
     let session = &loaded.session;
     assert_eq!(session.compactions.len(), 1);
     let compaction = &session.compactions[0];
-    assert_eq!(compaction.before_model_call, 4);
+    assert_eq!(compaction.before_model_call, 5);
     assert_eq!(compaction.tokens_before, Some(1600));
     assert_eq!(compaction.source_item_ids.len(), 6);
     assert_eq!(
-        session.model_calls[3].compaction_before.as_deref(),
+        session.model_calls[4].compaction_before.as_deref(),
         Some(compaction.id.as_str())
     );
     assert_eq!(
-        labels(session, 3),
+        labels(session, 4),
         [
             "System prompt",
             "Compaction summary",
@@ -216,13 +216,57 @@ fn a_compaction_keeps_the_last_messages_from_when_it_started() {
     for limitation in [
         Limitation::MissingHistoricalToolDefinitions,
         Limitation::SubagentCallsNotShown,
-        Limitation::MissingCompactionUsage,
     ] {
         assert!(loaded.limitations.contains(&limitation), "{limitation:?}");
     }
-    assert!(!loaded
-        .limitations
-        .contains(&Limitation::UnverifiedCompactionRetention));
+    for limitation in [
+        Limitation::MissingCompactionUsage,
+        Limitation::UnverifiedCompactionRetention,
+    ] {
+        assert!(!loaded.limitations.contains(&limitation), "{limitation:?}");
+    }
+}
+
+#[test]
+fn a_compaction_records_its_details_and_its_own_call() {
+    use crate::domain::{CompactionDetails, CompactionRule, CompactionTrigger};
+    let session = load("001").session;
+    let compaction = &session.compactions[0];
+    assert_eq!(
+        compaction.details,
+        CompactionDetails {
+            trigger: Some(CompactionTrigger::Automatic),
+            instructions: None,
+            rule: Some(CompactionRule::KeptLastMessages),
+            started_before_model_call: Some(4),
+            summary_call: Some(4),
+            duration_ms: Some(6000),
+            messages_before: Some(8),
+            messages_removed: Some(6),
+            messages_kept: Some(2),
+            messages_added_while_running: Some(1),
+            tokens_after: Some(1100),
+            system_tokens_after: Some(600),
+            tool_definition_tokens_after: Some(400),
+            conversation_tokens_after: Some(100),
+        }
+    );
+    // The compaction's own call is sent the context it started from, after call 3.
+    let call = &session.model_calls[3];
+    assert_eq!(call.stop_reason.as_deref(), Some("compaction-call"));
+    let mut expected = labels(&session, 2);
+    expected.extend([
+        "Thinking · 40 reported tokens".to_owned(),
+        "Assistant · There are two files.".to_owned(),
+    ]);
+    assert_eq!(labels(&session, 3), expected);
+    assert_eq!(call.reported_usage.input, Some(150));
+    assert_eq!(call.reported_usage.cache_read, Some(1450));
+    assert_eq!(call.reported_usage.cost.total, Some(0.3));
+    assert_eq!(call.target.model.as_deref(), Some("gpt-6.2-astra"));
+    assert_eq!(call.target.api.as_deref(), Some("openai-responses"));
+    let end = call.timestamps.recorded_at_ms.expect("recorded");
+    assert_eq!(call.timestamps.started_at_ms, Some(end - 5000));
 }
 
 #[test]

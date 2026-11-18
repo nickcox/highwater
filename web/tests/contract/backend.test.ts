@@ -135,12 +135,21 @@ describe('live production Rust -> indexAnalysis contract', () => {
   it('indexes Copilot calls, their recorded cost and timing, and a compaction', () => {
     const analysis = output('copilot-1-auto');
     expect(analysis.session.source).toBe('copilot');
-    expect(analysis.modelCalls).toHaveLength(4);
+    expect(analysis.modelCalls).toHaveLength(5);
     expect(analysis.reconstruction?.explanationCodes).toContain('subagentCallsNotShown');
     const indexed = indexTestAnalysis(analysis);
     const [compaction] = analysis.compactions;
     expect(indexed.itemById.get(compaction.summaryItemId)!.label).toBe('Compaction summary');
-    expect(analysis.modelCalls[3].compactionBefore).toBe(compaction.id);
+    expect(analysis.modelCalls[4].compactionBefore).toBe(compaction.id);
+    expect(analysis.modelCalls[3].stopReason).toBe('compaction-call');
+    expect(compaction.details).toMatchObject({
+      trigger: 'automatic',
+      rule: 'keptLastMessages',
+      startedBeforeModelCall: 4,
+      summaryCall: 4,
+      messagesKept: 2,
+      messagesAddedWhileRunning: 1,
+    });
     expect(analysis.modelCalls[0].timing.basis).toBe('copilot-usage-duration');
     expect(analysis.modelCalls[0].cost!.total).toBeCloseTo(0.1);
     expect(output('copilot-2-auto').modelCalls).toHaveLength(1);
@@ -347,7 +356,6 @@ describe('live production Rust -> indexAnalysis contract', () => {
       messagesRemoved: 157,
       conversationTokensAfter: 6592,
     });
-    expect(output('copilot-1-auto').compactions[0].details.rule).toBeNull();
     for (const policy of ['auto', 'strict', 'heuristic', 'off']) {
       const analysis = output(`fixture-terminal-compaction-${policy}`);
       const summary = analysis.contextItems.find(

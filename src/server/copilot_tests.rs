@@ -165,7 +165,8 @@ async fn a_session_is_analysed_with_a_coverage_notice() {
     let codes = json["reconstruction"]["explanationCodes"].to_string();
     assert!(codes.contains("subagentCallsNotShown"));
     let calls = json["modelCalls"].as_array().expect("calls");
-    assert_eq!(calls.len(), 4);
+    assert_eq!(calls.len(), 5);
+    assert_eq!(calls[3]["stopReason"], "compaction-call");
     assert_eq!(calls[0]["timing"]["basis"], "copilot-usage-duration");
     assert_eq!(calls[0]["timing"]["durationMs"], 2000);
 }

@@ -32,6 +32,17 @@ struct PendingCompaction {
     source_item_ids: Vec<String>,
     summary_item_id: String,
     tokens_before: Option<u64>,
+    details: CompactionDetails,
+}
+
+/// A compaction that has started and not yet been applied.
+struct CompactionStart {
+    attempt: Option<String>,
+    /// The items in context when it started, in order.
+    items: Vec<usize>,
+    /// The first call made after it started.
+    next_call: usize,
+    background: bool,
 }
 
 #[derive(Default)]
@@ -56,9 +67,9 @@ struct State {
     skills: HashMap<String, String>,
     compactions: Vec<PendingCompaction>,
     next_compaction: Option<String>,
-    /// The compaction in progress: its `compactionAttemptId` and the items in context when
-    /// it started. A background compaction runs while later calls add to the context.
-    compaction_start: Option<(Option<String>, HashSet<usize>)>,
+    /// The compaction in progress. A background compaction runs while later calls add to the
+    /// context.
+    compaction_start: Option<CompactionStart>,
     limitations: BTreeSet<Limitation>,
 }
 
@@ -198,12 +209,14 @@ impl State {
             }
             "tool.execution_complete" => self.apply_tool_result(line, data),
             "session.compaction_start" => {
-                self.compaction_start = Some((
-                    text(data, "compactionAttemptId"),
-                    self.active.iter().copied().collect(),
-                ));
+                self.compaction_start = Some(CompactionStart {
+                    attempt: text(data, "compactionAttemptId"),
+                    items: self.active.clone(),
+                    next_call: self.calls.len() + 1,
+                    background: text(data, "execution").as_deref() == Some("background"),
+                });
             }
-            "session.compaction_complete" => self.apply_compaction(line, data),
+            "session.compaction_complete" => self.apply_compaction(line, data, at),
             "session.truncation" => {
                 if let Some(removed) = count(data, "messagesRemovedDuringTruncation") {
                     self.remove_oldest(Some(removed));
@@ -599,39 +612,59 @@ impl State {
     /// A compaction keeps the last `preCompactionMessagesLength` less `messagesRemoved`
     /// messages of the context it started from, and everything added while it ran, and
     /// replaces the rest with its summary at the front of the conversation. Without those
-    /// counts only the summary is kept. Its own model call is not shown.
-    fn apply_compaction(&mut self, line: usize, data: &Value) {
+    /// counts only the summary is kept. Its own call (`compactionTokensUsed`) comes before it.
+    fn apply_compaction(&mut self, line: usize, data: &Value, at: Option<i64>) {
         let start = self.compaction_start.take();
         if data.get("success").and_then(Value::as_bool) != Some(true) {
             return;
         }
-        self.limitations.insert(Limitation::MissingCompactionUsage);
         let attempt = text(data, "compactionAttemptId");
+        let start = start.filter(|start| start.attempt.is_none() || start.attempt == attempt);
+        // The summariser was sent the context as it was when the compaction started.
+        let summarised = start
+            .as_ref()
+            .map_or_else(|| self.active.clone(), |start| start.items.clone());
+        let summary_call = self.compaction_call(line, data, at, &summarised);
+        if summary_call.is_none() {
+            self.limitations.insert(Limitation::MissingCompactionUsage);
+        }
         let systems = self.system_count();
         // Where the compaction started: just after the last item that was in context then.
-        let end = match start.filter(|(started, _)| started.is_none() || *started == attempt) {
-            Some((_, items)) => self
-                .active
-                .iter()
-                .rposition(|index| items.contains(index))
-                .map_or(systems, |position| position + 1),
+        let end = match &start {
+            Some(start) => {
+                let items: HashSet<usize> = start.items.iter().copied().collect();
+                self.active
+                    .iter()
+                    .rposition(|index| items.contains(index))
+                    .map_or(systems, |position| position + 1)
+            }
             None => self.active.len(),
         };
-        let kept = match (
+        let messages = |indexes: &[usize], items: &[NormalizedContextItem]| {
+            indexes
+                .iter()
+                .filter(|index| items[**index].kind != ContextItemKind::Thinking)
+                .count() as u64
+        };
+        let added_while_running = start
+            .as_ref()
+            .map(|_| messages(&self.active[end.max(systems)..], &self.items));
+        let (before, removed) = (
             count(data, "preCompactionMessagesLength"),
             count(data, "messagesRemoved"),
-        ) {
-            (Some(before), Some(removed)) => before.saturating_sub(removed),
+        );
+        let kept = match (before, removed) {
+            (Some(before), Some(removed)) => Some(before.saturating_sub(removed)),
             _ => {
                 self.limitations
                     .insert(Limitation::UnverifiedCompactionRetention);
-                0
+                None
             }
         };
         // Counted back from where the compaction started. A response's reported reasoning
         // comes before it and goes with it.
         let mut cut = end.max(systems);
-        let mut remaining = kept;
+        let mut remaining = kept.unwrap_or(0);
         while cut > systems && remaining > 0 {
             cut -= 1;
             if self.items[self.active[cut]].kind != ContextItemKind::Thinking {
@@ -653,6 +686,41 @@ impl State {
         ));
         self.active.insert(systems, index);
         let summary_item_id = self.items[index].id.clone();
+        let duration = data
+            .pointer("/summarizerProgress/durationMs")
+            .or_else(|| data.pointer("/compactionTokensUsed/duration"))
+            .and_then(Value::as_f64)
+            .filter(|ms| ms.is_finite() && *ms >= 0.0 && *ms < 1e15)
+            .map(|ms| ms.round() as u64);
+        let details = CompactionDetails {
+            trigger: match text(data, "trigger").as_deref() {
+                Some("manual") => Some(CompactionTrigger::Manual),
+                Some("threshold" | "context_limit_retry" | "memory_pressure" | "model_switch") => {
+                    Some(CompactionTrigger::Automatic)
+                }
+                _ => None,
+            },
+            instructions: text(data, "customInstructions"),
+            rule: Some(if kept.is_some() {
+                CompactionRule::KeptLastMessages
+            } else {
+                CompactionRule::SummaryOnly
+            }),
+            started_before_model_call: start
+                .as_ref()
+                .filter(|start| start.background)
+                .map(|start| start.next_call),
+            summary_call,
+            duration_ms: duration,
+            messages_before: before,
+            messages_removed: removed,
+            messages_kept: kept,
+            messages_added_while_running: added_while_running,
+            tokens_after: count(data, "postCompactionTokens"),
+            system_tokens_after: count(data, "systemTokens"),
+            tool_definition_tokens_after: count(data, "toolDefinitionsTokens"),
+            conversation_tokens_after: count(data, "conversationTokens"),
+        };
         self.compactions.push(PendingCompaction {
             before_model_call: self.calls.len() + 1,
             source_item_ids: sources
@@ -661,8 +729,77 @@ impl State {
                 .collect(),
             summary_item_id: summary_item_id.clone(),
             tokens_before: count(data, "preCompactionTokens"),
+            details,
         });
         self.next_compaction = Some(summary_item_id);
+    }
+
+    /// The compaction's own call, from `compactionTokensUsed`, with `summarised` as its
+    /// context. It is added when the compaction is applied, so a background compaction's
+    /// call comes after the calls made while it ran, although it started before them.
+    /// One that covers several requests is marked as an aggregate. Returns its index.
+    fn compaction_call(
+        &mut self,
+        line: usize,
+        data: &Value,
+        at: Option<i64>,
+        summarised: &[usize],
+    ) -> Option<usize> {
+        let used = data
+            .get("compactionTokensUsed")
+            .filter(|used| used.is_object())?;
+        let model = text(used, "model").or_else(|| text(data, "model"));
+        // The API is not recorded; a call to the same model earlier in the session used it.
+        let api = self
+            .calls
+            .iter()
+            .rev()
+            .find(|call| call.target.model == model && call.target.api.is_some())
+            .and_then(|call| call.target.api.clone());
+        let index = self.calls.len() + 1;
+        for item in summarised {
+            extend_presence(&mut self.items[*item], index);
+        }
+        let started_at_ms = match (at, used.get("duration").and_then(Value::as_f64)) {
+            (Some(end), Some(duration))
+                if duration.is_finite() && duration > 0.0 && duration < 1e12 =>
+            {
+                Some(end - duration.round() as i64)
+            }
+            _ => None,
+        };
+        let aggregate = used
+            .get("requestCount")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count > 1);
+        self.calls.push(NormalizedModelCall {
+            retried: false,
+            tool_loadout_known: false,
+            index,
+            source_record_id: format!("line-{line}"),
+            reported_usage: reported_usage(used, api.as_deref()),
+            target: ModelTarget {
+                provider: Some("github-copilot".into()),
+                model,
+                api,
+            },
+            stop_reason: Some(if aggregate {
+                "compaction-aggregate".into()
+            } else {
+                "compaction-call".into()
+            }),
+            timestamps: CallTimestamps {
+                started_at_ms,
+                recorded_at_ms: at,
+            },
+            context_item_ids: summarised
+                .iter()
+                .map(|item| self.items[*item].id.clone())
+                .collect(),
+            tool_calls_after: Vec::new(),
+            compaction_before: self.next_compaction.take(),
+        });
+        Some(index)
     }
 
     fn finish(
@@ -715,7 +852,7 @@ impl State {
                 retained_item_ids: Vec::new(),
                 summary_item_id: compaction.summary_item_id,
                 tokens_before: compaction.tokens_before,
-                details: CompactionDetails::default(),
+                details: compaction.details,
             });
         }
         // A call only names a compaction that is shown.

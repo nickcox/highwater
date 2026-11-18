@@ -69,10 +69,11 @@ skill = "# Synthetic skill\n\nFollow these synthetic steps."
 
 # A Copilot app session read in full. Calls: 1 runs a command, 2 loads a skill, 3 answers with
 # reasoning. A subagent's events are left out. A compaction starts in the background after
-# call 3 and is applied after the second request: it keeps the last two of the eight messages
-# it started from (the skill's message, and call 3's response with its reasoning) and the
-# request added while it ran. The second request repeats the system message, which is not a
-# new item, and changes to a Claude model.
+# call 3 and is applied after the second request: its own call (4) is sent the context it
+# started from, and it keeps the last two of the eight messages it started from (the skill's
+# message, and call 3's response with its reasoning) and the request added while it ran.
+# The second request repeats the system message, which is not a new item, and changes to a
+# Claude model for call 5.
 app = [
     event("2026-11-01T00:00:00.000Z", "session.start", {"sessionId": ids["app"], "version": 1, "producer": "copilot-agent",
           "copilotVersion": "1.0.106", "startTime": "2026-11-01T00:00:00.000Z", "selectedModel": "gpt-6.2-astra",
@@ -104,7 +105,13 @@ app = [
     event("2026-11-01T00:01:10.000Z", "user.message", {"content": "Summarise", "transformedContent": "Summarise", "turnId": "0"}),
     event("2026-11-01T00:01:10.001Z", "system.message", {"role": "system", "content": system}),
     event("2026-11-01T00:01:10.002Z", "session.compaction_complete", {"success": True, "compactionAttemptId": "attempt-1",
+          "trigger": "threshold", "execution": "background",
           "preCompactionMessagesLength": 8, "messagesRemoved": 6, "preCompactionTokens": 1600,
+          "postCompactionTokens": 1100, "systemTokens": 600, "toolDefinitionsTokens": 400, "conversationTokens": 100,
+          "summarizerProgress": {"durationMs": 6000},
+          "compactionTokensUsed": {"requestCount": 1, "model": "gpt-6.2-astra", "inputTokens": 1600, "outputTokens": 90,
+                                   "cacheReadTokens": 1450, "cacheWriteTokens": 0, "duration": 5000,
+                                   "copilotUsage": {"totalNanoAiu": 30000000000}},
           "summaryContent": "The user asked for the files; there are two."}),
     event("2026-11-01T00:01:10.003Z", "assistant.turn_start", {"turnId": "0"}),
     usage("2026-11-01T00:01:12.000Z", "api-4", 1400, 0, 1400, 15, model="claude-sonnet-5.5", endpoint="/v1/messages"),

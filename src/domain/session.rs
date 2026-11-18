@@ -322,7 +322,6 @@ pub(crate) struct NormalizedCompaction {
 
 /// What started a compaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum CompactionTrigger {
     Automatic,
     Manual,
