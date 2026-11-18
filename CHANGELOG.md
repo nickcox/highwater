@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Highwater reads sessions from the GitHub Copilot desktop app and the Copilot CLI, found in `$COPILOT_HOME` (default `~/.copilot`) or the folders given with `--copilot-home`. Each call shows its usage, what Copilot charged for it and how long it took. Compactions, including those Copilot runs in the background, keep the messages Copilot kept. Subagents' calls are not shown yet.
+
 ## 0.5.3 – 2026-11-17
 
 - Claude Code sessions compacted with `/compact` in Claude Code 2.1.304 open again. Their compaction marker points to a record that is not in the transcript, which made Highwater report "source session is invalid"; the conversation now continues from the record before the marker, with a notice.

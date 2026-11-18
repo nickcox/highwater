@@ -75,10 +75,17 @@ const VSCODE_COPILOT_COPY: CostBasisCopy = {
   trackCaveat: 'recorded by Copilot',
 };
 
+/** Copilot's session file records what it charged for each call, in credits. */
+const COPILOT_COPY: CostBasisCopy = {
+  ...VSCODE_COPILOT_COPY,
+  note: 'Copilot records what it charged for each call in credits, in the session file. Calls without a record are priced from the price table.',
+};
+
 export function describeCostBasis(basis: EconomicsCostBasis, source?: string): CostBasisCopy {
   if (source === 'claude-code') return CLAUDE_CODE_COPY;
   if (source === 'codex') return CODEX_COPY;
   if (source === 'vscode-copilot') return VSCODE_COPILOT_COPY;
+  if (source === 'copilot') return COPILOT_COPY;
   return COST_BASIS_COPY[basis] ?? COST_BASIS_COPY.unknown;
 }
 

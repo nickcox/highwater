@@ -34,6 +34,10 @@ pub(crate) enum SessionLocator {
     CodexFile {
         path: PathBuf,
     },
+    /// A Copilot session's `events.jsonl`.
+    CopilotFile {
+        path: PathBuf,
+    },
 }
 
 /// The portable reference an OpenCode session is listed under.
@@ -55,6 +59,14 @@ pub(crate) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) ->
         hash.update(agent_id.as_bytes());
     }
     format!("claude-code-{}", &hash.finalize().to_hex()[..12])
+}
+
+/// The portable reference a Copilot session is listed under.
+pub(crate) fn copilot_reference(session_id: &str) -> String {
+    let mut hash = blake3::Hasher::new_derive_key("Highwater Copilot session reference v1");
+    hash.update(b"id\0");
+    hash.update(session_id.as_bytes());
+    format!("copilot-{}", &hash.finalize().to_hex()[..12])
 }
 
 /// The portable reference a Codex thread is listed under.
@@ -100,6 +112,8 @@ pub(crate) enum LoadError {
     VsCodeCopilot(#[source] SourceError),
     #[error("codex session cannot be loaded")]
     Codex(#[source] SourceError),
+    #[error("copilot session cannot be loaded")]
+    Copilot(#[source] SourceError),
 }
 
 /// Synchronous, intended for a bounded blocking worker. No source mutation.
@@ -188,6 +202,25 @@ pub(crate) fn load(
         }
         SessionLocator::CodexFile { path } => {
             let loaded = crate::codex::load(path).map_err(LoadError::Codex)?;
+            Ok(LoadedSession {
+                normalized: loaded.session,
+                stats: LoadStats {
+                    records: loaded.records,
+                    selected_records: loaded.records,
+                },
+                database_revision: None,
+                replay_limitations: BTreeSet::new(),
+                coverage_codes: Some(
+                    loaded
+                        .limitations
+                        .into_iter()
+                        .map(|limitation| limitation.as_str().to_owned())
+                        .collect(),
+                ),
+            })
+        }
+        SessionLocator::CopilotFile { path } => {
+            let loaded = crate::copilot::load(path).map_err(LoadError::Copilot)?;
             Ok(LoadedSession {
                 normalized: loaded.session,
                 stats: LoadStats {

@@ -49,6 +49,7 @@ pub(super) enum FileReader {
     ClaudeCode(FileKind),
     VsCodeCopilot,
     Codex,
+    Copilot,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -205,6 +206,9 @@ impl AnalysisService {
             }
             SessionLocator::CodexFile { path } => {
                 self.response_file(path, FileReader::Codex, config).await
+            }
+            SessionLocator::CopilotFile { path } => {
+                self.response_file(path, FileReader::Copilot, config).await
             }
             SessionLocator::OpenCode {
                 database,
@@ -499,6 +503,11 @@ pub(super) fn file_cache_key(
                     crate::vscode_copilot::traces::fingerprint(&database),
                 )
             }),
+        // A Copilot session's title comes from the `workspace.yaml` beside it.
+        FileReader::Copilot => Some((
+            "copilot-workspace".to_owned(),
+            crate::copilot::discovery::workspace_fingerprint(&canonical_path),
+        )),
         _ => None,
     };
     Ok(AnalysisCacheKey {
@@ -528,6 +537,7 @@ pub(super) fn execute_analysis(
         },
         FileReader::VsCodeCopilot => SessionLocator::VsCodeCopilotFile { path: path.clone() },
         FileReader::Codex => SessionLocator::CodexFile { path: path.clone() },
+        FileReader::Copilot => SessionLocator::CopilotFile { path: path.clone() },
     };
     let loaded = match source::load(&locator, None) {
         Ok(value) => value,
@@ -610,6 +620,9 @@ pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
         }
         FileReader::Codex => {
             hasher.update(b"\0codex\0");
+        }
+        FileReader::Copilot => {
+            hasher.update(b"\0copilot\0");
         }
     }
     hasher.update(&key.byte_size.to_le_bytes());

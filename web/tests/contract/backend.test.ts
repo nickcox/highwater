@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8
   cases: { name: string; file: string }[];
   rejections: { name: string; category: string }[];
 };
-if (manifest.cases.length !== 135) throw new Error('Incomplete live Rust contract export.');
+if (manifest.cases.length !== 137) throw new Error('Incomplete live Rust contract export.');
 
 function rawOutput(name: string): WireSessionAnalysis {
   const entry = manifest.cases.find((entry) => entry.name === name);
@@ -130,6 +130,20 @@ describe('live production Rust -> indexAnalysis contract', () => {
     const fork = output('codex-8-auto');
     expect(fork.modelCalls).toHaveLength(2);
     expect(output('codex-6-auto').modelCalls).toHaveLength(1);
+  });
+
+  it('indexes Copilot calls, their recorded cost and timing, and a compaction', () => {
+    const analysis = output('copilot-1-auto');
+    expect(analysis.session.source).toBe('copilot');
+    expect(analysis.modelCalls).toHaveLength(4);
+    expect(analysis.reconstruction?.explanationCodes).toContain('subagentCallsNotShown');
+    const indexed = indexTestAnalysis(analysis);
+    const [compaction] = analysis.compactions;
+    expect(indexed.itemById.get(compaction.summaryItemId)!.label).toBe('Compaction summary');
+    expect(analysis.modelCalls[3].compactionBefore).toBe(compaction.id);
+    expect(analysis.modelCalls[0].timing.basis).toBe('copilot-usage-duration');
+    expect(analysis.modelCalls[0].cost!.total).toBeCloseTo(0.1);
+    expect(output('copilot-2-auto').modelCalls).toHaveLength(1);
   });
 
   it('indexes OpenCode compaction lineage and retains summary reasoning', () => {

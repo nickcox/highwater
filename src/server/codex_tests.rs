@@ -14,6 +14,7 @@ fn codex_only(homes: Vec<PathBuf>) -> SourceSet {
         claude_roots: Vec::new(),
         vscode_user_dirs: Vec::new(),
         codex_homes: homes,
+        copilot_homes: Vec::new(),
     }
 }
 
@@ -115,6 +116,8 @@ fn codex_home_comes_from_the_flag_then_codex_home_then_the_home_folder() {
             &[],
             homes,
             env,
+            Vec::new(),
+            None,
         )
     };
 

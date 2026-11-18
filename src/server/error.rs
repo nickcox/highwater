@@ -92,7 +92,8 @@ fn load_details(error: &crate::source::LoadError) -> Details {
         LoadError::Replay(_) => INVALID_SOURCE,
         LoadError::ClaudeCode(error)
         | LoadError::VsCodeCopilot(error)
-        | LoadError::Codex(error) => source_details(error),
+        | LoadError::Codex(error)
+        | LoadError::Copilot(error) => source_details(error),
         LoadError::Storage(error) => match error {
             StorageError::NotFound => NOT_FOUND,
             StorageError::Busy | StorageError::Cancelled => (

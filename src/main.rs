@@ -2,6 +2,7 @@ mod analysis;
 mod api;
 mod claude_code;
 mod codex;
+mod copilot;
 mod domain;
 mod opencode;
 mod pi;

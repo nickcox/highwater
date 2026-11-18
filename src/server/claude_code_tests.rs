@@ -20,6 +20,7 @@ fn claude_only(roots: Vec<PathBuf>) -> SourceSet {
         claude_roots: roots,
         vscode_user_dirs: Vec::new(),
         codex_homes: Vec::new(),
+        copilot_homes: Vec::new(),
     }
 }
 
@@ -226,6 +227,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         &[],
         Vec::new(),
         None,
+        Vec::new(),
+        None,
     )
     .expect("default Claude Code root");
     assert_eq!(
@@ -242,6 +245,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         Some(&configured),
         Vec::new(),
         &[],
+        Vec::new(),
+        None,
         Vec::new(),
         None,
     )
@@ -263,6 +268,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         &[],
         Vec::new(),
         None,
+        Vec::new(),
+        None,
     )
     .expect("Pi only");
     assert!(pi_only.claude_roots.is_empty());
@@ -276,6 +283,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         None,
         Vec::new(),
         &[],
+        Vec::new(),
+        None,
         Vec::new(),
         None,
     )
@@ -293,6 +302,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         &[],
         Vec::new(),
         None,
+        Vec::new(),
+        None,
     )
     .is_err());
 
@@ -306,6 +317,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
         None,
         Vec::new(),
         &[],
+        Vec::new(),
+        None,
         Vec::new(),
         None,
     )

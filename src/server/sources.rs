@@ -11,8 +11,12 @@ use crate::{
         FileKind,
     },
     codex::discovery::{self as codex_discovery, ListingCache as CodexListingCache, TitleIndex},
+    copilot::discovery::{self as copilot_discovery, ListingCache as CopilotListingCache},
     opencode::storage::{self, CatalogTracker},
-    source::{claude_code_reference, codex_reference, opencode_reference, SessionLocator},
+    source::{
+        claude_code_reference, codex_reference, copilot_reference, opencode_reference,
+        SessionLocator,
+    },
     vscode_copilot::discovery::{self as vscode_discovery, ListingCache as VsCodeListingCache},
 };
 use chrono::{DateTime, Utc};
@@ -34,11 +38,13 @@ pub(super) struct SourceSet {
     pub vscode_user_dirs: Vec<PathBuf>,
     /// Codex home folders, each holding `sessions` and `archived_sessions`.
     pub codex_homes: Vec<PathBuf>,
+    /// Copilot home folders, each holding `session-state`.
+    pub copilot_homes: Vec<PathBuf>,
 }
 
 impl SourceSet {
     /// An explicit `--session-root` is Pi only: it turns off the OpenCode, Claude Code,
-    /// VS Code and Codex defaults unless their own flags are also given. `vscode_defaults`
+    /// VS Code, Codex and Copilot defaults unless their own flags are also given. `vscode_defaults`
     /// are the platform's VS Code user data folders; those that exist are used.
     #[allow(clippy::too_many_arguments)]
     pub fn configured(
@@ -52,6 +58,8 @@ impl SourceSet {
         vscode_defaults: &[PathBuf],
         codex_homes: Vec<PathBuf>,
         codex_home_env: Option<&Path>,
+        copilot_homes: Vec<PathBuf>,
+        copilot_home_env: Option<&Path>,
     ) -> Result<Self, AppError> {
         let explicit_pi = pi.is_some();
         let default_databases = databases.is_empty() && !explicit_pi;
@@ -138,14 +146,32 @@ impl SourceSet {
                 codex_homes.push(folder);
             }
         }
+        let copilot_candidates = if copilot_homes.is_empty() && !explicit_pi {
+            let default = copilot_home_env.map_or_else(|| home.join(".copilot"), Path::to_path_buf);
+            if default.join("session-state").is_dir() {
+                vec![default]
+            } else {
+                Vec::new()
+            }
+        } else {
+            copilot_homes
+        };
+        let mut copilot_homes = Vec::new();
+        for folder in copilot_candidates {
+            let folder = canonical_root(&folder)?;
+            if !copilot_homes.contains(&folder) {
+                copilot_homes.push(folder);
+            }
+        }
         if pi_root.is_none()
             && databases.is_empty()
             && claude_roots.is_empty()
             && vscode_user_dirs.is_empty()
             && codex_homes.is_empty()
+            && copilot_homes.is_empty()
         {
             return Err(AppError::Message(
-                "no local sessions found; configure --session-root, --opencode-db, --claude-root, --vscode-user-dir or --codex-home"
+                "no local sessions found; configure --session-root, --opencode-db, --claude-root, --vscode-user-dir, --codex-home or --copilot-home"
                     .into(),
             ));
         }
@@ -155,6 +181,7 @@ impl SourceSet {
             claude_roots,
             vscode_user_dirs,
             codex_homes,
+            copilot_homes,
         })
     }
 }
@@ -464,6 +491,84 @@ impl CodexSource {
     }
 }
 
+fn copilot_entry(
+    file: copilot_discovery::SessionFile,
+    listing: copilot_discovery::Listing,
+) -> SessionFile {
+    let file_name = file
+        .path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let workspace = listing.workspace;
+    // The session folder is named after the session ID.
+    let session_id = workspace.id.clone().unwrap_or_else(|| {
+        file.path
+            .parent()
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+    let short_id: String = session_id.chars().take(8).collect();
+    let project = workspace
+        .cwd
+        .as_deref()
+        .and_then(|directory| Path::new(directory).file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty());
+    let display_name = workspace.name.clone().unwrap_or_else(|| match project {
+        Some(project) => format!("{project} · {short_id}"),
+        None => short_id.clone(),
+    });
+    SessionFile {
+        id: copilot_reference(&session_id),
+        path: String::new(),
+        file_name,
+        display_name: display_name.chars().take(160).collect(),
+        working_directory: workspace.cwd,
+        started_at: workspace
+            .created_at
+            .as_deref()
+            .and_then(|timestamp| timestamp.parse::<DateTime<Utc>>().ok()),
+        byte_size: Some(file.stamp.byte_size),
+        modified_at: file.modified.map(DateTime::<Utc>::from),
+        modified_nanos: file.stamp.modified_nanos,
+        harness: "copilot".into(),
+        parent_reference: None,
+        subagent_type: None,
+        locator: Some(SessionLocator::CopilotFile { path: file.path }),
+        source_revision: None,
+    }
+}
+
+struct CopilotSource {
+    home: PathBuf,
+    listings: CopilotListingCache,
+    last_good: Vec<SessionFile>,
+}
+
+impl CopilotSource {
+    fn discover(&mut self, cancelled: &AtomicBool) -> Result<Vec<SessionFile>, DiscoveryError> {
+        let files = copilot_discovery::find_files(&self.home, Some(cancelled))?;
+        self.listings.retain(&files);
+        let mut entries = Vec::new();
+        for file in files {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(DiscoveryError::Cancelled);
+            }
+            // A session with no reported call has nothing to show, so it is not offered.
+            if let Some(listing) = self
+                .listings
+                .listing(&file)?
+                .filter(|listing| listing.has_responses)
+            {
+                entries.push(copilot_entry(file, listing));
+            }
+        }
+        Ok(entries)
+    }
+}
+
 struct DatabaseSource {
     path: PathBuf,
     tracker: Option<CatalogTracker>,
@@ -475,6 +580,7 @@ struct DiscoveryState {
     claude_code: Vec<ClaudeCodeSource>,
     vscode_copilot: Vec<VsCodeCopilotSource>,
     codex: Vec<CodexSource>,
+    copilot: Vec<CopilotSource>,
 }
 
 pub(super) struct MixedScanner {
@@ -524,6 +630,15 @@ impl MixedScanner {
                         home: home.clone(),
                         listings: CodexListingCache::default(),
                         titles: TitleIndex::default(),
+                        last_good: Vec::new(),
+                    })
+                    .collect(),
+                copilot: sources
+                    .copilot_homes
+                    .iter()
+                    .map(|home| CopilotSource {
+                        home: home.clone(),
+                        listings: CopilotListingCache::default(),
                         last_good: Vec::new(),
                     })
                     .collect(),
@@ -653,6 +768,16 @@ impl MixedScanner {
                 Err(_) => failed = true,
             }
         }
+        for source in &mut state.copilot {
+            if cancelled.load(Ordering::Acquire) {
+                return Err(ScanError::Cancelled);
+            }
+            match source.discover(&cancelled) {
+                Ok(entries) => source.last_good = entries,
+                Err(DiscoveryError::Cancelled) => return Err(ScanError::Cancelled),
+                Err(_) => failed = true,
+            }
+        }
         // A transient source read failure must not permanently disable healthy
         // filesystem watchers. A subsequent successful scan clears this state.
         self.signals
@@ -708,6 +833,21 @@ impl MixedScanner {
             codex
                 .into_iter()
                 .filter(|entry| codex_ids.insert(entry.id.clone()))
+                .cloned(),
+        );
+        // Repeated home folders, or a copy of a session in another home folder, can list the
+        // same session twice. The most recently changed copy is kept.
+        let mut copilot: Vec<&SessionFile> = state
+            .copilot
+            .iter()
+            .flat_map(|source| &source.last_good)
+            .collect();
+        copilot.sort_by_key(|entry| std::cmp::Reverse(entry.modified_nanos));
+        let mut copilot_ids = HashSet::new();
+        entries.extend(
+            copilot
+                .into_iter()
+                .filter(|entry| copilot_ids.insert(entry.id.clone()))
                 .cloned(),
         );
         entries.sort_by(|left, right| {

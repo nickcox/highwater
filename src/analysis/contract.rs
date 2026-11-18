@@ -576,6 +576,28 @@ fn export_live_contract() {
         cases.push((format!("codex-{number}-auto"), analysis));
     }
 
+    // Copilot sessions, through the same loader and coverage notice as HTTP.
+    let copilot_home = std::fs::canonicalize("fixtures/copilot/home").expect("Copilot fixtures");
+    for (number, file) in crate::copilot::discovery::find_files(&copilot_home, None)
+        .expect("Copilot discovery")
+        .into_iter()
+        .enumerate()
+        .take(2)
+    {
+        let loaded = crate::source::load(
+            &crate::source::SessionLocator::CopilotFile { path: file.path },
+            None,
+        )
+        .expect("Copilot fixture");
+        let mut analysis =
+            analyze(loaded.normalized, config(TokenizationPolicy::Auto)).expect("Copilot analysis");
+        analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
+            status: "partial",
+            explanation_codes: codes,
+        });
+        cases.push((format!("copilot-{}-auto", number + 1), analysis));
+    }
+
     let modern_database = temporary.path().join("modern.db");
     let modern_writer = rusqlite::Connection::open(&modern_database).expect("modern database");
     modern_writer
@@ -777,7 +799,7 @@ fn export_live_contract() {
         }
         manifest.push(serde_json::json!({ "name": name, "file": file }));
     }
-    assert_eq!(manifest.len(), 135);
+    assert_eq!(manifest.len(), 137);
     if let Some(directory) = export {
         let manifest = serde_json::json!({ "schemaVersion": ANALYSIS_SCHEMA_VERSION, "outputVersion": ANALYSIS_OUTPUT_VERSION,
             "cases": manifest, "rejections": [

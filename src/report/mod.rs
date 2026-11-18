@@ -58,7 +58,7 @@ pub(crate) struct ReportArgs {
     /// Only sessions updated on or after this date (YYYY-MM-DD, UTC).
     #[arg(long)]
     since: Option<NaiveDate>,
-    /// Only sessions from this harness: pi, opencode, claude-code, codex or vscode-copilot.
+    /// Only sessions from this harness: pi, opencode, claude-code, codex, copilot or vscode-copilot.
     #[arg(long)]
     harness: Option<String>,
     /// Write the report as JSON, for an agent to read, instead of text.

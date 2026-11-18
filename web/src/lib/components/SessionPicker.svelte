@@ -20,7 +20,7 @@
   } = $props();
 
   const id = `session-picker-${nextPicker++}`;
-  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' | 'codex' | 'vscode-copilot' =
+  let harness: 'all' | 'pi' | 'opencode' | 'claude-code' | 'codex' | 'copilot' | 'vscode-copilot' =
     $state('all');
   /** Search text, used only while the list is open. */
   let query = $state('');
@@ -36,9 +36,11 @@
         ? 'claude-code'
         : session.id.startsWith('codex-')
           ? 'codex'
-          : session.id.startsWith('vscode-copilot-')
-            ? 'vscode-copilot'
-            : 'pi');
+          : session.id.startsWith('copilot-')
+            ? 'copilot'
+            : session.id.startsWith('vscode-copilot-')
+              ? 'vscode-copilot'
+              : 'pi');
   // Duplicate portable references are ambiguous on the server. Offer one
   // option per reference instead of crashing a keyed list or selecting a DB.
   let unique = $derived([...new Map(sessions.map((session) => [session.id, session])).values()]);
@@ -130,6 +132,7 @@
       <option value="opencode">OpenCode</option>
       <option value="claude-code">Claude Code</option>
       <option value="codex">Codex</option>
+      <option value="copilot">Copilot app and CLI</option>
       <option value="vscode-copilot">VS Code Copilot</option>
     </select>
   </label>

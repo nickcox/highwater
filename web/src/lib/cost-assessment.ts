@@ -9,6 +9,7 @@ export function harnessName(source: string): string {
   if (source === 'claude-code') return 'Claude Code';
   if (source === 'codex') return 'Codex';
   if (source === 'vscode-copilot') return 'VS Code Copilot';
+  if (source === 'copilot') return 'Copilot';
   return 'the harness';
 }
 
@@ -93,7 +94,7 @@ export function costRuleText(cost: CostAssessment, source: string): string {
   const harness = harnessName(source);
   switch (cost.classificationRule) {
     case 'recordedCost':
-      return source === 'vscode-copilot'
+      return source === 'vscode-copilot' || source === 'copilot'
         ? 'Billed per token; this is what Copilot recorded charging, in credits at $0.01 each.'
         : `Billed per token; this is the cost ${harness} recorded.`;
     case 'billingModeTable':

@@ -1,6 +1,6 @@
 # <img src="docs/images/logo.svg" alt="" width="32" height="32"> Highwater
 
-Highwater shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code, Codex and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
+Highwater shows how a coding agent's context window fills up over a session. It reads the session files that Pi, OpenCode, Claude Code, Codex, the Copilot app and CLI, and VS Code Copilot Chat already write, rebuilds what was in context at every model call, and draws each item (messages, tool results, the system prompt, compaction summaries) as a band that you can follow from the call where it appears to the call where it leaves.
 
 ![Highwater showing a 1,118-call Claude Code session: the session summary, and the Context River in Item types view as the context grows to 966K tokens, mostly tool results, assistant messages and thinking, before one compaction](docs/images/context-river.png)
 
@@ -55,6 +55,7 @@ Without options, Highwater finds sessions in each tool's default location, when 
 | OpenCode | `opencode.db` and `opencode-stable.db` in `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`) | `--opencode-db <file>` (repeatable) |
 | Claude Code | `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects`) | `--claude-root <dir>` (repeatable) |
 | Codex | `$CODEX_HOME` (default `~/.codex`) | `--codex-home <dir>` (repeatable) |
+| Copilot app and CLI | `$COPILOT_HOME` (default `~/.copilot`) | `--copilot-home <dir>` (repeatable) |
 | VS Code Copilot Chat | VS Code's and VS Code Insiders' user data folders | `--vscode-user-dir <dir>` (repeatable) |
 
 An option replaces that source's default, as in `highwater serve --claude-root <dir>`. `--session-root` on its own reads only Pi sessions; add the other options to include them too. Other options: `--port` (default 43123) and `--tokenization auto|strict|heuristic|off`. `highwater serve --help` lists them all.
@@ -74,7 +75,7 @@ Session files record how many input tokens each call used, and some record its c
 - [User guide](docs/user-guide.md): the River, Composition, lifespans, view links and the cache and cost track.
 - [Data semantics](docs/data-semantics.md): tokenization, cost, the analysis API, and what each number means.
 - [Token reports](docs/report.md): `highwater report`, `show` and the `token-efficiency` skill.
-- Sources: [Pi](docs/sources/pi.md), [OpenCode](docs/sources/opencode.md), [Claude Code](docs/sources/claude-code.md), [Codex](docs/sources/codex.md) and [VS Code Copilot Chat](docs/sources/vscode-copilot.md).
+- Sources: [Pi](docs/sources/pi.md), [OpenCode](docs/sources/opencode.md), [Claude Code](docs/sources/claude-code.md), [Codex](docs/sources/codex.md), [Copilot app and CLI](docs/sources/copilot.md) and [VS Code Copilot Chat](docs/sources/vscode-copilot.md).
 - [Architecture](docs/architecture.md) and [development](docs/development.md): how it is built, and how to change and check it.
 
 ## Third-party data

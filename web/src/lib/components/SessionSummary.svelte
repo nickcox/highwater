@@ -294,7 +294,7 @@
               {formatInteger(economics.usageCompleteness.unsupported)} unsupported
             </dd>
           </div>
-          {#if !['claude-code', 'codex', 'vscode-copilot'].includes(session.source)}
+          {#if !['claude-code', 'codex', 'copilot', 'vscode-copilot'].includes(session.source)}
             <div>
               <dt>
                 {costCopy.label} component coverage (complete / partial / missing / unsupported)

@@ -452,9 +452,9 @@
           <dt>{inputShareLabel(call.economics.policyId)}</dt>
           <dd>{freshRatioValue()}</dd>
         </div>
-        <!-- Claude Code and Codex record no cost, and VS Code Copilot only a total, so these rows
-             would only ever say Unknown. -->
-        {#if !['claude-code', 'codex', 'vscode-copilot'].includes(indexed.analysis.session.source)}
+        <!-- Claude Code and Codex record no cost, and Copilot only a total, so these rows would
+             only ever say Unknown. -->
+        {#if !['claude-code', 'codex', 'copilot', 'vscode-copilot'].includes(indexed.analysis.session.source)}
           <div>
             <dt>{costCopy.label} component completeness</dt>
             <dd>{call.economics.costCompleteness}</dd>

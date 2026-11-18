@@ -45,10 +45,11 @@ export function assertCallTiming(call: ModelCall, source: string): void {
     )
       fail();
   };
-  // A VS Code Copilot call's trace span: from sending the request to the end of the response.
-  if (basis === 'vscode-copilot-trace-spans') {
+  // A VS Code Copilot call's trace span, or the duration in a Copilot usage record: from sending
+  // the request to the end of the response.
+  if (basis === 'vscode-copilot-trace-spans' || basis === 'copilot-usage-duration') {
     if (
-      source !== 'vscode-copilot' ||
+      source !== (basis === 'vscode-copilot-trace-spans' ? 'vscode-copilot' : 'copilot') ||
       !Number.isSafeInteger(durationMs) ||
       durationMs <= 0 ||
       timing.startedAtMs === null ||

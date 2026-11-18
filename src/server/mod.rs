@@ -5,6 +5,8 @@ mod catalog;
 mod claude_code_tests;
 #[cfg(test)]
 mod codex_tests;
+#[cfg(test)]
+mod copilot_tests;
 mod error;
 mod events;
 mod local_origin;
@@ -93,6 +95,10 @@ pub(crate) struct SourceArgs {
     /// the default `$CODEX_HOME` or `~/.codex`.
     #[arg(long)]
     pub codex_home: Vec<PathBuf>,
+    /// Copilot home folder (repeatable), holding `session-state`, for the Copilot app and
+    /// CLI. Replaces the default `$COPILOT_HOME` or `~/.copilot`.
+    #[arg(long)]
+    pub copilot_home: Vec<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -200,11 +206,12 @@ impl SessionFile {
 /// The startup line, for example `Discovered 1,206 sessions: 150 Pi, 980 Claude Code (612 child
 /// sessions)`. A harness with no sessions is left out, in the session picker's order.
 fn discovery_summary(sessions: &[SessionFile]) -> String {
-    const HARNESSES: [(&str, &str); 5] = [
+    const HARNESSES: [(&str, &str); 6] = [
         ("pi", "Pi"),
         ("opencode", "OpenCode"),
         ("claude-code", "Claude Code"),
         ("codex", "Codex"),
+        ("copilot", "Copilot"),
         ("vscode-copilot", "VS Code Copilot"),
     ];
     let count = |count: usize, noun: &str| {
@@ -273,6 +280,9 @@ fn configured_sources(args: SourceArgs) -> Result<sources::SourceSet, AppError> 
     let codex_home_env = std::env::var_os("CODEX_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute());
+    let copilot_home_env = std::env::var_os("COPILOT_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute());
     sources::SourceSet::configured(
         args.session_root,
         args.opencode_db,
@@ -284,6 +294,8 @@ fn configured_sources(args: SourceArgs) -> Result<sources::SourceSet, AppError> 
         &vscode_defaults,
         args.codex_home,
         codex_home_env.as_deref(),
+        args.copilot_home,
+        copilot_home_env.as_deref(),
     )
 }
 
@@ -365,6 +377,18 @@ async fn run_with_watcher(
             {
                 watchers.push(watcher);
             }
+        }
+    }
+    // Only the session folder is watched, for the same reason.
+    for copilot_home in &sources.copilot_homes {
+        let folder = copilot_home.join("session-state");
+        if !folder.is_dir() {
+            continue;
+        }
+        if let Some(watcher) =
+            start_watcher_or_degraded(&folder, hint_sender.clone(), &signals, start_watcher)
+        {
+            watchers.push(watcher);
         }
     }
     for database in &sources.databases {

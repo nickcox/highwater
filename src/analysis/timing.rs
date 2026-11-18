@@ -13,17 +13,22 @@ fn valid_instant(value: Option<i64>) -> Option<i64> {
 /// Pi's checked built-in adapters initialize message.timestamp before requesting
 /// a response. Unknown/custom APIs retain their instants but have no inferred rate.
 /// VS Code Copilot's start instant comes only from a call's trace span, which runs from
-/// sending the request to the end of the response.
+/// sending the request to the end of the response. Copilot's comes from the duration its
+/// usage record reports, which covers the same.
 pub(super) fn call_timing(call: &NormalizedModelCall, harness: &str) -> CallTiming {
     let mut timing = CallTiming {
         started_at_ms: valid_instant(call.timestamps.started_at_ms),
         recorded_at_ms: valid_instant(call.timestamps.recorded_at_ms),
         ..CallTiming::default()
     };
-    if harness == "vscode-copilot" {
+    if harness == "vscode-copilot" || harness == "copilot" {
         if let Some(ms) = duration(&timing) {
             timing.duration_ms = Some(ms);
-            timing.basis = Some("vscode-copilot-trace-spans");
+            timing.basis = Some(if harness == "copilot" {
+                "copilot-usage-duration"
+            } else {
+                "vscode-copilot-trace-spans"
+            });
             timing.effective_output_tokens_per_second = rate(call, ms);
         }
         return timing;

@@ -40,6 +40,8 @@ pub(crate) enum Limitation {
     InferredUnsentHistory,
     /// Codex: the context was reset without a compaction record, judged from reported usage.
     InferredContextReset,
+    /// Copilot: subagents' calls are recorded in the main session's file but are not shown.
+    SubagentCallsNotShown,
 }
 
 impl Limitation {
@@ -55,6 +57,7 @@ impl Limitation {
             Self::RepairedCompactionLink => "repairedCompactionLink",
             Self::InferredUnsentHistory => "inferredUnsentHistory",
             Self::InferredContextReset => "inferredContextReset",
+            Self::SubagentCallsNotShown => "subagentCallsNotShown",
         }
     }
 }

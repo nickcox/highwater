@@ -99,6 +99,7 @@ impl DatabaseFixture {
             claude_roots: Vec::new(),
             vscode_user_dirs: Vec::new(),
             codex_homes: Vec::new(),
+            copilot_homes: Vec::new(),
         }
     }
     fn locator(&self) -> SessionLocator {
@@ -336,6 +337,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         &[],
         Vec::new(),
         None,
+        Vec::new(),
+        None,
     )
     .expect("OpenCode-only defaults");
     assert!(defaults.pi_root.is_none());
@@ -352,6 +355,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         &[],
         Vec::new(),
         None,
+        Vec::new(),
+        None,
     )
     .expect("Pi-only");
     assert!(explicit.databases.is_empty());
@@ -366,6 +371,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         &[],
         Vec::new(),
         None,
+        Vec::new(),
+        None,
     )
     .is_err());
     assert!(SourceSet::configured(
@@ -377,6 +384,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         None,
         Vec::new(),
         &[],
+        Vec::new(),
+        None,
         Vec::new(),
         None,
     )
@@ -411,6 +420,7 @@ fn failed_database_retains_its_catalogue_while_healthy_sources_advance() {
         claude_roots: Vec::new(),
         vscode_user_dirs: Vec::new(),
         codex_homes: Vec::new(),
+        copilot_homes: Vec::new(),
     };
     let signals = Arc::new(watcher::WatchSignals::default());
     let scanner = MixedScanner::new(&sources, Arc::clone(&signals));
@@ -512,6 +522,7 @@ async fn duplicate_database_native_ids_are_ambiguous_and_cache_entries_are_isola
         claude_roots: Vec::new(),
         vscode_user_dirs: Vec::new(),
         codex_homes: Vec::new(),
+        copilot_homes: Vec::new(),
     };
     let entries = scan(&scanner(&sources));
     let id = entries[0].id.clone();

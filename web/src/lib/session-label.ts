@@ -35,6 +35,7 @@ export function harnessName(session: SessionListItem): string {
   if (session.harness === 'claude-code') return 'Claude Code';
   if (session.harness === 'codex') return 'Codex';
   if (session.harness === 'vscode-copilot') return 'VS Code Copilot';
+  if (session.harness === 'copilot') return 'Copilot';
   return 'Pi';
 }
 

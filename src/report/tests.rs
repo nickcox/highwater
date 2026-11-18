@@ -33,6 +33,7 @@ fn fixture_sessions() -> Vec<SessionFile> {
         claude_root: vec![PathBuf::from("fixtures/claude-code/projects")],
         vscode_user_dir: Vec::new(),
         codex_home: vec![PathBuf::from("fixtures/codex/home")],
+        copilot_home: Vec::new(),
     })
     .expect("fixture discovery")
 }
@@ -54,6 +55,7 @@ fn args(dir: Option<&str>) -> ReportArgs {
             claude_root: Vec::new(),
             vscode_user_dir: Vec::new(),
             codex_home: Vec::new(),
+            copilot_home: Vec::new(),
         },
     }
 }
@@ -897,6 +899,7 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
         claude_root: Vec::new(),
         vscode_user_dir: Vec::new(),
         codex_home: Vec::new(),
+        copilot_home: Vec::new(),
     })
     .expect("discovery");
     let session = sessions

@@ -39,12 +39,14 @@ export const reconstructionLimitLabels: Record<string, string> = {
     'Some calls have no Copilot trace record (Copilot keeps them for a few days), so they show only what the session file records: no per-call usage, timing, system prompt or tools.',
   traceRecordsUnreadable:
     "Copilot's trace database could not be read, so calls show only what the session file records.",
+  subagentCallsNotShown:
+    "Subagents' model calls are recorded in the session's file but are not shown.",
   repairedCompactionLink:
     'A compaction marker named a later or missing record as its predecessor; the conversation was continued from the record before the marker.',
 };
 
 /** Sources whose analyses must always carry a reconstruction coverage notice. */
-const PARTIAL_SOURCES = new Set(['opencode', 'claude-code', 'codex', 'vscode-copilot']);
+const PARTIAL_SOURCES = new Set(['opencode', 'claude-code', 'codex', 'copilot', 'vscode-copilot']);
 
 export function assertReconstruction(analysis: SessionAnalysis): void {
   const coverage = analysis.reconstruction;
