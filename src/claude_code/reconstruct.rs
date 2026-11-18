@@ -786,6 +786,7 @@ impl State<'_> {
                     .collect(),
                 summary_item_id: summary,
                 tokens_before: compaction.tokens_before,
+                details: CompactionDetails::default(),
             });
         }
         let mut context_items: Vec<_> = items

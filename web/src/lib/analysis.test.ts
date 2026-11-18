@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from './compaction-details';
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis, toWireAnalysis } from './testing/wire-analysis';
 import { AnalysisValidationError, indexAnalysis } from './analysis';
@@ -296,6 +297,7 @@ describe('indexAnalysis', () => {
         retainedItemIds: [],
         summaryItemId: 'terminal-summary',
         tokensBefore: 100,
+        details: emptyCompactionDetails(),
       },
     ];
     analysis.contextItems.push({

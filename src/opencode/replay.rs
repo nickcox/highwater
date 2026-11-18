@@ -713,6 +713,7 @@ fn assistant(
             retained_item_ids,
             summary_item_id: summary_id,
             tokens_before: None,
+            details: CompactionDetails::default(),
         });
         state.pending_compaction = Some(id);
         state.admit(summary_index);

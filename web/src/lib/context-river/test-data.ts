@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from '../compaction-details';
 import { ANALYSIS_SCHEMA_VERSION } from '../analysis';
 import type {
   CallTokenAnalysis,
@@ -448,6 +449,7 @@ export function testAnalysis(): SessionAnalysis {
         retainedItemIds: ['retained'],
         summaryItemId: 'summary',
         tokensBefore: 100,
+        details: emptyCompactionDetails(),
       },
     ],
     lineage: [{ from: 'a', to: 'summary', kind: 'frameworkCompaction' }],

@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from './compaction-details';
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from './testing/wire-analysis';
 import {
@@ -89,6 +90,7 @@ function scopedCumulativeAnalysis() {
       retainedItemIds: [],
       summaryItemId: summary.id,
       tokensBefore: null,
+      details: emptyCompactionDetails(),
     },
   ];
   analysis.lineage = [{ from: source.id, to: summary.id, kind: 'frameworkCompaction' }];

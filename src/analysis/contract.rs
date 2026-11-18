@@ -67,6 +67,23 @@ fn terminal_session() -> NormalizedSession {
         retained_item_ids: Vec::new(),
         summary_item_id: item.id.clone(),
         tokens_before: None,
+        // Every kind of detail, so the frontend validator checks Rust's serialisation of them.
+        details: crate::domain::CompactionDetails {
+            trigger: Some(crate::domain::CompactionTrigger::Manual),
+            instructions: Some("Keep the open questions".into()),
+            rule: Some(crate::domain::CompactionRule::KeptLastMessages),
+            started_before_model_call: Some(1),
+            summary_call: None,
+            duration_ms: Some(56_808),
+            messages_before: Some(163),
+            messages_removed: Some(157),
+            messages_kept: Some(6),
+            messages_added_while_running: Some(4),
+            tokens_after: Some(56_958),
+            system_tokens_after: Some(20_679),
+            tool_definition_tokens_after: Some(29_684),
+            conversation_tokens_after: Some(6_592),
+        },
     });
     session
 }

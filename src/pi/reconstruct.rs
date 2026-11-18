@@ -165,10 +165,16 @@ fn reconstruct_selected(
                 item,
                 first_kept_position,
                 tokens_before,
+                usage,
+                recorded_at_ms,
             } => state.apply_compaction(
                 item,
-                first_kept_position,
-                tokens_before,
+                state::CompactionRecord {
+                    first_kept_position,
+                    tokens_before,
+                    usage: usage.map(|usage| *usage),
+                    recorded_at_ms,
+                },
                 &branch_positions,
                 &entries[*entry_index],
                 !inherited,
@@ -724,7 +730,7 @@ fn parse_safe_u64(value: Option<&Value>, field: &'static str) -> Result<Option<u
     Ok(None)
 }
 
-fn parse_assistant_usage(message: &Value) -> Result<ReportedUsage, SourceError> {
+pub(super) fn parse_assistant_usage(message: &Value) -> Result<ReportedUsage, SourceError> {
     let usage = parse_usage(message.get("usage"))?;
     // Pi initializes every core counter and cost component to zero before
     // streaming. A failed/aborted all-zero record is not evidence that the

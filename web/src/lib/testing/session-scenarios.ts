@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from '../compaction-details';
 import type { ContextItem, SessionAnalysis } from '../types';
 import { costSummaryFor, testAnalysis } from '../context-river/test-data';
 
@@ -151,6 +152,7 @@ function terminalCompactionScenario(): SessionAnalysis {
     retainedItemIds: ['retained'],
     summaryItemId: summary.id,
     tokensBefore: 100,
+    details: emptyCompactionDetails(),
   });
   analysis.lineage.push({ from: 'a', to: summary.id, kind: 'frameworkCompaction' });
   return analysis;
@@ -183,6 +185,7 @@ function terminalSummaryOnlyScenario(): SessionAnalysis {
       retainedItemIds: [],
       summaryItemId: summary.id,
       tokensBefore: 100,
+      details: emptyCompactionDetails(),
     },
   ];
   analysis.lineage = [];

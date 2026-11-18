@@ -777,6 +777,8 @@ pub(super) fn fixed_overhead(
         let at = item.first_model_call;
         match item.kind.as_str() {
             "system" | "toolDefinition" => true,
+            // A compaction call's input is the conversation it summarised, not overhead.
+            "unrecordedContext" if item.metadata.contains_key("compactionInput") => false,
             "unrecordedContext" => {
                 at == first.index || compactions.contains(&at) || model_changes.contains(&at)
             }

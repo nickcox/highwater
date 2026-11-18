@@ -611,6 +611,7 @@ fn valid_zero_call_terminal_summary_is_accepted() {
             retained_item_ids: Vec::new(),
             summary_item_id: "summary".into(),
             tokens_before: None,
+            details: crate::domain::CompactionDetails::default(),
         }],
         lineage: Vec::new(),
     };
@@ -659,6 +660,7 @@ fn terminal_summary_cannot_be_referenced_by_an_earlier_call() {
         retained_item_ids: Vec::new(),
         summary_item_id: "terminal-summary".into(),
         tokens_before: None,
+        details: crate::domain::CompactionDetails::default(),
     });
     let error = analyze(
         session,
@@ -696,6 +698,7 @@ fn terminal_summary_does_not_degrade_applicable_exposure() {
         retained_item_ids: Vec::new(),
         summary_item_id: "terminal-summary".into(),
         tokens_before: None,
+        details: crate::domain::CompactionDetails::default(),
     });
     let analysis = analyze(
         session,
@@ -1274,4 +1277,87 @@ fn a_failed_attempt_is_estimated_for_the_model_the_session_was_using() {
         .context_items
         .iter()
         .all(|item| item.token_estimates.len() == 1));
+}
+
+/// A terminal compaction on the fake session, with the given details, analysed.
+fn analyze_with_compaction_details(
+    details: crate::domain::CompactionDetails,
+) -> Result<Analysis, AnalysisError> {
+    let mut session = fake_session();
+    session.context_items.push(NormalizedContextItem {
+        id: "terminal-summary".into(),
+        kind: ContextItemKind::CompactionSummary,
+        label: "summary".into(),
+        source_record_id: Some("compaction".into()),
+        source_tool_call_id: None,
+        metadata: BTreeMap::new(),
+        serialized_size_bytes: 10,
+        payload: TokenizationPayload::CompactionSummary(String::new()),
+        presence: Vec::new(),
+        first_model_call: 0,
+        last_model_call: 0,
+    });
+    session.compactions.push(NormalizedCompaction {
+        id: "compaction".into(),
+        before_model_call: 2,
+        source_item_ids: vec!["opaque-item".into()],
+        retained_item_ids: Vec::new(),
+        summary_item_id: "terminal-summary".into(),
+        tokens_before: None,
+        details,
+    });
+    analyze(
+        session,
+        AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        },
+    )
+}
+
+#[test]
+fn compaction_details_are_serialised_and_checked() {
+    use crate::domain::{CompactionDetails, CompactionRule, CompactionTrigger};
+    let analysis = analyze_with_compaction_details(CompactionDetails {
+        trigger: Some(CompactionTrigger::Manual),
+        instructions: Some("Keep the plan".into()),
+        rule: Some(CompactionRule::KeptLastMessages),
+        started_before_model_call: Some(1),
+        summary_call: Some(1),
+        duration_ms: Some(56_808),
+        messages_before: Some(163),
+        messages_removed: Some(157),
+        tokens_after: Some(56_958),
+        ..CompactionDetails::default()
+    })
+    .expect("valid details");
+    let json = serde_json::to_value(&analysis.compactions[0]).expect("JSON");
+    let details = &json["details"];
+    assert_eq!(details["trigger"], "manual");
+    assert_eq!(details["rule"], "keptLastMessages");
+    assert_eq!(details["startedBeforeModelCall"], 1);
+    assert_eq!(details["messagesRemoved"], 157);
+    assert!(details["messagesKept"].is_null());
+
+    let starts_late = analyze_with_compaction_details(CompactionDetails {
+        started_before_model_call: Some(3),
+        ..CompactionDetails::default()
+    });
+    assert!(
+        matches!(starts_late, Err(AnalysisError::InvalidSession(message))
+        if message.contains("starts after it is applied"))
+    );
+    let unknown_call = analyze_with_compaction_details(CompactionDetails {
+        summary_call: Some(99),
+        ..CompactionDetails::default()
+    });
+    assert!(
+        matches!(unknown_call, Err(AnalysisError::InvalidSession(message))
+        if message.contains("unknown summary call"))
+    );
+    let unsafe_count = analyze_with_compaction_details(CompactionDetails {
+        tokens_after: Some(MAX_SAFE_JSON_INTEGER + 1),
+        ..CompactionDetails::default()
+    });
+    assert!(unsafe_count.is_err());
 }

@@ -25,13 +25,13 @@ const scenarios: SessionScenario[] = [
 const scenarioDigests: Record<SessionScenario, string> = {
   empty: '9bd126e3e7853666ffa00d0a8d6b0af45b72a22766d39a221e55544c70f262c8',
   singleCall: '3b5e8385304f99dff9b6323f4a9bdbd78cdfd56c611949e23f846650d741779a',
-  longSession: '7f190bf52ceb12d5263dfd7f850dbe53fda7b7d45fc76fe93399ff3b18ec59e3',
-  partialGeometry: '631d6dc36100694092b8d4105e7bb903dacd0b2e1825a5746e98b3f73e75dc8c',
-  unavailableGeometry: '1e1efd927e61de9ac05fef2d827ef70725396b83b654a5e4131e10378c7bb5cd',
-  terminalCompaction: '91de53bcd50db1e8b85678e8db1410fdad2c502f8be798d2929f91a6e0c16698',
-  terminalSummaryOnly: '45131fbcbde19345cbadda8f09e3ba7825226b5773e88e436723e992eed3a130',
-  labelStress: 'd510efa91210f647bf2a91ca6f0042050ed5bca584bc6abaa6179364351f3d56',
-  multipleToolsMissingMetadata: '6c8af98b10c68711a838fdf4e69b72b2f2aa453d9fb50c68904d309289e88797',
+  longSession: '486238eadab5bc47daf489315963a726d9bbc455a541be0662c1d95f5203f618',
+  partialGeometry: '47a1885a67e14f12619ffb7dee7478aa0dad38f3d0e960f1f6f134af544ca7cf',
+  unavailableGeometry: '5fe55004ceeae764204e154c4fd0e464a24a8fba4416bce74732d2f496801b42',
+  terminalCompaction: '87c76e0777dbd89821fcaeae3e5fd8e69714e872298b6611de862c59b7cf941a',
+  terminalSummaryOnly: 'e297c916bf037c81fda6489036acbd50636095f471b275678ecfaf24346607c4',
+  labelStress: 'f7be99d4ca2a915f589ede357131ce91088028739522464b2f1fda073a9ae199',
+  multipleToolsMissingMetadata: '146bb0346a9b161ca6d84c1f31700dd64d4252a9fdee27181eaedf64c41011f3',
 };
 
 const fixtures = [

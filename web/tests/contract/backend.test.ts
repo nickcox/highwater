@@ -338,6 +338,16 @@ describe('live production Rust -> indexAnalysis contract', () => {
     });
     expect(terminal.tokenAnalysis.itemEstimateCoverage.totalItems).toBe(0);
     expect(terminal.session.calculatedTokenTurns).toBeNull();
+    expect(terminal.compactions[0].details).toMatchObject({
+      trigger: 'manual',
+      instructions: 'Keep the open questions',
+      rule: 'keptLastMessages',
+      startedBeforeModelCall: 1,
+      summaryCall: null,
+      messagesRemoved: 157,
+      conversationTokensAfter: 6592,
+    });
+    expect(output('copilot-1-auto').compactions[0].details.rule).toBeNull();
     for (const policy of ['auto', 'strict', 'heuristic', 'off']) {
       const analysis = output(`fixture-terminal-compaction-${policy}`);
       const summary = analysis.contextItems.find(

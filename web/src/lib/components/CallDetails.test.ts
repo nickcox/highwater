@@ -32,6 +32,18 @@ describe('CallDetails transition metrics', () => {
     expect(screen.queryByText('Estimate basis')).toBeNull();
   });
 
+  it("says when a call is a compaction's own call", () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const call = indexed.analysis.modelCalls[1];
+    call.stopReason = 'compaction-call';
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(
+      screen.getByText(
+        "The compaction's own call, which wrote the summary that replaced the context.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('leaves complete-estimate metrics and unknown values unmarked', () => {
     const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[1];

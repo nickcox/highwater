@@ -545,6 +545,7 @@ fn compaction(
         retained_item_ids: Vec::new(),
         summary_item_id: summary_id,
         tokens_before: None,
+        details: CompactionDetails::default(),
     });
     state.active.clear();
     state.admit(index);

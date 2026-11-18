@@ -246,6 +246,11 @@
           {#if call.stopReason === 'web-search-aggregate'}<small
               >The total of several requests: this response ran web searches, so it is not compared
               with the context.</small
+            >{:else if call.stopReason === 'compaction-call'}<small
+              >The compaction's own call, which wrote the summary that replaced the context.</small
+            >{:else if call.stopReason === 'compaction-aggregate'}<small
+              >The total of the compaction's requests, which wrote the summary that replaced the
+              context.</small
             >{/if}
         </dd>
       </div>

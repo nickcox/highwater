@@ -693,6 +693,7 @@ impl<'t> State<'t> {
                 .collect(),
             summary_item_id: id.clone(),
             tokens_before: None,
+            details: CompactionDetails::default(),
         });
         self.summary = Some(summary.to_owned());
         id

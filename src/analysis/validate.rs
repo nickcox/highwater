@@ -273,6 +273,7 @@ pub(super) fn validate_normalized_session(
             compaction.tokens_before.unwrap_or(0),
             &format!("compaction {} tokensBefore", compaction.id),
         )?;
+        validate_compaction_details(compaction, session.model_calls.len())?;
         let mut source_ids = HashSet::with_capacity(compaction.source_item_ids.len());
         for item_id in &compaction.source_item_ids {
             if !source_ids.insert(item_id.as_str()) {
@@ -394,4 +395,54 @@ pub(super) fn validate_normalized_session(
         item_indices,
         compaction_indices,
     })
+}
+
+/// A background compaction starts no later than the call it is applied before, and its own
+/// call is one of the session's calls. The harness's counts are safe JSON integers.
+fn validate_compaction_details(
+    compaction: &NormalizedCompaction,
+    calls: usize,
+) -> Result<(), AnalysisError> {
+    let details = &compaction.details;
+    if details
+        .started_before_model_call
+        .is_some_and(|start| start == 0 || start > compaction.before_model_call)
+    {
+        return Err(invalid_session(format!(
+            "compaction {} starts after it is applied",
+            compaction.id
+        )));
+    }
+    if details
+        .summary_call
+        .is_some_and(|call| call == 0 || call > calls)
+    {
+        return Err(invalid_session(format!(
+            "compaction {} names an unknown summary call",
+            compaction.id
+        )));
+    }
+    for (value, field) in [
+        (details.duration_ms, "durationMs"),
+        (details.messages_before, "messagesBefore"),
+        (details.messages_removed, "messagesRemoved"),
+        (details.messages_kept, "messagesKept"),
+        (
+            details.messages_added_while_running,
+            "messagesAddedWhileRunning",
+        ),
+        (details.tokens_after, "tokensAfter"),
+        (details.system_tokens_after, "systemTokensAfter"),
+        (
+            details.tool_definition_tokens_after,
+            "toolDefinitionTokensAfter",
+        ),
+        (details.conversation_tokens_after, "conversationTokensAfter"),
+    ] {
+        require_safe_integer(
+            value.unwrap_or(0),
+            &format!("compaction {} {field}", compaction.id),
+        )?;
+    }
+    Ok(())
 }

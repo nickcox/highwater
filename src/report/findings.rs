@@ -83,6 +83,16 @@ fn comparable(previous: &ModelCall, call: &ModelCall) -> bool {
         && call.compaction_before.is_none()
         && !previous.retried
         && !call.retried
+        && !is_compaction_call(previous)
+        && !is_compaction_call(call)
+}
+
+/// A compaction's own call reads the conversation to summarise it, not the cached prompt.
+fn is_compaction_call(call: &ModelCall) -> bool {
+    matches!(
+        call.stop_reason.as_deref(),
+        Some("compaction-call" | "compaction-aggregate")
+    )
 }
 
 /// The time from the end of the previous call to the start of this one, in milliseconds.

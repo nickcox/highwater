@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from '../../src/lib/compaction-details';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -221,6 +222,7 @@ function denseEconomicsScenario(): ReturnType<typeof testAnalysis> {
     retainedItemIds: [`dense-item-${position + 6}`],
     summaryItemId: `dense-item-${position + 7}`,
     tokensBefore: 400 + position,
+    details: emptyCompactionDetails(),
   }));
   analysis.lineage = [];
   const cacheReadTokens = analysis.modelCalls.reduce(

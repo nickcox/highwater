@@ -239,7 +239,7 @@ fn normalized_fixture_parity() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "11195ad77b213e53bbebf3eaa662c0bc888588f8171188f7914304fdff2665ee"
+        "8e7f6035ef44a804674917e2769b25a1647ac145d58d2c8d766f0eafddb3580b"
     );
 }
 
@@ -1206,4 +1206,58 @@ fn claude_thinking_is_a_reported_item_that_follows_the_models_retention() {
         .context_items
         .iter()
         .any(|item| item.kind == ContextItemKind::Thinking));
+}
+
+#[test]
+fn a_compaction_that_records_its_usage_is_a_call_before_the_compaction() {
+    let lines: Vec<Value> = std::fs::read_to_string("fixtures/pi/compaction.jsonl")
+        .expect("fixture")
+        .lines()
+        .map(|line| {
+            let mut record: Value = serde_json::from_str(line).expect("record");
+            if record["type"] == "compaction" {
+                record["timestamp"] = Value::from("2026-01-01T00:00:05Z");
+                record["usage"] = serde_json::json!({
+                    "input": 40, "output": 8, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 48,
+                    "cost": {"input": 0.04, "output": 0.02, "cacheRead": 0, "cacheWrite": 0, "total": 0.06}
+                });
+            }
+            record
+        })
+        .collect();
+    let session = parse_records(&lines);
+    let without = fixture("compaction");
+    assert_eq!(session.model_calls.len(), without.model_calls.len() + 1);
+
+    let call = &session.model_calls[2];
+    assert_eq!(call.stop_reason.as_deref(), Some("compaction-call"));
+    assert_eq!(call.target.model.as_deref(), Some("model-1"));
+    assert_eq!(call.reported_usage.input, Some(40));
+    assert_eq!(call.reported_usage.cost.total, Some(0.06));
+    let [input_id] = call.context_item_ids.as_slice() else {
+        panic!("one input item: {:?}", call.context_item_ids);
+    };
+    let input = session
+        .context_items
+        .iter()
+        .find(|item| item.id == *input_id)
+        .expect("input item");
+    assert_eq!(input.label, "Compaction input · not recorded");
+    assert!(matches!(
+        input.payload,
+        TokenizationPayload::UnrecordedContext { tokens: 40, .. }
+    ));
+
+    let compaction = &session.compactions[0];
+    assert_eq!(compaction.before_model_call, 4);
+    assert_eq!(compaction.details.summary_call, Some(3));
+    assert_eq!(
+        compaction.details.rule,
+        Some(crate::domain::CompactionRule::KeptFromEntry)
+    );
+    assert_eq!(
+        session.model_calls[3].compaction_before.as_deref(),
+        Some(compaction.id.as_str())
+    );
+    assert_eq!(without.compactions[0].details.summary_call, None);
 }

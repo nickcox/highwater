@@ -173,6 +173,40 @@ impl NormalizedContextItem {
         }
     }
 
+    /// What a compaction's own call read: the conversation as the harness sent it to be
+    /// summarised, and its summarising prompt. Neither is recorded, so the item is sized by
+    /// the call's reported input, or has no size when that is not reported.
+    pub(crate) fn compaction_input(
+        id: String,
+        source_record_id: Option<String>,
+        usage: &ReportedUsage,
+    ) -> Self {
+        let tokens = usage.input.map(|input| {
+            input
+                .saturating_add(usage.cache_read.unwrap_or(0))
+                .saturating_add(usage.cache_write.unwrap_or(0))
+        });
+        Self {
+            id,
+            kind: ContextItemKind::UnrecordedContext,
+            label: "Compaction input · not recorded".into(),
+            source_record_id,
+            source_tool_call_id: None,
+            metadata: BTreeMap::from([("compactionInput".into(), "true".into())]),
+            serialized_size_bytes: 0,
+            payload: match tokens {
+                Some(tokens) => TokenizationPayload::UnrecordedContext {
+                    tokens,
+                    approximate: false,
+                },
+                None => TokenizationPayload::Unavailable,
+            },
+            presence: Vec::new(),
+            first_model_call: 0,
+            last_model_call: 0,
+        }
+    }
+
     /// Derived from authoritative presence, not the legacy zero lifetime sentinel.
     /// Analysis callers validate all ranges and call membership before deriving metrics.
     pub(crate) fn lifetime(&self) -> Option<ItemLifetime> {
@@ -282,6 +316,84 @@ pub(crate) struct NormalizedCompaction {
     pub retained_item_ids: Vec<String>,
     pub summary_item_id: String,
     pub tokens_before: Option<u64>,
+    /// What the harness recorded about the compaction beyond what it removed and kept.
+    pub details: CompactionDetails,
+}
+
+/// What started a compaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum CompactionTrigger {
+    Automatic,
+    Manual,
+}
+
+impl CompactionTrigger {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+/// How a harness decides what a compaction keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum CompactionRule {
+    /// Pi: the entries from `firstKeptEntryId` onwards.
+    KeptFromEntry,
+    /// OpenCode: the summary and the recent exchange saved with it.
+    RecentExchange,
+    /// Claude Code: the recorded preserved segment.
+    PreservedSegment,
+    /// Only the summary is kept.
+    SummaryOnly,
+    /// Codex: the recorded replacement history.
+    ReplacementHistory,
+    /// Copilot: the last messages from when the compaction started, and those added while
+    /// it ran.
+    KeptLastMessages,
+    /// VS Code Copilot: inferred from the next call's input.
+    InferredFromInput,
+}
+
+impl CompactionRule {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::KeptFromEntry => "keptFromEntry",
+            Self::RecentExchange => "recentExchange",
+            Self::PreservedSegment => "preservedSegment",
+            Self::SummaryOnly => "summaryOnly",
+            Self::ReplacementHistory => "replacementHistory",
+            Self::KeptLastMessages => "keptLastMessages",
+            Self::InferredFromInput => "inferredFromInput",
+        }
+    }
+}
+
+/// Optional facts about a compaction. Each source fills in what it records; the message
+/// and token figures are the harness's own counts, not Highwater's estimates.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct CompactionDetails {
+    pub trigger: Option<CompactionTrigger>,
+    /// A manual compaction's focus text.
+    pub instructions: Option<String>,
+    pub rule: Option<CompactionRule>,
+    /// For a compaction that ran in the background: the first call made after it started.
+    pub started_before_model_call: Option<usize>,
+    /// The compaction's own model call.
+    pub summary_call: Option<usize>,
+    pub duration_ms: Option<u64>,
+    pub messages_before: Option<u64>,
+    pub messages_removed: Option<u64>,
+    pub messages_kept: Option<u64>,
+    /// Messages added while a background compaction ran, which it also kept.
+    pub messages_added_while_running: Option<u64>,
+    pub tokens_after: Option<u64>,
+    pub system_tokens_after: Option<u64>,
+    pub tool_definition_tokens_after: Option<u64>,
+    pub conversation_tokens_after: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

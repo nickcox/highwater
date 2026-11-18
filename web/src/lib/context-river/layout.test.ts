@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from '../compaction-details';
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from '../testing/wire-analysis';
 import { curveLinear, curveMonotoneX, line, type CurveFactory } from 'd3-shape';
@@ -126,6 +127,7 @@ describe('layoutContextRiver', () => {
       retainedItemIds: ['retained'],
       summaryItemId: 'summary',
       tokensBefore: 90,
+      details: emptyCompactionDetails(),
     });
     const indexed = indexTestAnalysis(analysis);
     const layout = layoutContextRiver(indexed, options);
@@ -198,6 +200,7 @@ describe('layoutContextRiver', () => {
         retainedItemIds: [],
         summaryItemId: 'terminal-summary',
         tokensBefore: 100,
+        details: emptyCompactionDetails(),
       },
     ];
     analysis.lineage = [{ from: 'a', to: 'terminal-summary', kind: 'frameworkCompaction' }];

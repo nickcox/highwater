@@ -1,3 +1,4 @@
+import { emptyCompactionDetails } from './compaction-details';
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from './testing/wire-analysis';
 import { indexAnalysis } from './analysis';
@@ -56,6 +57,7 @@ function withRepeatedCompactions() {
       retainedItemIds: ['retained'],
       summaryItemId: 'summary-alt',
       tokensBefore: 100,
+      details: emptyCompactionDetails(),
     },
     {
       id: 'compact-2',
@@ -64,6 +66,7 @@ function withRepeatedCompactions() {
       retainedItemIds: ['retained'],
       summaryItemId: 'summary2',
       tokensBefore: 40,
+      details: emptyCompactionDetails(),
     },
   );
   return analysis;

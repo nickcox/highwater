@@ -35,6 +35,10 @@ struct PendingCompaction {
     source_item_ids: Vec<String>,
     retained_item_ids: Vec<String>,
     summary_item_id: String,
+    /// The compaction's own call, which Codex 0.167 and later record.
+    summary_call: Option<usize>,
+    /// Whether this is a `compacted` record rather than a reset inferred from usage.
+    recorded: bool,
 }
 
 #[derive(Default)]
@@ -157,7 +161,7 @@ impl State {
                 _ => {}
             },
             Some("response_item") => self.apply_item(line, record, payload, kind),
-            Some("compacted") => self.apply_compaction(line, payload),
+            Some("compacted") => self.apply_compaction(line, record, payload),
             _ => {}
         }
     }
@@ -537,6 +541,8 @@ impl State {
                     .collect(),
                 retained_item_ids: Vec::new(),
                 summary_item_id: summary_id,
+                summary_call: None,
+                recorded: false,
             });
             self.limitations.insert(Limitation::InferredContextReset);
         }
@@ -707,9 +713,16 @@ impl State {
 
     /// `replacement_history` is the whole conversation after the compaction. Items it
     /// repeats exactly are retained; the encrypted `compaction` item is the summary.
-    fn apply_compaction(&mut self, line: usize, payload: &Value) {
+    fn apply_compaction(&mut self, line: usize, record: &Value, payload: &Value) {
         self.close_response();
-        self.limitations.insert(Limitation::MissingCompactionUsage);
+        let summary_call = if self.inherited {
+            None
+        } else {
+            self.compaction_call(line, record, payload)
+        };
+        if summary_call.is_none() {
+            self.limitations.insert(Limitation::MissingCompactionUsage);
+        }
         let replacement = payload
             .get("replacement_history")
             .and_then(Value::as_array)
@@ -793,6 +806,7 @@ impl State {
             if let Some(compaction) = self.compactions.last_mut() {
                 compaction.source_item_ids.extend(source_item_ids);
                 compaction.retained_item_ids.extend(retained_item_ids);
+                compaction.summary_call = compaction.summary_call.or(summary_call);
             }
             return;
         }
@@ -802,8 +816,54 @@ impl State {
             source_item_ids,
             retained_item_ids,
             summary_item_id: summary_id.clone(),
+            summary_call,
+            recorded: true,
         });
         self.next_compaction = Some(summary_id);
+    }
+
+    /// The compaction's own call, from the usage record Codex 0.167 and later keep in the
+    /// `compacted` record (`latest_token_usage_record`, whose `response_id` is the
+    /// `compaction_response_id`). It is sent the whole context: measured on local sessions,
+    /// its input equals the previous call's input and output, plus a few dozen tokens of
+    /// prompt and any tool output since. Returns its index.
+    fn compaction_call(&mut self, line: usize, record: &Value, payload: &Value) -> Option<usize> {
+        let response = text(payload, "compaction_response_id")?;
+        let usage_record = payload.get("latest_token_usage_record")?;
+        if text(usage_record, "response_id").as_deref() != Some(response.as_str()) {
+            return None;
+        }
+        let usage = usage_record.get("usage")?;
+        let index = self.calls.len() + 1;
+        let context_item_ids = self
+            .active
+            .iter()
+            .map(|item| self.items[*item].id.clone())
+            .collect();
+        for item in &self.active {
+            extend_presence(&mut self.items[*item], index);
+        }
+        self.calls.push(NormalizedModelCall {
+            retried: false,
+            tool_loadout_known: false,
+            index,
+            source_record_id: format!("line-{line}"),
+            target: ModelTarget {
+                provider: Some("openai".into()),
+                model: self.model.clone(),
+                api: Some("openai-responses".into()),
+            },
+            reported_usage: reported_usage(usage),
+            stop_reason: Some("compaction-call".into()),
+            timestamps: CallTimestamps {
+                started_at_ms: None,
+                recorded_at_ms: timestamp_ms(record),
+            },
+            context_item_ids,
+            tool_calls_after: Vec::new(),
+            compaction_before: self.next_compaction.take(),
+        });
+        Some(index)
     }
 
     /// The summary is encrypted, so it has no countable text.
@@ -871,6 +931,13 @@ impl State {
                     .collect(),
                 summary_item_id: compaction.summary_item_id,
                 tokens_before: None,
+                details: CompactionDetails {
+                    rule: compaction
+                        .recorded
+                        .then_some(CompactionRule::ReplacementHistory),
+                    summary_call: compaction.summary_call,
+                    ..CompactionDetails::default()
+                },
             });
         }
         // A call only names a compaction that is shown.
@@ -1418,6 +1485,67 @@ mod tests {
         assert!(!normal
             .limitations
             .contains(&Limitation::InferredContextReset));
+    }
+
+    #[test]
+    fn a_compaction_with_its_usage_record_is_a_call_with_the_whole_context() {
+        let compacted = record(
+            "compacted",
+            r#"{"message":"","compaction_response_id":"resp_c","replacement_history":[{"type":"compaction","encrypted_content":"x"}],"latest_token_usage_record":{"response_id":"resp_c","usage":{"input_tokens":5000,"cached_input_tokens":4900,"cache_write_input_tokens":0,"output_tokens":300,"reasoning_output_tokens":0,"total_tokens":5300}}}"#,
+        );
+        let loaded = read(&[
+            record("session_meta", r#"{"id":"thread"}"#),
+            turn("t1"),
+            message("user", "First"),
+            message("assistant", "One"),
+            usage(4000),
+            compacted,
+            turn("t2"),
+            message("user", "Second"),
+            message("assistant", "Two"),
+            usage(900),
+        ]);
+        let session = &loaded.session;
+        assert_eq!(session.model_calls.len(), 3);
+        let call = &session.model_calls[1];
+        assert_eq!(call.stop_reason.as_deref(), Some("compaction-call"));
+        assert_eq!(call.reported_usage.cache_read, Some(4900));
+        assert_eq!(call.context_item_ids, ["codex:item:3", "codex:response:4"]);
+        let compaction = &session.compactions[0];
+        assert_eq!(compaction.before_model_call, 3);
+        assert_eq!(compaction.details.summary_call, Some(2));
+        assert_eq!(
+            compaction.details.rule,
+            Some(CompactionRule::ReplacementHistory)
+        );
+        assert!(!loaded
+            .limitations
+            .contains(&Limitation::MissingCompactionUsage));
+
+        // Without its usage record, a compaction has no call.
+        let without = read(&[
+            record("session_meta", r#"{"id":"thread"}"#),
+            turn("t1"),
+            message("user", "First"),
+            message("assistant", "One"),
+            usage(4000),
+            record(
+                "compacted",
+                r#"{"message":"","replacement_history":[{"type":"compaction","encrypted_content":"x"}]}"#,
+            ),
+            turn("t2"),
+            message("user", "Second"),
+            message("assistant", "Two"),
+            usage(900),
+        ]);
+        assert_eq!(without.session.model_calls.len(), 2);
+        assert!(without.session.compactions[0]
+            .details
+            .summary_call
+            .is_none());
+        assert!(without
+            .limitations
+            .contains(&Limitation::MissingCompactionUsage));
     }
 
     #[test]

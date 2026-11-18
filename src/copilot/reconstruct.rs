@@ -715,6 +715,7 @@ impl State {
                 retained_item_ids: Vec::new(),
                 summary_item_id: compaction.summary_item_id,
                 tokens_before: compaction.tokens_before,
+                details: CompactionDetails::default(),
             });
         }
         // A call only names a compaction that is shown.

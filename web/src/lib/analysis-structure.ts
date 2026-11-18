@@ -9,6 +9,7 @@ import { stableItemOrder } from './analysis-ordering';
 import { assignItemColorSlots } from './context-river/colors';
 import { itemVersions } from './item-versions';
 import { AnalysisValidationError, assertUnique } from './analysis-validation';
+import { assertCompactionDetails } from './compaction-details';
 
 function addToMap<K, V>(map: Map<K, V[]>, key: K, value: V): void {
   const values = map.get(key);
@@ -230,6 +231,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     }
   }
 
+  const callIndexes = new Set(analysis.modelCalls.map((call) => call.index));
   const compactionById = new Map<string, CompactionEvent>();
   const compactionBySummaryId = new Map<string, CompactionEvent>();
   const compactionsBySummaryId = new Map<string, CompactionEvent[]>();
@@ -249,6 +251,7 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
     if (!itemById.has(compaction.summaryItemId)) {
       throw new AnalysisValidationError(`Compaction ${compaction.id} references a missing summary`);
     }
+    assertCompactionDetails(compaction, callIndexes);
     for (const id of [...compaction.sourceItemIds, ...compaction.retainedItemIds]) {
       if (!itemById.has(id)) {
         throw new AnalysisValidationError(

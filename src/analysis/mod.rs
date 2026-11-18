@@ -910,6 +910,7 @@ fn assemble_analysis(
                 retained_item_ids: event.retained_item_ids.clone(),
                 summary_item_id: event.summary_item_id.clone(),
                 tokens_before: event.tokens_before,
+                details: (&event.details).into(),
             })
             .collect(),
         lineage: session

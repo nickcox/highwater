@@ -494,6 +494,48 @@ pub(crate) struct Compaction {
     pub retained_item_ids: Vec<String>,
     pub summary_item_id: String,
     pub tokens_before: Option<u64>,
+    pub details: CompactionDetails,
+}
+
+/// What the harness recorded about a compaction. Every field is `null` when not recorded.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompactionDetails {
+    pub trigger: Option<&'static str>,
+    pub instructions: Option<String>,
+    pub rule: Option<&'static str>,
+    pub started_before_model_call: Option<usize>,
+    pub summary_call: Option<usize>,
+    pub duration_ms: Option<u64>,
+    pub messages_before: Option<u64>,
+    pub messages_removed: Option<u64>,
+    pub messages_kept: Option<u64>,
+    pub messages_added_while_running: Option<u64>,
+    pub tokens_after: Option<u64>,
+    pub system_tokens_after: Option<u64>,
+    pub tool_definition_tokens_after: Option<u64>,
+    pub conversation_tokens_after: Option<u64>,
+}
+
+impl From<&crate::domain::CompactionDetails> for CompactionDetails {
+    fn from(details: &crate::domain::CompactionDetails) -> Self {
+        Self {
+            trigger: details.trigger.map(|trigger| trigger.as_str()),
+            instructions: details.instructions.clone(),
+            rule: details.rule.map(|rule| rule.as_str()),
+            started_before_model_call: details.started_before_model_call,
+            summary_call: details.summary_call,
+            duration_ms: details.duration_ms,
+            messages_before: details.messages_before,
+            messages_removed: details.messages_removed,
+            messages_kept: details.messages_kept,
+            messages_added_while_running: details.messages_added_while_running,
+            tokens_after: details.tokens_after,
+            system_tokens_after: details.system_tokens_after,
+            tool_definition_tokens_after: details.tool_definition_tokens_after,
+            conversation_tokens_after: details.conversation_tokens_after,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

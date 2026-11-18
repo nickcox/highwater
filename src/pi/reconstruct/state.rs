@@ -11,6 +11,16 @@ struct PendingCompaction {
     retained_item_ids: Vec<String>,
     before_model_call: usize,
     tokens_before: Option<u64>,
+    summary_call: Option<usize>,
+}
+
+/// What a compaction entry records besides its summary.
+pub(super) struct CompactionRecord {
+    pub first_kept_position: Option<usize>,
+    pub tokens_before: Option<u64>,
+    /// The usage of the call that wrote the summary.
+    pub usage: Option<ReportedUsage>,
+    pub recorded_at_ms: Option<i64>,
 }
 
 fn insert_item(
@@ -226,12 +236,17 @@ impl ReconstructionState {
     pub(super) fn apply_compaction(
         &mut self,
         item: NormalizedContextItem,
-        first_kept_position: Option<usize>,
-        tokens_before: Option<u64>,
+        record: CompactionRecord,
         branch_positions: &HashMap<&str, usize>,
         entry: &PiEntry,
-        record: bool,
+        own: bool,
     ) {
+        let CompactionRecord {
+            first_kept_position,
+            tokens_before,
+            usage,
+            recorded_at_ms,
+        } = record;
         let previous_globals: HashSet<ItemIndex> = self
             .global
             .iter()
@@ -275,10 +290,29 @@ impl ReconstructionState {
             .chain(retained.iter())
             .map(|index| self.items[index.0].id.clone())
             .collect();
+        // The call that wrote the summary read a shortened form of the removed items (about
+        // half their size, measured on local sessions) and Pi's summarising prompt.
+        let summary_call = match usage.filter(|_| own) {
+            Some(usage) => {
+                let input_id = format!("{summary_id}:input");
+                let input = insert_item(
+                    &mut self.items,
+                    &mut self.item_indices,
+                    input_id.clone(),
+                    NormalizedContextItem::compaction_input(
+                        input_id,
+                        Some(record_id.clone()),
+                        &usage,
+                    ),
+                );
+                Some(self.push_compaction_call(&[input], usage, recorded_at_ms, &record_id))
+            }
+            None => None,
+        };
         self.active.clear();
         self.active.push(summary_index);
         self.active.extend(retained);
-        if !record {
+        if !own {
             self.items[summary_index.0]
                 .metadata
                 .insert("inherited".into(), "true".into());
@@ -291,7 +325,47 @@ impl ReconstructionState {
             retained_item_ids,
             before_model_call: self.calls.len() + 1,
             tokens_before,
+            summary_call,
         });
+    }
+
+    /// A compaction's own call, made with the previous call's model. Returns its index.
+    fn push_compaction_call(
+        &mut self,
+        members: &[ItemIndex],
+        usage: ReportedUsage,
+        recorded_at_ms: Option<i64>,
+        record_id: &str,
+    ) -> usize {
+        let index = self.calls.len() + 1;
+        for member in members {
+            extend_presence(&mut self.items[member.0], index);
+        }
+        let target = self
+            .calls
+            .last()
+            .map(|call| call.target.clone())
+            .unwrap_or_default();
+        self.calls.push(NormalizedModelCall {
+            retried: false,
+            tool_loadout_known: false,
+            index,
+            source_record_id: record_id.to_owned(),
+            target,
+            reported_usage: usage,
+            stop_reason: Some("compaction-call".into()),
+            timestamps: CallTimestamps {
+                started_at_ms: None,
+                recorded_at_ms,
+            },
+            context_item_ids: members
+                .iter()
+                .map(|member| self.items[member.0].id.clone())
+                .collect(),
+            tool_calls_after: Vec::new(),
+            compaction_before: self.last_compaction.take(),
+        });
+        index
     }
 
     /// Visibility filtering, pruning, and output ordering happen only here.
@@ -329,6 +403,11 @@ impl ReconstructionState {
                 retained_item_ids: compaction.retained_item_ids,
                 summary_item_id: summary_id,
                 tokens_before: compaction.tokens_before,
+                details: CompactionDetails {
+                    rule: Some(CompactionRule::KeptFromEntry),
+                    summary_call: compaction.summary_call,
+                    ..CompactionDetails::default()
+                },
             });
         }
         let terminal_boundary = calls.len() + 1;

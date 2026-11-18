@@ -331,6 +331,36 @@ export interface CompactionEvent {
   retainedItemIds: string[];
   summaryItemId: string;
   tokensBefore: number | null;
+  details: CompactionDetails;
+}
+
+/** What the harness recorded about a compaction. Counts are the harness's own figures. */
+export interface CompactionDetails {
+  trigger: 'automatic' | 'manual' | null;
+  /** A manual compaction's focus text. */
+  instructions: string | null;
+  rule:
+    | 'keptFromEntry'
+    | 'recentExchange'
+    | 'preservedSegment'
+    | 'summaryOnly'
+    | 'replacementHistory'
+    | 'keptLastMessages'
+    | 'inferredFromInput'
+    | null;
+  /** For a compaction that ran in the background: the first call made after it started. */
+  startedBeforeModelCall: number | null;
+  /** The compaction's own model call. */
+  summaryCall: number | null;
+  durationMs: number | null;
+  messagesBefore: number | null;
+  messagesRemoved: number | null;
+  messagesKept: number | null;
+  messagesAddedWhileRunning: number | null;
+  tokensAfter: number | null;
+  systemTokensAfter: number | null;
+  toolDefinitionTokensAfter: number | null;
+  conversationTokensAfter: number | null;
 }
 
 export interface LineageEdge {
