@@ -278,6 +278,16 @@ fn successful_compaction_is_a_real_call_and_replaces_only_subsequent_context() {
     assert_eq!(result.session.model_calls.len(), 3);
     assert_eq!(result.session.compactions.len(), 1);
     assert_eq!(result.session.compactions[0].before_model_call, 3);
+    let details = &result.session.compactions[0].details;
+    assert_eq!(details.summary_call, Some(2));
+    assert_eq!(
+        details.trigger,
+        Some(crate::domain::CompactionTrigger::Automatic)
+    );
+    assert_eq!(
+        details.rule,
+        Some(crate::domain::CompactionRule::SummaryOnly)
+    );
     assert_eq!(
         origins(&result.session, 2),
         [

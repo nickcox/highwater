@@ -338,7 +338,6 @@ impl CompactionTrigger {
 
 /// How a harness decides what a compaction keeps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum CompactionRule {
     /// Pi: the entries from `firstKeptEntryId` onwards.
     KeptFromEntry,

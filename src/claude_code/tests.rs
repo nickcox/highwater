@@ -716,3 +716,57 @@ fn thinking_is_sized_by_reported_reasoning_for_the_model_that_produced_it() {
     assert_eq!(item.token_estimates[0].tokens, Some(7));
     assert_eq!(item.token_estimates[0].method, "reportedUsage");
 }
+
+#[test]
+fn compactions_record_their_trigger_rule_duration_and_figures() {
+    use crate::domain::{CompactionRule, CompactionTrigger};
+    let details = |name: &str| {
+        let path = fixture_root().join(format!("-synthetic-project/{name}.jsonl"));
+        super::load(&path, FileKind::Main)
+            .expect("fixture")
+            .session
+            .compactions[0]
+            .details
+            .clone()
+    };
+    let manual = details("compaction");
+    assert_eq!(manual.trigger, Some(CompactionTrigger::Manual));
+    assert_eq!(manual.rule, Some(CompactionRule::PreservedSegment));
+    assert_eq!(manual.duration_ms, Some(30_000));
+    assert_eq!(manual.messages_kept, Some(4));
+    assert_eq!(manual.tokens_after, Some(4_000));
+    assert_eq!(manual.instructions, None);
+    assert_eq!(manual.summary_call, None);
+
+    let legacy = details("compaction-legacy");
+    assert_eq!(legacy.trigger, Some(CompactionTrigger::Automatic));
+    assert_eq!(legacy.rule, Some(CompactionRule::SummaryOnly));
+    assert_eq!(legacy.duration_ms, None);
+    assert_eq!(legacy.tokens_after, None);
+}
+
+#[test]
+fn a_manual_compaction_reads_its_focus_text_from_the_queued_command() {
+    let source = fixture_root().join("-synthetic-project/compaction.jsonl");
+    let text = fs::read_to_string(&source).expect("fixture");
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let boundary = lines
+        .iter()
+        .position(|line| line.contains("\"compact_boundary\""))
+        .expect("boundary");
+    lines.insert(
+        boundary,
+        r#"{"type":"queue-operation","operation":"enqueue","content":"/compact keep the open questions"}"#
+            .to_owned(),
+    );
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("focus.jsonl");
+    fs::write(&path, lines.join("\n") + "\n").expect("transcript");
+    let session = super::load(&path, FileKind::Main)
+        .expect("transcript")
+        .session;
+    assert_eq!(
+        session.compactions[0].details.instructions.as_deref(),
+        Some("keep the open questions")
+    );
+}

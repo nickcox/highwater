@@ -413,6 +413,10 @@ fn a_conversation_summary_in_a_calls_input_is_a_compaction() {
     let session = loaded(&path).session;
     assert_eq!(session.compactions.len(), 1);
     let compaction = &session.compactions[0];
+    assert_eq!(
+        compaction.details.rule,
+        Some(crate::domain::CompactionRule::InferredFromInput)
+    );
     assert_eq!(compaction.before_model_call, 3);
     assert_eq!(
         session.model_calls[2].compaction_before.as_deref(),

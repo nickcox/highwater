@@ -460,6 +460,19 @@ fn assistant(
             .limitations
             .insert(ReplayLimitation::UnpairedCompactionSummary);
     }
+    // The compaction request's `auto` flag says whether OpenCode started it.
+    let trigger = parent_message
+        .parts
+        .iter()
+        .find(|part| part.data.get("type").and_then(Value::as_str) == Some("compaction"))
+        .and_then(|part| part.data.get("auto").and_then(Value::as_bool))
+        .map(|auto| {
+            if auto {
+                CompactionTrigger::Automatic
+            } else {
+                CompactionTrigger::Manual
+            }
+        });
     let overflow = summary
         && parent_message
             .parts
@@ -713,7 +726,13 @@ fn assistant(
             retained_item_ids,
             summary_item_id: summary_id,
             tokens_before: None,
-            details: CompactionDetails::default(),
+            details: CompactionDetails {
+                trigger,
+                rule: Some(CompactionRule::SummaryOnly),
+                // The summary message is the compaction's own call.
+                summary_call: Some(call_index),
+                ..CompactionDetails::default()
+            },
         });
         state.pending_compaction = Some(id);
         state.admit(summary_index);

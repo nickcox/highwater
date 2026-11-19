@@ -693,7 +693,10 @@ impl<'t> State<'t> {
                 .collect(),
             summary_item_id: id.clone(),
             tokens_before: None,
-            details: CompactionDetails::default(),
+            details: CompactionDetails {
+                rule: Some(CompactionRule::InferredFromInput),
+                ..CompactionDetails::default()
+            },
         });
         self.summary = Some(summary.to_owned());
         id

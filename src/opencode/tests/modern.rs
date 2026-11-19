@@ -318,6 +318,16 @@ fn completed_compaction_usage_is_one_explicit_aggregate_not_double_counted_legac
         Some("compaction-aggregate")
     );
     assert_eq!(r.session.compactions[0].before_model_call, 4);
+    let details = &r.session.compactions[0].details;
+    assert_eq!(details.summary_call, Some(3));
+    assert_eq!(
+        details.trigger,
+        Some(crate::domain::CompactionTrigger::Manual)
+    );
+    assert_eq!(
+        details.rule,
+        Some(crate::domain::CompactionRule::RecentExchange)
+    );
 }
 
 #[test]

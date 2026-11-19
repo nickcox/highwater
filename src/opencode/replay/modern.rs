@@ -545,7 +545,17 @@ fn compaction(
         retained_item_ids: Vec::new(),
         summary_item_id: summary_id,
         tokens_before: None,
-        details: CompactionDetails::default(),
+        details: CompactionDetails {
+            trigger: match message.data.get("reason").and_then(Value::as_str) {
+                Some("auto") => Some(CompactionTrigger::Automatic),
+                Some("manual") => Some(CompactionTrigger::Manual),
+                _ => None,
+            },
+            rule: Some(CompactionRule::RecentExchange),
+            // The call added above for the compaction's recorded usage.
+            summary_call: usage_present.then_some(state.session.model_calls.len()),
+            ..CompactionDetails::default()
+        },
     });
     state.active.clear();
     state.admit(index);

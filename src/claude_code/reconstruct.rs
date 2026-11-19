@@ -43,6 +43,7 @@ struct PendingCompaction {
     source_item_ids: Vec<String>,
     retained_item_ids: Vec<String>,
     summary_item_id: Option<String>,
+    details: CompactionDetails,
 }
 
 struct Response {
@@ -662,6 +663,36 @@ impl State<'_> {
             self.limitations
                 .insert(Limitation::UnverifiedCompactionRetention);
         }
+        let number = |key: &str| {
+            metadata
+                .and_then(|metadata| metadata.get(key))
+                .and_then(Value::as_f64)
+                .filter(|value| value.is_finite() && *value >= 0.0 && *value < 1e15)
+                .map(|value| value.round() as u64)
+        };
+        let details = CompactionDetails {
+            trigger: match metadata
+                .and_then(|metadata| metadata.get("trigger"))
+                .and_then(Value::as_str)
+            {
+                Some("manual") => Some(CompactionTrigger::Manual),
+                Some("auto") => Some(CompactionTrigger::Automatic),
+                _ => None,
+            },
+            instructions: self.compact_instructions(record),
+            rule: Some(if preserved.is_some() {
+                CompactionRule::PreservedSegment
+            } else {
+                CompactionRule::SummaryOnly
+            }),
+            duration_ms: number("durationMs"),
+            messages_kept: metadata
+                .and_then(|metadata| metadata.pointer("/preservedMessages/uuids"))
+                .and_then(Value::as_array)
+                .map(|uuids| uuids.len() as u64),
+            tokens_after: number("postTokens"),
+            ..CompactionDetails::default()
+        };
         let preserved = preserved.unwrap_or_default();
         let (retained, old): (Vec<usize>, Vec<usize>) = self.active.iter().partition(|item| {
             self.items[**item]
@@ -683,8 +714,32 @@ impl State<'_> {
             source_item_ids: ids(&old),
             retained_item_ids: ids(&retained),
             summary_item_id: None,
+            details,
         });
         self.active = retained;
+    }
+
+    /// A manual compaction's focus text: what followed `/compact` in the command queued
+    /// just before the boundary, after any earlier boundary.
+    fn compact_instructions(&self, boundary: &Record) -> Option<String> {
+        let position = self
+            .records
+            .iter()
+            .position(|record| std::ptr::eq(record, boundary))?;
+        self.records[..position]
+            .iter()
+            .rev()
+            .take_while(|record| {
+                record.value.get("subtype").and_then(Value::as_str) != Some("compact_boundary")
+            })
+            .filter(|record| record.kind() == "queue-operation")
+            .find_map(|record| {
+                let command = record.value.get("content").and_then(Value::as_str)?;
+                command.strip_prefix("/compact")
+            })
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
     }
 
     /// The UUIDs from `tailUuid` back to `headUuid` along their original
@@ -786,7 +841,7 @@ impl State<'_> {
                     .collect(),
                 summary_item_id: summary,
                 tokens_before: compaction.tokens_before,
-                details: CompactionDetails::default(),
+                details: compaction.details,
             });
         }
         let mut context_items: Vec<_> = items
