@@ -1246,6 +1246,18 @@
     economicsTrackComponent?.closeEventBreakdown(returnFocus);
   }
 
+  /** Selects the summary of the compaction before `callIndex`, whose details show the
+   * compaction. */
+  function inspectCompaction(callIndex: number): void {
+    const compaction = indexed.analysis.compactions.find(
+      (event) => event.beforeModelCall === callIndex,
+    );
+    if (!compaction) return;
+    closeEconomicsBreakdown(false);
+    onSelectItem(compaction.summaryItemId);
+    if (indexed.callByIndex.has(callIndex)) onPinCall(callIndex);
+  }
+
   function inspectEconomicsEvent(callIndex: number): void {
     closeEconomicsBreakdown(false);
     onPinCall(callIndex);
@@ -1973,6 +1985,7 @@
       onClose={() => closeEconomicsBreakdown()}
       onZoom={zoomEconomicsEvents}
       onInspect={inspectEconomicsEvent}
+      onInspectCompaction={inspectCompaction}
     />
   {/if}
   {#if economicsTrackMode !== 'off'}

@@ -246,3 +246,43 @@ describe('EconomicsTrack cost scaling', () => {
     await waitFor(() => expect(cluster).toHaveFocus());
   });
 });
+
+describe('EconomicsTrack compaction span', () => {
+  it('draws the calls a background compaction ran over', () => {
+    const analysis = testAnalysis();
+    analysis.compactions[0].details = {
+      ...analysis.compactions[0].details,
+      startedBeforeModelCall: 2,
+    };
+    const indexed = indexTestAnalysis(analysis);
+    const columns = analysis.modelCalls.map((call, index) => ({
+      callIndex: call.index,
+      x: 80 + index * 100,
+      totalDisplayWeight: 1,
+    }));
+    const { container } = render(EconomicsTrack, {
+      props: {
+        indexed,
+        columns,
+        width: 600,
+        mode: 'cost',
+        pinnedCallIndex: null,
+        hoveredCallIndex: null,
+        onPinCall: () => {},
+        onHoverCall: () => {},
+        onMarkClick: () => {},
+      },
+    });
+    const span = container.querySelector('line.compaction-span')!;
+    expect(span.getAttribute('x1')).toBe('130');
+    expect(span.getAttribute('x2')).toBe('230');
+    expect(span.querySelector('title')).toHaveTextContent(
+      'Compaction ran in the background from before call 2 to before call 3',
+    );
+  });
+
+  it('draws no span for a compaction applied where it started', () => {
+    const container = renderCostTrack([1, 1, 1]);
+    expect(container.querySelector('line.compaction-span')).toBeNull();
+  });
+});

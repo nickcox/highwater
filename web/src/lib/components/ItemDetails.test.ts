@@ -225,3 +225,47 @@ describe('ItemDetails child session', () => {
     expect(screen.getByText('Started a child session that is not listed.')).toBeInTheDocument();
   });
 });
+
+describe('ItemDetails compaction', () => {
+  it("shows a compaction's rule, details and own call on its summary", async () => {
+    const analysis = testAnalysis();
+    analysis.compactions[0].details = {
+      ...analysis.compactions[0].details,
+      trigger: 'manual',
+      instructions: 'Keep the plan',
+      rule: 'preservedSegment',
+      summaryCall: 2,
+      messagesKept: 1,
+      tokensAfter: 40,
+    };
+    analysis.session.source = 'claude-code';
+    analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: ['missingHistoricalSystemPrompt'],
+    };
+    const indexed = indexTestAnalysis(analysis);
+    const onInspectCall = vi.fn();
+    render(ItemDetails, {
+      props: {
+        item: indexed.itemById.get('summary')!,
+        indexed,
+        callIndex: 3,
+        pinnedCallIndex: 3,
+        onInspectCall,
+      },
+    });
+    expect(
+      screen.getByText('Claude Code kept the recent messages it recorded as preserved: 1 message.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Started').nextElementSibling).toHaveTextContent(
+      'By the user, with the focus “Keep the plan”',
+    );
+    expect(
+      screen.getByText('Tokens, as Claude Code counts them').nextElementSibling,
+    ).toHaveTextContent('100 before · 40 after');
+    await fireEvent.click(
+      screen.getByRole('button', { name: "Inspect the compaction's call (2)" }),
+    );
+    expect(onInspectCall).toHaveBeenCalledWith(2);
+  });
+});

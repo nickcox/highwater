@@ -9,6 +9,7 @@
     onClose,
     onZoom,
     onInspect,
+    onInspectCompaction = () => {},
   }: {
     breakdown: EconomicsEventBreakdown;
     element?: HTMLDivElement | null;
@@ -17,6 +18,8 @@
     onClose: () => void;
     onZoom: () => void;
     onInspect: (callIndex: number) => void;
+    /** Opens the details of the compaction before this call. */
+    onInspectCompaction?: (callIndex: number) => void;
   } = $props();
 
   function keydown(event: KeyboardEvent): void {
@@ -63,9 +66,16 @@
           ><EventGlyph kind={event.kind} direction={event.direction} size={18} />{event.label} · call
           {event.callIndex}</span
         >
-        <button type="button" onclick={() => onInspect(event.callIndex)}
-          >Inspect call {event.callIndex}</button
-        >
+        <span class="event-actions">
+          {#if event.kind === 'compaction'}
+            <button type="button" onclick={() => onInspectCompaction(event.callIndex)}
+              >Compaction details</button
+            >
+          {/if}
+          <button type="button" onclick={() => onInspect(event.callIndex)}
+            >Inspect call {event.callIndex}</button
+          >
+        </span>
       </li>
     {/each}
   </ul>
@@ -131,5 +141,11 @@
       max-height: 180px;
       margin: 8px 0 0;
     }
+  }
+  .event-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
   }
 </style>

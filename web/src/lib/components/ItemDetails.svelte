@@ -10,6 +10,7 @@
   import { presenceCount } from '../context-river/lifespans';
   import { describeTokenDiagnostic } from '../diagnostics';
   import CopyButton from './CopyButton.svelte';
+  import { compactionPanel } from '../compaction-details';
   import {
     inspectorSections,
     rememberSection,
@@ -52,6 +53,11 @@
   let sourceCompactions = $derived(item ? (indexed.compactionBySourceId.get(item.id) ?? []) : []);
   let summaryCompaction = $derived(
     item ? (indexed.compactionBySummaryId.get(item.id) ?? null) : null,
+  );
+  let compaction = $derived(
+    summaryCompaction
+      ? compactionPanel(summaryCompaction, indexed.analysis.session.source, indexed.callByIndex)
+      : null,
   );
   let retainedCompactions = $derived(
     item ? (indexed.compactionsByRetainedId.get(item.id) ?? []) : [],
@@ -295,10 +301,26 @@
             .map((event) => event.beforeModelCall)
             .join(', ')}.
         </p>{/if}
-      {#if summaryCompaction}<p>
+      {#if summaryCompaction && compaction}<p>
           Replaces {formatMetric(summaryCompaction.sourceItemIds.length)} items removed at the compaction
           before call {summaryCompaction.beforeModelCall}.
-        </p>{/if}
+        </p>
+        {#if compaction.rule}<p>{compaction.rule}</p>{/if}
+        <dl class="detail-rows compaction-rows">
+          {#each compaction.rows as row (row.label)}
+            <div>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          {/each}
+        </dl>
+        {#if compaction.summaryCall}
+          {@const call = compaction.summaryCall}
+          <button type="button" onclick={() => onInspectCall(call.index)}
+            >Inspect the compaction's call ({call.index})</button
+          >
+        {/if}
+      {/if}
     {/if}
 
     {#if version}

@@ -89,6 +89,15 @@
     label: string;
   }
 
+  /** The calls a background compaction ran over, from where it started to where it was
+   * applied. */
+  interface CompactionSpan {
+    callIndex: number;
+    startX: number;
+    endX: number;
+    label: string;
+  }
+
   type TrackEventKind = 'compaction' | 'targetChange' | 'ratioChange';
   interface TrackEvent {
     id: string;
@@ -136,6 +145,9 @@
   let columnsByCall = $derived(new Map(columns.map((column) => [column.callIndex, column])));
   let compactionMarkers = $derived(
     layoutCompactionMarkers(indexed.analysis.compactions, columns, width),
+  );
+  let compactionSpans = $derived(
+    layoutCompactionSpans(indexed.analysis.compactions, columns, compactionMarkers),
   );
   let targetChanges = $derived(layoutTargetChanges(indexed.analysis.modelCalls, columns));
   let targetChangesByCall = $derived(
@@ -242,6 +254,32 @@
     const published = readout;
     untrack(() => onReadoutChange(published));
   });
+
+  function layoutCompactionSpans(
+    compactions: IndexedAnalysis['analysis']['compactions'],
+    callColumns: readonly CallColumn[],
+    markers: readonly TrackBoundaryMarker[],
+  ): CompactionSpan[] {
+    const byCall = new Map(callColumns.map((column) => [column.callIndex, column.x]));
+    const markerX = new Map(markers.map((marker) => [marker.callIndex, marker.x]));
+    return compactions.flatMap((compaction) => {
+      const start = compaction.details.startedBeforeModelCall;
+      const endX = markerX.get(compaction.beforeModelCall);
+      if (start === null || start >= compaction.beforeModelCall || endX === undefined) return [];
+      const startCall = byCall.get(start);
+      const previous = byCall.get(start - 1);
+      if (startCall === undefined) return [];
+      const startX = previous !== undefined ? (previous + startCall) / 2 : startCall;
+      return [
+        {
+          callIndex: compaction.beforeModelCall,
+          startX,
+          endX,
+          label: `Compaction ran in the background from before call ${start} to before call ${compaction.beforeModelCall}`,
+        },
+      ];
+    });
+  }
 
   function layoutCompactionMarkers(
     compactions: IndexedAnalysis['analysis']['compactions'],
@@ -674,6 +712,15 @@
         width={Math.max(0, width - margin.left - margin.right)}
         height={eventLaneHeight}
       />
+      {#each compactionSpans as span (span.callIndex)}
+        <line
+          class="compaction-span"
+          x1={span.startX}
+          x2={span.endX}
+          y1={eventMarkerY}
+          y2={eventMarkerY}><title>{span.label}</title></line
+        >
+      {/each}
       {#each eventClusters as cluster (cluster.id)}
         {@const event = cluster.events[0]!}
         <g
@@ -1054,5 +1101,11 @@
   .economics-mark:focus-visible .uncertain-mark {
     stroke: var(--selection);
     stroke-width: 2.5;
+  }
+  .compaction-span {
+    stroke: var(--compaction);
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    stroke-linecap: round;
   }
 </style>

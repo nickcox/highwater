@@ -189,6 +189,28 @@ fn a_compaction_keeps_the_last_messages_from_when_it_started() {
     assert_eq!(compaction.before_model_call, 5);
     assert_eq!(compaction.tokens_before, Some(1600));
     assert_eq!(compaction.source_item_ids.len(), 6);
+    // What it kept from the context it started from; the request added while it ran is not
+    // a retained item.
+    let retained: Vec<&str> = compaction
+        .retained_item_ids
+        .iter()
+        .map(|id| {
+            session
+                .context_items
+                .iter()
+                .find(|item| item.id == *id)
+                .map(|item| item.label.as_str())
+                .expect("retained item")
+        })
+        .collect();
+    assert_eq!(
+        retained,
+        [
+            "Skill · synthetic",
+            "Thinking · 40 reported tokens",
+            "Assistant · There are two files."
+        ]
+    );
     assert_eq!(
         session.model_calls[4].compaction_before.as_deref(),
         Some(compaction.id.as_str())

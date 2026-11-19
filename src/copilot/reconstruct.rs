@@ -30,6 +30,8 @@ struct OpenCall {
 struct PendingCompaction {
     before_model_call: usize,
     source_item_ids: Vec<String>,
+    /// The messages it kept from the context it started from.
+    retained_item_ids: Vec<String>,
     summary_item_id: String,
     tokens_before: Option<u64>,
     details: CompactionDetails,
@@ -675,6 +677,13 @@ impl State {
             cut -= 1;
         }
         let sources: Vec<usize> = self.active.drain(systems..cut).collect();
+        // What remains up to where it started is what it kept; later items were added while
+        // it ran.
+        let kept_end = end.max(systems) - sources.len();
+        let retained_item_ids: Vec<String> = self.active[systems..kept_end]
+            .iter()
+            .map(|index| self.items[*index].id.clone())
+            .collect();
         let summary = text(data, "summaryContent").unwrap_or_default();
         let bytes = summary.len() as u64;
         let index = self.add(item(
@@ -727,6 +736,7 @@ impl State {
                 .iter()
                 .map(|index| self.items[*index].id.clone())
                 .collect(),
+            retained_item_ids,
             summary_item_id: summary_item_id.clone(),
             tokens_before: count(data, "preCompactionTokens"),
             details,
@@ -849,7 +859,11 @@ impl State {
                 id: compaction.summary_item_id.clone(),
                 before_model_call: compaction.before_model_call,
                 source_item_ids: sources,
-                retained_item_ids: Vec::new(),
+                retained_item_ids: compaction
+                    .retained_item_ids
+                    .into_iter()
+                    .filter(|id| visible.contains(id))
+                    .collect(),
                 summary_item_id: compaction.summary_item_id,
                 tokens_before: compaction.tokens_before,
                 details: compaction.details,
