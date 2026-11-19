@@ -193,7 +193,14 @@ fn traced_round(call: &TraceCall) -> Round<'_> {
 /// The US dollar value of a Copilot credit. A credit's dollar value is not recorded; at
 /// $0.01, the credits Copilot recorded for Claude calls equal their price at the
 /// `github-copilot` rates in the price table exactly.
-const CREDIT_USD: f64 = 0.01;
+pub(super) const CREDIT_USD: f64 = 0.01;
+
+pub(super) fn request_credits(request: &Value) -> Option<f64> {
+    request
+        .get("copilotCredits")
+        .and_then(Value::as_f64)
+        .filter(|credits| credits.is_finite() && *credits >= 0.0)
+}
 
 /// Usage from a trace record. Its input includes the cached part; OpenAI models report
 /// no cache writes.
@@ -349,10 +356,7 @@ impl<'t> State<'t> {
             "completionTokens",
         )?;
         // The credits Copilot charged for the request: every call's together.
-        let credits = request
-            .get("copilotCredits")
-            .and_then(Value::as_f64)
-            .filter(|credits| credits.is_finite() && *credits >= 0.0);
+        let credits = request_credits(request);
         if let Some(credits) = credits {
             self.credits += credits;
         }

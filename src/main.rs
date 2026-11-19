@@ -9,6 +9,7 @@ mod pi;
 mod pricing;
 mod report;
 mod server;
+mod session_totals;
 mod source;
 mod vscode_copilot;
 

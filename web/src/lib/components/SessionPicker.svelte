@@ -7,7 +7,8 @@
   import { domRoot } from '../dom-root';
   let pickerRoot: HTMLDivElement;
   import type { SessionListItem } from '../api/client';
-  import { sessionOptionLabels } from '../session-label';
+  import { formatSessionCost } from '../context-river/format';
+  import { formatSessionTime, sessionOptionLabels } from '../session-label';
   import { sessionTree, withAncestors } from '../session-links';
   let {
     sessions,
@@ -66,6 +67,36 @@
       : '',
   );
   const optionId = (index: number) => `${id}-option-${index}`;
+  function costNote(
+    session: SessionListItem,
+    total: NonNullable<SessionListItem['total']>,
+  ): string {
+    if (total.kind === 'estimated') {
+      return total.partial
+        ? 'Estimated API-equivalent cost for calls with a known price'
+        : 'Estimated API-equivalent cost for recorded calls';
+    }
+    if (total.kind === 'sum') {
+      if (harnessOf(session) === 'pi') return 'Recorded Pi charges, including abandoned branches';
+      if (harnessOf(session) === 'vscode-copilot') return 'Recorded credits at $0.01 each';
+      return 'Sum of charges recorded by OpenCode';
+    }
+    if (harnessOf(session) === 'copilot') return 'Recorded by Copilot at its last usage checkpoint';
+    const since =
+      total.sinceMs === null ? null : formatSessionTime(new Date(total.sinceMs).toISOString());
+    const recorded = `Claude Code's own total${since ? ` since ${since}` : ''}`;
+    if (total.newerUsage) {
+      const through =
+        total.throughMs === undefined
+          ? null
+          : formatSessionTime(new Date(total.throughMs).toISOString());
+      const started = session.startedAt === null ? NaN : Date.parse(session.startedAt);
+      const restarted = total.sinceMs !== null && total.sinceMs > started;
+      const label = restarted ? recorded : "Claude Code's own total";
+      return `${label}${through ? ` through about ${through}` : ''}; later usage not included`;
+    }
+    return `${recorded}${total.partial ? ' (partial session)' : ''}`;
+  }
 
   async function showActive(): Promise<void> {
     await tick();
@@ -178,7 +209,18 @@
             title={session.fileName || session.displayName}
             onclick={() => choose(session)}
           >
-            {labels.get(session.id)}
+            <span class="option-label">{labels.get(session.id)}</span>
+            {#if session.total}
+              <span class="option-total" title={costNote(session, session.total)}>
+                {session.total.kind === 'estimated' ? '~' : ''}{formatSessionCost(
+                  session.total.usd,
+                )}{session.total.partial ? ' (partial)' : ''}
+              </span>
+            {:else if session.total === null}
+              <span class="option-total unknown-cost" title="No cost total available"
+                >Cost unknown</span
+              >
+            {/if}
           </li>
         {/each}
       </ul>
@@ -305,14 +347,31 @@
     padding: 0;
   }
   li {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
     padding: 6px 8px;
     border-radius: var(--control-radius);
     color: var(--text);
     font-size: var(--text-md);
     white-space: nowrap;
+    cursor: pointer;
+  }
+  .option-label {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    cursor: pointer;
+  }
+  .option-total {
+    flex: none;
+    text-align: right;
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  .unknown-cost {
+    color: var(--secondary);
+    font-style: italic;
   }
   li[aria-selected='true'] {
     color: var(--accent);
@@ -321,6 +380,10 @@
   li:hover {
     background: var(--action);
     color: var(--active-text);
+  }
+  li.active .unknown-cost,
+  li:hover .unknown-cost {
+    color: inherit;
   }
   p {
     grid-column: 1 / -1;

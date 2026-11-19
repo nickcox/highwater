@@ -52,6 +52,50 @@ const offered = () => {
 };
 
 describe('Harness session picker', () => {
+  it('shows a cost when it arrives without changing the selected label or search', async () => {
+    const session: SessionListItem = {
+      ...sessions[0],
+      id: 'claude-code-cost',
+      harness: 'claude-code',
+    };
+    const props = { sessions: [session], selectedId: session.id, onSelect: vi.fn() };
+    const { rerender } = render(SessionPicker, { props });
+    await fireEvent.click(picker());
+    const options = () => within(screen.getByRole('listbox', { name: 'Sessions' }));
+    expect(options().getByRole('option')).not.toHaveTextContent(/\$|Cost unknown/);
+    await rerender({ ...props, sessions: [{ ...session, total: null }] });
+    expect(options().getByRole('option')).toHaveTextContent('Cost unknown');
+    await rerender({
+      ...props,
+      sessions: [{ ...session, total: { usd: 4.12, kind: 'recorded', partial: true, sinceMs: 0 } }],
+    });
+    expect(options().getByRole('option')).toHaveTextContent('$4.12 (partial)');
+    expect(screen.getByText('$4.12 (partial)')).toHaveAttribute(
+      'title',
+      expect.stringContaining('partial session'),
+    );
+    await fireEvent.input(picker(), { target: { value: '4.12' } });
+    expect(options().queryByRole('option')).not.toBeInTheDocument();
+    await fireEvent.keyDown(picker(), { key: 'Escape' });
+    expect(picker()).toHaveValue('[Claude Code] Pi task');
+  });
+  it('marks a Codex subtotal as an estimate and explains missing prices', async () => {
+    const session: SessionListItem = {
+      ...sessions[0],
+      id: 'codex-cost',
+      harness: 'codex',
+      total: { usd: 4.12, kind: 'estimated', partial: true, sinceMs: null },
+    };
+    render(SessionPicker, {
+      props: { sessions: [session], selectedId: session.id, onSelect: vi.fn() },
+    });
+    await fireEvent.click(picker());
+    expect(screen.getByText('~$4.12 (partial)')).toHaveAttribute(
+      'title',
+      'Estimated API-equivalent cost for calls with a known price',
+    );
+  });
+
   it('defaults to all harnesses and labels mixed results and child sessions', async () => {
     render(SessionPicker, { props: { sessions, selectedId: 'pi-one', onSelect: vi.fn() } });
     expect(screen.getByRole('combobox', { name: 'Harness' })).toHaveValue('all');

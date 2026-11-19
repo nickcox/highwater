@@ -12,6 +12,15 @@ export interface SessionListItem {
   parentReference?: string | null;
   /** A Claude Code subagent's type, such as `statusline-setup`. */
   subagentType?: string;
+  /** Absent before a lookup or for unsupported sources; null if no total is available. */
+  total?: {
+    usd: number;
+    kind: 'recorded' | 'sum' | 'estimated';
+    partial: boolean;
+    sinceMs: number | null;
+    newerUsage?: boolean;
+    throughMs?: number;
+  } | null;
 }
 
 export type LiveAvailability = 'active' | 'degraded';

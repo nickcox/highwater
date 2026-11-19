@@ -4,6 +4,8 @@
 pub(crate) mod discovery;
 mod reconstruct;
 
+pub(crate) use reconstruct::usage_checkpoint_cost;
+
 pub(crate) use reconstruct::Reconstruction as Loaded;
 
 #[cfg(test)]

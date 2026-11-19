@@ -19,6 +19,7 @@ export async function mockApi(
       constructor(url: string | URL) {
         super();
         this.url = String(url);
+        window.addEventListener('mockSessionsChanged', this.forwardCatalogue);
         queueMicrotask(() => {
           if (this.state === 2) return;
           this.state = 1;
@@ -33,8 +34,14 @@ export async function mockApi(
       get readyState(): number {
         return this.state;
       }
+      private forwardCatalogue = (event: Event): void => {
+        this.dispatchEvent(
+          new MessageEvent('sessionsChanged', { data: (event as MessageEvent).data }),
+        );
+      };
       close(): void {
         this.state = 2;
+        window.removeEventListener('mockSessionsChanged', this.forwardCatalogue);
       }
     }
     (window as unknown as { EventSource: typeof EventSource }).EventSource =

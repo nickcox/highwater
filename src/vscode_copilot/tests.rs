@@ -411,5 +411,9 @@ fn credits_are_a_single_call_requests_cost_and_add_up_to_the_session_total() {
     assert_eq!(cost(2), Some(0.0025));
     let total = session.harness_session_cost.expect("Copilot's total");
     assert!((total.total_usd - 0.0075).abs() < 1e-12);
+    assert_eq!(
+        super::session_total(&agent_session()).unwrap(),
+        Some(total.total_usd)
+    );
     assert_eq!(total.since_ms, None);
 }

@@ -15,6 +15,7 @@ mod opencode_tests;
 mod routes;
 mod scan;
 mod sources;
+mod totals;
 #[cfg(test)]
 mod vscode_copilot_tests;
 use routes::router;
@@ -423,6 +424,11 @@ async fn run_with_watcher(
         },
     });
     let (shutdown, _shutdown_receiver) = watch::channel(false);
+    let totals_worker = tokio::spawn(totals::run(
+        Arc::clone(&catalog),
+        live_state.clone(),
+        shutdown.subscribe(),
+    ));
     let (control_sender, control_receiver) = mpsc::channel(32);
     let coordinator = Arc::new(ScanCoordinator {
         controls: control_sender,
@@ -497,6 +503,7 @@ async fn run_with_watcher(
             "catalogue worker shutdown timed out; blocking catalogue work may still be running"
         ),
     }
+    let _ = tokio::time::timeout(SCAN_SHUTDOWN_DRAIN, totals_worker).await;
     if let Some(poller) = poller {
         poller.abort();
     }
@@ -562,10 +569,9 @@ fn publish_live_state(
     availability: LiveAvailability,
 ) {
     if let Ok(snapshot) = catalog.snapshot() {
-        live_state.send_replace(LiveState {
-            generation: snapshot.generation,
-            revision: snapshot.revision,
-            availability,
+        live_state.send_modify(|state| {
+            state.revision = state.revision.max(snapshot.revision);
+            state.availability = availability;
         });
     }
 }

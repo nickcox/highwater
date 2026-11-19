@@ -53,6 +53,7 @@ struct State {
     working_directory: Option<String>,
     model: Option<String>,
     version: Option<String>,
+    harness_session_cost: Option<HarnessSessionCost>,
     items: Vec<NormalizedContextItem>,
     item_indexes: HashMap<String, usize>,
     /// Items in context for the next call, in order. System messages come first.
@@ -199,6 +200,11 @@ impl State {
             "assistant.turn_end" | "abort" => {
                 self.open = None;
                 self.in_turn = false;
+            }
+            "session.usage_checkpoint" => {
+                if let Some(cost) = usage_checkpoint_cost(record) {
+                    self.harness_session_cost = Some(cost);
+                }
             }
             "session.usage_record" => self.apply_usage(line, data, at),
             "assistant.message" => self.apply_message(line, data, at),
@@ -898,7 +904,7 @@ impl State {
                 .then_with(|| left.from.cmp(&right.from))
         });
         NormalizedSession {
-            harness_session_cost: None,
+            harness_session_cost: self.harness_session_cost,
             id,
             source,
             title: None,
@@ -926,6 +932,23 @@ fn api(usage: &Value) -> Option<String> {
 /// credit.
 const CREDIT_USD: f64 = 0.01;
 
+fn nano_aiu_usd(value: Option<&Value>) -> Option<f64> {
+    let nano = value?.as_f64()?;
+    (nano.is_finite() && nano >= 0.0).then(|| nano / 1e9 * CREDIT_USD)
+}
+
+pub(crate) fn usage_checkpoint_cost(record: &Value) -> Option<HarnessSessionCost> {
+    if record.get("type").and_then(Value::as_str) != Some("session.usage_checkpoint")
+        || origin(record) != Origin::Main
+    {
+        return None;
+    }
+    Some(HarnessSessionCost {
+        total_usd: nano_aiu_usd(record.pointer("/data/totalNanoAiu"))?,
+        since_ms: None,
+    })
+}
+
 /// `inputTokens` is the whole input, including cache reads and writes. For the Responses
 /// API, `outputTokens` includes reasoning; for the others it is not known.
 fn reported_usage(usage: &Value, api: Option<&str>) -> ReportedUsage {
@@ -937,10 +960,6 @@ fn reported_usage(usage: &Value, api: Option<&str>) -> ReportedUsage {
             .checked_sub(cache_write.unwrap_or(0))
     });
     let output = count(usage, "outputTokens");
-    let nano = usage
-        .pointer("/copilotUsage/totalNanoAiu")
-        .and_then(Value::as_f64)
-        .filter(|nano| nano.is_finite() && *nano >= 0.0);
     ReportedUsage {
         placeholder: None,
         input,
@@ -959,7 +978,7 @@ fn reported_usage(usage: &Value, api: Option<&str>) -> ReportedUsage {
         reasoning: count(usage, "reasoningTokens"),
         total_tokens: None,
         cost: ReportedCost {
-            total: nano.map(|nano| nano / 1e9 * CREDIT_USD),
+            total: nano_aiu_usd(usage.pointer("/copilotUsage/totalNanoAiu")),
             ..ReportedCost::default()
         },
     }

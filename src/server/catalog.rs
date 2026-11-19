@@ -1,8 +1,11 @@
-use super::{AppError, SessionFile};
+use super::{
+    totals::{SessionTotal, TotalKey},
+    AppError, SessionFile,
+};
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
@@ -21,11 +24,15 @@ pub(super) struct CatalogSnapshot {
     pub(super) generation: String,
     pub(super) revision: u64,
     pub(super) sessions: Arc<[SessionFile]>,
+    pub(super) total_keys: Arc<HashSet<TotalKey>>,
+    /// An entry with no total means the worker checked this stamp and found no figure.
+    pub(super) totals: Arc<HashMap<TotalKey, Option<SessionTotal>>>,
 }
 
 #[derive(Debug)]
 pub(super) struct SessionCatalog {
     pub(super) snapshot: RwLock<CatalogSnapshot>,
+    pub(super) sessions_changed: tokio::sync::Notify,
 }
 
 impl SessionCatalog {
@@ -34,8 +41,11 @@ impl SessionCatalog {
             snapshot: RwLock::new(CatalogSnapshot {
                 generation,
                 revision: 0,
+                total_keys: Arc::new(sessions.iter().filter_map(TotalKey::of).collect()),
+                totals: Arc::default(),
                 sessions: Arc::from(sessions.into_boxed_slice()),
             }),
+            sessions_changed: tokio::sync::Notify::new(),
         }
     }
 
@@ -59,8 +69,37 @@ impl SessionCatalog {
             .revision
             .checked_add(1)
             .ok_or_else(|| AppError::Message("session catalogue revision exhausted".into()))?;
+        let keys: HashSet<_> = sessions.iter().filter_map(TotalKey::of).collect();
+        Arc::make_mut(&mut snapshot.totals).retain(|key, _| keys.contains(key));
+        snapshot.total_keys = Arc::new(keys);
         snapshot.sessions = sessions;
+        self.sessions_changed.notify_one();
         Ok(true)
+    }
+
+    pub(super) fn install_totals(
+        &self,
+        mut totals: Vec<(TotalKey, Option<SessionTotal>)>,
+    ) -> Result<Option<u64>, AppError> {
+        if totals.is_empty() {
+            return Ok(None);
+        }
+        let mut snapshot = self
+            .snapshot
+            .write()
+            .map_err(|_| AppError::Message("session catalogue is unavailable".into()))?;
+        totals.retain(|(key, total)| {
+            snapshot.total_keys.contains(key) && snapshot.totals.get(key) != Some(total)
+        });
+        if totals.is_empty() {
+            return Ok(None);
+        }
+        snapshot.revision = snapshot
+            .revision
+            .checked_add(1)
+            .ok_or_else(|| AppError::Message("session catalogue revision exhausted".into()))?;
+        Arc::make_mut(&mut snapshot.totals).extend(totals);
+        Ok(Some(snapshot.revision))
     }
 }
 

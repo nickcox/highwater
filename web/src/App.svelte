@@ -305,9 +305,6 @@
             >
           {/if}
         </div>
-        {#if $sessionController.refreshing && !$sessionController.loading}
-          <p role="status" aria-label="Refresh progress">Refreshing sessions…</p>
-        {/if}
       </div>
     </div>
     <div class="theme-controls"><ThemeSelector /></div>
@@ -446,6 +443,8 @@
     gap: 10px;
     max-width: 720px;
     margin-top: 4px;
+    font-size: var(--text-sm);
+    min-height: calc(1.4em + 6px);
   }
   .titlebar .status-row > .live-status {
     flex: 0 1 auto;

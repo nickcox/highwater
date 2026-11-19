@@ -730,7 +730,7 @@ fn parse_safe_u64(value: Option<&Value>, field: &'static str) -> Result<Option<u
     Ok(None)
 }
 
-pub(super) fn parse_assistant_usage(message: &Value) -> Result<ReportedUsage, SourceError> {
+pub(crate) fn parse_assistant_usage(message: &Value) -> Result<ReportedUsage, SourceError> {
     let usage = parse_usage(message.get("usage"))?;
     // Pi initializes every core counter and cost component to zero before
     // streaming. A failed/aborted all-zero record is not evidence that the

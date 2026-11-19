@@ -1,7 +1,7 @@
 use super::discovery::{find_files, parse_workspace, read_listing, ListingCache};
 use crate::{
     claude_code::Limitation,
-    domain::{ContextItemKind, NormalizedSession},
+    domain::{ContextItemKind, HarnessSessionCost, NormalizedSession},
 };
 use std::{fs, path::PathBuf};
 
@@ -319,6 +319,39 @@ fn a_compaction_without_message_counts_keeps_only_its_summary() {
     assert!(loaded
         .limitations
         .contains(&Limitation::UnverifiedCompactionRetention));
+}
+
+#[test]
+fn the_latest_valid_session_checkpoint_sets_the_harness_total() {
+    let reconstruct = super::reconstruct::reconstruct;
+    let event = |fields: &str, value: &str| {
+        format!(
+            r#"{{"type":"session.usage_checkpoint",{fields}"data":{{"totalNanoAiu":{value}}}}}"#
+        )
+    };
+    let checkpoints = [
+        event("", "0"),
+        event("", "2500000000"),
+        event("", "-1"),
+        event("", r#""3000000000""#),
+        event(r#""checkpoint":true,"#, "999000000000"),
+        event(r#""agentId":"agent-1","#, "999000000000"),
+    ];
+    let total = |lines: &[String]| {
+        reconstruct(&lines.join("\n"), "x")
+            .expect("reconstructs")
+            .session
+            .harness_session_cost
+    };
+    assert_eq!(total(&[]), None);
+    assert_eq!(total(&checkpoints[..1]).unwrap().total_usd, 0.0);
+    assert_eq!(
+        total(&checkpoints),
+        Some(HarnessSessionCost {
+            total_usd: 0.025,
+            since_ms: None,
+        })
+    );
 }
 
 #[test]

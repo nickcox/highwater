@@ -58,6 +58,22 @@ pub(crate) struct Loaded {
     pub records: usize,
 }
 
+pub(crate) fn session_total(path: &Path) -> Result<Option<f64>, SourceError> {
+    let file = File::open(path).map_err(SourceError::Io)?;
+    let replayed = change_log::replay(BufReader::new(file))?;
+    let mut credits = crate::session_totals::CostSum::default();
+    for request in replayed
+        .session
+        .get("requests")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        credits.add(reconstruct::request_credits(request));
+    }
+    Ok(credits.total().map(|total| total * reconstruct::CREDIT_USD))
+}
+
 /// Synchronous; intended for a bounded blocking worker. Never writes.
 pub(crate) fn load(path: &Path) -> Result<Loaded, SourceError> {
     let file = File::open(path).map_err(SourceError::Io)?;

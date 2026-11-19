@@ -39,7 +39,15 @@ mod tests;
 
 #[derive(Serialize)]
 struct SessionList<'a> {
-    sessions: &'a [SessionFile],
+    sessions: Vec<ListedSession<'a>>,
+}
+
+#[derive(Serialize)]
+struct ListedSession<'a> {
+    #[serde(flatten)]
+    session: &'a SessionFile,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total: Option<&'a Option<super::totals::SessionTotal>>,
 }
 
 /// Preserve existing exact/comma-separated matching, without broadening ETag semantics.
@@ -79,7 +87,15 @@ fn list_response(
             .map_err(AppError::ResponseBuild);
     }
     let body = serde_json::to_vec(&SessionList {
-        sessions: &snapshot.sessions,
+        sessions: snapshot
+            .sessions
+            .iter()
+            .map(|session| ListedSession {
+                session,
+                total: super::totals::TotalKey::of(session)
+                    .and_then(|key| snapshot.totals.get(&key)),
+            })
+            .collect(),
     })
     .map_err(AppError::Serialization)?;
     builder = builder

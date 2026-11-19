@@ -30,7 +30,8 @@ Each line is one JSON event, `{type, data, id, timestamp, parentId}`. An unfinis
 | `system.notification` | A message Copilot adds to the conversation. | Yes |
 | `session.compaction_start`, `session.compaction_complete` | A compaction starting, and its summary, counts, details and own call's usage when it is applied. | Yes |
 | `session.truncation`, `session.context_cleared` | Other changes to the conversation. | Yes (untested) |
-| `hook.start`, `hook.end`, `session.usage_checkpoint`, `session.shutdown` and the rest | Hooks, running totals and the app's display. | No |
+| `session.usage_checkpoint` | Copilot's running usage total. | Yes |
+| `hook.start`, `hook.end`, `session.shutdown` and the rest | Hooks and the app's display. | No |
 
 ## Reading sessions
 
@@ -48,6 +49,8 @@ Each line is one JSON event, `{type, data, id, timestamp, parentId}`. An unfinis
 - **Compaction calls.** `compactionTokensUsed` is the usage and charge of the compaction's own call. It becomes a call before the compaction, with the stop reason `compaction-call` (`compaction-aggregate` when `requestCount` is more than 1), the API of an earlier call to the same model, and the context as it was when the compaction started, because that is what it summarised: in the surveyed compaction, its calculated context was 0.8% below its reported input, as for the calls around it. It is added when the compaction is applied, so a background compaction's call comes after the calls made while it ran, although it started before them. Without `compactionTokensUsed` the call is not shown (`missingCompactionUsage`).
 - **Truncation and clearing (untested).** `session.truncation` removes the oldest `messagesRemovedDuringTruncation` messages, and `session.context_cleared` removes them all, without a summary.
 - **Subagents.** A subagent's events are written to the main session's file with its `agentId`. They are left out (`subagentCallsNotShown`).
+
+**Session cost.** Session details shows Copilot's own total from the last valid `session.usage_checkpoint`, at $0.01 per credit. It is separate from the sum of recorded call costs, which already includes compaction calls when their usage is recorded. A live session can have calls newer than its last checkpoint.
 
 ## Accuracy
 

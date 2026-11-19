@@ -123,10 +123,19 @@ fn copilot_home_comes_from_the_flag_then_copilot_home_then_the_home_folder() {
 }
 
 #[tokio::test]
-async fn a_session_is_analysed_with_a_coverage_notice() {
-    let entries = scan(&copilot_only(vec![home()]));
+async fn a_session_is_analysed_with_a_coverage_notice_and_checkpoint_total() {
+    use std::io::Write;
+
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let copy = copied_home(directory.path(), "home");
+    let events = copy
+        .join("session-state")
+        .join("1c000000-0000-4000-8000-000000000001")
+        .join("events.jsonl");
+    let files = copilot_only(vec![copy]);
+    let catalog = Arc::new(SessionCatalog::new("0".repeat(32), scan(&files)));
     let id = reference("001");
-    let (live_state, _) = watch::channel(LiveState {
+    let (live_state, mut revisions) = watch::channel(LiveState {
         generation: "0".repeat(32),
         revision: 0,
         availability: LiveAvailability::Active,
@@ -134,9 +143,9 @@ async fn a_session_is_analysed_with_a_coverage_notice() {
     let (shutdown, _) = watch::channel(false);
     let (controls, _) = mpsc::channel(32);
     let app = router(AppState {
-        catalog: Arc::new(SessionCatalog::new("0".repeat(32), entries)),
-        live_state,
-        shutdown,
+        catalog: Arc::clone(&catalog),
+        live_state: live_state.clone(),
+        shutdown: shutdown.clone(),
         coordinator: Arc::new(ScanCoordinator { controls }),
         config: AnalysisConfig {
             tokenization: TokenizationPolicy::Heuristic,
@@ -144,7 +153,57 @@ async fn a_session_is_analysed_with_a_coverage_notice() {
         },
         analysis: Arc::new(AnalysisService::new(Arc::new(execute_analysis))),
     });
+    let list = || {
+        app.clone().oneshot(
+            Request::builder()
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .expect("list request"),
+        )
+    };
+    let first = list().await.expect("initial list");
+    let old_etag = first.headers()[axum::http::header::ETAG].clone();
+    let decode = |response: axum::response::Response| async move {
+        serde_json::from_slice::<Value>(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+            .unwrap()
+    };
+    assert!(decode(first).await["sessions"][0].get("total").is_none());
+    let worker = tokio::spawn(totals::run(
+        Arc::clone(&catalog),
+        live_state,
+        shutdown.subscribe(),
+    ));
+    tokio::time::timeout(Duration::from_secs(5), revisions.changed())
+        .await
+        .unwrap()
+        .unwrap();
+    let updated = list().await.expect("updated list");
+    assert_ne!(updated.headers()[axum::http::header::ETAG], old_etag);
+    assert_eq!(
+        decode(updated).await["sessions"][0].get("total"),
+        Some(&Value::Null)
+    );
+    writeln!(
+        fs::OpenOptions::new().append(true).open(events).unwrap(),
+        r#"{{"type":"session.usage_checkpoint","data":{{"totalNanoAiu":125000000000}}}}"#
+    )
+    .unwrap();
+    assert!(catalog.install(scan(&files)).unwrap());
+    tokio::time::timeout(Duration::from_secs(5), revisions.changed())
+        .await
+        .unwrap()
+        .unwrap();
+    let json = decode(list().await.unwrap()).await;
+    assert_eq!(
+        json["sessions"][0]["total"],
+        serde_json::json!({
+            "usd": 1.25, "kind": "recorded", "partial": false, "sinceMs": null,
+        })
+    );
+    assert!(!catalog.install(scan(&files)).unwrap());
+    assert_eq!(decode(list().await.unwrap()).await, json);
     let analysis = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri(format!("/api/sessions/{id}/analysis"))
@@ -161,6 +220,12 @@ async fn a_session_is_analysed_with_a_coverage_notice() {
     )
     .expect("JSON");
     assert_eq!(json["session"]["source"], "copilot");
+    assert_eq!(json["session"]["harnessSessionCost"]["totalUsd"], 1.25);
+    assert!(json["session"]["harnessSessionCost"]["sinceMs"].is_null());
+    let call_total = json["session"]["reportedCostTotal"]
+        .as_f64()
+        .expect("recorded call cost");
+    assert!((call_total - 0.70).abs() < 1e-9, "{call_total}");
     assert_eq!(json["reconstruction"]["status"], "partial");
     let codes = json["reconstruction"]["explanationCodes"].to_string();
     assert!(codes.contains("subagentCallsNotShown"));
@@ -169,6 +234,28 @@ async fn a_session_is_analysed_with_a_coverage_notice() {
     assert_eq!(calls[3]["stopReason"], "compaction-call");
     assert_eq!(calls[0]["timing"]["basis"], "copilot-usage-duration");
     assert_eq!(calls[0]["timing"]["durationMs"], 2000);
+
+    let events = files.copilot_homes[0]
+        .join("session-state/1c000000-0000-4000-8000-000000000001/events.jsonl");
+    writeln!(
+        fs::OpenOptions::new().append(true).open(events).unwrap(),
+        r#"{{"type":"session.usage_checkpoint","data":{{"totalNanoAiu":150000000000}}}}"#
+    )
+    .unwrap();
+    assert!(catalog.install(scan(&files)).unwrap());
+    assert!(decode(list().await.unwrap()).await["sessions"][0]
+        .get("total")
+        .is_none());
+    tokio::time::timeout(Duration::from_secs(5), revisions.changed())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        decode(list().await.unwrap()).await["sessions"][0]["total"]["usd"],
+        1.5
+    );
+    shutdown.send_replace(true);
+    worker.await.unwrap();
 }
 
 /// A copy of fixture session `001` in a temporary Copilot home.

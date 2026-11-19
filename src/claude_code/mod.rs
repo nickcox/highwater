@@ -109,13 +109,15 @@ fn harness_session_cost(records: &[records::Record]) -> Option<HarnessSessionCos
         .iter()
         .rev()
         .find(|record| record.kind() == "cost-state")?;
+    cost_state(&record.value)
+}
+
+pub(crate) fn cost_state(record: &Value) -> Option<HarnessSessionCost> {
     let total_usd = record
-        .value
         .get("totalCostUSD")
         .and_then(Value::as_f64)
         .filter(|total| total.is_finite() && *total >= 0.0)?;
     let since_ms = record
-        .value
         .get("startTime")
         .and_then(Value::as_i64)
         .filter(|start| (0..=MAX_SAFE_JSON_INTEGER as i64).contains(start));

@@ -128,6 +128,23 @@ describe('SessionSummary', () => {
     expect(container.querySelector('.session-details')).not.toHaveTextContent('Billed cost');
   });
 
+  it("labels Copilot's own total as the last usage checkpoint", () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'copilot';
+    analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: ['missingHistoricalToolDefinitions'],
+    };
+    analysis.session.harnessSessionCost = { totalUsd: 1.23, sinceMs: null };
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    const row = [...container.querySelectorAll('.session-details dl > div')].find((element) =>
+      element.textContent?.includes("Copilot's own total"),
+    );
+    expect(row).toHaveTextContent(/1\.23.*last usage checkpoint/);
+  });
+
   it("shows VS Code Copilot's own total only when it differs from the recorded total", () => {
     const analysis = testAnalysis();
     analysis.session.source = 'vscode-copilot';

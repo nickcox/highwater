@@ -86,6 +86,8 @@ async fn catalogue_etags_track_generation_and_revision_while_availability_header
         generation: "first-generation".into(),
         revision: 4,
         sessions: Arc::from(Vec::<SessionFile>::new()),
+        total_keys: Arc::default(),
+        totals: Arc::default(),
     };
     let original_etag = list_etag(&snapshot);
     let headers = conditional(&format!("\"other\", {original_etag}"));

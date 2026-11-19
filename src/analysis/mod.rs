@@ -543,7 +543,7 @@ fn derive_calls(
 }
 
 /// Prices a call by the time it completed, or started when that is all there is.
-fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
+pub(crate) fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
     let timing = timing::call_timing(call, harness);
     pricing::assess(
         pricing::embedded(),

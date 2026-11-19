@@ -189,6 +189,9 @@ export function harnessSessionCostNote(
   if (source === 'vscode-copilot') {
     return 'The credits Copilot recorded for every request, at $0.01 each, including calls whose trace record is gone';
   }
+  if (source === 'copilot') {
+    return 'The credits Copilot recorded at its last usage checkpoint, at $0.01 each';
+  }
   const since =
     cost.sinceMs === null ? null : formatSessionTime(new Date(cost.sinceMs).toISOString(), now);
   const covers = `includes subagents and ${harnessName(source)}'s own calls, which are not in this transcript`;

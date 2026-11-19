@@ -65,7 +65,7 @@ Band heights and Composition use each item's local token estimate, not provider 
 - The call inspector shows **Recorded output** (`usage.recordedOutput`) and, when present, **Recorded reasoning** (`usage.reasoning`) as the source recorded them, and `usage.outputReasoningRelationship` says whether one includes the other. The details are in the usage disclosure rather than a warning. `usage.output` and `reportedCompletionTokens` stay the normalised completion totals, with reasoning counted exactly once when that is known, and costs, running totals and output rates use them.
 - Coverage figures tell apart a recorded zero, a partial figure and an unavailable one. A summary written at the very end of a session can be selected but has no exposure.
 - OpenCode, Claude Code and VS Code Copilot responses include `reconstruction: {status: "partial", explanationCodes: [...]}`, listing what the source does not record; Pi responses leave it out.
-- `session.harnessSessionCost` is `{totalUsd, sinceMs}` when the harness recorded its own session total (Claude Code's `cost-state`, or VS Code Copilot's credits), and `null` otherwise.
+- `session.harnessSessionCost` is `{totalUsd, sinceMs}` when the harness recorded its own session total (Claude Code's `cost-state`, Copilot's `session.usage_checkpoint`, or VS Code Copilot's credits), and `null` otherwise.
 - Known request framing is an approximation for text-only chat routes, not the exact provider serialisation or billing.
 
 ### Timing

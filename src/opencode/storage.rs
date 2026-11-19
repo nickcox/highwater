@@ -536,6 +536,33 @@ pub(crate) fn discover(
     Ok(sessions)
 }
 
+/// Sum recorded charges without replaying messages or reading tool output.
+pub(crate) fn session_total(path: &Path, native_id: &str) -> Result<Option<f64>, StorageError> {
+    let mut connection = open(path, None)?;
+    let tx = connection.transaction()?;
+    let layout = validate_layout(&tx)?;
+    let selected = format!("SELECT * FROM ({}) WHERE id = ?1", sessions_query(layout));
+    let mut statement = tx.prepare(&selected)?;
+    let mut rows = statement.query([native_id])?;
+    let selected = generation(rows.next()?.ok_or(StorageError::NotFound)?)?;
+    let costs = match selected {
+        Generation::Legacy => "SELECT json_extract(p.data, '$.cost') AS cost
+            FROM message m JOIN part p ON p.message_id = m.id
+            WHERE m.session_id = ?1 AND json_extract(m.data, '$.role') = 'assistant'
+                AND json_extract(p.data, '$.type') = 'step-finish'
+            GROUP BY m.id HAVING count(*) = 1",
+        Generation::Modern => "SELECT json_extract(data, '$.cost') AS cost
+            FROM session_message WHERE session_id = ?1 AND
+                ((type = 'assistant' AND json_type(data, '$.time.completed') = 'integer') OR
+                 (type = 'compaction' AND json_extract(data, '$.status') IN ('completed', 'failed')))",
+    };
+    Ok(tx.query_row(
+        &format!("SELECT sum(cost) FROM ({costs}) WHERE typeof(cost) IN ('integer', 'real') AND cost >= 0"),
+        [native_id],
+        |row| row.get::<_, Option<f64>>(0),
+    )?.filter(|total| total.is_finite()))
+}
+
 /// Materializes just one session in a read transaction, released before analysis.
 /// `native_id` is always a bound parameter, not SQL or a filesystem locator.
 pub(crate) fn load_session(
