@@ -1732,7 +1732,7 @@ test('cache and cost tracks share the river axis and expose a ratio change', asy
   expect(await track.getAttribute('width')).toBe(
     await river.locator('svg').first().getAttribute('width'),
   );
-  await expect(page.locator('#economics-call-1')).toHaveAttribute('aria-label', /0\.0000000123/);
+  await expect(page.locator('#economics-call-1')).toHaveAttribute('aria-label', /<\$0\.0001/);
   await page.getByRole('button', { name: 'Off', exact: true }).click();
   await expect(track).toHaveCount(0);
 });

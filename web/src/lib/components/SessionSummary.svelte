@@ -17,7 +17,6 @@
   import { summarizeInputComparisons } from '../context-river/reported-input';
   import {
     coverageLabel,
-    formatCost,
     formatInteger,
     formatMetric,
     formatPercent,
@@ -234,7 +233,7 @@
                 >
               </dt>
               <dd>
-                {#if session.reportedCostTotal === null}Not recorded{:else}{formatCost(
+                {#if session.reportedCostTotal === null}Not recorded{:else}{formatSessionCost(
                     session.reportedCostTotal,
                   )}{/if}
                 {#if costCoverageNote}<small class="metric-note">{costCoverageNote}</small>{/if}

@@ -29,7 +29,7 @@ describe('cost assessment wording', () => {
     expect(formatAssessedCost(costAssessmentOf('recorded', 0.25))).not.toContain('≈');
     expect(formatAssessedCost(costAssessmentOf('estimated', 0.25))).toMatch(/^≈ /);
     expect(formatAssessedCost({ ...costAssessmentOf('apiEquivalent', 1), amountHigh: 2 })).toMatch(
-      /^≈ \D*1\.0–\D*2\.0$/,
+      /^≈ \D*1\.00–\D*2\.00$/,
     );
     expect(formatAssessedCost(costAssessmentOf('unknown', null))).toBe('Unknown');
     expect(formatCostSubtotal({ low: null, high: null, calls: 0 }, true)).toBe('Unknown');
@@ -49,7 +49,7 @@ describe('cost assessment wording', () => {
 
   it('repeats the recorded figure only when it differs from the amount shown', () => {
     const pi = { ...costAssessmentOf('apiEquivalent', 4), recordedByHarness: 4.9 };
-    expect(recordedByHarnessLine(pi, 'pi')).toMatch(/^Recorded by Pi: \D*4\.9$/);
+    expect(recordedByHarnessLine(pi, 'pi')).toMatch(/^Recorded by Pi: \D*4\.90$/);
     expect(recordedByHarnessLine({ ...pi, recordedByHarness: 4 }, 'pi')).toBeNull();
     expect(recordedByHarnessLine(costAssessmentOf('recorded', 1), 'pi')).toBeNull();
     expect(recordedByHarnessLine({ ...pi, recordedByHarness: 0 }, 'future')).toMatch(

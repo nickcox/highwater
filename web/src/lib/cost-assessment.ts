@@ -37,7 +37,9 @@ export function costKindLabel(cost: CostAssessment, source: string): string {
 }
 
 function range(low: number, high: number | null, format: (value: number) => string): string {
-  return high === null || high === low ? format(low) : `${format(low)}–${format(high)}`;
+  const lower = format(low);
+  const upper = high === null ? lower : format(high);
+  return lower === upper ? lower : `${lower}–${upper}`;
 }
 
 /** A call's cost as shown in the inspector: estimates and ranges are marked "≈". */

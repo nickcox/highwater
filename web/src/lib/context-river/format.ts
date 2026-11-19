@@ -3,12 +3,14 @@ const integer = new Intl.NumberFormat();
 const currency = new Intl.NumberFormat(undefined, {
   style: 'currency',
   currency: 'USD',
-  minimumSignificantDigits: 2,
-  maximumSignificantDigits: 7,
+  currencyDisplay: 'narrowSymbol',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
 });
 const sessionCurrency = new Intl.NumberFormat(undefined, {
   style: 'currency',
   currency: 'USD',
+  currencyDisplay: 'narrowSymbol',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -34,13 +36,16 @@ export function formatCostTick(value: number): string {
 }
 
 export function formatCost(value: number | null | undefined): string {
-  return value === null || value === undefined ? 'Unknown' : currency.format(value);
+  if (value === null || value === undefined) return 'Unknown';
+  return value > 0 && value < 0.0001 ? `<${currency.format(0.0001)}` : currency.format(value);
 }
 
-/** Round reader-facing session totals while retaining precision for very small positive values. */
+/** Round session totals to cents without displaying positive totals as zero. */
 export function formatSessionCost(value: number | null | undefined): string {
   if (value === null || value === undefined) return 'Unknown';
-  return value >= 0.01 ? sessionCurrency.format(value) : formatCost(value);
+  return value > 0 && value < 0.01
+    ? `<${sessionCurrency.format(0.01)}`
+    : sessionCurrency.format(value);
 }
 
 export function formatPercent(value: number | null | undefined): string {

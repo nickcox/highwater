@@ -580,7 +580,7 @@ describe('ContextRiver continuous viewport integration', () => {
     expect(interaction.selectedItemId).toBe(command.itemId);
   });
 
-  it('keeps explicit track choices across same-session data replacement and shows tiny costs precisely', async () => {
+  it('keeps explicit track choices across same-session data replacement and distinguishes tiny costs from zero', async () => {
     const indexed = economicsAnalysis();
     const handlers = callbacks();
     const view = render(ContextRiver, {
@@ -595,7 +595,7 @@ describe('ContextRiver continuous viewport integration', () => {
     const track = view.container.querySelector('.economics-track-svg') as SVGSVGElement;
     expect(track.getAttribute('aria-label')).toContain('Cost track');
     expect(view.container.querySelector('#economics-call-1')?.getAttribute('aria-label')).toContain(
-      '0.0000000123',
+      '<$0.0001',
     );
 
     await view.rerender({
