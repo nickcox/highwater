@@ -44,6 +44,20 @@ describe('CallDetails transition metrics', () => {
     ).toBeInTheDocument();
   });
 
+  it("says when a compaction names a call as its own, whatever the call's stop reason", () => {
+    const analysis = testAnalysis();
+    analysis.compactions[0].details = { ...analysis.compactions[0].details, summaryCall: 2 };
+    const indexed = indexTestAnalysis(analysis);
+    render(CallDetails, {
+      props: { call: indexed.analysis.modelCalls[1], indexed, pinned: true },
+    });
+    expect(
+      screen.getByText(
+        "The compaction's own call, which wrote the summary that replaced the context.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('leaves complete-estimate metrics and unknown values unmarked', () => {
     const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[1];

@@ -102,6 +102,17 @@
   );
 
   let economicsExplanationCodes = $derived(call?.economics.explanationCodes ?? []);
+  // A compaction's own call, named by its compaction or marked by its stop reason. One that
+  // covers several requests has its own note.
+  let compactionCall = $derived(
+    call !== null &&
+      call !== undefined &&
+      call.stopReason !== 'compaction-aggregate' &&
+      (call.stopReason === 'compaction-call' ||
+        indexed.analysis.compactions.some(
+          (compaction) => compaction.details.summaryCall === call.index,
+        )),
+  );
   let costCopy = $derived(
     describeCostBasis(indexed.analysis.economics.costBasis, indexed.analysis.session.source),
   );
@@ -246,7 +257,7 @@
           {#if call.stopReason === 'web-search-aggregate'}<small
               >The total of several requests: this response ran web searches, so it is not compared
               with the context.</small
-            >{:else if call.stopReason === 'compaction-call'}<small
+            >{:else if compactionCall}<small
               >The compaction's own call, which wrote the summary that replaced the context.</small
             >{:else if call.stopReason === 'compaction-aggregate'}<small
               >The total of the compaction's requests, which wrote the summary that replaced the

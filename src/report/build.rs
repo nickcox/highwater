@@ -4,14 +4,14 @@
 use super::{
     distinct, findings,
     types::{
-        CarriedContext, FamilyTotal, FindingCost, FixedOverhead, FixedPart, KindTotal,
-        Reconstruction, SessionCost, SessionReport, Thresholds, TokenStats, TokenTotals,
+        CarriedContext, CompactionCalls, FamilyTotal, FindingCost, FixedOverhead, FixedPart,
+        KindTotal, Reconstruction, SessionCost, SessionReport, Thresholds, TokenStats, TokenTotals,
         TokenTotalsCoverage, ToolRun, ToolTotal, UsdRange,
     },
 };
 use crate::{
     analysis::reported_token_subtotals,
-    api::{Analysis, ContextItem, CostSubtotal},
+    api::{Analysis, ContextItem, CostSubtotal, ModelCall},
     domain::{AssistantContentBlock, NormalizedSession, TokenizationPayload},
     pricing::{self, CallToPrice, InputPrice},
     server::SessionFile,
@@ -130,6 +130,7 @@ pub(super) fn session_report(
         },
         peak_context_tokens: summary.peak_calculated_visible_tokens,
         compactions: analysis.compactions.len(),
+        compaction_calls: compaction_calls(analysis),
         user_turns: turns,
         carried_context: carried,
         context_by_kind: context_by_kind(analysis, &costs),
@@ -963,4 +964,33 @@ fn tool_totals(analysis: &Analysis, costs: &[ItemCost], runs: &[ToolRun]) -> Vec
         .take(TOOL_LIMIT)
         .map(|(_, tool)| tool)
         .collect()
+}
+
+/// The calls that wrote compaction summaries: those a compaction names as its own, and those
+/// marked by their stop reason.
+fn compaction_calls(analysis: &Analysis) -> CompactionCalls {
+    let named: HashSet<usize> = analysis
+        .compactions
+        .iter()
+        .filter_map(|compaction| compaction.details.summary_call)
+        .collect();
+    let calls: Vec<&ModelCall> = analysis
+        .model_calls
+        .iter()
+        .filter(|call| {
+            named.contains(&call.index)
+                || matches!(
+                    call.stop_reason.as_deref(),
+                    Some("compaction-call" | "compaction-aggregate")
+                )
+        })
+        .collect();
+    let amounts: Vec<f64> = calls
+        .iter()
+        .filter_map(|call| call.cost_assessment.amount)
+        .collect();
+    CompactionCalls {
+        calls: calls.len(),
+        usd: (!amounts.is_empty()).then(|| amounts.iter().sum()),
+    }
 }

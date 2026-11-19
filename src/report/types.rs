@@ -123,6 +123,8 @@ pub(crate) struct SessionReport {
     /// The calls it covers are `tokens.coverage.prompt.recorded_calls`.
     pub average_context_tokens: Option<u64>,
     pub compactions: usize,
+    /// The compactions' own calls, where the harness records them.
+    pub compaction_calls: CompactionCalls,
     /// User messages: each starts a turn.
     pub user_turns: usize,
     pub carried_context: CarriedContext,
@@ -394,4 +396,15 @@ fn optional_fraction<S: Serializer>(value: &Option<f64>, serializer: S) -> Resul
     value
         .map(|value| (value * 1_000.0).round() / 1_000.0)
         .serialize(serializer)
+}
+
+/// The calls that wrote compaction summaries, and what they cost. They are also counted in the
+/// session's calls and cost.
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CompactionCalls {
+    pub calls: usize,
+    /// The low end of their cost, when any has one.
+    #[serde(serialize_with = "usd")]
+    pub usd: Option<f64>,
 }

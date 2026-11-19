@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `highwater report` gives each session's compaction calls and their cost (`compactionCalls`), and its cache-miss finding no longer counts a compaction's own call as a miss.
 - Selecting a compaction's summary shows how the harness decided what to keep and what it recorded about the compaction: what started it, when, how long it took, what it removed and kept, and its own call. The events lane's compaction marker opens the same details, and a dashed line shows the calls a background compaction ran over.
 - The call that writes a compaction summary is shown and counted in costs for Pi, Copilot, and Codex 0.167 and later, which record it. Before, those sessions' totals left it out. In the call details, a compaction call says what it is.
 - Highwater reads sessions from the GitHub Copilot desktop app and the Copilot CLI, found in `$COPILOT_HOME` (default `~/.copilot`) or the folders given with `--copilot-home`. Each call shows its usage, what Copilot charged for it and how long it took. Compactions, including those Copilot runs in the background, keep the messages Copilot kept. Subagents' calls are not shown yet.

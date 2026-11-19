@@ -648,6 +648,27 @@ fn cache_misses_are_classed_by_the_pause_before_them() {
     assert_eq!(listed(&finding)["cause"], "unexplained");
     assert_eq!(listed(&finding)["pauseSeconds"], 60);
 
+    // A compaction's own call is not compared, whether its stop reason marks it or its
+    // compaction names it.
+    analysis.model_calls[first + 1].stop_reason = Some("compaction-call".into());
+    assert_eq!(misses(&analysis), others);
+    analysis.model_calls[first + 1].stop_reason = None;
+    analysis.compactions.push(crate::api::Compaction {
+        id: "named".into(),
+        before_model_call: call + 1,
+        source_item_ids: Vec::new(),
+        retained_item_ids: Vec::new(),
+        summary_item_id: "named-summary".into(),
+        tokens_before: None,
+        details: (&crate::domain::CompactionDetails {
+            summary_call: Some(call),
+            ..crate::domain::CompactionDetails::default()
+        })
+            .into(),
+    });
+    assert_eq!(misses(&analysis), others);
+    analysis.compactions.pop();
+
     // A compaction before the call explains it.
     analysis.model_calls[first + 1].compaction_before = Some("compaction".into());
     assert_eq!(misses(&analysis), others);
@@ -1223,4 +1244,30 @@ fn report_text_does_not_count_failed_attempts_as_unrecorded() {
         )),
         "{text}"
     );
+}
+
+#[test]
+fn a_session_report_counts_the_compactions_own_calls_and_their_cost() {
+    let empty = tempfile::tempdir().expect("temporary folder");
+    let sessions = discover_sessions(SourceArgs {
+        session_root: Some(empty.path().to_path_buf()),
+        opencode_db: Vec::new(),
+        claude_root: Vec::new(),
+        vscode_user_dir: Vec::new(),
+        codex_home: Vec::new(),
+        copilot_home: vec![PathBuf::from("fixtures/copilot/home")],
+    })
+    .expect("discovery");
+    let session = sessions
+        .iter()
+        .find(|session| session.display_name == "Synthetic: app session")
+        .expect("the Copilot app fixture");
+    let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).expect("analysis");
+    let report = session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
+    assert_eq!(report.compactions, 1);
+    assert_eq!(report.compaction_calls.calls, 1);
+    let usd = report.compaction_calls.usd.expect("a cost");
+    assert!((usd - 0.3).abs() < 1e-9, "{usd}");
+    let json = serde_json::to_value(&report).expect("JSON");
+    assert_eq!(json["compactionCalls"]["calls"], 1);
 }

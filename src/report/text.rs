@@ -106,7 +106,14 @@ fn write_session(out: &mut impl Write, session: &SessionReport) -> io::Result<()
         facts.push(plural(session.user_turns, "user turn"));
     }
     if session.compactions > 0 {
-        facts.push(plural(session.compactions, "compaction"));
+        let calls = session.compaction_calls;
+        facts.push(match calls.usd {
+            Some(usd) if calls.calls > 0 => format!(
+                "{} (their calls ${usd:.2})",
+                plural(session.compactions, "compaction")
+            ),
+            _ => plural(session.compactions, "compaction"),
+        });
     }
     writeln!(out, "  {}", facts.join(" · "))?;
     let kinds: Vec<String> = session

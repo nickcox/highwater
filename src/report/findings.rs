@@ -67,7 +67,7 @@ pub(super) fn session_findings(
 /// Whether two adjacent calls can be compared for cache reads, by the rules the call
 /// economics use for a change in cache read ratio: the same provider, model and API, complete
 /// usage under the same pricing policy, no compaction between them and neither retried.
-fn comparable(previous: &ModelCall, call: &ModelCall) -> bool {
+fn comparable(previous: &ModelCall, call: &ModelCall, summary_calls: &HashSet<usize>) -> bool {
     let complete = |call: &ModelCall| {
         call.economics.usage_completeness == EconomicsCompleteness::Complete
             && call.economics.prompt_tokens.is_some()
@@ -83,16 +83,27 @@ fn comparable(previous: &ModelCall, call: &ModelCall) -> bool {
         && call.compaction_before.is_none()
         && !previous.retried
         && !call.retried
-        && !is_compaction_call(previous)
-        && !is_compaction_call(call)
+        && !is_compaction_call(previous, summary_calls)
+        && !is_compaction_call(call, summary_calls)
 }
 
-/// A compaction's own call reads the conversation to summarise it, not the cached prompt.
-fn is_compaction_call(call: &ModelCall) -> bool {
-    matches!(
-        call.stop_reason.as_deref(),
-        Some("compaction-call" | "compaction-aggregate")
-    )
+/// A compaction's own call reads the conversation to summarise it, not the cached prompt. It
+/// is named by its compaction (`summary_calls`), or marked by its stop reason.
+fn is_compaction_call(call: &ModelCall, summary_calls: &HashSet<usize>) -> bool {
+    summary_calls.contains(&call.index)
+        || matches!(
+            call.stop_reason.as_deref(),
+            Some("compaction-call" | "compaction-aggregate")
+        )
+}
+
+/// The calls the session's compactions name as their own.
+fn summary_calls(analysis: &Analysis) -> HashSet<usize> {
+    analysis
+        .compactions
+        .iter()
+        .filter_map(|compaction| compaction.details.summary_call)
+        .collect()
 }
 
 /// The time from the end of the previous call to the start of this one, in milliseconds.
@@ -130,11 +141,12 @@ fn cache_misses(
     }
     let mut misses = Vec::new();
     let mut cost = FindingCost::default();
+    let summary_calls = summary_calls(analysis);
     for (position, pair) in analysis.model_calls.windows(2).enumerate() {
         let [previous, call] = pair else {
             continue;
         };
-        if !comparable(previous, call) {
+        if !comparable(previous, call, &summary_calls) {
             continue;
         }
         let (Some(previous_prompt), Some(prompt), Some(read)) = (
@@ -1090,7 +1102,7 @@ pub(super) fn cache_misses_for_test(
 
 #[cfg(test)]
 pub(super) fn comparable_for_test(previous: &ModelCall, call: &ModelCall) -> bool {
-    comparable(previous, call)
+    comparable(previous, call, &HashSet::new())
 }
 
 #[cfg(test)]
