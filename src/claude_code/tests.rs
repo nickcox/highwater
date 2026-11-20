@@ -448,6 +448,42 @@ fn user(uuid: &str, parent: Option<&str>) -> String {
 }
 
 #[test]
+fn turn_duration_matches_its_branch_without_requiring_the_marker_on_the_branch() {
+    let answer = |id: &str, parent: &str| {
+        format!(
+            r#"{{"type":"assistant","uuid":"{id}","parentUuid":"{parent}",{HEADER},"message":{{"id":"{id}","role":"assistant","model":"claude-sonnet-4-6","content":[{{"type":"text","text":"Done"}}]}}}}"#
+        )
+    };
+    let marker = |id: &str, parent: &str, ms: u64| {
+        format!(
+            r#"{{"type":"system","subtype":"turn_duration","uuid":"{id}","parentUuid":"{parent}","durationMs":{ms},{HEADER}}}"#
+        )
+    };
+    let records = [
+        user("u1", None),
+        answer("unused", "u1"),
+        marker("unused-end", "unused", 99_000),
+        answer("a1", "u1"),
+        marker("end1", "a1", 3000),
+        user("u2", Some("a1")),
+        answer("a2", "u2"),
+        marker("end2", "a2", 2000),
+        user("u3", Some("a2")),
+        answer("a3", "u3"),
+        marker("late-end2", "a2", 9000),
+    ];
+    let loaded = load_text(&records.join("\n")).expect("turns");
+    let turns = &loaded.session.turns;
+    assert_eq!(turns.len(), 2);
+    assert_eq!((turns[0].first_call, turns[0].last_call), (1, 1));
+    assert_eq!(turns[0].prompt.as_deref(), Some("hi"));
+    assert_eq!(turns[0].duration_ms, Some(3000));
+    assert_eq!((turns[1].first_call, turns[1].last_call), (2, 2));
+    assert_eq!(turns[1].duration_ms, Some(2000));
+    assert_eq!(turns[1].status, None);
+}
+
+#[test]
 fn tool_references_become_their_own_content_part() {
     use crate::domain::{ContentPart, TokenizationPayload};
     let loaded = super::load(

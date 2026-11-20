@@ -12,6 +12,8 @@ pub(crate) struct Analysis {
     pub session: SessionSummary,
     pub display_weight_unit: String,
     pub model_calls: Vec<ModelCall>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub turns: Vec<crate::domain::RecordedTurn>,
     pub context_items: Vec<ContextItem>,
     pub compactions: Vec<Compaction>,
     pub lineage: Vec<Lineage>,

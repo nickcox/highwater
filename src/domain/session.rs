@@ -27,6 +27,32 @@ pub(crate) struct NormalizedSession {
     pub compactions: Vec<NormalizedCompaction>,
     pub lineage: Vec<NormalizedLineageEdge>,
     pub harness_session_cost: Option<HarnessSessionCost>,
+    pub turns: Vec<RecordedTurn>,
+}
+
+/// An identified user request and its inclusive range of projected calls.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecordedTurn {
+    pub first_call: usize,
+    pub last_call: usize,
+    pub prompt: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub status: Option<TurnStatus>,
+    /// The source combined multiple model calls into one projected call.
+    pub combined_calls: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum TurnStatus {
+    Completed,
+    Failed,
+    Interrupted,
+}
+
+pub(crate) fn turn_duration_ms(value: u64) -> Option<u64> {
+    (value <= MAX_SAFE_JSON_INTEGER).then_some(value)
 }
 
 /// A session total the harness calculated itself, such as Claude Code's `cost-state`.

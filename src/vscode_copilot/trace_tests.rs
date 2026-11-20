@@ -256,6 +256,43 @@ fn trace_records_give_matched_calls_their_usage_timing_and_loadout() {
 }
 
 #[test]
+fn turns_use_request_timestamps_without_traces_but_not_synthesised_cancel_times() {
+    let mut records = gpt_session();
+    let requests = records
+        .iter_mut()
+        .filter(|record| record["k"] == json!(["requests"]))
+        .flat_map(|record| {
+            record
+                .get_mut("v")
+                .and_then(Value::as_array_mut)
+                .into_iter()
+                .flatten()
+        });
+    for (i, request) in requests.enumerate() {
+        let start = request["timestamp"].as_u64().unwrap();
+        request["modelState"] =
+            json!({"value": if i == 0 { 1 } else { 2 }, "completedAt": start + 2000});
+    }
+    let (_directory, path) = user_folder(&records, &[]);
+    let session = loaded(&path).session;
+    assert_eq!(session.turns.len(), 2);
+    assert_eq!(
+        (session.turns[0].first_call, session.turns[0].last_call),
+        (1, 2)
+    );
+    assert_eq!(session.turns[0].duration_ms, Some(2000));
+    assert_eq!(
+        session.turns[0].status,
+        Some(crate::domain::TurnStatus::Completed)
+    );
+    assert_eq!(session.turns[1].duration_ms, None);
+    assert_eq!(
+        session.turns[1].status,
+        Some(crate::domain::TurnStatus::Interrupted)
+    );
+}
+
+#[test]
 fn trace_records_that_do_not_match_the_rounds_are_not_used() {
     let (_directory, path) = user_folder(&gpt_session(), &gpt_spans("call_other"));
     let loaded = loaded(&path);

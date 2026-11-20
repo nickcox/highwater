@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Call inspector shows a **Turn** section for recognised Codex, Claude Code and VS Code Copilot turns, with whole-turn elapsed time where available, recorded call counts and the pinned call’s position in the turn.
 - VS Code Copilot sessions explain when trace coverage is missing, partial or unreadable, and which details are unavailable as a result.
 - The session picker shows costs in the background as they become available. Codex shows an estimated API-equivalent cost instead of a recorded charge. Sessions without a cost are labelled **Cost unknown**.
 - `highwater report` gives each session's compaction calls and their cost (`compactionCalls`), and its cache-miss finding no longer counts a compaction's own call as a miss.

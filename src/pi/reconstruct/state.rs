@@ -448,6 +448,7 @@ impl ReconstructionState {
         });
         NormalizedSession {
             harness_session_cost: None,
+            turns: Vec::new(),
             id,
             source,
             title: None,

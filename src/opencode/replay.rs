@@ -226,6 +226,7 @@ pub(crate) fn reconstruct(
     let mut state = State {
         session: NormalizedSession {
             harness_session_cost: None,
+            turns: Vec::new(),
             id: snapshot.metadata.id,
             source: SourceDescriptor {
                 kind: "opencode".into(),

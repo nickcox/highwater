@@ -594,6 +594,7 @@ fn valid_zero_call_terminal_summary_is_accepted() {
     };
     let session = NormalizedSession {
         harness_session_cost: None,
+        turns: Vec::new(),
         id: "terminal".into(),
         source: SourceDescriptor {
             kind: "fake".into(),

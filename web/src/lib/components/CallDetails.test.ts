@@ -169,6 +169,60 @@ describe('CallDetails change lists', () => {
     expect(screen.queryByText('1700000000000')).toBeNull();
   });
 
+  it('shows turn timing and the pinned call’s position below the call metrics', async () => {
+    const analysis = testAnalysis();
+    analysis.turns = [
+      {
+        firstCall: 1,
+        lastCall: 3,
+        prompt: 'Run the tests',
+        durationMs: 42_800,
+        status: 'completed',
+        combinedCalls: false,
+      },
+    ];
+    const indexed = indexTestAnalysis(analysis);
+    const view = render(CallDetails, {
+      props: { call: indexed.analysis.modelCalls[1], indexed, pinned: true },
+    });
+    const turn = screen.getByRole('region', { name: 'Turn' });
+    const pinned = screen.getByRole('heading', { name: 'Pinned call 2' });
+    expect(pinned.compareDocumentPosition(turn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(turn).toHaveTextContent('42.8 s');
+    expect(turn).toHaveTextContent('Run the tests');
+    const timingNote = screen.getByText(/including tool work/);
+    expect(timingNote).not.toBeVisible();
+    await fireEvent.click(screen.getByRole('button', { name: 'What turn elapsed time measures' }));
+    expect(timingNote).toBeVisible();
+    expect(turn).toHaveTextContent('Call 2 of 3 in this turn');
+    expect(turn.querySelector('.marker')).toHaveStyle({ left: '50%' });
+    await view.rerender({ call: indexed.analysis.modelCalls[0] });
+    expect(turn.querySelector('.marker')).toHaveStyle({ left: '0%' });
+    await view.rerender({ call: indexed.analysis.modelCalls[2] });
+    expect(turn.querySelector('.marker')).toHaveStyle({ left: '100%' });
+    await view.rerender({ call: indexed.analysis.modelCalls[3] });
+    expect(screen.queryByRole('region', { name: 'Turn' })).toBeNull();
+  });
+
+  it('shows a single call’s turn position without a bar', () => {
+    const analysis = testAnalysis();
+    analysis.turns = [
+      {
+        firstCall: 1,
+        lastCall: 1,
+        prompt: null,
+        durationMs: null,
+        status: null,
+        combinedCalls: false,
+      },
+    ];
+    const indexed = indexTestAnalysis(analysis);
+    render(CallDetails, { props: { call: indexed.analysis.modelCalls[0], indexed, pinned: true } });
+    const turn = screen.getByRole('region', { name: 'Turn' });
+    expect(turn).toHaveTextContent('Call 1 of 1 in this turn');
+    expect(turn.querySelector('.track')).toBeNull();
+  });
+
   it('shows missing timing as unavailable instead of zero', () => {
     const { container } = renderCall([], []);
     const label = screen.getByText('Response time (approx.)');

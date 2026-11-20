@@ -905,6 +905,7 @@ impl State {
         });
         NormalizedSession {
             harness_session_cost: self.harness_session_cost,
+            turns: Vec::new(),
             id,
             source,
             title: None,

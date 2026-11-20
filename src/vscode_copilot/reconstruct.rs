@@ -24,6 +24,7 @@ struct State<'t> {
     /// Conversation items in context for the next call, in order.
     active: Vec<usize>,
     calls: Vec<NormalizedModelCall>,
+    turns: Vec<RecordedTurn>,
     limitations: BTreeSet<Limitation>,
     traces: Option<&'t Traces>,
     /// Trace calls already matched to a request, by span ID.
@@ -56,6 +57,7 @@ pub(super) fn reconstruct(
         item_indexes: HashMap::new(),
         active: Vec::new(),
         calls: Vec::new(),
+        turns: Vec::new(),
         limitations: [Limitation::UnrecordedHarnessCalls].into(),
         traces,
         claimed: HashSet::new(),
@@ -360,8 +362,10 @@ impl<'t> State<'t> {
         }
         let results = metadata.and_then(|metadata| metadata.get("toolCallResults"));
         let last = rounds.len() - 1;
-        let single = rounds.len() == 1 && !rounds[0].combined;
-        if rounds[0].combined {
+        let first_call = self.calls.len();
+        let combined_calls = rounds[0].combined;
+        let single = rounds.len() == 1 && !combined_calls;
+        if combined_calls {
             self.limitations.insert(Limitation::UnrecordedRounds);
         }
         for (position, round) in rounds.into_iter().enumerate() {
@@ -398,6 +402,49 @@ impl<'t> State<'t> {
             };
             self.apply_round(&request_id, round, usage, results);
         }
+        let error = request
+            .pointer("/result/errorDetails")
+            .filter(|value| value.is_object());
+        // VS Code's ResponseModelState: Complete = 1, Cancelled = 2, Failed = 3.
+        let state = request.pointer("/modelState/value").and_then(Value::as_u64);
+        let cancelled = state == Some(2)
+            || request.get("isCanceled").and_then(Value::as_bool) == Some(true)
+            || error
+                .and_then(|value| value.get("code"))
+                .and_then(Value::as_str)
+                == Some("canceled");
+        let status = if cancelled {
+            Some(TurnStatus::Interrupted)
+        } else if state == Some(3) || error.is_some() {
+            Some(TurnStatus::Failed)
+        } else if state == Some(1) {
+            Some(TurnStatus::Completed)
+        } else {
+            None
+        };
+        // VS Code can synthesise a cancellation time when saving a pending request.
+        let duration_ms = if matches!(status, Some(TurnStatus::Completed | TurnStatus::Failed)) {
+            request
+                .get("timestamp")
+                .and_then(Value::as_u64)
+                .zip(
+                    request
+                        .pointer("/modelState/completedAt")
+                        .and_then(Value::as_u64),
+                )
+                .filter(|(start, end)| *start > 0 && turn_duration_ms(*end).is_some())
+                .and_then(|(start, end)| end.checked_sub(start))
+        } else {
+            None
+        };
+        self.turns.push(RecordedTurn {
+            first_call: first_call + 1,
+            last_call: self.calls.len(),
+            prompt: first_nonempty_line(message),
+            duration_ms,
+            status,
+            combined_calls,
+        });
         Ok(())
     }
 
@@ -777,6 +824,7 @@ impl<'t> State<'t> {
         let Self {
             mut items,
             calls,
+            turns,
             compactions,
             credits,
             ..
@@ -845,6 +893,7 @@ impl<'t> State<'t> {
             working_directory,
             context_items,
             model_calls: calls,
+            turns,
             compactions,
             lineage,
         }

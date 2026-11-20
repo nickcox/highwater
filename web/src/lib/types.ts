@@ -417,6 +417,15 @@ export interface ReconstructionCoverage {
   explanationCodes: string[];
 }
 
+export interface RecordedTurn {
+  firstCall: number;
+  lastCall: number;
+  prompt: string | null;
+  durationMs: number | null;
+  status: 'completed' | 'failed' | 'interrupted' | null;
+  combinedCalls: boolean;
+}
+
 export interface SessionAnalysis {
   schemaVersion: number;
   reconstruction?: ReconstructionCoverage;
@@ -425,6 +434,7 @@ export interface SessionAnalysis {
   session: SessionSummary;
   displayWeightUnit: ChartUnit;
   modelCalls: ModelCall[];
+  turns?: RecordedTurn[];
   contextItems: ContextItem[];
   compactions: CompactionEvent[];
   lineage: LineageEdge[];

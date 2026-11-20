@@ -174,6 +174,21 @@ pub(super) fn validate_normalized_session(
     }
 
     let call_count = session.model_calls.len();
+    let mut last_turn_call = 0;
+    for turn in &session.turns {
+        if turn.first_call <= last_turn_call
+            || turn.last_call < turn.first_call
+            || turn.last_call > call_count
+        {
+            return Err(invalid_session(
+                "turn call ranges must be ordered, disjoint and within the session",
+            ));
+        }
+        if let Some(duration_ms) = turn.duration_ms {
+            require_safe_integer(duration_ms, "turn duration")?;
+        }
+        last_turn_call = turn.last_call;
+    }
     let terminal_boundary = call_count
         .checked_add(1)
         .ok_or_else(|| invalid_session("model-call boundary overflow"))?;

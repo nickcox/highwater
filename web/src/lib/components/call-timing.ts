@@ -26,7 +26,8 @@ export function responseDuration(ms: number | null): string {
   if (ms === null) return 'Unavailable';
   if (ms < 1000) return `${ms.toLocaleString()} ms`;
   if (ms < 60000) return `${(ms / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} s`;
-  return `${Math.floor(ms / 60000).toLocaleString()} min ${((ms % 60000) / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} s`;
+  const seconds = Math.round(ms / 1000);
+  return `${Math.floor(seconds / 60).toLocaleString()}m ${(seconds % 60).toLocaleString()}s`;
 }
 
 export function effectiveOutputRate(rate: number | null): string {

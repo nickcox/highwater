@@ -41,8 +41,16 @@ struct PendingCompaction {
     recorded: bool,
 }
 
+struct TurnStart {
+    id: String,
+    first_call: usize,
+    prompt: Option<String>,
+}
+
 #[derive(Default)]
 struct State {
+    pending_turn: Option<TurnStart>,
+    turns: Vec<RecordedTurn>,
     thread_id: Option<String>,
     working_directory: Option<String>,
     model: Option<String>,
@@ -150,6 +158,11 @@ impl State {
                     self.end_turn();
                     self.turn_start = self.items.len();
                     self.turn_has_call = false;
+                    self.pending_turn = text(payload, "turn_id").map(|id| TurnStart {
+                        id,
+                        first_call: self.calls.len(),
+                        prompt: None,
+                    });
                     // Turn and thread IDs are UUIDv7, which sort in the order they were made.
                     if let (true, Some(turn), Some(thread)) =
                         (self.forked, text(payload, "turn_id"), &self.thread_id)
@@ -157,6 +170,17 @@ impl State {
                         self.inherited = turn < *thread;
                     }
                 }
+                "user_message" => {
+                    if let Some(turn) = self.pending_turn.as_mut() {
+                        if turn.prompt.is_none() {
+                            turn.prompt = payload
+                                .get("message")
+                                .and_then(Value::as_str)
+                                .and_then(first_nonempty_line);
+                        }
+                    }
+                }
+                "task_complete" | "turn_aborted" => self.record_turn(payload, kind),
                 "token_count" => self.apply_usage(payload),
                 _ => {}
             },
@@ -164,6 +188,48 @@ impl State {
             Some("compacted") => self.apply_compaction(line, record, payload),
             _ => {}
         }
+    }
+
+    fn record_turn(&mut self, payload: &Value, kind: &str) {
+        let Some(turn) = self.pending_turn.as_ref().filter(|turn| {
+            payload.get("turn_id").and_then(Value::as_str) == Some(turn.id.as_str())
+        }) else {
+            return;
+        };
+        let first_call = turn.first_call;
+        let prompt = turn.prompt.clone().or_else(|| {
+            self.items[self.turn_start..]
+                .iter()
+                .find(|item| item.kind == ContextItemKind::UserMessage)
+                .and_then(|item| item.label.strip_prefix("User · "))
+                .map(str::to_owned)
+        });
+        self.pending_turn = None;
+        if first_call == self.calls.len() {
+            return;
+        }
+        self.turns.push(RecordedTurn {
+            first_call: first_call + 1,
+            last_call: self.calls.len(),
+            prompt,
+            duration_ms: payload
+                .get("duration_ms")
+                .and_then(Value::as_u64)
+                .and_then(turn_duration_ms),
+            status: Some(if kind == "turn_aborted" {
+                TurnStatus::Interrupted
+            } else if payload.get("error").is_some_and(|error| !error.is_null()) {
+                TurnStatus::Failed
+            } else {
+                TurnStatus::Completed
+            }),
+            combined_calls: self.calls[first_call..].iter().any(|call| {
+                matches!(
+                    call.stop_reason.as_deref(),
+                    Some("web-search-aggregate" | "compaction-aggregate")
+                )
+            }),
+        });
     }
 
     /// Adds an item without putting it in the context. The same ID is the same item.
@@ -886,6 +952,7 @@ impl State {
         let Self {
             mut items,
             mut calls,
+            turns,
             compactions,
             ..
         } = self;
@@ -970,6 +1037,7 @@ impl State {
         });
         NormalizedSession {
             harness_session_cost: None,
+            turns,
             id,
             source,
             title: None,
@@ -1320,6 +1388,27 @@ mod tests {
         assert!(keeps_prior_reasoning("gpt-6-astra"));
         assert!(keeps_prior_reasoning("gpt-6.1-sol"));
         assert!(keeps_prior_reasoning("codex-auto-review"));
+    }
+
+    #[test]
+    fn matches_turn_end_by_id_without_using_a_later_turn_as_the_end() {
+        let records = [
+            r#"{"type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}"#,
+            r#"{"type":"event_msg","payload":{"type":"user_message","message":"Try it"}}"#,
+            r#"{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done"}]}}"#,
+            r#"{"type":"event_msg","payload":{"type":"task_complete","turn_id":"other","duration_ms":999}}"#,
+            r#"{"type":"event_msg","payload":{"type":"task_complete","turn_id":"t1","duration_ms":1500}}"#,
+            r#"{"type":"event_msg","payload":{"type":"task_started","turn_id":"t2"}}"#,
+            r#"{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Still running"}]}}"#,
+        ];
+        let session = reconstruct(&records.join("\n"), "session").unwrap().session;
+        assert_eq!(session.model_calls.len(), 2);
+        assert_eq!(session.turns.len(), 1);
+        let turn = &session.turns[0];
+        assert_eq!((turn.first_call, turn.last_call), (1, 1));
+        assert_eq!(turn.prompt.as_deref(), Some("Try it"));
+        assert_eq!(turn.duration_ms, Some(1500));
+        assert_eq!(turn.status, Some(TurnStatus::Completed));
     }
 
     /// Two turns with one response each; the first response reasons.

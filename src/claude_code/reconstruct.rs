@@ -60,6 +60,7 @@ struct State<'a> {
     item_indexes: HashMap<String, usize>,
     active: Vec<usize>,
     calls: Vec<NormalizedModelCall>,
+    turns: Vec<RecordedTurn>,
     responses: HashMap<String, Response>,
     compactions: Vec<PendingCompaction>,
     next_compaction: Option<String>,
@@ -118,6 +119,7 @@ pub(super) fn reconstruct(
         item_indexes: HashMap::new(),
         active: Vec::new(),
         calls: Vec::new(),
+        turns: Vec::new(),
         responses: HashMap::new(),
         compactions: Vec::new(),
         next_compaction: None,
@@ -132,8 +134,63 @@ pub(super) fn reconstruct(
         open_response: None,
         turn_thinking: Vec::new(),
     };
-    for index in branch {
-        state.apply(&records[*index])?;
+    // Duration records can be siblings of the next user message, not on the selected
+    // branch themselves. Consider them only when their parent is on that branch.
+    let mut markers: HashMap<&str, Vec<(usize, u64)>> = HashMap::new();
+    for (index, record) in records.iter().enumerate() {
+        if record.kind() == "system"
+            && record.subtype() == Some("turn_duration")
+            && !record.flag("isSidechain")
+        {
+            if let (Some(parent), Some(duration)) = (
+                record.parent(),
+                record
+                    .value
+                    .get("durationMs")
+                    .and_then(Value::as_u64)
+                    .and_then(turn_duration_ms),
+            ) {
+                markers.entry(parent).or_default().push((index, duration));
+            }
+        }
+    }
+    let mut pending: Option<PendingTurn> = None;
+    for &index in branch {
+        let record = &records[index];
+        let first_call = state.calls.len();
+        let first_item = state.items.len();
+        state.apply(record)?;
+        if let Some(user) = state.items[first_item..]
+            .iter()
+            .find(|item| item.kind == ContextItemKind::UserMessage)
+        {
+            if let Some(turn) = pending.take() {
+                state.turns.extend(turn.finish(first_call, index));
+            }
+            pending = Some(PendingTurn {
+                first_call,
+                prompt: user.label.strip_prefix("User · ").map(str::to_owned),
+                last_assistant: index,
+                candidates: Vec::new(),
+            });
+        }
+        if let Some(turn) = pending.as_mut() {
+            if record.kind() == "assistant" {
+                turn.last_assistant = turn.last_assistant.max(index);
+            }
+            if let Some(matches) = record.uuid().and_then(|uuid| markers.remove(uuid)) {
+                turn.candidates.extend(
+                    matches
+                        .into_iter()
+                        .map(|(index, duration)| (index, state.calls.len(), duration)),
+                );
+            }
+        }
+    }
+    if let Some(turn) = pending {
+        state
+            .turns
+            .extend(turn.finish(state.calls.len(), records.len()));
     }
     let working_directory = state.working_directory.clone();
     Ok(Reconstruction {
@@ -148,6 +205,41 @@ pub(super) fn reconstruct(
             },
         ),
     })
+}
+
+struct PendingTurn {
+    first_call: usize,
+    prompt: Option<String>,
+    last_assistant: usize,
+    /// Marker position, call count at its parent, and recorded duration.
+    candidates: Vec<(usize, usize, u64)>,
+}
+
+impl PendingTurn {
+    fn finish(self, end: usize, next_prompt: usize) -> Option<RecordedTurn> {
+        if end <= self.first_call {
+            return None;
+        }
+        let mut durations = self
+            .candidates
+            .into_iter()
+            .filter_map(|(index, calls, duration)| {
+                (calls == end && index > self.last_assistant && index < next_prompt)
+                    .then_some(duration)
+            });
+        let duration_ms = durations.next()?;
+        if durations.next().is_some() {
+            return None;
+        }
+        Some(RecordedTurn {
+            first_call: self.first_call + 1,
+            last_call: end,
+            prompt: self.prompt,
+            duration_ms: Some(duration_ms),
+            status: None,
+            combined_calls: false,
+        })
+    }
 }
 
 impl State<'_> {
@@ -793,6 +885,7 @@ impl State<'_> {
         let Self {
             mut items,
             calls,
+            turns,
             compactions,
             ..
         } = self;
@@ -860,6 +953,7 @@ impl State<'_> {
         });
         NormalizedSession {
             harness_session_cost: None,
+            turns,
             id,
             source,
             title: None,

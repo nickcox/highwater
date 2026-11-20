@@ -899,6 +899,7 @@ fn assemble_analysis(
         },
         display_weight_unit: chart_unit.as_str().into(),
         model_calls,
+        turns: session.turns.clone(),
         context_items,
         compactions: session
             .compactions

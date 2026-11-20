@@ -120,6 +120,12 @@ describe('live production Rust -> indexAnalysis contract', () => {
     const analysis = output('codex-7-auto');
     expect(analysis.session.source).toBe('codex');
     expect(analysis.modelCalls).toHaveLength(5);
+    expect(
+      analysis.turns?.map(({ firstCall, lastCall, status }) => [firstCall, lastCall, status]),
+    ).toEqual([
+      [1, 3, 'completed'],
+      [4, 4, 'completed'],
+    ]);
     expect(analysis.reconstruction?.explanationCodes).toContain('missingCompactionUsage');
     const indexed = indexTestAnalysis(analysis);
     const [compaction] = analysis.compactions;

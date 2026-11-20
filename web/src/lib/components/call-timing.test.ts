@@ -6,7 +6,9 @@ describe('call timing presentation', () => {
     expect(responseDuration(null)).toBe('Unavailable');
     expect(responseDuration(1)).toBe('1 ms');
     expect(responseDuration(2000)).toBe('2 s');
-    expect(responseDuration(62300)).toBe('1 min 2.3 s');
+    expect(responseDuration(62300)).toBe('1m 2s');
+    expect(responseDuration(152_270)).toBe('2m 32s');
+    expect(responseDuration(119_600)).toBe('2m 0s');
   });
   it('distinguishes unknown, real zero and small positive effective rates', () => {
     expect(effectiveOutputRate(null)).toBe('Unavailable');

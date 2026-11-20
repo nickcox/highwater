@@ -36,6 +36,7 @@
   import { itemContributions } from './item-contribution';
   import { responseDuration, effectiveOutputRate, timingExplanation } from './call-timing';
   import InfoPopover from './InfoPopover.svelte';
+  import TurnDetails from './TurnDetails.svelte';
   import {
     inspectorSections,
     rememberSection,
@@ -92,6 +93,11 @@
   let sessionWideCodes = $derived(sessionWideExplanationCodes(indexed.analysis));
   let callExplanationCodes = $derived(
     explanationCodes.filter((code) => !sessionWideCodes.has(code)),
+  );
+  let turn = $derived(
+    indexed.analysis.turns?.find(
+      (turn) => call && turn.firstCall <= call.index && call.index <= turn.lastCall,
+    ),
   );
   let traceUnavailable = $derived(
     indexed.analysis.session.source === 'vscode-copilot' && call?.timing.startedAtMs == null,
@@ -334,6 +340,8 @@
     {#if timingRecorded}<span class="timing-explanation" id={`${contributionId}-timing`}
         >{timingText}</span
       >{/if}
+
+    {#if turn}<TurnDetails {turn} callIndex={call.index} {indexed} />{/if}
 
     {#if call.addedItemIds.length > 0 || call.droppedItemIds.length > 0}
       <details use:rememberSection={{ state: sections, key: 'changes' }}>

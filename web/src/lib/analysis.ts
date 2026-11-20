@@ -90,6 +90,31 @@ function validateEnvelope(input: SessionAnalysis): void {
     throw new AnalysisValidationError(`Unsupported chart unit ${String(input.displayWeightUnit)}`);
   }
   assertReconstruction(input);
+  if (input.turns !== undefined) {
+    if (!Array.isArray(input.turns)) throw new AnalysisValidationError('Invalid turns');
+    const indexes = new Set(input.modelCalls.map((call) => call.index));
+    let previous = 0;
+    for (const turn of input.turns) {
+      if (
+        !turn ||
+        !Number.isSafeInteger(turn.firstCall) ||
+        !Number.isSafeInteger(turn.lastCall) ||
+        turn.firstCall <= previous ||
+        turn.lastCall < turn.firstCall ||
+        turn.lastCall - turn.firstCall >= indexes.size ||
+        (turn.prompt !== null && typeof turn.prompt !== 'string') ||
+        (turn.durationMs !== null &&
+          (!Number.isSafeInteger(turn.durationMs) || turn.durationMs < 0)) ||
+        ![null, 'completed', 'failed', 'interrupted'].includes(turn.status) ||
+        typeof turn.combinedCalls !== 'boolean'
+      )
+        throw new AnalysisValidationError('Invalid turn details');
+      for (let call = turn.firstCall; call <= turn.lastCall; call++) {
+        if (!indexes.has(call)) throw new AnalysisValidationError('Turn references a missing call');
+      }
+      previous = turn.lastCall;
+    }
+  }
   for (const call of input.modelCalls) {
     if (typeof call.tokenAnalysis.metricsIncludePartialEstimates !== 'boolean') {
       throw new AnalysisValidationError(

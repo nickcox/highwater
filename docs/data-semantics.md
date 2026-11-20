@@ -74,6 +74,12 @@ Each `modelCalls[].timing` keeps `startedAtMs` (when Pi created the assistant me
 
 For Pi's built-in APIs that Highwater has checked, a positive interval between the two gives `durationMs`, with the basis `pi-message-timestamps`. It is the elapsed time the client saw, including waiting, retries and any extension processing, not generation time alone and not the tool calls that followed. A successful response with reported output also gets `effectiveOutputTokensPerSecond = output × 1000 / durationMs`; output already includes reasoning, so it is not added twice. Failed or aborted responses, missing output, missing, reversed or zero intervals, and APIs whose timing has not been checked get no rate. Highwater does not work out gaps between messages, time to first token or streaming timing. The call inspector shows the approximate elapsed time and output rate; the absolute times are kept but not shown yet.
 
+### User turns
+
+When the source identifies user turns, the analysis can include `turns`: ordered, disjoint inclusive ranges of one-based model call indexes (`firstCall`, `lastCall`). Each has an optional prompt preview, whole-turn `durationMs` and outcome `status` (each `null` if unknown). `combinedCalls` indicates that a call entry represents more than one model call. A call outside these ranges has no identified turn.
+
+Codex matches `task_started` and `task_complete` or `turn_aborted` by turn ID and uses the recorded duration. Claude Code uses `turn_duration` only when it can be attached unambiguously to the selected branch and the current prompt. VS Code Copilot groups calls by saved chat request and subtracts the request timestamp from `modelState.completedAt` for completed or failed requests. Cancelled requests can have a synthesised completion time, so their duration is omitted. These are not per-call timings.
+
 ### Limits and caching
 
 Integers in the analysis are limited to `Number.MAX_SAFE_INTEGER`, and invalid required values or counts are rejected before a response is sent. A total that would exceed that limit is `null`, never a partial figure.
