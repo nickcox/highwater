@@ -158,12 +158,30 @@ describe('SessionSummary', () => {
     const same = render(SessionSummary, { props: { indexed: indexTestAnalysis(analysis) } });
     expect(ownTotal(same.container)).toBeUndefined();
     same.unmount();
-    // Calls whose trace records are gone have no recorded cost of their own.
+    // Calls with no matching trace have no recorded cost of their own in this session.
     analysis.session.reportedCostTotal = 0.04;
     const { container } = render(SessionSummary, {
       props: { indexed: indexTestAnalysis(analysis) },
     });
-    expect(ownTotal(container)).toHaveTextContent(/including calls whose trace record is gone/);
+    expect(ownTotal(container)).toHaveTextContent(/including calls with no matching trace/);
+  });
+
+  it.each([
+    ['traceRecordsUnavailable', 'No matching call traces', false],
+    ['traceRecordsIncomplete', 'Some calls have no matching trace', false],
+    ['traceRecordsUnreadable', 'Could not read the Copilot trace database', true],
+  ])('shows a visible session notice for %s', (code, title, warning) => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'vscode-copilot';
+    analysis.reconstruction = { status: 'partial', explanationCodes: [code] };
+    const { container } = render(SessionSummary, {
+      props: { indexed: indexTestAnalysis(analysis) },
+    });
+    const notice = container.querySelector('.trace-notice');
+    expect(notice).toHaveTextContent(title);
+    expect(notice).toHaveTextContent(/timing and detailed token usage are unavailable/i);
+    expect(notice).not.toHaveTextContent(/expired|gone/i);
+    expect(notice?.classList.contains('unreadable')).toBe(warning);
   });
 
   it('has no own-total row when the harness recorded none', () => {

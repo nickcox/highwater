@@ -189,7 +189,7 @@ export function harnessSessionCostNote(
   now = new Date(),
 ): string {
   if (source === 'vscode-copilot') {
-    return 'The credits Copilot recorded for every request, at $0.01 each, including calls whose trace record is gone';
+    return 'The credits Copilot recorded for every request, at $0.01 each, including calls with no matching trace';
   }
   if (source === 'copilot') {
     return 'The credits Copilot recorded at its last usage checkpoint, at $0.01 each';

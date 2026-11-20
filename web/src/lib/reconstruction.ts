@@ -1,6 +1,35 @@
 import type { SessionAnalysis } from './types';
 import { AnalysisValidationError } from './analysis-validation';
 
+const chatFileOnly =
+  'Showing what the chat session file recorded. Per-call timing and detailed token usage are unavailable; system prompt and tool definition details may be incomplete.';
+const copilotTraceNotes = {
+  traceRecordsUnavailable: { title: 'No matching call traces', detail: chatFileOnly },
+  traceRecordsIncomplete: {
+    title: 'Some calls have no matching trace',
+    detail:
+      'For those calls, the chat session file supplies what it recorded. Timing and detailed token usage are unavailable, and system prompt and tool definition details may be incomplete.',
+  },
+  traceRecordsUnreadable: {
+    title: 'Could not read the Copilot trace database',
+    detail: chatFileOnly,
+  },
+} as const;
+
+export function copilotTraceNotice(analysis: SessionAnalysis) {
+  if (analysis.session.source !== 'vscode-copilot') return null;
+  const codes = analysis.reconstruction?.explanationCodes ?? [];
+  for (const code of [
+    'traceRecordsUnreadable',
+    'traceRecordsUnavailable',
+    'traceRecordsIncomplete',
+  ] as const) {
+    if (codes.includes(code))
+      return { ...copilotTraceNotes[code], unreadable: code === 'traceRecordsUnreadable' };
+  }
+  return null;
+}
+
 export const reconstructionLimitLabels: Record<string, string> = {
   missingHistoricalSystemPrompt: 'Historical system instructions are not recorded completely.',
   missingHistoricalToolDefinitions: 'Historical tool declarations are not recorded completely.',
@@ -36,9 +65,11 @@ export const reconstructionLimitLabels: Record<string, string> = {
   unrecordedRounds:
     "A request that was stopped or interrupted recorded its model calls as one, so its calls' context and output are not split.",
   traceRecordsIncomplete:
-    'Some calls have no Copilot trace record (Copilot keeps them for a few days), so they show only what the session file records: no per-call usage, timing, system prompt or tools.',
-  traceRecordsUnreadable:
-    "Copilot's trace database could not be read, so calls show only what the session file records.",
+    copilotTraceNotes.traceRecordsIncomplete.title +
+    '. ' +
+    copilotTraceNotes.traceRecordsIncomplete.detail,
+  traceRecordsUnavailable: copilotTraceNotes.traceRecordsUnavailable.title + '. ' + chatFileOnly,
+  traceRecordsUnreadable: copilotTraceNotes.traceRecordsUnreadable.title + '. ' + chatFileOnly,
   subagentCallsNotShown:
     "Subagents' model calls are recorded in the session's file but are not shown.",
   repairedCompactionLink:

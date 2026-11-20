@@ -30,6 +30,8 @@ pub(crate) enum Limitation {
     /// Some calls have no trace records (deleted, never written, or not matching the
     /// session file), so they use the session file alone.
     TraceRecordsIncomplete,
+    /// No model call could be matched to a trace.
+    TraceRecordsUnavailable,
     /// The trace database exists but could not be read.
     TraceRecordsUnreadable,
     UnsupportedContent,
@@ -44,6 +46,7 @@ impl Limitation {
             Self::UnrenderedAttachments => "unrenderedAttachments",
             Self::UnrecordedRounds => "unrecordedRounds",
             Self::TraceRecordsIncomplete => "traceRecordsIncomplete",
+            Self::TraceRecordsUnavailable => "traceRecordsUnavailable",
             Self::TraceRecordsUnreadable => "traceRecordsUnreadable",
             Self::UnsupportedContent => "unsupportedContent",
         }
@@ -103,22 +106,22 @@ pub(crate) fn load(path: &Path) -> Result<Loaded, SourceError> {
     };
     let mut reconstruction =
         reconstruct::reconstruct(&replayed.session, working_directory, traces.as_ref())?;
-    if unreadable {
-        reconstruction
-            .limitations
-            .insert(Limitation::TraceRecordsUnreadable);
-    }
-    // Calls without trace records in a session that has some are worth pointing out.
+    // Only matched traces supply the start timestamp; the session file supplies no start.
     let calls = &reconstruction.session.model_calls;
-    if traces.is_some_and(|traces| !traces.calls.is_empty())
-        && calls
-            .iter()
-            .any(|call| call.timestamps.started_at_ms.is_none())
-    {
-        reconstruction
-            .limitations
-            .insert(Limitation::TraceRecordsIncomplete);
-    }
+    let traced = calls
+        .iter()
+        .filter(|call| call.timestamps.started_at_ms.is_some())
+        .count();
+    let trace_limitation = if unreadable {
+        Some(Limitation::TraceRecordsUnreadable)
+    } else if calls.is_empty() || traced == calls.len() {
+        None
+    } else if traced == 0 {
+        Some(Limitation::TraceRecordsUnavailable)
+    } else {
+        Some(Limitation::TraceRecordsIncomplete)
+    };
+    reconstruction.limitations.extend(trace_limitation);
     Ok(Loaded {
         session: reconstruction.session,
         limitations: reconstruction.limitations,

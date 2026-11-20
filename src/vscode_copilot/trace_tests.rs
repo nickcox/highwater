@@ -266,7 +266,23 @@ fn trace_records_that_do_not_match_the_rounds_are_not_used() {
         .all(|call| call.timestamps.started_at_ms.is_none()));
     assert!(loaded
         .limitations
+        .contains(&Limitation::TraceRecordsUnavailable));
+    assert!(!loaded
+        .limitations
         .contains(&Limitation::TraceRecordsIncomplete));
+}
+
+#[test]
+fn a_session_without_a_trace_database_still_loads_with_a_coverage_notice() {
+    let (_directory, path) = user_folder(&gpt_session(), &[]);
+    let loaded = loaded(&path);
+    assert_eq!(loaded.session.model_calls.len(), 3);
+    assert!(loaded
+        .limitations
+        .contains(&Limitation::TraceRecordsUnavailable));
+    assert!(!loaded
+        .limitations
+        .contains(&Limitation::TraceRecordsUnreadable));
 }
 
 #[test]
@@ -281,6 +297,9 @@ fn an_unreadable_trace_database_is_a_limitation() {
     assert!(loaded
         .limitations
         .contains(&Limitation::TraceRecordsUnreadable));
+    assert!(!loaded
+        .limitations
+        .contains(&Limitation::TraceRecordsUnavailable));
     assert_eq!(loaded.session.model_calls.len(), 3);
 }
 

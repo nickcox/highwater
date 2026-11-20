@@ -71,7 +71,7 @@ const VSCODE_COPILOT_COPY: CostBasisCopy = {
   label: 'Copilot-recorded cost',
   totalLabel: 'Copilot-recorded cost total',
   basisLabel: 'Copilot credits, at $0.01 a credit',
-  note: 'Copilot records what it charged for each call in credits, in trace records it keeps for a few days, and for each request in the session file. Calls without a record are priced from the price table.',
+  note: 'Copilot records what it charged for each call in credits, in its trace database, and for each request in the session file. Calls without a record are priced from the price table.',
   trackCaveat: 'recorded by Copilot',
 };
 

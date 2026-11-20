@@ -13,7 +13,9 @@ Without explicit source flags, Highwater reads VS Code's and VS Code Insiders' u
 | Session files | `workspaceStorage/<workspace>/chatSessions/<session id>.jsonl` | One file per chat session, kept until the user deletes the chat. |
 | Sessions with no folder open | `globalStorage/emptyWindowChatSessions/<session id>.jsonl` | The same format. |
 | Workspace folder | `workspaceStorage/<workspace>/workspace.json` | The session's working directory. A `file://` URI becomes a path; a `vscode-remote://` URI is kept as recorded, because the folder is on another machine. |
-| Trace database | `globalStorage/github.copilot-chat/agent-traces.db` (with `-wal` and `-shm`) | Per-call usage, timing and content, for about the last five days. |
+| Trace database | `globalStorage/github.copilot-chat/agent-traces.db` (with `-wal` and `-shm`) | Recent per-call usage, timing and content. |
+
+[The current Copilot Chat trace store](https://github.com/microsoft/vscode/blob/main/extensions/copilot/src/platform/otel/node/sqlite/otelSqliteStore.ts#L413) removes spans older than seven days when it opens the database and caps retention at 100 sessions. A missing trace does not necessarily mean it expired. Highwater identifies sessions with no matching traces, incomplete trace coverage or an unreadable database, and still shows what the chat session file recorded.
 
 Only sessions with at least one request are listed; most session files are empty. The title is the custom title, otherwise the first message. References are `vscode-copilot-…`, derived from the session ID.
 
@@ -91,7 +93,7 @@ Every analysis is partial, because Copilot's own model calls (titles, progress m
 
 ## Cost and cache figures
 
-Copilot records what it charged, in credits: per traced call (`copilot_usage_nano_aiu`) and per request in the session file (`copilotCredits`, the sum of its calls'). A credit's dollar value is not recorded. Highwater assumes $0.01 a credit; at that value, Claude calls' credits equal their price at the `github-copilot` rates exactly, and GPT calls' credits were 1–25% above it. Because `github-copilot` bills per token from June 2026, a traced call's credits, or a single-call request's, are its recorded cost. Other calls are priced from the price table. The session's credits are Copilot's own total (`session.harnessSessionCost`), shown in Session details when it differs from the recorded call costs, which happens when some calls' trace records are gone.
+Copilot records what it charged, in credits: per traced call (`copilot_usage_nano_aiu`) and per request in the session file (`copilotCredits`, the sum of its calls'). A credit's dollar value is not recorded. Highwater assumes $0.01 a credit; at that value, Claude calls' credits equal their price at the `github-copilot` rates exactly, and GPT calls' credits were 1–25% above it. Because `github-copilot` bills per token from June 2026, a traced call's credits, or a single-call request's, are its recorded cost. Other calls are priced from the price table. The session's credits are Copilot's own total (`session.harnessSessionCost`), shown in Session details when it differs from the recorded call costs, which happens when some calls have no matching trace.
 
 Cache figures are usage-only, as for Claude Code. Claude calls use the `github-copilot-messages-cache-v1` policy and GPT calls `github-copilot-responses-cache-v1`; calls with no recorded API are unsupported.
 

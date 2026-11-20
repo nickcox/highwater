@@ -10,7 +10,7 @@ export function timingExplanation(source: string, traced = false): string {
     case 'vscode-copilot':
       return traced
         ? `From Copilot sending the request to the end of the response, as its trace records show. ${RATE}`
-        : "VS Code Copilot's trace record for this call is gone (Copilot keeps them for a few days), and the session file does not record when a response started, so the response time and output rate are unavailable.";
+        : 'Response time and output rate require timing from the Copilot trace, not the chat session file.';
     case 'copilot':
       return `From Copilot sending the request to the end of the response, as its usage record reports. ${RATE}`;
     case 'pi':

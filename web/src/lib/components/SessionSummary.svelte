@@ -4,6 +4,7 @@
   import { childSessions, sessionHref } from '../session-links';
   import { formatSessionTime } from '../session-label';
   import { estimateSummary } from '../estimate-quality';
+  import { copilotTraceNotice } from '../reconstruction';
   import InfoPopover from './InfoPopover.svelte';
   import { describeCostBasis, isPiSource } from '../cost-basis';
   import { recordedCoverageNote } from '../recorded-usage';
@@ -70,6 +71,7 @@
   );
   let coverage = $derived(tokenAnalysis.itemEstimateCoverage);
   let estimates = $derived(estimateSummary(indexed));
+  let traceNotice = $derived(copilotTraceNotice(analysis));
   let costCopy = $derived(describeCostBasis(economics.costBasis, session.source));
   // Framing-based reconciliation only applies to text-only routes; otherwise
   // summarise the approximate comparison the River draws instead.
@@ -148,6 +150,13 @@
         {/if}
       </div>
     </div>
+  {/if}
+
+  {#if traceNotice}
+    <p class="trace-notice" class:unreadable={traceNotice.unreadable}>
+      <strong>{traceNotice.title}</strong>
+      <span>{traceNotice.detail}</span>
+    </p>
   {/if}
 
   <div class="session-status">
@@ -415,6 +424,19 @@
 </section>
 
 <style>
+  .trace-notice {
+    border-inline-start: 2px solid var(--border);
+    margin: 0;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.82rem;
+  }
+  .trace-notice.unreadable {
+    border-inline-start-color: var(--warning);
+  }
+  .trace-notice span {
+    display: block;
+  }
+
   .session-relations {
     margin-top: 8px;
     color: var(--secondary);

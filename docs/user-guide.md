@@ -46,7 +46,7 @@ The summary shows the number of model calls and context items, the peak calculat
 
 - the billed cost (Pi and OpenCode) and the cost the harness recorded, or that it recorded none;
 - Claude Code's own session total, when its transcript records one. It is a running total that also includes subagents and Claude Code's own calls, so it is never added to the other figures;
-- VS Code Copilot's own total from the credits it recorded for each request, shown when it differs from the recorded call costs because some calls' trace records are gone;
+- VS Code Copilot's own total from the credits it recorded for each request, shown when it differs from the recorded call costs because some calls have no matching trace;
 - token usage across all calls, cache-read share, compactions, model and provider, and session metadata;
 - a closed **Diagnostics** section with the estimator's own figures: usage and estimate coverage, token-turns, reconciliation, tokenizer methods and profiles.
 

@@ -283,8 +283,6 @@ impl<'t> State<'t> {
                 for (round, call) in rounds.iter_mut().zip(&traced) {
                     round.trace = Some(call);
                 }
-            } else {
-                self.limitations.insert(Limitation::TraceRecordsIncomplete);
             }
         }
         let metadata = request.pointer("/result/metadata");

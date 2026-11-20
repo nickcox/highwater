@@ -188,6 +188,28 @@ describe('CallDetails change lists', () => {
     expect(screen.queryByText('Response time (approx.)')).toBeNull();
   });
 
+  it('labels a missing VS Code Copilot trace without assuming it expired', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    indexed.analysis.session.source = 'vscode-copilot';
+    const call = indexed.analysis.modelCalls[0];
+    const view = render(CallDetails, { props: { call, indexed, pinned: true } });
+    const timing = screen.getByText('Timing').nextElementSibling;
+    expect(timing).toHaveTextContent('Trace unavailable');
+    expect(timing).not.toHaveTextContent(/expired|gone/i);
+    view.unmount();
+
+    call.timing = {
+      startedAtMs: 1000,
+      recordedAtMs: 3000,
+      durationMs: 2000,
+      effectiveOutputTokensPerSecond: 50,
+      basis: 'vscode-copilot-trace-spans',
+    };
+    render(CallDetails, { props: { call, indexed, pinned: true } });
+    expect(screen.queryByText('Trace unavailable')).toBeNull();
+    expect(screen.getByText('50 tok/s')).toBeInTheDocument();
+  });
+
   it('renders tool metadata as noninteractive text with an explicit failure label', () => {
     const indexed = indexTestAnalysis(testAnalysis());
     const call = indexed.analysis.modelCalls[0];

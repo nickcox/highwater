@@ -93,8 +93,10 @@
   let callExplanationCodes = $derived(
     explanationCodes.filter((code) => !sessionWideCodes.has(code)),
   );
-  // Claude Code and Codex never record when a request started, and VS Code Copilot only in trace
-  // records it keeps for a few days, so their calls without a start show one "Not recorded" row.
+  let traceUnavailable = $derived(
+    indexed.analysis.session.source === 'vscode-copilot' && call?.timing.startedAtMs == null,
+  );
+  // Claude Code and Codex lack request starts. VS Code Copilot timing comes from traces.
   let timingRecorded = $derived(
     indexed.analysis.session.source === 'vscode-copilot'
       ? call?.timing.durationMs != null
@@ -318,9 +320,12 @@
         <div>
           <dt>Timing</dt>
           <dd>
-            Not recorded<InfoPopover
+            {traceUnavailable ? 'Trace unavailable' : 'Not recorded'}<InfoPopover
               id={`${contributionId}-timing`}
-              label="Why timing is not recorded">{timingText}</InfoPopover
+              label="Why timing is not recorded"
+              >{timingText}{#if traceUnavailable}
+                The chat session file may still record token totals and tool activity.
+              {/if}</InfoPopover
             >
           </dd>
         </div>
