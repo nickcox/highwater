@@ -913,32 +913,34 @@ test('item type hover shows its tokens in a card beside the pointer without movi
   await page.goto('/#session=browser-smoke&display=itemTypes');
   await assertLoaded(page);
   const legend = page.getByRole('group', { name: 'Item type legend' });
-  const before = (await legend.boundingBox())!;
   const bands = page.locator('.ribbon-group.group-ribbon .ribbon-hit');
   await expect(bands.locator('title')).toHaveCount(0);
   const card = page.locator('.group-hover-card');
-  // A band's bounding box can include points outside its shape, so hover each in turn.
-  let pointer: { x: number; y: number } | null = null;
-  for (let index = 0; index < (await bands.count()) && !pointer; index++) {
+  // Scroll before measuring so only pointer movement can change the legend's position.
+  // A band's bounding box can include points outside its shape, so try each in turn.
+  for (let index = 0; index < (await bands.count()); index++) {
     const band = bands.nth(index);
-    await band.hover({ timeout: 2000 }).catch(() => undefined);
-    if (await card.isVisible()) {
-      const bounds = (await band.boundingBox())!;
-      pointer = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
-    }
+    await page.mouse.move(0, 0);
+    await band.scrollIntoViewIfNeeded();
+    const bounds = (await band.boundingBox())!;
+    const pointer = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const before = (await legend.boundingBox())!;
+    await page.mouse.move(pointer.x, pointer.y);
+    if (!(await card.isVisible())) continue;
+
+    await expect(card).toContainText(/ at call \d+/);
+    await expect(card).toContainText(/\d+ items/);
+    const placed = (await card.boundingBox())!;
+    expect(Math.abs(placed.y - pointer.y)).toBeLessThan(40);
+    expect(
+      Math.min(Math.abs(placed.x - pointer.x), Math.abs(placed.x + placed.width - pointer.x)),
+    ).toBeLessThan(40);
+    expect(await legend.boundingBox()).toEqual(before);
+    await page.mouse.move(0, 0);
+    await expect(card).toHaveCount(0);
+    return;
   }
-  expect(pointer).not.toBeNull();
-  await expect(card).toBeVisible();
-  await expect(card).toContainText(/ at call \d+/);
-  await expect(card).toContainText(/\d+ items/);
-  const placed = (await card.boundingBox())!;
-  expect(Math.abs(placed.y - pointer.y)).toBeLessThan(40);
-  expect(
-    Math.min(Math.abs(placed.x - pointer.x), Math.abs(placed.x + placed.width - pointer.x)),
-  ).toBeLessThan(40);
-  expect(await legend.boundingBox()).toEqual(before);
-  await page.mouse.move(0, 0);
-  await expect(card).toHaveCount(0);
+  throw new Error('No item type band showed a hover card');
 });
 
 test('Item types use distinct semantic colors consistently in ribbons and legend without changing individual colors', async ({
