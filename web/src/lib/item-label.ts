@@ -1,4 +1,5 @@
 import type { ContextItem } from './types';
+import { kindLabel } from './kind-labels';
 
 type LabelFields = Pick<ContextItem, 'kind' | 'label' | 'preview'>;
 
@@ -9,7 +10,7 @@ const KIND_FALLBACKS: Record<string, string> = {
   assistantMessage: 'Assistant message',
   toolResult: 'Tool result',
   compactionSummary: 'Compaction summary',
-  customMessage: 'Custom context message',
+  customMessage: kindLabel('customMessage'),
   branchSummary: 'Branch summary',
   thinking: 'Thinking',
   unrecordedContext: 'Unrecorded request context',
@@ -22,6 +23,8 @@ export function displayItemLabel(
   fallback = 'Unlabelled context item',
 ): string {
   const label = item?.label;
+  if (item?.kind === 'customMessage' && label === 'Custom context message')
+    return KIND_FALLBACKS.customMessage;
   if (label && label.trim().length > 0) return label;
 
   const preview = item?.preview?.text;

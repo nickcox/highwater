@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Summary } from '../contract';
+import { contextItemKind, type ContextComposition, type ContextItemKind } from '../state';
 import { HostFailure } from './http';
 
 const tokens = z
@@ -15,10 +16,65 @@ const tokens = z
 const analysisSchema = z.object({
   schemaVersion: z.literal(1),
   modelCalls: z.array(
-    z.object({ reportedPromptTokens: tokens, compactionBefore: z.string().nullable().optional() }),
+    z.object({
+      reportedPromptTokens: tokens,
+      compactionBefore: z.string().nullable().optional(),
+      contextItemIndexes: z.unknown().optional(),
+      tokenizationProfileId: z.unknown().optional(),
+    }),
   ),
   compactions: z.array(z.unknown()),
+  contextItems: z.unknown().optional(),
 });
+const itemIndexes = z.array(z.number().int().nonnegative().safe());
+const contextItem = z.object({
+  kind: contextItemKind.catch('other'),
+  tokenEstimates: z.array(
+    z.object({
+      profileId: z.string(),
+      tokens: tokens.catch(null),
+      coverage: z.enum(['complete', 'partial', 'unavailable']).catch('unavailable'),
+    }),
+  ),
+});
+
+function latestComposition(
+  analysis: z.infer<typeof analysisSchema>,
+): ContextComposition | undefined {
+  const call = analysis.modelCalls.at(-1);
+  const items: unknown = analysis.contextItems;
+  if (typeof call?.tokenizationProfileId !== 'string' || !Array.isArray(items)) return;
+  const indexes = itemIndexes.safeParse(call.contextItemIndexes);
+  if (!indexes.success) return;
+  const totals = new Map<ContextItemKind, number>();
+  let total = 0;
+  let incomplete = false;
+  for (const index of new Set(indexes.data)) {
+    const item = contextItem.safeParse(items[index]);
+    if (!item.success) {
+      incomplete = true;
+      continue;
+    }
+    const estimate = item.data.tokenEstimates.find(
+      ({ profileId }) => profileId === call.tokenizationProfileId,
+    );
+    if (estimate?.coverage !== 'complete' || estimate.tokens === null) incomplete = true;
+    const count = estimate?.tokens ?? 0;
+    if (count === 0) continue;
+    total += count;
+    if (!Number.isSafeInteger(total)) return;
+    totals.set(item.data.kind, (totals.get(item.data.kind) ?? 0) + count);
+  }
+  if (!total) return;
+  return {
+    segments: contextItemKind.options.flatMap((kind) => {
+      const count = totals.get(kind);
+      return count === undefined ? [] : [{ kind, tokens: count }];
+    }),
+    incomplete,
+  };
+}
+
 export function summariseAnalysis(input: unknown): Summary {
   const parsed = analysisSchema.safeParse(input);
   if (!parsed.success)
@@ -48,6 +104,7 @@ export function summariseAnalysis(input: unknown): Summary {
       ),
     ),
   ].filter((position) => position >= 0);
+  const composition = latestComposition(analysis);
   return {
     callCount: analysis.modelCalls.length,
     compactionCount: analysis.compactions.length,
@@ -56,6 +113,7 @@ export function summariseAnalysis(input: unknown): Summary {
     series: [...bins.values()],
     compactionPoints,
     recentGrowth: recentGrowth(analysis.modelCalls),
+    ...(composition ? { latestComposition: composition } : {}),
   };
 }
 

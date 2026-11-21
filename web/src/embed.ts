@@ -5,10 +5,17 @@ import { themeCss } from '../scripts/theme-html';
 import workspaceCss from './lib/styles/workspace.css?inline';
 import type { AnalysisLoader } from './lib/embed/analysis-controller';
 import { PANEL_SECTIONS, STANDARD_SECTIONS, type SectionId } from './lib/state/session-sections';
+import { kindGroupLabel } from './lib/kind-labels';
+import { palettes } from './lib/theme/palettes';
+import type { ContextItemKind } from './lib/types';
 
 export type { SectionId };
 /** Section orders for `sections`: `standard` matches the standalone viewer. */
 export const sectionPresets = { standard: STANDARD_SECTIONS, panel: PANEL_SECTIONS };
+
+export function contextItemPresentation(kind: ContextItemKind, mode: 'light' | 'dark') {
+  return { label: kindGroupLabel(kind), colour: palettes[mode].itemTypes[kind] };
+}
 
 export interface HighwaterEmbedOptions {
   target: HTMLElement;

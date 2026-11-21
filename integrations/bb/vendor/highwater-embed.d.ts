@@ -1,3 +1,5 @@
+import type { ContextItemKind } from '../state';
+
 /** Analysis payloads are validated by Highwater before they are indexed or rendered. */
 export type AnalysisFetchResult =
   | { status: 'ok'; analysis: unknown; etag: string | null }
@@ -8,6 +10,10 @@ export const sectionPresets: {
   standard: readonly SectionId[];
   panel: readonly SectionId[];
 };
+export function contextItemPresentation(
+  kind: ContextItemKind,
+  mode: 'light' | 'dark',
+): { label: string; colour: string };
 export interface HighwaterEmbedOptions {
   target: HTMLElement;
   loadAnalysis(signal: AbortSignal, etag: string | null): Promise<AnalysisFetchResult>;

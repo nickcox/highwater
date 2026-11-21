@@ -3,9 +3,11 @@ import {
   experimental_Icon as Icon,
   experimental_useAppPanel,
   experimental_useThreadContextKind,
+  useSettings,
 } from '@get-bb/plugin-sdk/app';
 import { Button } from '../components/ui/button';
 import type { ThreadSummaryData } from '../state';
+import { CompactContextSummary } from './CompactContextSummary';
 import { useThreadAnalysis } from './use-thread-analysis';
 import { stateMessage } from './ContextState';
 
@@ -133,11 +135,6 @@ function describeParts(data: ThreadSummaryData): { text: string; growth?: true }
       : [{ text: `input ${signedTokens(recentGrowth)}/call`, growth: true as const }]),
   ];
 }
-function describe(data: ThreadSummaryData): string {
-  return describeParts(data)
-    .map((part) => part.text)
-    .join(' · ');
-}
 /** The summary with its own tooltip on the growth rate, which is not self-explanatory. */
 function Detail({ data }: { data: ThreadSummaryData }) {
   return describeParts(data).map((part, index) => (
@@ -152,12 +149,10 @@ function usagePercent(data: ThreadSummaryData): string | null {
     ? `${Math.round((data.usage.usedTokens / data.usage.contextWindowTokens) * 100)}%`
     : null;
 }
-function usageText(data: ThreadSummaryData, compact = false): string {
+function usageText(data: ThreadSummaryData): string {
   const percent = usagePercent(data);
   if (!data.usage || percent === null) return 'Usage unavailable';
-  return compact
-    ? percent
-    : `${formatTokens(data.usage.usedTokens)} / ${formatTokens(data.usage.contextWindowTokens)} · ${percent}`;
+  return `${formatTokens(data.usage.usedTokens)} / ${formatTokens(data.usage.contextWindowTokens)} · ${percent}`;
 }
 /** Whole thousands above 1,000, so the tooltip's text changes less often. */
 function roundedTokens(value: number): string {
@@ -172,7 +167,7 @@ export function forecast(data: ThreadSummaryData): string {
   // Rounded so the tooltip's text changes rarely; a changing title hides a native tooltip.
   const exact = Math.ceil(remaining / growth);
   const calls = exact > 20 ? Math.round(exact / 10) * 10 : exact;
-  return ` Full in about ${calls.toLocaleString('en-AU')} ${calls === 1 ? 'call' : 'calls'} at the recent rate.`;
+  return `Full in about ${calls.toLocaleString('en-AU')} ${calls === 1 ? 'call' : 'calls'} at the recent rate.`;
 }
 
 function sparklineProps(data: ThreadSummaryData) {
@@ -189,25 +184,33 @@ function ContextContent({ threadId, compact }: { threadId: string; compact: bool
   const state = snapshot.summaryState;
   if (state?.state === 'unsupportedAgent' || state?.state === 'noSession') return null;
   const data = snapshot.summary;
-  const detail = state ? stateMessage(state).title : data ? describe(data) : 'Loading…';
-  const detailNode = !state && data ? <Detail data={data} /> : detail;
-  const title = state
-    ? stateMessage(state).detail
-    : data
-      ? data.usage
-        ? `${roundedTokens(data.usage.usedTokens)} of ${roundedTokens(data.usage.contextWindowTokens)} tokens (${usagePercent(data)}).${forecast(data)}`
-        : 'No current usage from bb.'
-      : 'Loading Highwater context summary.';
+  const detail = state ? stateMessage(state).title : 'Loading…';
+  const percent = data ? usagePercent(data) : null;
+  const usageHeading =
+    data?.usage && percent !== null
+      ? `${roundedTokens(data.usage.usedTokens)} of ${roundedTokens(data.usage.contextWindowTokens)} tokens (${percent})`
+      : 'No current usage from bb';
+  const usageForecast = data && percent !== null ? forecast(data) : '';
   const open = () => {
     panel.openTab({ tab: { id: 'context', context: { kind: 'thread' }, availability: 'action' } });
   };
-  const trailing =
-    !state && data ? (
-      <span className="flex min-w-0 items-center gap-2">
-        {compact && <Sparkline {...sparklineProps(data)} compact />}
-        <span className="whitespace-nowrap tabular-nums">{usageText(data, compact)}</span>
-      </span>
-    ) : null;
+  if (compact && !state && data)
+    return (
+      <CompactContextSummary
+        composition={data.summary.latestComposition}
+        usagePercent={percent}
+        usageHeading={usageHeading}
+        usageForecast={usageForecast}
+        onOpen={open}
+      />
+    );
+  const title = state
+    ? stateMessage(state).detail
+    : data
+      ? usageForecast
+        ? `${usageHeading}. ${usageForecast}`
+        : `${usageHeading}.`
+      : 'Loading Highwater context summary.';
   if (compact)
     return (
       // bb shows plain title tooltips; the Button component does not accept one directly.
@@ -218,11 +221,10 @@ function ContextContent({ threadId, compact }: { threadId: string; compact: bool
           className="h-auto min-w-0 justify-start gap-2 px-1 py-0.5 text-xs"
           onClick={open}
           aria-description={title}
-          aria-label={`Context: ${detail}${!state && data ? `; ${usageText(data)}` : ''}`}
+          aria-label={`Open Context tab. ${detail}`}
         >
           <Icon name="highwater/gauge" className="size-3.5 shrink-0" aria-hidden />
-          <span className="truncate text-muted-foreground">{detailNode}</span>
-          {trailing}
+          <span className="truncate text-muted-foreground">{detail}</span>
         </Button>
       </span>
     );
@@ -235,26 +237,35 @@ function ContextContent({ threadId, compact }: { threadId: string; compact: bool
             Context{!state && data && <Sparkline {...sparklineProps(data)} compact />}
           </span>
           <span className="whitespace-normal text-xs leading-snug text-muted-foreground">
-            {detailNode}
+            {!state && data ? <Detail data={data} /> : detail}
           </span>
         </span>
       }
-      trailing={trailing}
+      trailing={
+        !state && data && <span className="whitespace-nowrap tabular-nums">{usageText(data)}</span>
+      }
       title={title}
       onClick={open}
     />
   );
 }
 export function ContextRow({ threadId }: { threadId: string }) {
-  return <ContextContent threadId={threadId} compact={false} />;
+  return useShowContextSummary() ? <ContextContent threadId={threadId} compact={false} /> : null;
+}
+function useShowContextSummary(): boolean {
+  const { values, isLoading } = useSettings();
+  return !isLoading && values?.showContextSummary !== false;
 }
 export function useContextSegmentVisible({ threadId }: { threadId: string }): boolean {
   const kind = experimental_useThreadContextKind();
-  const { snapshot } = useThreadAnalysis(threadId, kind === 'banner', 'summary');
+  const showSummary = useShowContextSummary();
+  const enabled = kind === 'banner' && showSummary;
+  const { snapshot } = useThreadAnalysis(threadId, enabled, 'summary');
   const state = snapshot.summaryState?.state;
-  return kind === 'banner' && state !== 'unsupportedAgent' && state !== 'noSession';
+  return enabled && state !== 'unsupportedAgent' && state !== 'noSession';
 }
 export function ContextSegment({ threadId }: { threadId: string }) {
   const kind = experimental_useThreadContextKind();
-  return kind === 'card' ? null : <ContextContent threadId={threadId} compact />;
+  const showSummary = useShowContextSummary();
+  return kind === 'banner' && showSummary ? <ContextContent threadId={threadId} compact /> : null;
 }

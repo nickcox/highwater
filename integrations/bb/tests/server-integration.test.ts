@@ -96,14 +96,26 @@ for (const binaryPath of binaries) {
           );
           expect(unchanged.status).toBe(304);
           expect(await unchanged.text()).toBe('');
-          expect(
-            await server.harness.behavior.callRpc('threadSummary', { threadId, ifNoneMatch: null }),
-          ).toMatchObject({
+          const summary = await server.harness.behavior.callRpc('threadSummary', {
+            threadId,
+            ifNoneMatch: null,
+          });
+          expect(summary).toMatchObject({
             state: 'ok',
             etag,
             summary: { callCount: analysis.modelCalls.length },
             usage: null,
           });
+          if (providerId === 'pi')
+            expect(summary).toMatchObject({
+              summary: {
+                latestComposition: {
+                  segments: expect.arrayContaining([
+                    { kind: 'userMessage', tokens: expect.any(Number) },
+                  ]),
+                },
+              },
+            });
           expect(
             await server.harness.behavior.callRpc('threadSummary', { threadId, ifNoneMatch: etag }),
           ).toEqual({ state: 'notModified', etag, usage: null });

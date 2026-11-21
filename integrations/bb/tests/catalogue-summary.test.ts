@@ -115,6 +115,67 @@ describe('summary', () => {
     // Changes since the compaction: +60, +120, +20, +300; the median is (60 + 120) / 2.
     expect(summary.recentGrowth).toBe(90);
   });
+  it('uses only the latest call’s distinct items and matching token estimates', () => {
+    const estimate = (tokens: number | null, coverage = 'complete', profileId = 'latest') => ({
+      tokens,
+      coverage,
+      profileId,
+    });
+    const summary = summariseAnalysis({
+      ...analysis([200, null]),
+      modelCalls: [
+        {
+          reportedPromptTokens: 200,
+          contextItemIndexes: [0, 4],
+          tokenizationProfileId: 'earlier',
+        },
+        {
+          reportedPromptTokens: null,
+          contextItemIndexes: [3, 1, 5, 2, 6, 0, 1],
+          tokenizationProfileId: 'latest',
+          compactionBefore: 'c1',
+        },
+      ],
+      contextItems: [
+        { kind: 'system', tokenEstimates: [estimate(10), estimate(200, 'complete', 'earlier')] },
+        { kind: 'toolResult', tokenEstimates: [estimate(20, 'partial')] },
+        { kind: 'toolResult', tokenEstimates: [estimate(30)] },
+        {
+          kind: 'userMessage',
+          tokenEstimates: [estimate(null), estimate(5, 'complete', 'earlier')],
+        },
+        { kind: 'toolDefinition', tokenEstimates: [estimate(100)] },
+        { kind: 'customMessage', tokenEstimates: [estimate(40)] },
+        { kind: 'toolDefinition', tokenEstimates: [estimate(80)] },
+      ],
+    });
+    expect(summary.latestComposition).toEqual({
+      segments: [
+        { kind: 'system', tokens: 10 },
+        { kind: 'toolDefinition', tokens: 80 },
+        { kind: 'customMessage', tokens: 40 },
+        { kind: 'toolResult', tokens: 50 },
+      ],
+      incomplete: true,
+    });
+  });
+  it('omits composition when the latest call has no usable estimates', () => {
+    expect(
+      summariseAnalysis({
+        ...analysis([100, 200]),
+        modelCalls: [
+          { reportedPromptTokens: 100, contextItemIndexes: [0], tokenizationProfileId: 'complete' },
+          { reportedPromptTokens: 200, contextItemIndexes: [0], tokenizationProfileId: 'missing' },
+        ],
+        contextItems: [
+          {
+            kind: 'system',
+            tokenEstimates: [{ tokens: 100, coverage: 'complete', profileId: 'complete' }],
+          },
+        ],
+      }).latestComposition,
+    ).toBeUndefined();
+  });
   it('uses at most the last ten changes for growth', () => {
     const tokens = [...Array.from({ length: 20 }, (_, i) => i * 1000), 19500];
     expect(summariseAnalysis(analysis(tokens)).recentGrowth).toBe(1000);

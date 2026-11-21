@@ -238,7 +238,7 @@ fn item_label(
             || "Tool result".into(),
             |message| tool_result_label(message, tool_invocations, working_directory),
         ),
-        ContextItemKind::CustomMessage => "Custom context message".into(),
+        ContextItemKind::CustomMessage => "Agent-added context".into(),
         ContextItemKind::BranchSummary => "Branch summary".into(),
         ContextItemKind::Thinking => "Thinking".into(),
         ContextItemKind::UnrecordedContext => "Unrecorded request context".into(),

@@ -17,7 +17,7 @@ describe('package boundaries', () => {
         allow: [
           /^(semver|tar-stream|yauzl)$/,
           /^vitest(?:\/config)?$/,
-          /^(react(?:-dom)?(?:\/.*)?|@testing-library\/react|@radix-ui\/react-slot|class-variance-authority|clsx|tailwind-merge)$/,
+          /^(react(?:-dom)?(?:\/.*)?|@testing-library\/react|@radix-ui\/react-(slot|tooltip)|class-variance-authority|clsx|tailwind-merge)$/,
         ],
       },
     );

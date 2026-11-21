@@ -3298,32 +3298,66 @@ function ko() {
 	}, u;
 }
 //#endregion
-//#region src/lib/item-label.ts
+//#region src/lib/kind-labels.ts
 var Ao = {
+	system: "System",
+	toolDefinition: "Tool definition",
+	userMessage: "User message",
+	assistantMessage: "Assistant message",
+	toolResult: "Tool result",
+	compactionSummary: "Compaction summary",
+	customMessage: "Agent-added context",
+	branchSummary: "Branch summary",
+	thinking: "Thinking",
+	unrecordedContext: "Unrecorded request context",
+	other: "Other"
+}, jo = {
+	system: "System",
+	toolDefinition: "Tool definitions",
+	userMessage: "User messages",
+	assistantMessage: "Assistant messages",
+	toolResult: "Tool results",
+	compactionSummary: "Compaction summaries",
+	customMessage: Ao.customMessage,
+	branchSummary: "Branch summaries",
+	thinking: "Thinking",
+	unrecordedContext: "Unrecorded request context",
+	other: "Other context"
+};
+function Mo(e) {
+	return Ao[e];
+}
+function No(e) {
+	return jo[e];
+}
+//#endregion
+//#region src/lib/item-label.ts
+var Po = {
 	system: "System context",
 	toolDefinition: "Tool definition",
 	userMessage: "User message",
 	assistantMessage: "Assistant message",
 	toolResult: "Tool result",
 	compactionSummary: "Compaction summary",
-	customMessage: "Custom context message",
+	customMessage: Mo("customMessage"),
 	branchSummary: "Branch summary",
 	thinking: "Thinking",
 	unrecordedContext: "Unrecorded request context",
 	other: "Context item"
 };
-function jo(e, t = "Unlabelled context item") {
+function Fo(e, t = "Unlabelled context item") {
 	let n = e?.label;
+	if (e?.kind === "customMessage" && n === "Custom context message") return Po.customMessage;
 	if (n && n.trim().length > 0) return n;
 	let r = e?.preview?.text;
 	if (r && r.trim().length > 0) return r;
 	if (e) {
 		let n = e.kind.trim();
-		return (Ao[n] ?? n.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^\w/, (e) => e.toUpperCase())) || t;
+		return (Po[n] ?? n.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^\w/, (e) => e.toUpperCase())) || t;
 	}
 	return t;
 }
-function Mo(e) {
+function Io(e) {
 	let t = e.trim().match(/^((?:Read|Write|Edit)(?: result)?)\s*[·:]\s*(.+)$/i);
 	if (!t) return null;
 	let n = t[1], r = t[2].trim();
@@ -3334,13 +3368,13 @@ function Mo(e) {
 		segments: i
 	} : null;
 }
-function No(e) {
+function Lo(e) {
 	let t = e.map((e) => {
-		let t = jo(e);
+		let t = Fo(e);
 		return {
 			id: e.id,
 			fullLabel: t,
-			source: Mo(t)
+			source: Io(t)
 		};
 	}), n = {
 		pathCount: 0,
@@ -3367,39 +3401,6 @@ function No(e) {
 		let o = r.segments.slice(-a).join("/");
 		return [e, r.prefix ? `${r.prefix} · ${o}` : o];
 	}));
-}
-//#endregion
-//#region src/lib/kind-labels.ts
-var Po = {
-	system: "System",
-	toolDefinition: "Tool definition",
-	userMessage: "User message",
-	assistantMessage: "Assistant message",
-	toolResult: "Tool result",
-	compactionSummary: "Compaction summary",
-	customMessage: "Custom message",
-	branchSummary: "Branch summary",
-	thinking: "Thinking",
-	unrecordedContext: "Unrecorded request context",
-	other: "Other"
-}, Fo = {
-	system: "System",
-	toolDefinition: "Tool definitions",
-	userMessage: "User messages",
-	assistantMessage: "Assistant messages",
-	toolResult: "Tool results",
-	compactionSummary: "Compaction summaries",
-	customMessage: "Custom messages",
-	branchSummary: "Branch summaries",
-	thinking: "Thinking",
-	unrecordedContext: "Unrecorded request context",
-	other: "Other context"
-};
-function Io(e) {
-	return Po[e];
-}
-function Lo(e) {
-	return Fo[e];
 }
 //#endregion
 //#region src/lib/diagnostics.ts
@@ -3519,7 +3520,7 @@ function qo(e) {
 		let n = Ko(e.filter((e) => e.kind === t));
 		return n.length === 0 ? [] : [{
 			kind: t,
-			label: Lo(t),
+			label: No(t),
 			items: n
 		}];
 	});
@@ -3531,8 +3532,8 @@ function Yo({ item: e, sourceOrder: t, tokens: n, ageAtCall: r, estimateMethods:
 	return {
 		id: e.id,
 		kind: e.kind,
-		kindLabel: Io(e.kind),
-		label: jo(e),
+		kindLabel: Mo(e.kind),
+		label: Fo(e),
 		sourceOrder: t,
 		tokens: n,
 		share: null,
@@ -4521,7 +4522,7 @@ function Jc(e, t) {
 	Vi(() => {
 		x = !1;
 	});
-	let S = /* @__PURE__ */ P(() => t.indexed.analysis.contextItems), C = /* @__PURE__ */ P(() => No(H(S))), w = /* @__PURE__ */ P(() => ic(H(S))), ee = /* @__PURE__ */ P(() => H(w) === null ? null : t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === H(w)) ?? null), T = /* @__PURE__ */ P(() => H(ee) ? `${H(ee).provider}/${H(ee).model} · ${H(ee).method}` : H(w) ?? "unavailable"), E = /* @__PURE__ */ P(() => o() === null ? null : t.indexed.contextSetByCall.get(o()) ?? null), D = /* @__PURE__ */ P(() => H(S).filter((e) => (t.indexed.versionByItemId.get(e.id)?.number ?? 1) === 1)), O = /* @__PURE__ */ P(() => new Map(H(D).map((e) => [e.id, gc(t.indexed.itemById, t.indexed.versionByItemId, e.id)]))), k = /* @__PURE__ */ P(() => (e) => H(O).get(e.id) ?? [e]), te = /* @__PURE__ */ P(() => cc(H(D), H(m), H(w), H(k))), ne = /* @__PURE__ */ P(() => H(f) === "presentAtPin" && H(E) !== null ? H(te).filter((e) => H(k)(e).some((e) => H(E).has(e.id))) : H(te)), re = /* @__PURE__ */ P(() => H(u).trim().slice(0, 120).toLowerCase()), ie = /* @__PURE__ */ P(() => H(ne).filter((e) => {
+	let S = /* @__PURE__ */ P(() => t.indexed.analysis.contextItems), C = /* @__PURE__ */ P(() => Lo(H(S))), w = /* @__PURE__ */ P(() => ic(H(S))), ee = /* @__PURE__ */ P(() => H(w) === null ? null : t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === H(w)) ?? null), T = /* @__PURE__ */ P(() => H(ee) ? `${H(ee).provider}/${H(ee).model} · ${H(ee).method}` : H(w) ?? "unavailable"), E = /* @__PURE__ */ P(() => o() === null ? null : t.indexed.contextSetByCall.get(o()) ?? null), D = /* @__PURE__ */ P(() => H(S).filter((e) => (t.indexed.versionByItemId.get(e.id)?.number ?? 1) === 1)), O = /* @__PURE__ */ P(() => new Map(H(D).map((e) => [e.id, gc(t.indexed.itemById, t.indexed.versionByItemId, e.id)]))), k = /* @__PURE__ */ P(() => (e) => H(O).get(e.id) ?? [e]), te = /* @__PURE__ */ P(() => cc(H(D), H(m), H(w), H(k))), ne = /* @__PURE__ */ P(() => H(f) === "presentAtPin" && H(E) !== null ? H(te).filter((e) => H(k)(e).some((e) => H(E).has(e.id))) : H(te)), re = /* @__PURE__ */ P(() => H(u).trim().slice(0, 120).toLowerCase()), ie = /* @__PURE__ */ P(() => H(ne).filter((e) => {
 		let t = H(d) === "all" || e.kind === H(d), n = H(re).length === 0 || H(k)(e).some((e) => e.label.toLowerCase().includes(H(re)) || (e.preview?.text ?? "").toLowerCase().includes(H(re)));
 		return t && n;
 	})), ae = /* @__PURE__ */ P(() => H(ie).reduce((e, t) => e + H(k)(t).length, 0)), oe = /* @__PURE__ */ P(() => H(ie).slice(0, H(h))), se = /* @__PURE__ */ P(() => H(ie).length - H(oe).length), ce = /* @__PURE__ */ P(() => l.filter((e) => H(S).some((t) => t.kind === e))), le = /* @__PURE__ */ P(() => +!!H(re) + (H(d) === "all" ? 0 : 1) + (H(f) === "all" ? 0 : 1)), ue = /* @__PURE__ */ P(() => H(re).length > 0 || H(d) !== "all" || H(f) !== "all"), de = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.map((e) => e.index)), fe = /* @__PURE__ */ P(() => lc(H(de))), pe = /* @__PURE__ */ P(() => H(de).length), me = /* @__PURE__ */ P(() => new Map(H(de).map((e, t) => [e, t]))), he = /* @__PURE__ */ P(() => o() === null || !H(me).has(o()) ? null : A(o())), ge = /* @__PURE__ */ P(() => a() !== null && H(ue) && !H(ie).some((e) => Ce(e, a())));
@@ -4573,7 +4574,7 @@ function Jc(e, t) {
 		return H(C).get(e.id) ?? Se(e);
 	}
 	function Se(e) {
-		return jo(e, "Unlabelled item");
+		return Fo(e, "Unlabelled item");
 	}
 	function Ce(e, t) {
 		return H(k)(e).some((e) => e.id === t);
@@ -4652,7 +4653,7 @@ function Jc(e, t) {
 					var n = bc(), r = z(n, !0), i = {};
 					V((e) => {
 						K(r, e), i !== (i = t) && (n.value = (n.__value = i) ?? "");
-					}, [() => Io(t)]), G(e, n);
+					}, [() => Mo(t)]), G(e, n);
 				}), M(a), Ci(a), M(i);
 				var c = B(i, 2), l = B(L(c), 2), p = L(l);
 				p.value = p.__value = "tokenTurns";
@@ -4831,11 +4832,11 @@ function Jc(e, t) {
 					}, [
 						() => Me(H(r).id),
 						() => Ce(H(r), a()),
-						() => `${Se(H(r))}; ${Io(H(r).kind)}; ${Ee(H(r))}`,
+						() => `${Se(H(r))}; ${Mo(H(r).kind)}; ${Ee(H(r))}`,
 						() => Se(H(r)),
 						() => `background:${Ta(t.indexed, H(r).id, n())}`,
 						() => `Select ${Se(H(r))}${H(r).presence.length === 0 ? "; no model-call presence" : ""}`,
-						() => Io(H(r).kind),
+						() => Mo(H(r).kind),
 						() => Ee(H(r)),
 						() => `${sc(H(k)(H(r)))} calls; ${qa(De(H(r)), Oe(H(r)))} tokenized`,
 						() => Ka(oc(H(k)(H(r))), "calculatedTokens")
@@ -6082,7 +6083,7 @@ function Hd(e, t) {
 		}));
 	})()), d = /* @__PURE__ */ P(() => t.call ? mu(t.call.usage) : []), f = /* @__PURE__ */ P(() => t.call?.tokenAnalysis.explanationCodes ?? []), p = /* @__PURE__ */ P(() => Fl(t.indexed.analysis)), h = /* @__PURE__ */ P(() => H(f).filter((e) => !H(p).has(e))), g = /* @__PURE__ */ P(() => t.indexed.analysis.turns?.find((e) => t.call && e.firstCall <= t.call.index && t.call.index <= e.lastCall)), _ = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" && t.call?.timing.startedAtMs == null), v = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" ? t.call?.timing.durationMs != null : !["claude-code", "codex"].includes(t.indexed.analysis.session.source)), y = /* @__PURE__ */ P(() => t.call?.economics.explanationCodes ?? []), b = /* @__PURE__ */ P(() => t.call !== null && t.call !== void 0 && t.call.stopReason !== "compaction-aggregate" && (t.call.stopReason === "compaction-call" || t.indexed.analysis.compactions.some((e) => e.details.summaryCall === t.call.index))), x = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), S = /* @__PURE__ */ P(() => t.call?.costAssessment ?? null), C = /* @__PURE__ */ P(() => H(S) ? au(H(S)) : null), w = /* @__PURE__ */ P(() => Ru(t.indexed.analysis.session.source, H(v))), ee = /* @__PURE__ */ P(() => H(S) ? ou(H(S), t.indexed.analysis.session.source) : null), T = /* @__PURE__ */ P(() => t.call?.tokenizationProfileId ? t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === t.call?.tokenizationProfileId) ?? null : null), E = /* @__PURE__ */ P(() => t.call ? t.indexed.analysis.modelCalls[t.indexed.analysis.modelCalls.findIndex((e) => e.index === t.call?.index) - 1] ?? null : null), D = /* @__PURE__ */ P(() => Pu(t.indexed, t.call?.addedItemIds ?? [], t.call, "added")), O = /* @__PURE__ */ P(() => Pu(t.indexed, t.call?.droppedItemIds ?? [], H(E), "dropped"));
 	function k(e) {
-		return jo(t.indexed.itemById.get(e), e);
+		return Fo(t.indexed.itemById.get(e), e);
 	}
 	function te(e) {
 		return e === "anthropic-messages-cache-v1" || e === "github-copilot-messages-cache-v1" || e === "github-copilot-responses-cache-v1" ? "Fresh input" : e === "openai-completions-cache-v1" ? "Uncached input" : e === "openai-responses-cache-read-v1" || e === "openai-codex-responses-cache-read-v1" ? "Non-cache-read input (may include writes)" : "Input (raw normalized bucket)";
@@ -6874,7 +6875,7 @@ function Gf(e, t) {
 	}
 	let ne = /* @__PURE__ */ P(() => t.item?.preview !== null && t.item?.preview !== void 0 && (t.item.preview.expandedText !== t.item.preview.text || t.item.preview.expandedTruncated)), re = /* @__PURE__ */ P(() => [...new Set(t.item?.tokenEstimates.flatMap((e) => e.noteCodes) ?? [])]);
 	function ie(e) {
-		return jo(t.indexed.itemById.get(e), e);
+		return Fo(t.indexed.itemById.get(e), e);
 	}
 	function ae(e) {
 		let n = t.indexed.callByIndex.get(e.firstModelCall)?.tokenizationProfileId ?? "";
@@ -7277,8 +7278,8 @@ function Gf(e, t) {
 			K(ae, `${e ?? ""}${H(v) ? ` · version ${H(v).number} of ${H(v).count}` : ""}`), K(se, n), K(Ie, `${r ?? ""} `), K(Ue, `${i ?? ""} `), K(dt, ` · ${H(D)?.coverage ?? "unavailable" ?? ""}`), K(pt, `${a ?? ""}
             calls covered`), K(ht, o), K(At, t.item.id);
 		}, [
-			() => Io(t.item.kind),
-			() => jo(t.item),
+			() => Mo(t.item.kind),
+			() => Fo(t.item),
 			() => H(D) ? `${Z(H(D).tokens)} · call ${H(T)?.index}` : "Unavailable",
 			() => Ka(t.item.tokenTurns, "calculatedTokens"),
 			() => qa(t.item.tokenTurnsCoverage.coveredCalls, t.item.tokenTurnsCoverage.totalCalls),
@@ -7436,9 +7437,9 @@ function ap(e, t) {
 		}), M(n), V((e, r, i, a, c, l, u) => {
 			Y(n, "aria-label", e), K(o, r), K(s, i), K(m, `Calls ${t.item.firstModelCall ?? ""}–${t.item.lastModelCall ?? ""}`), K(g, `${a ?? ""} calls · ${t.item.presence.length ?? ""} range${t.item.presence.length === 1 ? "" : "s"}`), K(v, c), K(b, l), K(S, u);
 		}, [
-			() => `Context item ${jo(t.item)}`,
-			() => Io(t.item.kind),
-			() => jo(t.item),
+			() => `Context item ${Fo(t.item)}`,
+			() => Mo(t.item.kind),
+			() => Fo(t.item),
 			() => nc(t.item),
 			() => Wa(t.item.displayWeight, "serializedBytes"),
 			() => Ka(rc(t.item), "calculatedTokens"),
@@ -10532,7 +10533,7 @@ function Av(e, t) {
 	function Re() {
 		p() ? O && O.clientWidth > 0 && (I(ne, O.clientWidth, !0), I(re, !0), an()) : (he.cancel(), ge.cancel(), Fn(), t.onHoverCall(null), t.onHoverItem(null), H(fe) && Jn(!1));
 	}
-	let ze = /* @__PURE__ */ F(null), He = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), Ue = /* @__PURE__ */ P(() => H(pe) ? H(pe).memberIds.slice(0, 12).map((e) => jo(t.indexed.itemById.get(e), e)) : []), We = /* @__PURE__ */ P(() => JSON.stringify(t.indexed.analysis.modelCalls.map((e) => [e.index, e.sourceRecordId]))), Ge = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.length), Ke = /* @__PURE__ */ P(() => Math.max(1, H(ne) - N.left - N.right)), qe = /* @__PURE__ */ P(() => H(Ge) > 1 ? H(Ke) / (H(Ge) - 1) : 0), Je = /* @__PURE__ */ P(() => Math.max(H(be) ?? H(qe), H(qe))), Ye = /* @__PURE__ */ P(() => H(Ge) > 1 && H(be) !== null ? Math.max(H(ne), N.left + N.right + (H(Ge) - 1) * H(be)) : Math.max(1, H(ne))), Xe = /* @__PURE__ */ P(() => T_(t.indexed, 960, N)), Ze = /* @__PURE__ */ P(() => vl(t.indexed, H(Xe))), Qe = /* @__PURE__ */ P(() => bl(H(Xe), H(Ze))), $e = /* @__PURE__ */ P(() => Math.max(0, ...H(Qe).map((e) => e.totalDisplayWeight))), et = /* @__PURE__ */ P(() => O_(H(Qe), 960, H(Ye), N)), tt = /* @__PURE__ */ P(() => Math.max(N.left, H(ie) - H(oe))), nt = /* @__PURE__ */ P(() => Math.min(H(Ye) - N.right, H(ie) - H(oe) + H(ne))), rt = /* @__PURE__ */ P(() => Math.max(N.left, H(ae) - H(oe))), it = /* @__PURE__ */ P(() => Math.min(H(Ye) - N.right, H(ae) - H(oe) + H(ne))), at = /* @__PURE__ */ P(() => D_(t.indexed, {
+	let ze = /* @__PURE__ */ F(null), He = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), Ue = /* @__PURE__ */ P(() => H(pe) ? H(pe).memberIds.slice(0, 12).map((e) => Fo(t.indexed.itemById.get(e), e)) : []), We = /* @__PURE__ */ P(() => JSON.stringify(t.indexed.analysis.modelCalls.map((e) => [e.index, e.sourceRecordId]))), Ge = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.length), Ke = /* @__PURE__ */ P(() => Math.max(1, H(ne) - N.left - N.right)), qe = /* @__PURE__ */ P(() => H(Ge) > 1 ? H(Ke) / (H(Ge) - 1) : 0), Je = /* @__PURE__ */ P(() => Math.max(H(be) ?? H(qe), H(qe))), Ye = /* @__PURE__ */ P(() => H(Ge) > 1 && H(be) !== null ? Math.max(H(ne), N.left + N.right + (H(Ge) - 1) * H(be)) : Math.max(1, H(ne))), Xe = /* @__PURE__ */ P(() => T_(t.indexed, 960, N)), Ze = /* @__PURE__ */ P(() => vl(t.indexed, H(Xe))), Qe = /* @__PURE__ */ P(() => bl(H(Xe), H(Ze))), $e = /* @__PURE__ */ P(() => Math.max(0, ...H(Qe).map((e) => e.totalDisplayWeight))), et = /* @__PURE__ */ P(() => O_(H(Qe), 960, H(Ye), N)), tt = /* @__PURE__ */ P(() => Math.max(N.left, H(ie) - H(oe))), nt = /* @__PURE__ */ P(() => Math.min(H(Ye) - N.right, H(ie) - H(oe) + H(ne))), rt = /* @__PURE__ */ P(() => Math.max(N.left, H(ae) - H(oe))), it = /* @__PURE__ */ P(() => Math.min(H(Ye) - N.right, H(ae) - H(oe) + H(ne))), at = /* @__PURE__ */ P(() => D_(t.indexed, {
 		width: 960,
 		height: 500,
 		margin: N,
@@ -11051,7 +11052,7 @@ function Av(e, t) {
 		return e.thinnest * H(mt) < 1;
 	}
 	function lr(e) {
-		return jo(t.indexed.itemById.get(e), e);
+		return Fo(t.indexed.itemById.get(e), e);
 	}
 	function ur(e, n, r, i) {
 		if (n === "items") return A_(e, r, i);
@@ -11151,7 +11152,7 @@ function Av(e, t) {
 			Y(r, "d", H(t).mergePath), Y(r, "fill", `url(#${o}-${H(n)})`);
 		}), G(e, r);
 	}), J(B(Lr), 17, () => H(lt).ribbons, (e) => e.key, (e, r) => {
-		let i = /* @__PURE__ */ P(() => H(r).groupKind !== void 0), a = /* @__PURE__ */ P(() => H(r).groupKind ? wa(H(r).groupKind, n()) : Ta(t.indexed, H(r).itemId, n())), o = /* @__PURE__ */ P(() => H(i) ? `Item type ${Lo(H(r).groupKind)} · ${H(r).memberItemIds?.length ?? 0} items` : lr(H(r).itemId));
+		let i = /* @__PURE__ */ P(() => H(r).groupKind !== void 0), a = /* @__PURE__ */ P(() => H(r).groupKind ? wa(H(r).groupKind, n()) : Ta(t.indexed, H(r).itemId, n())), o = /* @__PURE__ */ P(() => H(i) ? `Item type ${No(H(r).groupKind)} · ${H(r).memberItemIds?.length ?? 0} items` : lr(H(r).itemId));
 		var s = ov();
 		let c;
 		var l = L(s);
@@ -11312,7 +11313,7 @@ function Av(e, t) {
             ${H(Tt) ?? ""} at call ${H(_e).callIndex ?? "—" ?? ""}`), K(l, `${s ?? ""} items`);
 		}, [
 			() => wa(H(_e).kind, n()),
-			() => Lo(H(_e).kind),
+			() => No(H(_e).kind),
 			() => pm(H(_e).total),
 			() => H(_e).itemCount.toLocaleString()
 		]), G(e, t);
@@ -11326,7 +11327,7 @@ function Av(e, t) {
 			var r = bv(), i = L(r), a = B(i, 1, !0);
 			M(r), V((e, t) => {
 				yi(i, e), K(a, t);
-			}, [() => `background:${wa(H(t), n())}`, () => Lo(H(t))]), G(e, r);
+			}, [() => `background:${wa(H(t), n())}`, () => No(H(t))]), G(e, r);
 		}), M(t), G(e, t);
 	};
 	q(ai, (e) => {
@@ -11449,7 +11450,7 @@ function Av(e, t) {
 	}), M(xr), Ri(xr, (e) => O = e, () => O), M(vr), Ri(vr, (e) => A = e, () => A);
 	var pi = B(vr, 2), mi = (e) => {
 		{
-			let t = /* @__PURE__ */ P(() => Lo(H(pe).kind));
+			let t = /* @__PURE__ */ P(() => No(H(pe).kind));
 			ih(e, {
 				get label() {
 					return H(t);
@@ -11557,7 +11558,7 @@ function qv(e, t) {
 		}));
 	});
 	function h(e) {
-		return jo(t.indexed.itemById.get(e), e);
+		return Fo(t.indexed.itemById.get(e), e);
 	}
 	function g(e, t, n) {
 		return e === 0 ? `0 ${t}` : `${Q(e)} ${t} (≈ ${Z(n.total)}${n.complete ? "" : ", partial"})`;
@@ -13025,11 +13026,18 @@ function rb(e = Object.values(ya), t = "html") {
 var ib = ":root,:host{--text-xs:11px;--text-sm:12px;--text-md:13px;--text-lg:15px;--radius:8px;--control-radius:6px;--radius-small:2px;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--control-padding:7px 9px;--control-size:32px;--toggle-height:30px;--toggle-padding:4px 9px;--panel-padding:15px;--panel-gap:14px}*{box-sizing:border-box}button,select{background-color:var(--surface);border:1px solid var(--control-border);color:var(--text);border-radius:var(--control-radius);padding:var(--control-padding)}button{cursor:pointer}button:hover{background-color:var(--surface-raised)}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}summary:focus-visible{border-radius:var(--radius-small)}.sr-only{clip:rect(0, 0, 0, 0);white-space:nowrap;border:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}.toggle-group{flex-wrap:wrap;align-items:center;gap:5px;display:flex}.toggle-label{color:var(--text);margin-right:3px;font-weight:650}.toggle-group>button{min-height:var(--toggle-height);padding:var(--toggle-padding);border:1px solid var(--separator);background-color:var(--surface);color:var(--text);font:inherit}.toggle-group>button[aria-pressed=true]{border-color:var(--accent);background-color:var(--action);color:var(--active-text)}input{color:var(--text);background:var(--plot);border:1px solid var(--control-border)}summary{cursor:pointer}.disclosure{width:fit-content;color:var(--secondary);cursor:pointer;align-items:center;gap:7px;font-size:13px;list-style:none;display:inline-flex}.disclosure::-webkit-details-marker{display:none}.disclosure:before{content:\"\";border-top:4px solid #0000;border-bottom:4px solid #0000;border-left:6px solid;transition:transform .12s}details[open]>.disclosure:before,.disclosure[aria-expanded=true]:before{transform:rotate(90deg)}select{appearance:none;background-image:var(--chevron);background-position:right 12px center;background-repeat:no-repeat;background-size:12px 8px}@media (prefers-reduced-motion:reduce){*,:before,:after{scroll-behavior:auto!important}}", ab = {
 	standard: Yv,
 	panel: Xv
-}, ob = /* @__PURE__ */ new WeakMap();
-function sb(e) {
-	let { target: t } = e, n = ob.get(t) ?? t.attachShadow({ mode: "open" });
+};
+function ob(e, t) {
+	return {
+		label: No(e),
+		colour: ya[t].itemTypes[e]
+	};
+}
+var sb = /* @__PURE__ */ new WeakMap();
+function cb(e) {
+	let { target: t } = e, n = sb.get(t) ?? t.attachShadow({ mode: "open" });
 	if (n.hasChildNodes()) throw Error("Highwater is already mounted in this target");
-	ob.set(t, n);
+	sb.set(t, n);
 	let r = t.getAttribute("data-theme"), i = document.createElement("style");
 	i.textContent = rb(void 0, ":host") + ib + "\n    :host { display:block; background:var(--page); color:var(--text);\n      font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif; }\n    .highwater-embed-root { container-type:inline-size; container-name:highwater; min-width:0; }\n    .highwater-embed-root.compact { font-size:13px; --control-padding:4px 8px; --control-size:24px;\n      --toggle-height:24px; --toggle-padding:3px 8px; --panel-padding:12px; --panel-gap:10px; }\n    .highwater-embed-root.compact :is(button:not(.step-call), select, input, summary) { font-size:12px; }\n  ";
 	let a = document.createElement("div");
@@ -13064,4 +13072,4 @@ function sb(e) {
 	};
 }
 //#endregion
-export { sb as mountHighwater, ab as sectionPresets };
+export { ob as contextItemPresentation, cb as mountHighwater, ab as sectionPresets };

@@ -239,7 +239,7 @@ fn normalized_fixture_parity() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "3ab36f862b6c010a8afa491ec30b9bb3381696ab4cbfb3977d38d3dd58ec5520"
+        "5578112a14b3f17f90f358fecfb9eed879b4c09a9aa49900add9a8337bb24be8"
     );
 }
 
@@ -951,7 +951,7 @@ fn other_context_kinds_keep_explicit_kind_specific_labels() {
     for (kind, expected) in [
         (ContextItemKind::System, "System context"),
         (ContextItemKind::ToolDefinition, "Tool definition"),
-        (ContextItemKind::CustomMessage, "Custom context message"),
+        (ContextItemKind::CustomMessage, "Agent-added context"),
         (ContextItemKind::BranchSummary, "Branch summary"),
         (ContextItemKind::CompactionSummary, "Compaction summary"),
         (ContextItemKind::Other, "Context item"),

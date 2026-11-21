@@ -24,14 +24,14 @@ const scenarios: SessionScenario[] = [
 // commit message.
 const scenarioDigests: Record<SessionScenario, string> = {
   empty: '9bd126e3e7853666ffa00d0a8d6b0af45b72a22766d39a221e55544c70f262c8',
-  singleCall: '3b5e8385304f99dff9b6323f4a9bdbd78cdfd56c611949e23f846650d741779a',
-  longSession: '486238eadab5bc47daf489315963a726d9bbc455a541be0662c1d95f5203f618',
-  partialGeometry: '47a1885a67e14f12619ffb7dee7478aa0dad38f3d0e960f1f6f134af544ca7cf',
-  unavailableGeometry: '5fe55004ceeae764204e154c4fd0e464a24a8fba4416bce74732d2f496801b42',
-  terminalCompaction: '87c76e0777dbd89821fcaeae3e5fd8e69714e872298b6611de862c59b7cf941a',
+  singleCall: '06cff4d4a8304ff42c79dce64d417135c9fc5b03bd3c43ca8b53096a75888dde',
+  longSession: '1b4a4b87e021d4fd3ebd1fc95ccebe2d391ec43d592a769f3c7715360f91ae7b',
+  partialGeometry: 'a8ccaf6d4299abe5d3476ba9e3ecdb796a00efc72597b59f17f2462d174bf677',
+  unavailableGeometry: '1888de60d22550e59c73b27923d0a2b592294064e7e71e88128be9c27a09a0ec',
+  terminalCompaction: '612a574023db2b1886cde11540dc2d9223359dc10552cd4569b739238eae12d4',
   terminalSummaryOnly: 'e297c916bf037c81fda6489036acbd50636095f471b275678ecfaf24346607c4',
-  labelStress: 'f7be99d4ca2a915f589ede357131ce91088028739522464b2f1fda073a9ae199',
-  multipleToolsMissingMetadata: '146bb0346a9b161ca6d84c1f31700dd64d4252a9fdee27181eaedf64c41011f3',
+  labelStress: '58af9b9c28bc6fab7055c9b3eb49cd1c5b36193b8f8ab2275a6fc9da68ab711a',
+  multipleToolsMissingMetadata: 'de5eade0b404593daa3a7d2ed7f0491fe9c633f315c1bbaca972e75f4795e15b',
 };
 
 const fixtures = [
@@ -43,12 +43,12 @@ const fixtures = [
   {
     name: 'composition220',
     input: compositionScenario(220),
-    expected: '5ceb0161349d8d1d45db3811bdd685e403e034ca170f10adc4886cb7083d6274',
+    expected: 'e00aac42e6d6670446e994a95c673083bbd8fd0313687feb095e48e3b8e188e1',
   },
   {
     name: 'composition220Zero',
     input: compositionScenario(220, true),
-    expected: 'fe8e81dce345c7fe75146230de7d51e3d3c54baba7d1e3214c217a4cb602f640',
+    expected: '6aa9d90b130e1460a8f8676274637936a3770c28e4577753cd60e2511706ce49',
   },
 ];
 

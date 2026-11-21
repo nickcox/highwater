@@ -9,6 +9,12 @@ const responseHeaders = { 'cache-control': 'private, no-store', vary: 'If-None-M
 
 export default function highwaterPlugin(bb: BbPluginApi): void {
   const settings = bb.settings.define({
+    showContextSummary: {
+      type: 'boolean',
+      default: true,
+      label: 'Show context summary',
+      description: 'Show the summary above the composer or in the thread card.',
+    },
     binaryPath: {
       type: 'string',
       default: '',

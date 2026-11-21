@@ -51,9 +51,9 @@ The rules are in `src/claude_code/branch.rs`, kept in one module so that a later
 | `user` with text, not `isMeta` | User message | Includes slash commands and their output (`<command-name>`, `<local-command-stdout>`) and task notifications. |
 | `assistant` response | Assistant message | One item per response, not per record. |
 | `user` with `tool_result` blocks | Tool result | One item per result, labelled from its tool call. Only `message.content` is counted, not `toolUseResult`. `is_error` marks a failed tool. A `tool_reference` block, which loads a tool's definition, is counted as `[tool reference: name]` with the note `unrecordedToolDefinition`. |
-| `attachment` with rendered text | Custom message | Labelled from its type, for example **Environment**. |
+| `attachment` with rendered text | Agent-added context | Labelled from its type, for example **Environment**. |
 | `attachment` without rendered text | – | Not context. If it is a type that 2.1.287 renders, the session gets `unrenderedAttachments`, because it was probably sent but its text is unknown. |
-| `user` with `isMeta` | Custom message | Skill text, `<system-reminder>` blocks, command caveats and automatic continuation messages, all sent as user content. |
+| `user` with `isMeta` | Agent-added context | Skill text, `<system-reminder>` blocks, command caveats and automatic continuation messages, all sent as user content. |
 | `user` with `isCompactSummary` | Compaction summary | Starts the context after a compaction. |
 
 ## Compaction

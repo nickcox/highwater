@@ -31,6 +31,19 @@ describe('displayItemLabel', () => {
     expect(displayItemLabel(first)).toBe('Read · /repo/src/alpha/config.ts');
   });
 
+  it('uses the current category name for older generic labels and preserves specific labels', () => {
+    const item = {
+      ...testAnalysis().contextItems[0],
+      kind: 'customMessage' as const,
+      preview: null,
+    };
+    expect(displayItemLabel({ ...item, label: 'Custom context message' })).toBe(
+      'Agent-added context',
+    );
+    expect(displayItemLabel({ ...item, label: '' })).toBe('Agent-added context');
+    expect(displayItemLabel({ ...item, label: 'Environment context' })).toBe('Environment context');
+  });
+
   it.each(['Read', 'Write', 'Edit'])(
     'keeps %s result explicit when shortening file paths',
     (tool) => {

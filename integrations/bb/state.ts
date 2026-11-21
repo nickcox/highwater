@@ -24,6 +24,30 @@ export const threadStateSchema = z.discriminatedUnion('state', [
 ]);
 export type ThreadState = z.infer<typeof threadStateSchema>;
 
+export const contextItemKind = z.enum([
+  'system',
+  'toolDefinition',
+  'customMessage',
+  'userMessage',
+  'assistantMessage',
+  'toolResult',
+  'compactionSummary',
+  'branchSummary',
+  'thinking',
+  'unrecordedContext',
+  'other',
+]);
+export type ContextItemKind = z.infer<typeof contextItemKind>;
+
+const compositionSchema = z.strictObject({
+  segments: z
+    .array(z.strictObject({ kind: contextItemKind, tokens: z.number().int().positive().safe() }))
+    .min(1)
+    .max(contextItemKind.options.length),
+  incomplete: z.boolean(),
+});
+export type ContextComposition = z.infer<typeof compositionSchema>;
+
 export const summarySchema = z
   .object({
     callCount: z.number().int().nonnegative(),
@@ -35,6 +59,7 @@ export const summarySchema = z
     compactionPoints: z.array(z.number().int().nonnegative()).max(60),
     /** Median change in reported input per call, over recent calls since the last compaction. */
     recentGrowth: z.number().int().safe().nullable(),
+    latestComposition: compositionSchema.optional(),
   })
   .strict();
 export type Summary = z.infer<typeof summarySchema>;

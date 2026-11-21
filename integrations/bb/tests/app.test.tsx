@@ -50,7 +50,12 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 async function mount(
-  options: { threadId?: string; visible?: boolean; mode?: 'light' | 'dark' } = {},
+  options: {
+    threadId?: string;
+    visible?: boolean;
+    mode?: 'light' | 'dark';
+    showSummary?: boolean;
+  } = {},
 ) {
   const captured = await loadPluginApp(app);
   expect(captured.tabs).toHaveLength(1);
@@ -72,6 +77,7 @@ async function mount(
       tabVisible: options.visible ?? true,
       codeTheme: { mode: options.mode ?? 'dark' },
       realtimeConnectionState: 'connected',
+      settings: { showContextSummary: options.showSummary ?? true },
     },
   );
   slots.push(slot);
@@ -103,14 +109,14 @@ describe('Context tab', () => {
       expect(slot.inspection.rpcCalls).toHaveLength(0);
     },
   );
-  it('shows the latest call before the chart', async () => {
+  it('shows the latest call before the chart even with the summary turned off', async () => {
     vi.stubGlobal(
       'fetch',
       vi
         .fn<typeof fetch>()
         .mockImplementation(async () => Response.json(fixture, { headers: { etag: '"v1"' } })),
     );
-    const slot = await mount();
+    const slot = await mount({ showSummary: false });
     await ready(slot);
     const root = target(slot).shadowRoot!;
     await waitFor(() =>

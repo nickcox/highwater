@@ -11,7 +11,7 @@ import {
   sparklinePoints,
   useContextSegmentVisible,
 } from '../app/ContextRow';
-import type { ThreadState } from '../state';
+import type { ContextComposition, ThreadState } from '../state';
 import { skippableTimers, wholeText } from './helpers';
 
 const metrics = {
@@ -23,12 +23,29 @@ const metrics = {
   compactionPoints: [1],
   recentGrowth: 1200,
 };
+const composition: ContextComposition = {
+  segments: [
+    { kind: 'system', tokens: 2500 },
+    { kind: 'customMessage', tokens: 1 },
+    { kind: 'toolResult', tokens: 7499 },
+  ],
+  incomplete: true,
+};
 const ok = (
   usage: { usedTokens: number; contextWindowTokens: number } | null = {
     usedTokens: 62400,
     contextWindowTokens: 200000,
   },
-) => ({ ok: true, result: { state: 'ok', etag: '"v1"', summary: metrics, usage } });
+  latestComposition: ContextComposition | null = composition,
+) => ({
+  ok: true,
+  result: {
+    state: 'ok',
+    etag: '"v1"',
+    summary: { ...metrics, ...(latestComposition ? { latestComposition } : {}) },
+    usage,
+  },
+});
 const slots: ReturnType<typeof renderSlot>[] = [];
 let serial = 0;
 afterEach(async () => {
@@ -39,7 +56,11 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
-async function mount(kind: 'card' | 'banner' = 'card', threadId = `thr_row${++serial}`) {
+async function mount(
+  kind: 'card' | 'banner' = 'card',
+  threadId = `thr_row${++serial}`,
+  settings?: { showContextSummary: boolean },
+) {
   const captured = await loadPluginApp(app);
   expect(captured.threadContextCardRows).toHaveLength(1);
   expect(captured.threadContextSegments).toHaveLength(1);
@@ -48,6 +69,7 @@ async function mount(kind: 'card' | 'banner' = 'card', threadId = `thr_row${++se
     threadContextKind: kind,
     realtimeConnectionState: 'connected' as const,
     experimental_panel: { openTab: () => true },
+    settings,
   };
   const props = { threadId, projectId: 'proj_test', environment: null };
   const slot =
@@ -115,9 +137,9 @@ it('estimates calls until the window is full only from a positive recent rate', 
     usage: { usedTokens, contextWindowTokens: 200000 },
   });
   // (200,000 − 62,400) / 1,200 = 114.7: 115 calls, shown to the nearest 10.
-  expect(forecast(data(1200))).toBe(' Full in about 120 calls at the recent rate.');
+  expect(forecast(data(1200))).toBe('Full in about 120 calls at the recent rate.');
   // Below 20 calls the exact number is shown.
-  expect(forecast(data(1200, 190000))).toBe(' Full in about 9 calls at the recent rate.');
+  expect(forecast(data(1200, 190000))).toBe('Full in about 9 calls at the recent rate.');
   expect(forecast(data(0))).toBe('');
   expect(forecast(data(-300))).toBe('');
   expect(forecast(data(null))).toBe('');
@@ -125,30 +147,62 @@ it('estimates calls until the window is full only from a positive recent rate', 
 });
 
 describe('Context row and segment', () => {
+  it.each(['card', 'banner'] as const)('disables the %s summary and its requests', async (kind) => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(ok()));
+    vi.stubGlobal('fetch', fetcher);
+    const threadId = `thr_row${++serial}`;
+    const slot = await mount(kind, threadId, { showContextSummary: false });
+    await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
+    expect(slot.container.textContent).toBe('');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it.each(['card', 'banner'] as const)(
-    'shows the same summary in the %s layout and opens the Context tab',
+    'shows context usage in the %s layout and opens the Context tab',
     async (kind) => {
       const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(ok()));
       vi.stubGlobal('fetch', fetcher);
       const slot = await mount(kind);
-      expect(
-        await slot.findByText(wholeText('84 calls · 1 compaction · input +1.2k/call')),
-      ).toBeTruthy();
-      expect(slot.getByText(kind === 'card' ? '62.4k / 200k · 31%' : '31%')).toBeTruthy();
-      const chart = slot.getByRole('img', {
-        name: 'Reported input tokens per model call, against the context window',
-      });
-      expect(chart.querySelector('[data-part="window"]')).not.toBeNull();
-      expect(chart.querySelectorAll('[data-part="compaction"]')).toHaveLength(1);
-      expect(chart.querySelector('[data-part="latest"]')).not.toBeNull();
-      expect(chart.querySelector('title')?.textContent).toBe(
-        'Input per call across the session. Dashed line: context window.',
-      );
-      expect(slot.getByText('input +1.2k/call')).toHaveProperty('title', GROWTH_EXPLANATION);
-      if (kind === 'banner')
-        expect(slot.container.querySelector('[title^="62k of"]')?.getAttribute('title')).toBe(
-          '62k of 200k tokens (31%). Full in about 120 calls at the recent rate.',
+      expect(await slot.findByText(kind === 'card' ? '62.4k / 200k · 31%' : '31%')).toBeTruthy();
+      if (kind === 'card') {
+        expect(
+          slot.getByText(wholeText('84 calls · 1 compaction · input +1.2k/call')),
+        ).toBeTruthy();
+        const chart = slot.getByRole('img', {
+          name: 'Reported input tokens per model call, against the context window',
+        });
+        expect(chart.querySelector('[data-part="window"]')).not.toBeNull();
+        expect(chart.querySelectorAll('[data-part="compaction"]')).toHaveLength(1);
+        expect(chart.querySelector('[data-part="latest"]')).not.toBeNull();
+        expect(chart.querySelector('title')?.textContent).toBe(
+          'Input per call across the session. Dashed line: context window.',
         );
+        expect(slot.getByText('input +1.2k/call')).toHaveProperty('title', GROWTH_EXPLANATION);
+        expect(slot.container.querySelector('[data-context-composition]')).toBeNull();
+      } else {
+        const button = slot.getByRole('button', { name: /Open Context tab/ });
+        expect(button.textContent).toBe('31%');
+        const bar = button.querySelector('[data-context-composition]')!;
+        expect(Array.from(bar.querySelectorAll('span'), (part) => part.style.width)).toEqual([
+          '25%',
+          '0.01%',
+          '74.99%',
+        ]);
+        act(() => button.focus());
+        const tooltip = await slot.findByRole('tooltip');
+        const [heading, forecastLine] = tooltip.querySelectorAll('p');
+        expect(heading.textContent).toBe('62k of 200k tokens (31%)');
+        expect(forecastLine.textContent).toBe('Full in about 120 calls at the recent rate.');
+        expect(tooltip.textContent).toContain('Latest call · share of estimated input tokens');
+        expect(tooltip.textContent).toContain('Agent-added context');
+        expect(Array.from(tooltip.querySelectorAll('dd'), (value) => value.textContent)).toEqual([
+          '25% (2,500)',
+          '<0.1% (1)',
+          '75% (7,499)',
+        ]);
+        expect(tooltip.textContent).toContain(
+          'Some items have partial or missing token estimates.',
+        );
+      }
       // The displayed current usage is bb's 62.4k, not Highwater's 99k last reported input.
       expect(slot.queryByText('99k / 200k')).toBeNull();
       fireEvent.click(slot.getByRole('button', { name: /Context/ }));
@@ -165,6 +219,15 @@ describe('Context row and segment', () => {
       );
     },
   );
+  it('shows just the percentage in the banner when composition is unavailable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(async () => Response.json(ok(undefined, null))),
+    );
+    const slot = await mount('banner');
+    expect(await slot.findByText('31%')).toBeTruthy();
+    expect(slot.container.querySelector('[data-context-composition]')).toBeNull();
+  });
   it('does not render or fetch a redundant segment while bb shows the card', async () => {
     const fetcher = vi.fn<typeof fetch>();
     vi.stubGlobal('fetch', fetcher);
@@ -209,9 +272,7 @@ describe('Context row and segment', () => {
     await waitFor(() => expect(slot.container.textContent).toBe(''));
     await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
     await skip();
-    await waitFor(() =>
-      expect(slot.getByText(wholeText('84 calls · 1 compaction · input +1.2k/call'))).toBeTruthy(),
-    );
+    expect(await slot.findByText('31%')).toBeTruthy();
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('stops redundant realtime reads once an immutable unsupported provider is known', async () => {
