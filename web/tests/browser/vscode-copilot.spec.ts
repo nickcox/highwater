@@ -44,7 +44,7 @@ test('integrated VS Code Copilot catalogue, trace records, cost and timing', asy
   expect(analysis.modelCalls[2].timing.basis).toBeNull();
   expect(analysis.contextItems.some((item: { kind: string }) => item.kind === 'system')).toBe(true);
   await expect(page.locator('#estimate-quality-note')).toContainText(
-    'Some calls have no Copilot trace record',
+    'Some calls have no matching trace. For those calls, the chat session file supplies what it recorded.',
   );
 
   await page.getByRole('button', { name: 'Pin model call 1', exact: true }).press('Enter');
@@ -55,7 +55,7 @@ test('integrated VS Code Copilot catalogue, trace records, cost and timing', asy
   await expect(details).toContainText('Recorded');
 
   await page.getByRole('button', { name: 'Pin model call 3', exact: true }).press('Enter');
-  await expect(page.locator('.call-details')).toContainText('Not recorded');
+  await expect(details).toContainText('Trace unavailable');
 
   // A Claude call through Copilot, with cache reads and writes.
   const remote = copilot.find((session) => session.displayName === 'Summarise the service')!;

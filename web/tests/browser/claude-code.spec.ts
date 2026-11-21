@@ -44,7 +44,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const picker = page.getByRole('combobox', { name: 'Session' });
   await harness.selectOption('claude-code');
   const subagentOption = page.getByRole('option', {
-    name: /^Configure the status line · .*child session · statusline-setup$/,
+    name: /^Configure the status line · .*child session · statusline-setup\b/,
   });
   // Child sessions are listed only when asked for.
   await picker.click();
