@@ -54,10 +54,7 @@ export function ContextTab({ threadId }: { threadId: string }) {
   }, [snapshot, visible]);
 
   return (
-    <div
-      className="h-full min-h-0 overflow-auto bg-background text-foreground"
-      data-highwater-thread={threadId}
-    >
+    <div className="h-full min-h-0 overflow-auto text-foreground" data-highwater-thread={threadId}>
       {!hasAnalysis && (
         <ContextState
           state={snapshot.state}
@@ -72,7 +69,7 @@ export function ContextTab({ threadId }: { threadId: string }) {
           {pinned.version}, so some views may not work.
         </p>
       )}
-      <div ref={target} hidden={!hasAnalysis} />
+      <div ref={target} hidden={!hasAnalysis} className="bg-transparent" />
     </div>
   );
 }
