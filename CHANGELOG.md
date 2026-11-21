@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.4 – 2026-11-21
+
+- The BB status bar shows the latest recorded call's estimated input by item type beside BB's context-window usage percentage. Hover or focus to see percentage shares and token counts. Turn off **Show context summary** in Highwater's plugin settings to hide the summary in both layouts.
+- Highwater labels instructions, environment details and other context supplied by the coding agent or its extensions as **Agent-added context**.
 - The Call inspector shows a **Turn** section for recognised Codex, Claude Code and VS Code Copilot turns, with whole-turn elapsed time where available, recorded call counts and the pinned call’s position in the turn.
 - VS Code Copilot sessions explain when trace coverage is missing, partial or unreadable, and which details are unavailable as a result.
 - The session picker shows costs in the background as they become available. Codex shows an estimated API-equivalent cost instead of a recorded charge. Sessions without a cost are labelled **Cost unknown**.
