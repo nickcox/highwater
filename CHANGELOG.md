@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.5 – 2026-11-21
+
+- Find Pi sessions in BB's current provider directory. Threads with transcripts in the legacy directory still open.
+- Use BB's side-pane background in the Highwater Context tab.
+
 ## 0.5.4 – 2026-11-21
 
 - The BB status bar shows the latest recorded call's estimated input by item type beside BB's context-window usage percentage. Hover or focus to see percentage shares and token counts. Turn off **Show context summary** in Highwater's plugin settings to hide the summary in both layouts.
