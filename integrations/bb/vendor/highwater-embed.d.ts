@@ -1,4 +1,4 @@
-import type { ContextItemKind } from '../state';
+import type { ContextItemKind } from '../context-item-kinds';
 
 /** Analysis payloads are validated by Highwater before they are indexed or rendered. */
 export type AnalysisFetchResult =

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CONTEXT_ITEM_KINDS } from './context-item-kinds';
 
 // Shared validation without the server-only RPC registration helper.
 export const threadIdSchema = z
@@ -24,20 +25,7 @@ export const threadStateSchema = z.discriminatedUnion('state', [
 ]);
 export type ThreadState = z.infer<typeof threadStateSchema>;
 
-export const contextItemKind = z.enum([
-  'system',
-  'toolDefinition',
-  'customMessage',
-  'userMessage',
-  'assistantMessage',
-  'toolResult',
-  'compactionSummary',
-  'branchSummary',
-  'thinking',
-  'unrecordedContext',
-  'other',
-]);
-export type ContextItemKind = z.infer<typeof contextItemKind>;
+export const contextItemKind = z.enum(CONTEXT_ITEM_KINDS);
 
 const compositionSchema = z.strictObject({
   segments: z

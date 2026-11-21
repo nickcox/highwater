@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Summary } from '../contract';
-import { contextItemKind, type ContextComposition, type ContextItemKind } from '../state';
+import type { ContextItemKind } from '../context-item-kinds';
+import { contextItemKind, type ContextComposition } from '../state';
 import { HostFailure } from './http';
 
 const tokens = z
