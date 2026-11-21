@@ -8,6 +8,7 @@ export interface ResolvedSession {
   harness: 'pi' | 'claude-code' | 'codex';
   providerThreadId: string;
   sessionId: string;
+  legacyPi?: true;
   binaryPath: string | null;
   /** The running Highwater version, which can differ from the pin only with an explicit binary. */
   version: string;
@@ -99,6 +100,7 @@ export async function resolveThread(
     harness,
     providerThreadId,
     sessionId: found.sessionId,
+    ...(found.legacyPi ? { legacyPi: found.legacyPi } : {}),
     binaryPath,
     version: status.version,
   };

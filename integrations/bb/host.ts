@@ -9,23 +9,33 @@ import { HighwaterProcess, type ProcessOptions } from './host/process';
 import { HostFailure, failureResult, matchesEtag, waitFor } from './host/http';
 
 export interface HostOptions {
-  process?: Omit<ProcessOptions, 'dataDir'>;
+  process?: Omit<ProcessOptions, 'dataDir' | 'legacyPi'>;
   analysis?: AnalysisOptions;
 }
-/** Each daemon worker owns one process, catalogue and bounded set of transfers. */
+interface SourceRuntime {
+  process: HighwaterProcess;
+  catalogue: SessionCatalogue;
+}
+
+/** Each worker owns the main server and may start a second one for legacy Pi sessions. */
 export function createHighwaterEntry(options: HostOptions = {}) {
-  let runtime:
-    { process: HighwaterProcess; catalogue: SessionCatalogue; analyses: Analyses } | undefined;
+  let runtime: { primary: SourceRuntime; legacyPi?: SourceRuntime; analyses: Analyses } | undefined;
   let disposing: Promise<void> | undefined;
   const loading = new Map<string, Promise<AnalysisEntry>>();
+  function createSource(context: ExperimentalHostRpcContext, legacyPi = false): SourceRuntime {
+    return {
+      process: new HighwaterProcess({
+        ...options.process,
+        legacyPi,
+        dataDir: context.experimental_paths.dataDir,
+      }),
+      catalogue: new SessionCatalogue(options.analysis?.timeoutMs, options.analysis?.fetcher),
+    };
+  }
   function getRuntime(context: ExperimentalHostRpcContext) {
     if (!runtime) {
       runtime = {
-        process: new HighwaterProcess({
-          ...options.process,
-          dataDir: context.experimental_paths.dataDir,
-        }),
-        catalogue: new SessionCatalogue(options.analysis?.timeoutMs, options.analysis?.fetcher),
+        primary: createSource(context),
         analyses: new Analyses(options.analysis),
       };
       context.lifecycle.signal.addEventListener(
@@ -38,11 +48,16 @@ export function createHighwaterEntry(options: HostOptions = {}) {
     }
     return runtime;
   }
+  function getSource(context: ExperimentalHostRpcContext, legacyPi = false): SourceRuntime {
+    const worker = getRuntime(context);
+    return legacyPi ? (worker.legacyPi ??= createSource(context, true)) : worker.primary;
+  }
   function dispose(): Promise<void> {
     disposing ??= (async () => {
       runtime?.analyses.dispose();
-      runtime?.catalogue.clear();
-      await runtime?.process.dispose();
+      runtime?.primary.catalogue.clear();
+      runtime?.legacyPi?.catalogue.clear();
+      await Promise.all([runtime?.primary.process.dispose(), runtime?.legacyPi?.process.dispose()]);
     })();
     return disposing;
   }
@@ -55,11 +70,16 @@ export function createHighwaterEntry(options: HostOptions = {}) {
     }
   }
   async function load(
-    input: { binaryPath: string | null; sessionId: string },
+    input: { binaryPath: string | null; sessionId: string; legacyPi?: true },
     context: ExperimentalHostRpcContext,
   ) {
-    const { process, catalogue, analyses } = getRuntime(context);
-    const key = JSON.stringify([input.binaryPath?.trim() || null, input.sessionId]);
+    const { process, catalogue } = getSource(context, input.legacyPi);
+    const { analyses } = getRuntime(context);
+    const key = JSON.stringify([
+      input.binaryPath?.trim() || null,
+      input.sessionId,
+      !!input.legacyPi,
+    ]);
     let work = loading.get(key);
     if (!work) {
       // Share the entire operation, including lazy startup and catalogue validation. Otherwise
@@ -74,7 +94,7 @@ export function createHighwaterEntry(options: HostOptions = {}) {
             'The session is no longer in the Highwater catalogue.',
           );
         }
-        return analyses.load(server, input.sessionId);
+        return analyses.load(server, input.sessionId, input.legacyPi);
       })();
       loading.set(key, work);
       void work.finally(() => loading.delete(key)).catch(() => {});
@@ -85,14 +105,23 @@ export function createHighwaterEntry(options: HostOptions = {}) {
     contract: hostContract,
     handlers: {
       status: (input, context) =>
-        getRuntime(context).process.status(input.binaryPath, context.signal),
+        getSource(context).process.status(input.binaryPath, context.signal),
       findSession: (input, context) =>
         boundary(context, async () => {
-          const { process, catalogue } = getRuntime(context);
-          const server = await process.get(input.binaryPath, context.signal);
-          const entries = await waitFor(catalogue.list(server), context.signal);
-          const sessionId = matchSession(entries, input.harness, input.providerThreadId);
-          return sessionId ? { found: true as const, sessionId } : { found: false as const };
+          const find = async ({ process, catalogue }: SourceRuntime) => {
+            const server = await process.get(input.binaryPath, context.signal);
+            const entries = await waitFor(catalogue.list(server), context.signal);
+            return matchSession(entries, input.harness, input.providerThreadId);
+          };
+          const primary = getSource(context);
+          const sessionId = await find(primary);
+          if (sessionId) return { found: true as const, sessionId };
+          if (input.harness === 'pi' && (await primary.process.hasLegacyPiFallback())) {
+            const legacySessionId = await find(getSource(context, true));
+            if (legacySessionId)
+              return { found: true as const, sessionId: legacySessionId, legacyPi: true as const };
+          }
+          return { found: false as const };
         }),
       openAnalysis: (input, context) =>
         boundary(context, async () => {

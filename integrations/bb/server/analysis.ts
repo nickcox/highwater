@@ -32,6 +32,7 @@ export async function readAnalysis(
         binaryPath: session.binaryPath,
         sessionId: session.sessionId,
         ifNoneMatch,
+        ...(session.legacyPi ? { legacyPi: session.legacyPi } : {}),
       },
       options,
     );

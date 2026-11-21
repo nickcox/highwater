@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { join } from 'node:path';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { createFakePluginHost, makeThreadResponse } from '@get-bb/plugin-sdk/testing';
 import { experimental_createHostEntryHarness } from '@get-bb/plugin-sdk/testing/host';
@@ -11,16 +11,23 @@ import { binaries, claudeFixtures, codexFixtures, tempDirectory, writePi } from 
 
 for (const binaryPath of binaries) {
   describe(`server and real host: ${binaryPath}`, () => {
-    it.each(['pi', 'claude-code', 'codex'])(
+    it.each(['pi', 'legacy Pi', 'claude-code', 'codex'])(
       'serves a %s analysis and summary through the complete contracts',
-      async (providerId) => {
+      async (source) => {
+        const providerId = source === 'legacy Pi' ? 'pi' : source;
         const home = await tempDirectory();
+        const plugins = join(home, '.bb/plugins');
         const host = experimental_createHostEntryHarness(
           createHighwaterEntry({
             process: { home, env: { PATH: process.env.PATH } },
             analysis: { pieceBytes: 1024 },
           }),
-          { experimental_paths: { dataDir: join(home, 'data'), tempDir: join(home, 'tmp') } },
+          {
+            experimental_paths: {
+              dataDir: join(plugins, 'highwater/host-data'),
+              tempDir: join(home, 'tmp'),
+            },
+          },
         );
         const threadId = 'thr_integration1';
         const server = createFakePluginHost({
@@ -73,6 +80,14 @@ for (const binaryPath of binaries) {
             piFile,
             records.map((record) => JSON.stringify(record)).join('\n') + '\n',
           );
+          if (providerId === 'pi') {
+            const sessions = join(plugins, 'provider-pi/bridge-data/sessions');
+            await mkdir(sessions, { recursive: true });
+            if (source === 'pi') {
+              await rename(piFile, join(sessions, basename(piFile)));
+              await writePi(home);
+            }
+          }
           await claudeFixtures(home);
           await codexFixtures(home);
           plugin(server.bb);

@@ -28,7 +28,8 @@ export const statusSchema = z.discriminatedUnion('state', [
   z.object({ state: z.literal('failed'), message: z.string() }).strict(),
 ]);
 export type HostStatus = z.infer<typeof statusSchema>;
-const analysisInput = binary.extend({ sessionId, ifNoneMatch: etag }).strict();
+const legacyPi = z.literal(true).optional();
+const analysisInput = binary.extend({ sessionId, ifNoneMatch: etag, legacyPi }).strict();
 const notModified = z.object({ status: z.literal('notModified'), etag: z.string() }).strict();
 const transferId = z.string().uuid();
 
@@ -46,7 +47,7 @@ export const hostContract = defineRpcContract({
       })
       .strict(),
     output: z.union([
-      z.object({ found: z.literal(true), sessionId }).strict(),
+      z.object({ found: z.literal(true), sessionId, legacyPi }).strict(),
       z.object({ found: z.literal(false) }).strict(),
       errorSchema,
     ]),

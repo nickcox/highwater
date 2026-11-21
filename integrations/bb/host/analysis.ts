@@ -66,7 +66,7 @@ export class Analyses {
   private readonly pieceBytes: number;
   private readonly memoryBytes: number;
   private readonly now: () => number;
-  private generation = -1;
+  private readonly generations = new Map<string, number>();
   private closed = false;
   constructor(private readonly options: AnalysisOptions = {}) {
     this.pieceBytes = options.pieceBytes ?? 4 * 1024 * 1024;
@@ -75,16 +75,17 @@ export class Analyses {
     this.memoryBytes = options.memoryBytes ?? 64 * 1024 * 1024;
     this.now = options.now ?? Date.now;
   }
-  load(server: HighwaterServer, sessionId: string): Promise<AnalysisEntry> {
+  load(server: HighwaterServer, sessionId: string, legacyPi = false): Promise<AnalysisEntry> {
     if (this.closed)
       return Promise.reject(
         new HostFailure(503, 'processStopped', 'The Highwater host has been disposed.'),
       );
-    if (this.generation !== server.generation) {
-      this.cache.clear();
-      this.generation = server.generation;
+    const prefix = legacyPi ? 'legacyPi:' : 'primary:';
+    if (this.generations.get(prefix) !== server.generation) {
+      for (const key of this.cache.keys()) if (key.startsWith(prefix)) this.cache.delete(key);
+      this.generations.set(prefix, server.generation);
     }
-    const key = `${server.generation}:${sessionId}`;
+    const key = `${prefix}${server.generation}:${sessionId}`;
     const pending = this.inflight.get(key);
     if (pending) return pending;
     const work = this.fetch(server, sessionId, key);

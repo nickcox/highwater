@@ -11,6 +11,7 @@ export interface ProcessOptions {
   dataDir: string;
   home?: string;
   env?: NodeJS.ProcessEnv;
+  legacyPi?: boolean;
   startTimeoutMs?: number;
   probeTimeoutMs?: number;
   stopGraceMs?: number;
@@ -87,8 +88,25 @@ export class HighwaterProcess {
         : { state: 'failed', message: error instanceof Error ? error.message : String(error) };
     }
   }
+  private get providerPiRoot(): string {
+    return join(this.options.dataDir, '..', '..', 'provider-pi', 'bridge-data', 'sessions');
+  }
+  private get legacyPiRoot(): string {
+    return join(this.home, '.bb', 'pi-bridge-sessions');
+  }
+  async hasLegacyPiFallback(): Promise<boolean> {
+    return (
+      !this.env.BB_PI_BRIDGE_SESSION_DIR?.trim() &&
+      (await directory(this.providerPiRoot)) &&
+      (await directory(this.legacyPiRoot))
+    );
+  }
   private async roots(): Promise<string[]> {
-    const pi = this.env.BB_PI_BRIDGE_SESSION_DIR || join(this.home, '.bb', 'pi-bridge-sessions');
+    const pi =
+      this.env.BB_PI_BRIDGE_SESSION_DIR?.trim() ||
+      (!this.options.legacyPi && (await directory(this.providerPiRoot))
+        ? this.providerPiRoot
+        : this.legacyPiRoot);
     const empty = join(this.options.dataDir, 'empty-pi-sessions');
     let piRoot = pi;
     if (!(await directory(pi))) {
@@ -96,6 +114,7 @@ export class HighwaterProcess {
       piRoot = empty;
     }
     const args = ['--session-root', piRoot];
+    if (this.options.legacyPi) return args;
     const claude = join(this.env.CLAUDE_CONFIG_DIR || join(this.home, '.claude'), 'projects');
     const codex = this.env.CODEX_HOME || join(this.home, '.codex');
     if (await directory(claude)) args.push('--claude-root', claude);

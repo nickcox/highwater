@@ -107,7 +107,12 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
         if (session.state !== 'resolved') return session;
         const result = await host.call(
           'summary',
-          { binaryPath: session.binaryPath, sessionId: session.sessionId, ifNoneMatch },
+          {
+            binaryPath: session.binaryPath,
+            sessionId: session.sessionId,
+            ifNoneMatch,
+            ...(session.legacyPi ? { legacyPi: session.legacyPi } : {}),
+          },
           { hostId: session.hostId, signal },
         );
         if (result.status === 'error') return hostErrorState(result);
