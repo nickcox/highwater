@@ -6,7 +6,9 @@ The view refreshes when the thread advances. A Latest call panel above the chart
 
 ## Compact summary
 
-The Context row shows call and compaction counts, the recent growth per call, a small chart of input against the context window and bb's current token usage and percentage. Select it to open the tab. Narrow panes show a segment above the composer instead. With only the row visible, the browser receives a small summary rather than the full analysis.
+The summary above the composer shows bb's current context-window percentage beside a coloured bar. The bar shows how the latest recorded model call's estimated input tokens break down by item type. Hover over the bar or focus it with the keyboard to see each type's share and token count.
+
+The wider thread card also shows call and compaction counts, recent input growth per call and a small chart of input against the context window. Select either summary to open the Context tab. Turn off **Show context summary** in Highwater's plugin settings to hide both summaries.
 
 ## Requirements
 
