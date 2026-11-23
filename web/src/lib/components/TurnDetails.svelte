@@ -74,6 +74,7 @@
 <style>
   .turn {
     border-block-start: 1px solid var(--separator);
+    margin-block-start: 0.75rem;
     padding-block-start: 0.75rem;
   }
   .heading {
