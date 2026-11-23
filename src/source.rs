@@ -195,7 +195,8 @@ pub(crate) fn load(
     }
 }
 
-/// Attach partial reconstruction coverage when the source reports limitations.
+/// Sets the analysis's reconstruction coverage: none for Pi (`None`), and partial, with the
+/// limitations as explanation codes, for every other source, even when it has none.
 pub(crate) fn add_reconstruction(
     analysis: &mut crate::api::Analysis,
     limitations: Option<BTreeSet<Limitation>>,
@@ -209,7 +210,7 @@ pub(crate) fn add_reconstruction(
     });
 }
 
-/// Analyse an OpenCode replay while preserving its reconstruction coverage.
+/// Analyses an OpenCode replay and adds its limitations as reconstruction coverage.
 pub(crate) fn analyze_reconstructed(
     reconstructed: replay::ReplayResult,
     config: crate::analysis::AnalysisConfig,

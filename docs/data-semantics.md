@@ -55,7 +55,7 @@ The analysis holds labels, structural metadata, short previews of each item's co
 
 Each model call lists its context items by position in `contextItems` (`contextItemIndexes`, `addedItemIndexes`, `droppedItemIndexes`), in context order, rather than repeating their IDs; the frontend's `indexAnalysis` turns them back into IDs.
 
-Compactions with a recorded or reconstructed summary are included even when no later call reads the summary, such as when another compaction replaces it or the session ends. Those summaries have no presence and are not part of any call's context. The compaction's own call still contributes to session cost where its cost is known.
+The analysis includes every compaction that has a summary, even when no later call reads that summary, as when another compaction replaces it or the session ends. Such a summary has no presence and is in no call's context. Where the harness records the compaction's own call, that call is still priced and counted in the session's cost.
 
 Band heights and Composition use each item's local token estimate, not provider prompt totals. When a session has no token estimates, the chart says so rather than drawing bands from byte sizes. The older `displayWeight` field still holds each item's serialised size in bytes, for diagnostics only.
 
