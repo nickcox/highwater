@@ -13,6 +13,7 @@ use super::{
 };
 use crate::{
     analysis::{AnalysisConfig, TokenizationPolicy},
+    domain::ToolAction,
     pricing::{self, CallToPrice},
     server::{discover_sessions, SessionFile, SourceArgs, TokenizationArg},
 };
@@ -63,34 +64,21 @@ fn args(dir: Option<&str>) -> ReportArgs {
 #[test]
 fn shell_commands_are_compared_without_a_leading_change_of_directory() {
     let cases = [
-        (
-            "Bash",
-            r#"{"command":"cargo test","description":"Run"}"#,
-            "cargo test",
-        ),
-        (
-            "Bash",
-            r#"{"command":"cd /a/b && cargo test"}"#,
-            "cargo test",
-        ),
-        ("bash", r#"{"command":"cd /a/b; git status"}"#, "git status"),
-        (
-            "exec_command",
-            r#"{"cmd":"ls -la","workdir":"/x"}"#,
-            "ls -la",
-        ),
-        ("shell", r#"{"command":["bash","-lc","ls"]}"#, "bash -lc ls"),
-        (
-            "Bash",
-            r#"{"command":"cd /only/a/directory"}"#,
-            "cd /only/a/directory",
-        ),
+        (" cargo test\n", "cargo test"),
+        ("cd /a/b && cargo test", "cargo test"),
+        ("cd /a/b; git status", "git status"),
+        ("ls -la", "ls -la"),
+        ("bash -lc ls", "bash -lc ls"),
+        ("cd /only/a/directory", "cd /only/a/directory"),
     ];
-    for (tool, arguments, expected) in cases {
+    for (command, expected) in cases {
+        let action = ToolAction::Shell {
+            command: command.into(),
+        };
         assert_eq!(
-            command_key(tool, arguments, &Paths::none()),
+            command_key(Some(&action), "{}", &Paths::none()),
             expected,
-            "{arguments}"
+            "{command}"
         );
     }
 }
@@ -99,26 +87,81 @@ fn shell_commands_are_compared_without_a_leading_change_of_directory() {
 fn reads_are_compared_by_path_and_other_tools_by_their_arguments() {
     let cases = [
         (
-            "Read",
+            Some(ToolAction::ReadFile {
+                path: "/a.rs".into(),
+            }),
             r#"{"file_path":"/a.rs","offset":10,"limit":20}"#,
             "/a.rs",
         ),
-        ("read", r#"{"path":"a.rs","limit":null}"#, "a.rs"),
+        (
+            Some(ToolAction::ReadFile {
+                path: "a.rs".into(),
+            }),
+            r#"{"path":"a.rs","limit":null}"#,
+            "a.rs",
+        ),
+        (
+            None,
+            r#"{"limit":null,"path":"a.rs"}"#,
+            r#"{"path":"a.rs"}"#,
+        ),
+        (
+            None,
+            r#"{"command":"ls","cmd":null}"#,
+            r#"{"command":"ls"}"#,
+        ),
         // Keys are sorted and null values left out.
         (
-            "Grep",
+            None,
             r#"{"pattern":"x","path":null,"glob":"*.rs"}"#,
             r#"{"glob":"*.rs","pattern":"x"}"#,
         ),
-        ("apply_patch", " *** Begin Patch\n", "*** Begin Patch"),
+        (
+            Some(ToolAction::EditFile {
+                path: "a.rs".into(),
+            }),
+            " *** Begin Patch\n",
+            "*** Begin Patch",
+        ),
     ];
-    for (tool, arguments, expected) in cases {
+    for (action, arguments, expected) in cases {
         assert_eq!(
-            command_key(tool, arguments, &Paths::none()),
+            command_key(action.as_ref(), arguments, &Paths::none()),
             expected,
             "{arguments}"
         );
     }
+}
+
+#[test]
+fn report_uses_the_readers_tool_actions() {
+    let empty = tempfile::tempdir().expect("temporary folder");
+    let sessions = discover_sessions(SourceArgs {
+        session_root: Some(empty.path().to_path_buf()),
+        opencode_db: Vec::new(),
+        claude_root: Vec::new(),
+        vscode_user_dir: Vec::new(),
+        codex_home: Vec::new(),
+        copilot_home: vec![PathBuf::from("fixtures/copilot/home")],
+    })
+    .expect("Copilot fixture discovery");
+    let reports: Vec<_> = sessions
+        .iter()
+        .map(|session| {
+            let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).unwrap();
+            session_report(session, &normalized, &analysis, &Thresholds::default(), 10)
+        })
+        .collect();
+    let run = |name| {
+        reports
+            .iter()
+            .flat_map(|report| &report.runs)
+            .find(|run| run.tool == name)
+            .unwrap()
+    };
+    assert_eq!(run("bash").family.as_deref(), Some("ls"));
+    assert_eq!(run("view").command, "missing.rs");
+    assert_eq!(run("view").family, None);
 }
 
 #[test]
@@ -131,38 +174,49 @@ fn paths_in_a_sessions_working_tree_are_written_relative_to_its_top_folder() {
     let in_web = Paths::for_directory(Some(&format!("{top}/web")));
     let cases = [
         (
-            "Read",
-            json!({ "file_path": format!("{top}/src/a.rs") }),
+            ToolAction::ReadFile {
+                path: format!("{top}/src/a.rs"),
+            },
             "src/a.rs",
         ),
         (
-            "read",
-            json!({ "path": "src/App.svelte" }),
+            ToolAction::ReadFile {
+                path: "src/App.svelte".into(),
+            },
             "web/src/App.svelte",
         ),
-        ("read", json!({ "path": "/etc/hosts" }), "/etc/hosts"),
         (
-            "Bash",
-            json!({ "command": format!("cd {top} && sed -n 1,5p {top}/src/a.rs") }),
+            ToolAction::ReadFile {
+                path: "/etc/hosts".into(),
+            },
+            "/etc/hosts",
+        ),
+        (
+            ToolAction::Shell {
+                command: format!("cd {top} && sed -n 1,5p {top}/src/a.rs"),
+            },
             "sed -n 1,5p src/a.rs",
         ),
         (
-            "Bash",
-            json!({ "command": format!("git -C {top} status; ls {top}-old") }),
+            ToolAction::Shell {
+                command: format!("git -C {top} status; ls {top}-old"),
+            },
             "git -C . status; ls TOP-old",
         ),
     ];
-    for (tool, arguments, expected) in cases {
-        let arguments = arguments.to_string();
+    for (action, expected) in cases {
         assert_eq!(
-            command_key(tool, &arguments, &in_web),
+            command_key(Some(&action), "{}", &in_web),
             expected.replace("TOP", &top),
-            "{arguments}"
+            "{action:?}"
         );
     }
     let gone = Paths::for_directory(Some("/no/such/checkout"));
+    let action = ToolAction::ReadFile {
+        path: "/no/such/checkout/a.rs".into(),
+    };
     assert_eq!(
-        command_key("Read", r#"{"file_path":"/no/such/checkout/a.rs"}"#, &gone),
+        command_key(Some(&action), "{}", &gone),
         "a.rs",
         "a folder that no longer exists is its own top folder"
     );

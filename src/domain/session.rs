@@ -243,6 +243,18 @@ pub(crate) struct NormalizedToolCall {
     pub id: String,
     pub name: String,
     pub failed: bool,
+    pub action: Option<ToolAction>,
+}
+
+/// What a tool call does, for the tools a reader knows. Other tools have none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ToolAction {
+    /// Runs a shell command; the command as recorded.
+    Shell { command: String },
+    /// Reads a file; the path as recorded.
+    ReadFile { path: String },
+    /// Writes or edits a file; the path as recorded.
+    EditFile { path: String },
 }
 
 #[derive(Debug, Clone)]

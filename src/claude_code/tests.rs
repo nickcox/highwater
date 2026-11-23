@@ -1,9 +1,10 @@
+use super::reconstruct::tool_action;
 use super::{
     discovery::{find_files, read_listing, DiscoveryError, ListingCache, TranscriptFile},
     FileKind,
 };
-use crate::domain::{Harness, Limitation};
-use serde_json::Value;
+use crate::domain::{Harness, Limitation, ToolAction};
+use serde_json::{json, Value};
 use std::{
     fs,
     io::Write,
@@ -806,4 +807,33 @@ fn a_manual_compaction_reads_its_focus_text_from_the_queued_command() {
         session.compactions[0].details.instructions.as_deref(),
         Some("keep the open questions")
     );
+}
+
+#[test]
+fn recognises_claude_code_tool_actions() {
+    assert_eq!(
+        tool_action("Bash", &json!({"command": " pwd\n"})),
+        Some(ToolAction::Shell {
+            command: " pwd\n".into()
+        })
+    );
+    assert_eq!(
+        tool_action("Read", &json!({"file_path": "/tmp/file"})),
+        Some(ToolAction::ReadFile {
+            path: "/tmp/file".into()
+        })
+    );
+    for (name, key) in [
+        ("Write", "file_path"),
+        ("Edit", "file_path"),
+        ("NotebookEdit", "notebook_path"),
+    ] {
+        assert_eq!(
+            tool_action(name, &json!({(key): "/tmp/file"})),
+            Some(ToolAction::EditFile {
+                path: "/tmp/file".into()
+            })
+        );
+    }
+    assert_eq!(tool_action("mcp__bash", &json!({"command": "pwd"})), None);
 }

@@ -1,7 +1,7 @@
-use super::{change_log, discovery, load};
+use super::{change_log, discovery, load, reconstruct::tool_action};
 use crate::domain::{
     AssistantContentBlock, ContentPart, ContextItemKind, Harness, Limitation, SourceError,
-    TokenizationPayload,
+    TokenizationPayload, ToolAction,
 };
 use serde_json::json;
 use std::{fs, path::PathBuf};
@@ -417,4 +417,34 @@ fn credits_are_a_single_call_requests_cost_and_add_up_to_the_session_total() {
         Some(total.total_usd)
     );
     assert_eq!(total.since_ms, None);
+}
+
+#[test]
+fn recognises_vscode_copilot_tool_actions() {
+    assert_eq!(
+        tool_action("run_in_terminal", &json!({"command": " pwd\n"})),
+        Some(ToolAction::Shell {
+            command: " pwd\n".into()
+        })
+    );
+    let input = json!({"filePath": "/tmp/file"});
+    assert_eq!(
+        tool_action("read_file", &input),
+        Some(ToolAction::ReadFile {
+            path: "/tmp/file".into()
+        })
+    );
+    for name in [
+        "create_file",
+        "replace_string_in_file",
+        "insert_edit_into_file",
+    ] {
+        assert_eq!(
+            tool_action(name, &input),
+            Some(ToolAction::EditFile {
+                path: "/tmp/file".into()
+            })
+        );
+    }
+    assert_eq!(tool_action("mcp_read_file", &input), None);
 }

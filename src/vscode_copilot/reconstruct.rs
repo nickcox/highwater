@@ -563,6 +563,9 @@ impl<'t> State<'t> {
                 id: id.clone(),
                 name: name.clone(),
                 failed: false,
+                action: serde_json::from_str(&arguments)
+                    .ok()
+                    .and_then(|input| tool_action(&name, &input)),
             });
             tools.push((id, name, arguments));
         }
@@ -1036,6 +1039,20 @@ fn assistant_label(payload: &TokenizationPayload) -> String {
     }
 }
 
+pub(super) fn tool_action(name: &str, input: &Value) -> Option<ToolAction> {
+    let path = || Some(input.get("filePath")?.as_str()?.to_owned());
+    match name {
+        "run_in_terminal" => Some(ToolAction::Shell {
+            command: input.get("command")?.as_str()?.to_owned(),
+        }),
+        "read_file" => Some(ToolAction::ReadFile { path: path()? }),
+        "create_file" | "replace_string_in_file" | "insert_edit_into_file" => {
+            Some(ToolAction::EditFile { path: path()? })
+        }
+        _ => None,
+    }
+}
+
 /// Labels for Copilot's built-in file, terminal and search tools. Other tools keep a
 /// generic label rather than guessing what their arguments mean.
 fn tool_result_label(name: &str, input: &Value, working_directory: Option<&str>) -> String {
@@ -1046,22 +1063,19 @@ fn tool_result_label(name: &str, input: &Value, working_directory: Option<&str>)
             .map(bounded_label)
             .filter(|text| !text.is_empty())
     };
-    let path = |key: &str| {
-        input
-            .get(key)
-            .and_then(Value::as_str)
-            .map(|path| bounded_label(&display_path_argument(path, working_directory)))
-            .filter(|text| !text.is_empty())
-    };
-    let detail = match name {
-        "read_file" | "create_file" | "replace_string_in_file" | "insert_edit_into_file" => {
-            path("filePath")
+    let path = |path: &str| bounded_label(&display_path_argument(path, working_directory));
+    let detail = match tool_action(name, input) {
+        Some(ToolAction::Shell { command }) => Some(bounded_label(&command)),
+        Some(ToolAction::ReadFile { path: file } | ToolAction::EditFile { path: file }) => {
+            Some(path(&file))
         }
-        "list_dir" => path("path"),
-        "run_in_terminal" => argument("command"),
-        "grep_search" | "file_search" | "semantic_search" => argument("query"),
-        _ => None,
-    };
+        None if name == "list_dir" => input.get("path").and_then(Value::as_str).map(path),
+        None if matches!(name, "grep_search" | "file_search" | "semantic_search") => {
+            argument("query")
+        }
+        None => None,
+    }
+    .filter(|text| !text.is_empty());
     let name = bounded_label(name);
     match (name.is_empty(), detail) {
         (true, _) => "Tool result".into(),

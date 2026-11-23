@@ -369,6 +369,18 @@ fn message_has_image(message: &Value) -> bool {
         })
 }
 
+fn tool_action(name: &str, arguments: &Value) -> Option<ToolAction> {
+    let path = || Some(arguments.get("path")?.as_str()?.to_owned());
+    match name {
+        "bash" => Some(ToolAction::Shell {
+            command: arguments.get("command")?.as_str()?.to_owned(),
+        }),
+        "read" => Some(ToolAction::ReadFile { path: path()? }),
+        "write" | "edit" => Some(ToolAction::EditFile { path: path()? }),
+        _ => None,
+    }
+}
+
 fn tool_result_label(
     message: &Value,
     tool_invocations: &HashMap<&str, Vec<ToolInvocation<'_>>>,
@@ -395,34 +407,27 @@ fn tool_result_label(
     if result_tool_name.is_some_and(|result_name| result_name != tool_name) {
         return fallback();
     }
-    let Some(arguments) = invocation.arguments.and_then(Value::as_object) else {
+    let Some(arguments) = invocation.arguments.filter(|value| value.is_object()) else {
         return fallback();
     };
 
     // These names and fields match Pi's built-in read/write/edit, bash, grep, and find schemas.
     // Extensions and other tools intentionally remain generic instead of guessing argument meaning.
-    let (display_name, argument) = match tool_name {
-        "read" | "write" | "edit" => (
+    let (display_name, argument) = match tool_action(tool_name, arguments) {
+        Some(ToolAction::ReadFile { path } | ToolAction::EditFile { path }) => (
             match tool_name {
                 "read" => "Read",
                 "write" => "Write",
                 _ => "Edit",
             },
-            arguments
-                .get("path")
-                .and_then(Value::as_str)
-                .filter(|path| has_visible_label_text(path))
-                .map(|path| bounded_label(&display_path_argument(path, working_directory))),
+            has_visible_label_text(&path)
+                .then(|| bounded_label(&display_path_argument(&path, working_directory))),
         ),
-        "bash" => (
+        Some(ToolAction::Shell { command }) => (
             "Bash",
-            arguments
-                .get("command")
-                .and_then(Value::as_str)
-                .filter(|command| has_visible_label_text(command))
-                .map(bounded_label),
+            has_visible_label_text(&command).then(|| bounded_label(&command)),
         ),
-        "grep" | "find" => (
+        None if matches!(tool_name, "grep" | "find") => (
             if tool_name == "grep" { "Grep" } else { "Find" },
             arguments
                 .get("pattern")
@@ -687,14 +692,17 @@ fn assistant_tool_calls(message: &Value, failed: &HashSet<String>) -> Vec<Normal
                         .and_then(Value::as_str)
                         .unwrap_or("")
                         .to_owned();
+                    let name = block
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown");
                     NormalizedToolCall {
                         failed: failed.contains(&id),
+                        action: block
+                            .get("arguments")
+                            .and_then(|input| tool_action(name, input)),
                         id,
-                        name: block
-                            .get("name")
-                            .and_then(Value::as_str)
-                            .unwrap_or("unknown")
-                            .to_owned(),
+                        name: name.to_owned(),
                     }
                 })
                 .collect()

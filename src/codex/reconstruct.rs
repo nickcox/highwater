@@ -343,6 +343,7 @@ impl State {
                     id: id.clone(),
                     name: name.clone(),
                     failed: false,
+                    action: tool_action(&name, &arguments),
                 });
                 self.tool_calls
                     .insert(id.clone(), (name.clone(), arguments.clone()));
@@ -1220,38 +1221,51 @@ pub(super) fn tool_output_failed(content: &MessageContent) -> bool {
         })
 }
 
-/// `exec_command` shows its command, `apply_patch` its first file and `view_image` its path.
-fn tool_result_label(name: &str, arguments: &str, working_directory: Option<&str>) -> String {
-    let json = serde_json::from_str::<Value>(arguments).ok();
-    let argument = |key: &str| {
-        json.as_ref()
-            .and_then(|json| json.get(key))
-            .and_then(Value::as_str)
-            .and_then(first_nonempty_line)
-    };
-    let path = |path: &str| bounded_label(&display_path_argument(path, working_directory));
-    let detail = match name {
-        "exec_command" => argument("cmd"),
-        "shell" => json
-            .as_ref()
-            .and_then(|json| json.get("command"))
-            .and_then(Value::as_array)
-            .map(|parts| {
-                parts
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .and_then(|command| first_nonempty_line(&command)),
+fn tool_action(name: &str, arguments: &str) -> Option<ToolAction> {
+    match name {
+        "exec_command" => Some(ToolAction::Shell {
+            command: serde_json::from_str::<Value>(arguments)
+                .ok()?
+                .get("cmd")?
+                .as_str()?
+                .to_owned(),
+        }),
+        "shell" => Some(ToolAction::Shell {
+            command: serde_json::from_str::<Value>(arguments)
+                .ok()?
+                .get("command")?
+                .as_array()?
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<Vec<_>>()
+                .join(" "),
+        }),
         "apply_patch" => arguments.lines().find_map(|line| {
             ["*** Update File: ", "*** Add File: ", "*** Delete File: "]
                 .iter()
                 .find_map(|prefix| line.strip_prefix(prefix))
-                .map(path)
+                .map(|path| ToolAction::EditFile {
+                    path: path.to_owned(),
+                })
         }),
-        "view_image" => argument("path").map(|value| path(&value)),
-        "spawn_agent" => argument("task_name"),
+        _ => None,
+    }
+}
+
+fn tool_result_label(name: &str, arguments: &str, working_directory: Option<&str>) -> String {
+    let path = |path: &str| bounded_label(&display_path_argument(path, working_directory));
+    let argument = |key: &str| {
+        serde_json::from_str::<Value>(arguments)
+            .ok()?
+            .get(key)?
+            .as_str()
+            .and_then(first_nonempty_line)
+    };
+    let detail = match tool_action(name, arguments) {
+        Some(ToolAction::Shell { command }) => first_nonempty_line(&command),
+        Some(ToolAction::EditFile { path: file }) => Some(path(&file)),
+        _ if name == "view_image" => argument("path").map(|value| path(&value)),
+        _ if name == "spawn_agent" => argument("task_name"),
         _ => None,
     }
     .filter(|detail| !detail.is_empty());
@@ -1295,6 +1309,31 @@ fn reported_usage(usage: &Value) -> ReportedUsage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognises_codex_tool_actions() {
+        for (name, arguments, command) in [
+            ("exec_command", r#"{"cmd":" pwd\n"}"#, " pwd\n"),
+            ("shell", r#"{"command":["git","status"]}"#, "git status"),
+        ] {
+            assert_eq!(
+                tool_action(name, arguments),
+                Some(ToolAction::Shell {
+                    command: command.into()
+                })
+            );
+        }
+        assert_eq!(
+            tool_action(
+                "apply_patch",
+                "*** Begin Patch\n*** Add File: first.txt\n*** Delete File: second.txt"
+            ),
+            Some(ToolAction::EditFile {
+                path: "first.txt".into()
+            })
+        );
+        assert_eq!(tool_action("mcp__exec", r#"{"cmd":"pwd"}"#), None);
+    }
 
     #[test]
     fn newer_gpt_models_keep_reasoning_from_earlier_turns() {

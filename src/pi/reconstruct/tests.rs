@@ -4,6 +4,34 @@ use std::io::{BufReader, Cursor};
 use std::path::Path;
 
 #[test]
+fn recognises_pi_tool_actions() {
+    use serde_json::json;
+
+    assert_eq!(
+        tool_action("bash", &json!({"command": " pwd\n"})),
+        Some(ToolAction::Shell {
+            command: " pwd\n".into()
+        })
+    );
+    let input = json!({"path": "/tmp/file"});
+    assert_eq!(
+        tool_action("read", &input),
+        Some(ToolAction::ReadFile {
+            path: "/tmp/file".into()
+        })
+    );
+    for name in ["write", "edit"] {
+        assert_eq!(
+            tool_action(name, &input),
+            Some(ToolAction::EditFile {
+                path: "/tmp/file".into()
+            })
+        );
+    }
+    assert_eq!(tool_action("extension_read", &input), None);
+}
+
+#[test]
 fn failed_default_usage_is_unavailable_but_retains_raw_placeholders() {
     for stop in ["error", "aborted"] {
         let message = serde_json::json!({"stopReason":stop,"content":[{"type":"text","text":"partial"}],
@@ -239,7 +267,7 @@ fn normalized_fixture_parity() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "acbc1925d19067b7ca17d2961404f596b182b54f52809400d255aeb0944c231b"
+        "eb8686e4b8df2845b360513423be8707e12623a9bf0f962d0b2fbd4570499fc0"
     );
 }
 

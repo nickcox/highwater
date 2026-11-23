@@ -473,6 +473,9 @@ impl State<'_> {
             id: id.to_owned(),
             name: name.to_owned(),
             failed: self.failed_tools.contains(id),
+            action: block
+                .get("input")
+                .and_then(|input| tool_action(name, input)),
         });
     }
 
@@ -1075,25 +1078,37 @@ pub(crate) fn assistant_label(payload: &TokenizationPayload) -> String {
 
 /// Labels for Claude Code's built-in file, shell and search tools. Other tools
 /// keep a generic label rather than guessing what their arguments mean.
-fn tool_result_label(name: &str, input: &Value, working_directory: Option<&str>) -> String {
-    let argument = |key: &str| {
+pub(super) fn tool_action(name: &str, input: &Value) -> Option<ToolAction> {
+    let path = || {
         input
-            .get(key)
-            .and_then(Value::as_str)
-            .map(bounded_label)
-            .filter(|text| !text.is_empty())
-    };
-    let detail = match name {
-        "Read" | "Write" | "Edit" | "NotebookEdit" => input
             .get("file_path")
-            .or_else(|| input.get("notebook_path"))
-            .and_then(Value::as_str)
-            .map(|path| bounded_label(&display_path_argument(path, working_directory)))
-            .filter(|text| !text.is_empty()),
-        "Bash" => argument("command"),
-        "Grep" | "Glob" => argument("pattern"),
-        _ => None,
+            .or_else(|| input.get("notebook_path"))?
+            .as_str()
+            .map(str::to_owned)
     };
+    match name {
+        "Bash" => Some(ToolAction::Shell {
+            command: input.get("command")?.as_str()?.to_owned(),
+        }),
+        "Read" => Some(ToolAction::ReadFile { path: path()? }),
+        "Write" | "Edit" | "NotebookEdit" => Some(ToolAction::EditFile { path: path()? }),
+        _ => None,
+    }
+}
+
+fn tool_result_label(name: &str, input: &Value, working_directory: Option<&str>) -> String {
+    let detail = match tool_action(name, input) {
+        Some(ToolAction::Shell { command }) => Some(bounded_label(&command)),
+        Some(ToolAction::ReadFile { path } | ToolAction::EditFile { path }) => Some(bounded_label(
+            &display_path_argument(&path, working_directory),
+        )),
+        None if matches!(name, "Grep" | "Glob") => input
+            .get("pattern")
+            .and_then(Value::as_str)
+            .map(bounded_label),
+        None => None,
+    }
+    .filter(|text| !text.is_empty());
     let name = bounded_label(name);
     match (name.is_empty(), detail) {
         (true, _) => "Tool result".into(),

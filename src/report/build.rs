@@ -12,7 +12,7 @@ use super::{
 use crate::{
     analysis::reported_token_subtotals,
     api::{Analysis, ContextItem, CostSubtotal, ModelCall},
-    domain::{AssistantContentBlock, NormalizedSession, TokenizationPayload},
+    domain::{AssistantContentBlock, NormalizedSession, TokenizationPayload, ToolAction},
     pricing::{self, CallToPrice, InputPrice},
     server::SessionFile,
 };
@@ -319,6 +319,12 @@ fn tool_runs(
             }
         }
     }
+    let actions: HashMap<_, _> = normalized
+        .model_calls
+        .iter()
+        .flat_map(|call| &call.tool_calls_after)
+        .map(|tool_call| (tool_call.id.as_str(), tool_call.action.as_ref()))
+        .collect();
     let paths = Paths::for_directory(session.working_directory.as_deref());
     let payloads: HashMap<&str, &TokenizationPayload> = normalized
         .context_items
@@ -341,12 +347,11 @@ fn tool_runs(
             else {
                 return None;
             };
-            let text = arguments.get(tool_call_id.as_str());
-            let command =
-                text.map_or_else(String::new, |text| command_key(tool_name, text, &paths));
-            let shell = text
-                .and_then(|text| serde_json::from_str::<Value>(text).ok())
-                .is_some_and(|value| shell_command(&value).is_some());
+            let id = tool_call_id.as_str();
+            let action = actions.get(id).copied().flatten();
+            let text = arguments.get(id).copied().unwrap_or_default();
+            let command = command_key(action, text, &paths);
+            let shell = matches!(action, Some(ToolAction::Shell { .. }));
             Some(ToolRun {
                 tool: tool_name.clone(),
                 family: shell.then(|| command_family(&command)),
@@ -363,46 +368,23 @@ fn tool_runs(
         .collect()
 }
 
-/// What makes two runs of a tool the same: a shell tool's command, without a leading
-/// change of directory; the path a read tool read, whatever part of it; or otherwise the
-/// arguments as canonical JSON without null values, or the text itself when it is not JSON.
-/// Paths in the session's working tree are written relative to its top folder.
-pub(super) fn command_key(tool: &str, arguments: &str, paths: &Paths) -> String {
-    let Ok(mut value) = serde_json::from_str::<Value>(arguments) else {
-        return paths.in_text(arguments.trim());
-    };
-    if let Some(command) = shell_command(&value) {
-        return paths.in_text(without_cd(&command));
-    }
-    if tool.to_lowercase().contains("read") {
-        if let Some(path) = ["file_path", "filePath", "path"]
-            .iter()
-            .find_map(|key| value.get(key).and_then(Value::as_str))
-        {
-            return paths.relative(path);
+/// Compare shell commands without a leading change of directory, and file reads by path.
+/// For edits and tools the reader does not identify, compare canonical JSON arguments without
+/// null fields, or the trimmed text when it is not JSON. Paths in the session's working tree
+/// are written relative to its top folder.
+pub(super) fn command_key(action: Option<&ToolAction>, arguments: &str, paths: &Paths) -> String {
+    match action {
+        Some(ToolAction::Shell { command }) => paths.in_text(without_cd(command.trim())),
+        Some(ToolAction::ReadFile { path }) => paths.relative(path),
+        Some(ToolAction::EditFile { .. }) | None => {
+            let Ok(mut value) = serde_json::from_str::<Value>(arguments) else {
+                return paths.in_text(arguments.trim());
+            };
+            if let Value::Object(fields) = &mut value {
+                fields.retain(|_, field| !field.is_null());
+            }
+            paths.in_text(&value.to_string())
         }
-    }
-    if let Value::Object(fields) = &mut value {
-        fields.retain(|_, field| !field.is_null());
-    }
-    paths.in_text(&value.to_string())
-}
-
-/// A shell tool's command: its `command` or `cmd` argument, as a string or a list of words.
-fn shell_command(arguments: &Value) -> Option<String> {
-    match ["command", "cmd"]
-        .iter()
-        .find_map(|key| arguments.get(key))?
-    {
-        Value::String(text) => Some(text.trim().to_owned()),
-        Value::Array(parts) => Some(
-            parts
-                .iter()
-                .filter_map(Value::as_str)
-                .collect::<Vec<_>>()
-                .join(" "),
-        ),
-        _ => None,
     }
 }
 

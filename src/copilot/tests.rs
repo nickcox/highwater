@@ -1,5 +1,9 @@
 use super::discovery::{find_files, parse_workspace, read_listing, ListingCache};
-use crate::domain::{ContextItemKind, Harness, HarnessSessionCost, Limitation, NormalizedSession};
+use super::reconstruct::tool_action;
+use crate::domain::{
+    ContextItemKind, Harness, HarnessSessionCost, Limitation, NormalizedSession, ToolAction,
+};
+use serde_json::json;
 use std::{fs, path::PathBuf};
 
 fn home() -> PathBuf {
@@ -546,4 +550,41 @@ fn a_workspace_file_that_is_a_symbolic_link_is_not_read() {
     let folder = file.path.parent().expect("folder");
     std::os::unix::fs::symlink(&target, folder.join("workspace.yaml")).expect("link");
     assert_eq!(super::discovery::read_workspace(folder).name, None);
+}
+
+#[test]
+fn recognises_copilot_tool_actions() {
+    for name in ["bash", "powershell"] {
+        assert_eq!(
+            tool_action(name, &json!({"command": " pwd\n"})),
+            Some(ToolAction::Shell {
+                command: " pwd\n".into()
+            })
+        );
+    }
+    let input = json!({"path": "/tmp/file"});
+    assert_eq!(
+        tool_action("view", &input),
+        Some(ToolAction::ReadFile {
+            path: "/tmp/file".into()
+        })
+    );
+    for name in ["edit", "create"] {
+        assert_eq!(
+            tool_action(name, &input),
+            Some(ToolAction::EditFile {
+                path: "/tmp/file".into()
+            })
+        );
+    }
+    assert_eq!(
+        tool_action(
+            "apply_patch",
+            &json!("*** Update File: first.txt\n*** Add File: second.txt")
+        ),
+        Some(ToolAction::EditFile {
+            path: "first.txt".into()
+        })
+    );
+    assert_eq!(tool_action("mcp__read", &input), None);
 }

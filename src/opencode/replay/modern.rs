@@ -333,15 +333,17 @@ fn assistant(
                     return Err(ReplayError::UnsupportedHistory);
                 }
                 let arguments = tool_state.get("input").ok_or(ReplayError::InvalidRecords)?;
-                let arguments = if status == "streaming" {
+                let (arguments, action) = if status == "streaming" {
                     let raw = arguments.as_str().ok_or(ReplayError::InvalidRecords)?;
-                    serde_json::from_str::<Value>(raw)
-                        .map_or_else(|_| raw.to_owned(), |value| value.to_string())
+                    serde_json::from_str::<Value>(raw).map_or_else(
+                        |_| (raw.to_owned(), None),
+                        |value| (value.to_string(), tool_action(name, &value)),
+                    )
                 } else {
                     if !arguments.is_object() {
                         return Err(ReplayError::InvalidRecords);
                     }
-                    arguments.to_string()
+                    (arguments.to_string(), tool_action(name, arguments))
                 };
                 blocks.push(AssistantContentBlock::ToolCall {
                     id: id.into(),
@@ -352,6 +354,7 @@ fn assistant(
                     id: id.into(),
                     name: name.into(),
                     failed: status != "completed",
+                    action,
                 });
                 if matches!(status, "completed" | "error") {
                     tools.push(part);

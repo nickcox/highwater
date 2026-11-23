@@ -480,7 +480,8 @@ impl State {
         {
             let id = text(request, "toolCallId").unwrap_or_default();
             let name = text(request, "name").unwrap_or_default();
-            let arguments = match request.get("arguments") {
+            let input = request.get("arguments");
+            let arguments = match input {
                 Some(Value::String(arguments)) => arguments.clone(),
                 Some(arguments) => arguments.to_string(),
                 None => String::new(),
@@ -490,6 +491,7 @@ impl State {
                 id: id.clone(),
                 name: name.clone(),
                 failed: false,
+                action: input.and_then(|input| tool_action(&name, input)),
             });
             blocks.push(AssistantContentBlock::ToolCall {
                 id,
@@ -955,7 +957,26 @@ fn timestamp_ms(record: &Value) -> Option<i64> {
         .map(|timestamp| timestamp.timestamp_millis())
 }
 
-/// `bash` shows its command, `view` and `edit` their path, and `apply_patch` its first file.
+pub(super) fn tool_action(name: &str, arguments: &Value) -> Option<ToolAction> {
+    let path = || Some(arguments.get("path")?.as_str()?.to_owned());
+    match name {
+        "bash" | "powershell" => Some(ToolAction::Shell {
+            command: arguments.get("command")?.as_str()?.to_owned(),
+        }),
+        "view" => Some(ToolAction::ReadFile { path: path()? }),
+        "edit" | "create" => Some(ToolAction::EditFile { path: path()? }),
+        "apply_patch" => arguments.as_str()?.lines().find_map(|line| {
+            ["*** Update File: ", "*** Add File: ", "*** Delete File: "]
+                .iter()
+                .find_map(|prefix| line.strip_prefix(prefix))
+                .map(|path| ToolAction::EditFile {
+                    path: path.to_owned(),
+                })
+        }),
+        _ => None,
+    }
+}
+
 fn tool_result_label(name: &str, arguments: &Value, working_directory: Option<&str>) -> String {
     let argument = |key: &str| {
         arguments
@@ -964,20 +985,15 @@ fn tool_result_label(name: &str, arguments: &Value, working_directory: Option<&s
             .and_then(first_nonempty_line)
     };
     let path = |path: &str| bounded_label(&display_path_argument(path, working_directory));
-    let detail = match name {
-        "bash" | "powershell" => argument("command"),
-        "view" | "edit" | "create" => argument("path").map(|value| path(&value)),
-        "apply_patch" => arguments.as_str().and_then(|patch| {
-            patch.lines().find_map(|line| {
-                ["*** Update File: ", "*** Add File: ", "*** Delete File: "]
-                    .iter()
-                    .find_map(|prefix| line.strip_prefix(prefix))
-                    .map(path)
-            })
-        }),
-        "skill" => argument("skill"),
-        "grep" | "glob" => argument("pattern"),
-        _ => None,
+    let detail = match tool_action(name, arguments) {
+        Some(ToolAction::Shell { command }) => first_nonempty_line(&command),
+        Some(ToolAction::EditFile { path: file }) if name == "apply_patch" => Some(path(&file)),
+        Some(ToolAction::ReadFile { path: file } | ToolAction::EditFile { path: file }) => {
+            first_nonempty_line(&file).map(|value| path(&value))
+        }
+        None if name == "skill" => argument("skill"),
+        None if matches!(name, "grep" | "glob") => argument("pattern"),
+        None => None,
     }
     .filter(|detail| !detail.is_empty());
     let name = bounded_label(name);

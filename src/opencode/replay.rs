@@ -48,6 +48,61 @@ fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, ReplayError> {
         .ok_or(ReplayError::InvalidRecords)
 }
 
+fn tool_action(name: &str, input: &Value) -> Option<ToolAction> {
+    match name {
+        "bash" => Some(ToolAction::Shell {
+            command: input.get("command")?.as_str()?.to_owned(),
+        }),
+        // Read calls use `filePath` in legacy fixtures and `path` in modern fixtures.
+        "read" => Some(ToolAction::ReadFile {
+            path: input
+                .get("filePath")
+                .and_then(Value::as_str)
+                .or_else(|| input.get("path").and_then(Value::as_str))?
+                .to_owned(),
+        }),
+        "write" | "edit" => Some(ToolAction::EditFile {
+            path: input.get("filePath")?.as_str()?.to_owned(),
+        }),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tool_action_tests {
+    use super::*;
+
+    #[test]
+    fn recognises_opencode_tool_actions() {
+        use serde_json::json;
+
+        assert_eq!(
+            tool_action("bash", &json!({"command": " pwd\n"})),
+            Some(ToolAction::Shell {
+                command: " pwd\n".into()
+            })
+        );
+        for key in ["filePath", "path"] {
+            assert_eq!(
+                tool_action("read", &json!({(key): "/tmp/file"})),
+                Some(ToolAction::ReadFile {
+                    path: "/tmp/file".into()
+                })
+            );
+        }
+        let input = json!({"filePath": "/tmp/file"});
+        for name in ["write", "edit"] {
+            assert_eq!(
+                tool_action(name, &input),
+                Some(ToolAction::EditFile {
+                    path: "/tmp/file".into()
+                })
+            );
+        }
+        assert_eq!(tool_action("custom_read", &input), None);
+    }
+}
+
 fn nonempty<'a>(value: &'a Value, key: &str) -> Result<&'a str, ReplayError> {
     let value = text(value, key)?;
     if value.is_empty() {
@@ -511,6 +566,7 @@ fn assistant(
                     id: call_id.into(),
                     name: name.into(),
                     failed: status != "completed",
+                    action: tool_action(name, arguments),
                 });
                 tools.push(part);
             }
