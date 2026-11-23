@@ -569,12 +569,7 @@ pub(super) fn execute_analysis(
     let parse_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
     let mut analysis = analyze(loaded.normalized, config).map_err(FlightError::Analysis)?;
-    if let Some(codes) = loaded.coverage_codes {
-        analysis.reconstruction = Some(crate::api::ReconstructionCoverage {
-            status: "partial",
-            explanation_codes: codes,
-        });
-    }
+    source::add_reconstruction(&mut analysis, loaded.limitations);
     let analysis_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
     let body = serialize_analysis(&mut analysis, response_key.compact_previews)?;

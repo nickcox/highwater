@@ -8,7 +8,9 @@ mod records;
 #[cfg(test)]
 mod tests;
 
-use crate::domain::{HarnessSessionCost, NormalizedSession, SourceError, MAX_SAFE_JSON_INTEGER};
+use crate::domain::{
+    HarnessSessionCost, Limitation, NormalizedSession, SourceError, MAX_SAFE_JSON_INTEGER,
+};
 use serde_json::Value;
 use std::{collections::BTreeSet, fs::File, io::BufReader, path::Path};
 
@@ -17,49 +19,6 @@ use std::{collections::BTreeSet, fs::File, io::BufReader, path::Path};
 pub(crate) enum FileKind {
     Main,
     Subagent,
-}
-
-/// What the reconstruction could not establish from the transcript. The strings
-/// are shared with OpenCode where the meaning is the same.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Limitation {
-    MissingHistoricalSystemPrompt,
-    MissingHistoricalToolDefinitions,
-    /// Claude Code's own calls (titles, summaries, compaction) are not recorded.
-    UnrecordedHarnessCalls,
-    MissingCompactionUsage,
-    /// A compaction without `preservedSegment`: only the summary is kept.
-    UnverifiedCompactionRetention,
-    /// Attachments of a type that is sent, recorded without their text.
-    UnrenderedAttachments,
-    UnsupportedContent,
-    /// A compaction boundary named a later record as its predecessor; the branch continued
-    /// from the last record before the boundary.
-    RepairedCompactionLink,
-    /// Codex: a thread's inherited history was mostly not sent, judged from reported usage.
-    InferredUnsentHistory,
-    /// Codex: the context was reset without a compaction record, judged from reported usage.
-    InferredContextReset,
-    /// Copilot: subagents' calls are recorded in the main session's file but are not shown.
-    SubagentCallsNotShown,
-}
-
-impl Limitation {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::MissingHistoricalSystemPrompt => "missingHistoricalSystemPrompt",
-            Self::MissingHistoricalToolDefinitions => "missingHistoricalToolDefinitions",
-            Self::UnrecordedHarnessCalls => "unrecordedHarnessCalls",
-            Self::MissingCompactionUsage => "missingCompactionUsage",
-            Self::UnverifiedCompactionRetention => "unverifiedCompactionRetention",
-            Self::UnrenderedAttachments => "unrenderedAttachments",
-            Self::UnsupportedContent => "unsupportedContent",
-            Self::RepairedCompactionLink => "repairedCompactionLink",
-            Self::InferredUnsentHistory => "inferredUnsentHistory",
-            Self::InferredContextReset => "inferredContextReset",
-            Self::SubagentCallsNotShown => "subagentCallsNotShown",
-        }
-    }
 }
 
 #[derive(Debug)]

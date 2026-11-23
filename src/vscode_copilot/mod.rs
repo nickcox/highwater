@@ -10,48 +10,8 @@ mod tests;
 #[cfg(test)]
 mod trace_tests;
 
-use crate::domain::{NormalizedSession, SourceError};
+use crate::domain::{Limitation, NormalizedSession, SourceError};
 use std::{collections::BTreeSet, fs::File, io::BufReader, path::Path};
-
-/// What the reconstruction could not establish from the session file. The strings are
-/// shared with Claude Code and OpenCode where the meaning is the same.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Limitation {
-    MissingHistoricalSystemPrompt,
-    MissingHistoricalToolDefinitions,
-    /// Copilot's own calls (titles, progress messages, tool grouping) are not recorded.
-    UnrecordedHarnessCalls,
-    /// A request with attachments recorded without the message as sent, so only the
-    /// typed text is known.
-    UnrenderedAttachments,
-    /// A request that made several model calls but recorded no rounds (one stopped or
-    /// interrupted, for example) is shown as one call.
-    UnrecordedRounds,
-    /// Some calls have no trace records (deleted, never written, or not matching the
-    /// session file), so they use the session file alone.
-    TraceRecordsIncomplete,
-    /// No model call could be matched to a trace.
-    TraceRecordsUnavailable,
-    /// The trace database exists but could not be read.
-    TraceRecordsUnreadable,
-    UnsupportedContent,
-}
-
-impl Limitation {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::MissingHistoricalSystemPrompt => "missingHistoricalSystemPrompt",
-            Self::MissingHistoricalToolDefinitions => "missingHistoricalToolDefinitions",
-            Self::UnrecordedHarnessCalls => "unrecordedHarnessCalls",
-            Self::UnrenderedAttachments => "unrenderedAttachments",
-            Self::UnrecordedRounds => "unrecordedRounds",
-            Self::TraceRecordsIncomplete => "traceRecordsIncomplete",
-            Self::TraceRecordsUnavailable => "traceRecordsUnavailable",
-            Self::TraceRecordsUnreadable => "traceRecordsUnreadable",
-            Self::UnsupportedContent => "unsupportedContent",
-        }
-    }
-}
 
 #[derive(Debug)]
 pub(crate) struct Loaded {

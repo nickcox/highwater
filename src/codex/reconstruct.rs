@@ -2,7 +2,7 @@
 //! docs/sources/codex.md describes the rules.
 
 use crate::{
-    claude_code::{reconstruct::assistant_label, Limitation},
+    claude_code::reconstruct::assistant_label,
     domain::*,
     pi::reconstruct::{bounded_label, display_path_argument, first_nonempty_line},
 };

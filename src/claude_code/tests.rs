@@ -2,6 +2,7 @@ use super::{
     discovery::{find_files, read_listing, DiscoveryError, ListingCache, TranscriptFile},
     FileKind,
 };
+use crate::domain::Limitation;
 use serde_json::Value;
 use std::{
     fs,
@@ -534,13 +535,13 @@ fn a_boundary_naming_a_later_record_continues_from_the_record_before_it() {
     assert_eq!(after.selected_records, before.selected_records);
     assert!(after
         .limitations
-        .contains(&super::Limitation::RepairedCompactionLink));
+        .contains(&Limitation::RepairedCompactionLink));
     assert!(!before
         .limitations
-        .contains(&super::Limitation::RepairedCompactionLink));
+        .contains(&Limitation::RepairedCompactionLink));
     assert!(!after
         .limitations
-        .contains(&super::Limitation::UnverifiedCompactionRetention));
+        .contains(&Limitation::UnverifiedCompactionRetention));
     let summary = |loaded: &super::Loaded| {
         let compaction = &loaded.session.compactions[0];
         (
@@ -572,7 +573,7 @@ fn a_boundary_naming_a_missing_record_continues_from_the_record_before_it() {
     assert_eq!(after.selected_records, before.selected_records);
     assert!(after
         .limitations
-        .contains(&super::Limitation::RepairedCompactionLink));
+        .contains(&Limitation::RepairedCompactionLink));
     let summary = |loaded: &super::Loaded| {
         let compaction = &loaded.session.compactions[0];
         (

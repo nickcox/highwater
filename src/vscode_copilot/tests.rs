@@ -1,6 +1,7 @@
-use super::{change_log, discovery, load, Limitation};
+use super::{change_log, discovery, load};
 use crate::domain::{
-    AssistantContentBlock, ContentPart, ContextItemKind, SourceError, TokenizationPayload,
+    AssistantContentBlock, ContentPart, ContextItemKind, Limitation, SourceError,
+    TokenizationPayload,
 };
 use serde_json::json;
 use std::{fs, path::PathBuf};

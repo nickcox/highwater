@@ -521,10 +521,7 @@ fn export_live_contract() {
         .expect("Claude Code fixture");
         let mut analysis = analyze(loaded.normalized, config(TokenizationPolicy::Auto))
             .expect("Claude Code analysis");
-        analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
-            status: "partial",
-            explanation_codes: codes,
-        });
+        crate::source::add_reconstruction(&mut analysis, loaded.limitations);
         analysis
     };
     for name in [
@@ -573,10 +570,7 @@ fn export_live_contract() {
         .expect("Codex fixture");
         let mut analysis =
             analyze(loaded.normalized, config(TokenizationPolicy::Auto)).expect("Codex analysis");
-        analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
-            status: "partial",
-            explanation_codes: codes,
-        });
+        crate::source::add_reconstruction(&mut analysis, loaded.limitations);
         let name = file.path.file_name().unwrap_or_default().to_string_lossy();
         let number = name
             .trim_end_matches(".zst")
@@ -604,10 +598,7 @@ fn export_live_contract() {
         .expect("Copilot fixture");
         let mut analysis =
             analyze(loaded.normalized, config(TokenizationPolicy::Auto)).expect("Copilot analysis");
-        analysis.reconstruction = loaded.coverage_codes.map(|codes| ReconstructionCoverage {
-            status: "partial",
-            explanation_codes: codes,
-        });
+        crate::source::add_reconstruction(&mut analysis, loaded.limitations);
         cases.push((format!("copilot-{}-auto", number + 1), analysis));
     }
 
@@ -773,10 +764,10 @@ fn export_live_contract() {
         let mut analysis = analyze(session, config(TokenizationPolicy::Off)).expect("cost case");
         if harness == "opencode" {
             // Every OpenCode response carries its reconstruction limits.
-            analysis.reconstruction = Some(crate::api::ReconstructionCoverage {
-                status: "partial",
-                explanation_codes: vec!["missingHistoricalSystemPrompt".into()],
-            });
+            crate::source::add_reconstruction(
+                &mut analysis,
+                Some([crate::domain::Limitation::MissingHistoricalSystemPrompt].into()),
+            );
         }
         cases.push((name.into(), analysis));
     }

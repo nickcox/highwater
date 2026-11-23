@@ -13,45 +13,10 @@ use thiserror::Error;
 
 mod modern;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum ReplayLimitation {
-    MissingHistoricalSystemPrompt,
-    MissingHistoricalToolDefinitions,
-    UnrecordedRequestTransforms,
-    UnknownOutputAccounting,
-    UnknownCompactionPrompt,
-    UnpairedCompactionSummary,
-    AmbiguousPruningBoundary,
-    UnsupportedContent,
-    StorageGenerationSelection,
-    AggregatedCompactionUsage,
-    MissingCompactionUsage,
-    ProjectedRequestBoundaries,
-}
-
-impl ReplayLimitation {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::MissingHistoricalSystemPrompt => "missingHistoricalSystemPrompt",
-            Self::MissingHistoricalToolDefinitions => "missingHistoricalToolDefinitions",
-            Self::UnrecordedRequestTransforms => "unrecordedRequestTransforms",
-            Self::UnknownOutputAccounting => "unknownOutputAccounting",
-            Self::UnknownCompactionPrompt => "unknownCompactionPrompt",
-            Self::UnpairedCompactionSummary => "unpairedCompactionSummary",
-            Self::AmbiguousPruningBoundary => "ambiguousPruningBoundary",
-            Self::UnsupportedContent => "unsupportedContent",
-            Self::StorageGenerationSelection => "storageGenerationSelection",
-            Self::AggregatedCompactionUsage => "aggregatedCompactionUsage",
-            Self::MissingCompactionUsage => "missingCompactionUsage",
-            Self::ProjectedRequestBoundaries => "projectedRequestBoundaries",
-        }
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct ReplayResult {
     pub session: NormalizedSession,
-    pub limitations: BTreeSet<ReplayLimitation>,
+    pub limitations: BTreeSet<Limitation>,
 }
 
 #[derive(Debug, Error)]
@@ -72,7 +37,7 @@ struct ActiveItem {
 struct State {
     session: NormalizedSession,
     active: Vec<ActiveItem>,
-    limitations: BTreeSet<ReplayLimitation>,
+    limitations: BTreeSet<Limitation>,
     pending_compaction: Option<String>,
 }
 
@@ -183,7 +148,7 @@ impl State {
                     Some(at) if at < pruned_at => item.original,
                     _ => {
                         self.limitations
-                            .insert(ReplayLimitation::AmbiguousPruningBoundary);
+                            .insert(Limitation::AmbiguousPruningBoundary);
                         revision
                     }
                 },
@@ -229,16 +194,16 @@ pub(crate) fn reconstruct(
         },
         active: Vec::new(),
         limitations: BTreeSet::from([
-            ReplayLimitation::MissingHistoricalSystemPrompt,
-            ReplayLimitation::MissingHistoricalToolDefinitions,
-            ReplayLimitation::UnrecordedRequestTransforms,
+            Limitation::MissingHistoricalSystemPrompt,
+            Limitation::MissingHistoricalToolDefinitions,
+            Limitation::UnrecordedRequestTransforms,
         ]),
         pending_compaction: None,
     };
     if snapshot.mixed_layout {
         state
             .limitations
-            .insert(ReplayLimitation::StorageGenerationSelection);
+            .insert(Limitation::StorageGenerationSelection);
     }
     if snapshot.generation == Generation::Modern {
         modern::replay(&mut state, &snapshot.messages, accounting)?;
@@ -267,7 +232,7 @@ pub(crate) fn reconstruct(
     }) {
         state
             .limitations
-            .insert(ReplayLimitation::UnknownOutputAccounting);
+            .insert(Limitation::UnknownOutputAccounting);
     }
     // The current normalized contract describes input-context items, not all
     // output transcript records. Like Pi, discard output/revisions never reused
@@ -331,9 +296,7 @@ fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {
                     None => {
                         // Do not resolve live files/URLs as historical attachments.
                         parts.push(ContentPart::Unsupported);
-                        state
-                            .limitations
-                            .insert(ReplayLimitation::UnsupportedContent);
+                        state.limitations.insert(Limitation::UnsupportedContent);
                     }
                 },
             },
@@ -349,9 +312,7 @@ fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {
             // Known structural parts are omitted by the legacy serializer.
             "agent" | "snapshot" | "patch" | "retry" | "step-start" | "step-finish" => {}
             _ => {
-                state
-                    .limitations
-                    .insert(ReplayLimitation::UnsupportedContent);
+                state.limitations.insert(Limitation::UnsupportedContent);
                 parts.push(ContentPart::Unsupported);
             }
         }
@@ -442,7 +403,7 @@ fn assistant(
         // A bare summary flag is insufficient evidence of a history reset.
         state
             .limitations
-            .insert(ReplayLimitation::UnpairedCompactionSummary);
+            .insert(Limitation::UnpairedCompactionSummary);
     }
     // The compaction request's `auto` flag says whether OpenCode started it.
     let trigger = parent_message
@@ -496,7 +457,7 @@ fn assistant(
     if summary {
         state
             .limitations
-            .insert(ReplayLimitation::UnknownCompactionPrompt);
+            .insert(Limitation::UnknownCompactionPrompt);
         // A plugin may replace this prompt; the installed default isn't evidence.
         let index = state.item(
             message,
@@ -556,9 +517,7 @@ fn assistant(
             "step-start" | "step-finish" | "patch" | "snapshot" | "retry" | "agent" => {}
             _ => {
                 blocks.push(AssistantContentBlock::Unsupported);
-                state
-                    .limitations
-                    .insert(ReplayLimitation::UnsupportedContent);
+                state.limitations.insert(Limitation::UnsupportedContent);
             }
         }
     }
@@ -747,9 +706,7 @@ fn assistant(
             }
             if has_unsupported_attachment {
                 content.parts.push(ContentPart::Unsupported);
-                state
-                    .limitations
-                    .insert(ReplayLimitation::UnsupportedContent);
+                state.limitations.insert(Limitation::UnsupportedContent);
             }
             let result = state.item(
                 message,

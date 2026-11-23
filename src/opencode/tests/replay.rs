@@ -2,10 +2,11 @@ use super::Fixture;
 use crate::{
     analysis::{analyze, AnalysisConfig, TokenizationPolicy},
     domain::{
-        ContextItemKind, NormalizedSession, OutputReasoningRelationship, TokenizationPayload,
+        ContextItemKind, Limitation, NormalizedSession, OutputReasoningRelationship,
+        TokenizationPayload,
     },
     opencode::{
-        replay::{reconstruct, ReplayError, ReplayLimitation, ReplayResult},
+        replay::{reconstruct, ReplayError, ReplayResult},
         storage::load_session,
         usage::OutputAccounting,
     },
@@ -136,13 +137,13 @@ fn calls_snapshot_input_before_own_output_and_terminal_output_has_no_exposure() 
     );
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::MissingHistoricalSystemPrompt));
+        .contains(&Limitation::MissingHistoricalSystemPrompt));
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::MissingHistoricalToolDefinitions));
+        .contains(&Limitation::MissingHistoricalToolDefinitions));
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::UnrecordedRequestTransforms));
+        .contains(&Limitation::UnrecordedRequestTransforms));
     validate(&result);
 }
 
@@ -247,7 +248,7 @@ fn ambiguous_prune_timestamp_is_reported_not_silently_classified_as_exact() {
     let result = fixture.replay().expect("ambiguous history");
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::AmbiguousPruningBoundary));
+        .contains(&Limitation::AmbiguousPruningBoundary));
     validate(&result);
 }
 
@@ -313,7 +314,7 @@ fn successful_compaction_is_a_real_call_and_replaces_only_subsequent_context() {
     assert!(result.session.model_calls[2].compaction_before.is_some());
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::UnknownCompactionPrompt));
+        .contains(&Limitation::UnknownCompactionPrompt));
     validate(&result);
 }
 
@@ -429,9 +430,7 @@ fn unsupported_summary_blocks_do_not_become_complete_text_estimates() {
     );
     fixture.assistant("next", "marker", 60, false);
     let replay = fixture.replay().expect("unsupported summary content");
-    assert!(replay
-        .limitations
-        .contains(&ReplayLimitation::UnsupportedContent));
+    assert!(replay.limitations.contains(&Limitation::UnsupportedContent));
     validate(&replay);
     let analysis = analyze(replay.session, config()).expect("partial analysis");
     let summary = analysis
@@ -563,9 +562,7 @@ fn ignored_text_is_excluded_synthetic_text_is_included_and_file_references_are_n
         origins(&result.session, 1),
         [("user_1", ContextItemKind::UserMessage)]
     );
-    assert!(result
-        .limitations
-        .contains(&ReplayLimitation::UnsupportedContent));
+    assert!(result.limitations.contains(&Limitation::UnsupportedContent));
     match &result.session.context_items[0].payload {
         TokenizationPayload::UserMessage(content) => assert_eq!(content.parts.len(), 2),
         _ => panic!("user payload"),
@@ -586,7 +583,7 @@ fn unpaired_summary_flag_never_invents_a_compaction_boundary() {
     assert!(origins(&result.session, 2).contains(&("user_1", ContextItemKind::UserMessage)));
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::UnpairedCompactionSummary));
+        .contains(&Limitation::UnpairedCompactionSummary));
     validate(&result);
 }
 
@@ -732,9 +729,7 @@ fn aborted_reasoning_eligibility_uses_original_source_parts() {
                 matches!(&item.payload, TokenizationPayload::AssistantMessage { blocks, .. } if matches!(blocks.as_slice(), [crate::domain::AssistantContentBlock::Thinking { text, .. }] if text == "Recorded reasoning"))
             );
         }
-        assert!(!result
-            .limitations
-            .contains(&ReplayLimitation::UnsupportedContent));
+        assert!(!result.limitations.contains(&Limitation::UnsupportedContent));
         validate(&result);
     }
 }
@@ -769,9 +764,7 @@ fn known_structural_parts_do_not_create_or_degrade_context_items() {
                 matches!(&item.payload, TokenizationPayload::AssistantMessage { blocks, .. } if matches!(blocks.as_slice(), [crate::domain::AssistantContentBlock::Text(text)] if text == "Recorded answer"))
             );
         }
-        assert!(!result
-            .limitations
-            .contains(&ReplayLimitation::UnsupportedContent));
+        assert!(!result.limitations.contains(&Limitation::UnsupportedContent));
         validate(&result);
     }
 }
@@ -794,9 +787,7 @@ fn user_agent_metadata_is_not_model_content() {
         origins(&result.session, 1),
         [("user_1", ContextItemKind::UserMessage)]
     );
-    assert!(!result
-        .limitations
-        .contains(&ReplayLimitation::UnsupportedContent));
+    assert!(!result.limitations.contains(&Limitation::UnsupportedContent));
     assert!(
         matches!(&result.session.context_items[0].payload, TokenizationPayload::UserMessage(content) if matches!(content.parts.as_slice(), [crate::domain::ContentPart::Text(text)] if text == "Task"))
     );
@@ -820,9 +811,7 @@ fn unknown_assistant_content_remains_explicitly_unsupported() {
     assert!(
         origins(&result.session, 2).contains(&("assistant_1", ContextItemKind::AssistantMessage))
     );
-    assert!(result
-        .limitations
-        .contains(&ReplayLimitation::UnsupportedContent));
+    assert!(result.limitations.contains(&Limitation::UnsupportedContent));
     validate(&result);
 }
 
@@ -848,7 +837,7 @@ fn stored_total_shows_whether_output_includes_reasoning() {
     );
     assert!(!separate
         .limitations
-        .contains(&ReplayLimitation::UnknownOutputAccounting));
+        .contains(&Limitation::UnknownOutputAccounting));
     validate(&separate);
 
     // 80 + 20 + 20 = 120: the v1.3 layout, with reasoning inside output.
@@ -897,7 +886,7 @@ fn unaudited_writer_and_unverified_transport_stay_explicit() {
     );
     assert!(result
         .limitations
-        .contains(&ReplayLimitation::UnknownOutputAccounting));
+        .contains(&Limitation::UnknownOutputAccounting));
     validate(&result);
 }
 
@@ -919,7 +908,7 @@ fn unaudited_tail_revert_and_multistep_histories_are_rejected() {
 }
 
 #[test]
-fn source_neutral_loader_preserves_database_revision_and_replay_qualifications() {
+fn source_neutral_loader_preserves_replay_limitations() {
     use crate::source::{load, SessionLocator};
     let fixture = Fixture::new(false);
     fixture.user("user_1", 10, json!({"type":"text","text":"Task"}));
@@ -932,18 +921,11 @@ fn source_neutral_loader_preserves_database_revision_and_replay_qualifications()
     assert_eq!(loaded.normalized.source.kind, "opencode");
     assert_eq!(loaded.stats.records, 5);
     assert_eq!(loaded.stats.selected_records, 5);
-    assert_eq!(
-        loaded.database_revision,
-        Some(
-            load_session(&fixture.path, "ses_example", None)
-                .expect("same source snapshot")
-                .revision
-        )
-    );
     // The fixture's stored total shows output excludes reasoning.
     assert!(!loaded
-        .replay_limitations
-        .contains(&ReplayLimitation::UnknownOutputAccounting));
+        .limitations
+        .expect("OpenCode reconstruction limitations")
+        .contains(&Limitation::UnknownOutputAccounting));
     assert_eq!(
         loaded.normalized.model_calls[0].reported_usage.output,
         Some(30)

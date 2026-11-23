@@ -2,10 +2,11 @@ use super::*;
 use crate::{
     analysis::{analyze, AnalysisConfig, TokenizationPolicy},
     domain::{
-        AssistantContentBlock, ContextItemKind, OutputReasoningRelationship, TokenizationPayload,
+        AssistantContentBlock, ContextItemKind, Limitation, OutputReasoningRelationship,
+        TokenizationPayload,
     },
     opencode::{
-        replay::{reconstruct, ReplayError, ReplayLimitation, ReplayResult},
+        replay::{reconstruct, ReplayError, ReplayResult},
         storage::Generation,
         usage::OutputAccounting,
     },
@@ -154,12 +155,10 @@ fn modern_usage_only_calls_reasoning_tools_and_checkpoint_recent_are_not_lost() 
         r.session.model_calls[2].context_item_ids,
         vec![summary.id.clone()]
     );
-    assert!(r
-        .limitations
-        .contains(&ReplayLimitation::MissingCompactionUsage));
+    assert!(r.limitations.contains(&Limitation::MissingCompactionUsage));
     assert!(
         r.limitations
-            .contains(&ReplayLimitation::MissingHistoricalSystemPrompt),
+            .contains(&Limitation::MissingHistoricalSystemPrompt),
         "updates aren't a complete system baseline"
     );
 }
@@ -173,9 +172,7 @@ fn native_layout_does_not_infer_migrated_output_accounting_from_creation_version
             .expect("creation version");
         let r = f.replay().expect("replay");
         assert_eq!(r.session.model_calls[0].reported_usage.output, None);
-        assert!(r
-            .limitations
-            .contains(&ReplayLimitation::UnknownOutputAccounting));
+        assert!(r.limitations.contains(&Limitation::UnknownOutputAccounting));
     }
     let r = reconstruct(
         load_session(&f.path, "ses_modern", None).expect("snapshot"),
@@ -225,7 +222,7 @@ fn modern_record_takes_its_accounting_from_the_matching_legacy_step_total() {
                 .output_reasoning_relationship,
             result
                 .limitations
-                .contains(&ReplayLimitation::UnknownOutputAccounting),
+                .contains(&Limitation::UnknownOutputAccounting),
         )
     };
     // 80 + 20 + 5 + 10 = 115: reasoning outside output.
@@ -281,7 +278,7 @@ fn running_and_failed_compactions_do_not_reset_context_and_usage_is_qualified() 
         );
         assert!(r
             .limitations
-            .contains(&ReplayLimitation::AggregatedCompactionUsage));
+            .contains(&Limitation::AggregatedCompactionUsage));
         assert!(r.session.model_calls[3].context_item_ids.len() > 1);
     }
 }
@@ -512,9 +509,7 @@ fn null_title_and_non_text_attachments_keep_explicit_missingness() {
     f.update("msg_user", json!({"text":"synthetic","files":[{"mime":"text/plain","source":{"type":"uri","uri":"file:///never/read"},"data":"c3ludGhldGlj"}]}));
     let r = f.replay().expect("unknown attachment");
     validate(&r);
-    assert!(r
-        .limitations
-        .contains(&ReplayLimitation::UnsupportedContent));
+    assert!(r.limitations.contains(&Limitation::UnsupportedContent));
 }
 
 #[test]

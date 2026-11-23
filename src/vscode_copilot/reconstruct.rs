@@ -1,10 +1,7 @@
 //! Turns a replayed session into model calls and context items. Section 5 of
 //! docs/sources/vscode-copilot.md describes the rules.
 
-use super::{
-    traces::{TraceCall, Traces},
-    Limitation,
-};
+use super::traces::{TraceCall, Traces};
 use crate::{
     domain::*,
     pi::reconstruct::{bounded_label, display_path_argument, first_nonempty_line},

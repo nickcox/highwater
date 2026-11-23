@@ -1,5 +1,5 @@
 use super::discovery::{find_files, read_listing, ChildThread, ListingCache, TitleIndex};
-use crate::claude_code::Limitation;
+use crate::domain::Limitation;
 use std::{fs, io::Read, path::PathBuf};
 
 fn home() -> PathBuf {

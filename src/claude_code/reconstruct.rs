@@ -1,7 +1,7 @@
 //! Turns the active branch into normalized model calls, context items and
 //! compactions. docs/sources/claude-code.md describes the rules.
 
-use super::{records::Record, Limitation};
+use super::records::Record;
 use crate::{
     domain::*,
     pi::reconstruct::{bounded_label, display_path_argument, first_nonempty_line},

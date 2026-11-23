@@ -2,9 +2,9 @@
 //! remain server responsibilities; never deserialize these locators from HTTP.
 
 use crate::{
-    domain::{NormalizedSession, SourceError},
+    domain::{Limitation, NormalizedSession, SourceError},
     opencode::{
-        replay::{self, ReplayError, ReplayLimitation},
+        replay::{self, ReplayError},
         storage::{self, StorageError},
         usage::OutputAccounting,
     },
@@ -87,15 +87,8 @@ pub(crate) struct LoadStats {
 pub(crate) struct LoadedSession {
     pub normalized: NormalizedSession,
     pub stats: LoadStats,
-    // Preserved for non-cache source consumers. HTTP revalidates the snapshot
-    // before replay so a cache hit need not reconstruct the conversation again.
-    #[allow(dead_code)]
-    pub database_revision: Option<blake3::Hash>,
-    #[allow(dead_code)]
-    pub replay_limitations: BTreeSet<ReplayLimitation>,
-    /// Coverage codes for a file source whose reconstruction is partial.
-    /// OpenCode reports its own through `analyze_reconstructed`.
-    pub coverage_codes: Option<Vec<String>>,
+    /// None for Pi; other sources report partial coverage even with no limitations.
+    pub limitations: Option<BTreeSet<Limitation>>,
 }
 
 #[derive(Debug, Error)]
@@ -117,8 +110,6 @@ pub(crate) enum LoadError {
 }
 
 /// Synchronous, intended for a bounded blocking worker. No source mutation.
-/// Pi's file revision is managed by its existing pre/post-read fingerprint;
-/// OpenCode returns the revision of its committed SQLite transaction instead.
 pub(crate) fn load(
     locator: &SessionLocator,
     cancelled: Option<Arc<AtomicBool>>,
@@ -132,9 +123,7 @@ pub(crate) fn load(
                     records: stats.entries,
                     selected_records: stats.selected_entries,
                 },
-                database_revision: None,
-                replay_limitations: BTreeSet::new(),
-                coverage_codes: None,
+                limitations: None,
             })
         }
         SessionLocator::OpenCode {
@@ -142,7 +131,6 @@ pub(crate) fn load(
             native_id,
         } => {
             let snapshot = storage::load_session(database, native_id, cancelled)?;
-            let revision = snapshot.revision;
             let records = snapshot
                 .messages
                 .iter()
@@ -157,9 +145,7 @@ pub(crate) fn load(
                     records,
                     selected_records: records,
                 },
-                database_revision: Some(revision),
-                replay_limitations: reconstructed.limitations,
-                coverage_codes: None,
+                limitations: Some(reconstructed.limitations),
             })
         }
         SessionLocator::ClaudeCodeFile { path, kind } => {
@@ -170,15 +156,7 @@ pub(crate) fn load(
                     records: loaded.records,
                     selected_records: loaded.selected_records,
                 },
-                database_revision: None,
-                replay_limitations: BTreeSet::new(),
-                coverage_codes: Some(
-                    loaded
-                        .limitations
-                        .into_iter()
-                        .map(|limitation| limitation.as_str().to_owned())
-                        .collect(),
-                ),
+                limitations: Some(loaded.limitations),
             })
         }
         SessionLocator::VsCodeCopilotFile { path } => {
@@ -189,15 +167,7 @@ pub(crate) fn load(
                     records: loaded.records,
                     selected_records: loaded.records,
                 },
-                database_revision: None,
-                replay_limitations: BTreeSet::new(),
-                coverage_codes: Some(
-                    loaded
-                        .limitations
-                        .into_iter()
-                        .map(|limitation| limitation.as_str().to_owned())
-                        .collect(),
-                ),
+                limitations: Some(loaded.limitations),
             })
         }
         SessionLocator::CodexFile { path } => {
@@ -208,15 +178,7 @@ pub(crate) fn load(
                     records: loaded.records,
                     selected_records: loaded.records,
                 },
-                database_revision: None,
-                replay_limitations: BTreeSet::new(),
-                coverage_codes: Some(
-                    loaded
-                        .limitations
-                        .into_iter()
-                        .map(|limitation| limitation.as_str().to_owned())
-                        .collect(),
-                ),
+                limitations: Some(loaded.limitations),
             })
         }
         SessionLocator::CopilotFile { path } => {
@@ -227,35 +189,33 @@ pub(crate) fn load(
                     records: loaded.records,
                     selected_records: loaded.records,
                 },
-                database_revision: None,
-                replay_limitations: BTreeSet::new(),
-                coverage_codes: Some(
-                    loaded
-                        .limitations
-                        .into_iter()
-                        .map(|limitation| limitation.as_str().to_owned())
-                        .collect(),
-                ),
+                limitations: Some(loaded.limitations),
             })
         }
     }
 }
 
-/// Preserve source replay qualifications when assembling public analysis.
-/// Callers must not serialize an OpenCode normalized session without this report.
+/// Attach partial reconstruction coverage when the source reports limitations.
+pub(crate) fn add_reconstruction(
+    analysis: &mut crate::api::Analysis,
+    limitations: Option<BTreeSet<Limitation>>,
+) {
+    analysis.reconstruction = limitations.map(|limitations| crate::api::ReconstructionCoverage {
+        status: "partial",
+        explanation_codes: limitations
+            .into_iter()
+            .map(|code| code.as_str().to_owned())
+            .collect(),
+    });
+}
+
+/// Analyse an OpenCode replay while preserving its reconstruction coverage.
 pub(crate) fn analyze_reconstructed(
     reconstructed: replay::ReplayResult,
     config: crate::analysis::AnalysisConfig,
 ) -> Result<crate::api::Analysis, crate::analysis::AnalysisError> {
     let mut analysis = crate::analysis::analyze(reconstructed.session, config)?;
-    analysis.reconstruction = Some(crate::api::ReconstructionCoverage {
-        status: "partial",
-        explanation_codes: reconstructed
-            .limitations
-            .into_iter()
-            .map(|code| code.as_str().to_owned())
-            .collect(),
-    });
+    add_reconstruction(&mut analysis, Some(reconstructed.limitations));
     Ok(analysis)
 }
 
@@ -292,7 +252,6 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(loaded.stats.records >= loaded.stats.selected_records);
-        assert!(loaded.database_revision.is_none());
-        assert!(loaded.replay_limitations.is_empty());
+        assert!(loaded.limitations.is_none());
     }
 }

@@ -357,22 +357,7 @@ fn analyse(locator: &SessionLocator, config: AnalysisConfig) -> Analysed {
     let loaded = source::load(locator, None).map_err(|error| error.to_string())?;
     let normalized = loaded.normalized.clone();
     let mut analysis = analyze(loaded.normalized, config).map_err(|error| error.to_string())?;
-    let codes = match locator {
-        SessionLocator::OpenCode { .. } => Some(
-            loaded
-                .replay_limitations
-                .iter()
-                .map(|code| code.as_str().to_owned())
-                .collect(),
-        ),
-        _ => loaded.coverage_codes,
-    };
-    if let Some(explanation_codes) = codes {
-        analysis.reconstruction = Some(crate::api::ReconstructionCoverage {
-            status: "partial",
-            explanation_codes,
-        });
-    }
+    source::add_reconstruction(&mut analysis, loaded.limitations);
     Ok((normalized, analysis))
 }
 

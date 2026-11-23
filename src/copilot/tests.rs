@@ -1,8 +1,5 @@
 use super::discovery::{find_files, parse_workspace, read_listing, ListingCache};
-use crate::{
-    claude_code::Limitation,
-    domain::{ContextItemKind, HarnessSessionCost, NormalizedSession},
-};
+use crate::domain::{ContextItemKind, HarnessSessionCost, Limitation, NormalizedSession};
 use std::{fs, path::PathBuf};
 
 fn home() -> PathBuf {

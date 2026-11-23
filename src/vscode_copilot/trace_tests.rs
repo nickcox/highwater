@@ -1,8 +1,8 @@
 //! Sessions read together with a trace database built in a temporary user folder, with
 //! the tables Copilot writes. All records are made up.
 
-use super::{load, Limitation, Loaded};
-use crate::domain::{ContentPart, ContextItemKind, TokenizationPayload};
+use super::{load, Loaded};
+use crate::domain::{ContentPart, ContextItemKind, Limitation, TokenizationPayload};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::{fs, path::Path};

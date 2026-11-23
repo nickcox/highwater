@@ -10,7 +10,7 @@ pub(super) fn replay(
 ) -> Result<(), ReplayError> {
     state
         .limitations
-        .insert(ReplayLimitation::ProjectedRequestBoundaries);
+        .insert(Limitation::ProjectedRequestBoundaries);
     for message in messages {
         if let Some(time) = message.data.get("time") {
             if !time.is_object() {
@@ -81,9 +81,7 @@ pub(super) fn replay(
                         None,
                     );
                     state.admit(index);
-                    state
-                        .limitations
-                        .insert(ReplayLimitation::UnsupportedContent);
+                    state.limitations.insert(Limitation::UnsupportedContent);
                 }
             }
             "location-switched" => {
@@ -179,9 +177,7 @@ fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {
             // Encoded textual/PDF attachments remain in the source snapshot;
             // until their lowering is supported, expose unknown coverage.
             parts.push(ContentPart::Unsupported);
-            state
-                .limitations
-                .insert(ReplayLimitation::UnsupportedContent);
+            state.limitations.insert(Limitation::UnsupportedContent);
         }
     }
     if !parts.is_empty() {
@@ -322,9 +318,7 @@ fn assistant(
                     });
                 } else if part.get("state").is_some() {
                     blocks.push(AssistantContentBlock::Unsupported);
-                    state
-                        .limitations
-                        .insert(ReplayLimitation::UnsupportedContent);
+                    state.limitations.insert(Limitation::UnsupportedContent);
                 }
             }
             "tool" => {
@@ -365,9 +359,7 @@ fn assistant(
             }
             _ => {
                 blocks.push(AssistantContentBlock::Unsupported);
-                state
-                    .limitations
-                    .insert(ReplayLimitation::UnsupportedContent);
+                state.limitations.insert(Limitation::UnsupportedContent);
             }
         }
     }
@@ -410,9 +402,7 @@ fn assistant(
                 "image" => content.parts.push(ContentPart::Image(image(block))),
                 _ => {
                     content.parts.push(ContentPart::Unsupported);
-                    state
-                        .limitations
-                        .insert(ReplayLimitation::UnsupportedContent);
+                    state.limitations.insert(Limitation::UnsupportedContent);
                 }
             }
         }
@@ -476,13 +466,13 @@ fn compaction(
     )?;
     state
         .limitations
-        .insert(ReplayLimitation::UnknownCompactionPrompt);
+        .insert(Limitation::UnknownCompactionPrompt);
     if usage_present {
         // One projected billing aggregate, NOT proof of a single model request.
         // Upstream includes retries/reduction calls and failed calls here.
         state
             .limitations
-            .insert(ReplayLimitation::AggregatedCompactionUsage);
+            .insert(Limitation::AggregatedCompactionUsage);
         push_call(
             state,
             message,
@@ -494,9 +484,7 @@ fn compaction(
     } else {
         // Migration deliberately omits summary-request usage; never recover it
         // by adding legacy rows/session totals into the modern ledger.
-        state
-            .limitations
-            .insert(ReplayLimitation::MissingCompactionUsage);
+        state.limitations.insert(Limitation::MissingCompactionUsage);
     }
     if status != "completed" {
         return Ok(());
