@@ -185,13 +185,18 @@ test('Follow latest moves to the newest calls after a replacement and can be res
     toWireAnalysis(long),
   );
   const last = long.modelCalls.at(-1)!.index;
+  const live = app.getByTitle('Live', { exact: true });
+  await expect(live).toBeVisible();
+  await expect(app.getByRole('status').filter({ hasText: 'Live' })).toHaveCount(1);
   await expect(app.getByTestId('visible-call-range')).toContainText(String(last));
   await app.getByRole('button', { name: 'Pin model call ' + last, exact: true }).focus();
   await page.keyboard.press('Enter');
   const follow = app.getByRole('button', { name: 'Follow latest' });
   await expect(follow).toHaveAttribute('aria-pressed', 'false');
+  await expect(live).toHaveCount(0);
   await follow.click();
   await expect(follow).toHaveAttribute('aria-pressed', 'true');
+  await expect(live).toBeVisible();
   await expect(app.getByTestId('visible-call-range')).toContainText(String(last));
 });
 

@@ -303,7 +303,7 @@ describe('Context tab', () => {
     await skip();
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
   });
-  it('shows Updating while a shared fetch is in flight, then returns to Live', async () => {
+  it('keeps the same status dot while switching between Live and Updating', async () => {
     const skip = skippableTimers();
     const pending = deferred<Response>();
     const fetcher = vi
@@ -314,19 +314,21 @@ describe('Context tab', () => {
     const threadId = `thr_ui${++serial}`;
     const slot = await mount({ threadId });
     await ready(slot);
+    const status = target(slot).shadowRoot!.querySelector('header [role="status"]')!;
+    await waitFor(() => expect(status.querySelector('[title="Live"]')).toBeTruthy());
+    const dot = status.querySelector('.status-dot');
     await slot.behavior.emitRealtime('thread-advanced', { threadId, idle: false });
     await skip();
-    await waitFor(() =>
-      expect(target(slot).shadowRoot?.querySelector('header [role="status"]')?.textContent).toBe(
-        'Updating…',
-      ),
-    );
+    await waitFor(() => {
+      expect(status.querySelector('.status-dot.updating[title="Updating…"]')).toBe(dot);
+      expect(status.querySelector('.sr-only')?.textContent).toBe('Updating…');
+    });
     pending.resolve(new Response(null, { status: 304 }));
-    await waitFor(() =>
-      expect(target(slot).shadowRoot?.querySelector('header [role="status"]')?.textContent).toBe(
-        'Live',
-      ),
-    );
+    await waitFor(() => {
+      expect(status.querySelector('.status-dot[title="Live"][aria-hidden="true"]')).toBe(dot);
+      expect(status.querySelector('.status-dot.updating')).toBeNull();
+      expect(status.querySelector('.sr-only')?.textContent).toBe('Live');
+    });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it.each([

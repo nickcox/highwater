@@ -12927,65 +12927,78 @@ function Yy(e) {
 }
 //#endregion
 //#region src/lib/embed/EmbeddedSession.svelte
-var Xy = /* @__PURE__ */ W("<button type=\"button\">Retry</button>"), Zy = /* @__PURE__ */ W("<p role=\"alert\" class=\"svelte-11525tj\"> <!></p>"), Qy = /* @__PURE__ */ W("<p>Analysing session…</p>"), $y = /* @__PURE__ */ W("<div class=\"embedded-session svelte-11525tj\"><header class=\"svelte-11525tj\"><button type=\"button\" class=\"follow svelte-11525tj\">Follow latest</button> <span role=\"status\" class=\"svelte-11525tj\"> </span> <!></header> <!> <!></div>"), eb = {
+var Xy = /* @__PURE__ */ W("<span aria-hidden=\"true\"></span> <span class=\"sr-only\"> </span>", 1), Zy = /* @__PURE__ */ W("<button type=\"button\">Retry</button>"), Qy = /* @__PURE__ */ W("<p role=\"alert\" class=\"svelte-11525tj\"> <!></p>"), $y = /* @__PURE__ */ W("<p>Analysing session…</p>"), eb = /* @__PURE__ */ W("<div class=\"embedded-session svelte-11525tj\"><header class=\"svelte-11525tj\"><button type=\"button\" class=\"follow svelte-11525tj\">Follow latest</button> <span role=\"status\" class=\"svelte-11525tj\"><!></span> <!></header> <!> <!></div>"), tb = {
 	hash: "svelte-11525tj",
-	code: ".embedded-session.svelte-11525tj {min-width:0;padding:12px;}header.svelte-11525tj {display:flex;align-items:center;flex-wrap:wrap;gap:8px;}.follow[aria-pressed='true'].svelte-11525tj {border-color:var(--accent);background-color:var(--action);color:var(--active-text);}header.svelte-11525tj span:where(.svelte-11525tj) {color:var(--secondary);font-size:var(--text-sm);}p[role='alert'].svelte-11525tj {color:var(--error);}"
+	code: ".embedded-session.svelte-11525tj {min-width:0;padding:12px;}header.svelte-11525tj {display:flex;align-items:center;flex-wrap:wrap;gap:8px;}.follow[aria-pressed='true'].svelte-11525tj {border-color:var(--accent);background-color:var(--action);color:var(--active-text);}[role='status'].svelte-11525tj {display:inline-flex;align-items:center;color:var(--secondary);font-size:var(--text-sm);}[role='status'].svelte-11525tj:empty {position:absolute;}.status-dot.svelte-11525tj {width:0.5rem;height:0.5rem;border-radius:50%;background:var(--event-success);}.status-dot.updating.svelte-11525tj {background:var(--event-warning);}p[role='alert'].svelte-11525tj {color:var(--error);}"
 };
-function tb(e, t) {
-	Be(t, !0), ui(e, eb);
+function nb(e, t) {
+	Be(t, !0), ui(e, tb);
 	let n = () => ot(o, "$controller", r), [r, i] = st(), a = X(t, "defaultVerticalScale", 3, "session"), o = Yy((e, n) => yr(() => t.loadAnalysis(e, n))), s = /* @__PURE__ */ F(yr(() => {
 		let e = Ki();
 		return e.river.verticalScale = a(), Xi(void 0, t.preferencesKey, e);
-	})), c = /* @__PURE__ */ F(!0), l = 0, u = 0, d = /* @__PURE__ */ F(void 0), f = !1;
-	function p(e) {
+	})), c = /* @__PURE__ */ F(!0), l = /* @__PURE__ */ P(() => n().loading ? "Updating…" : "Live"), u = 0, d = 0, f = /* @__PURE__ */ F(void 0), p = !1;
+	function m(e) {
 		Zi(e, void 0, t.preferencesKey);
 	}
-	function m() {
-		I(c, !1), u += 1;
-	}
 	function h() {
-		I(c, !0), H(d)?.followLatest();
+		I(c, !1), d += 1;
+	}
+	function g() {
+		I(c, !0), H(f)?.followLatest();
 	}
 	Cn(() => {
 		let e = n().revision;
-		if (e !== l && (l = e, n().kind === "selection" && I(c, !0), H(c))) {
-			let e = ++u;
+		if (e !== u && (u = e, n().kind === "selection" && I(c, !0), H(c))) {
+			let e = ++d;
 			gr().then(() => {
-				!f && H(c) && e === u && H(d)?.followLatest();
+				!p && H(c) && e === d && H(f)?.followLatest();
 			});
 		}
 	}), Bi(() => (o.refresh(), () => {
-		f = !0, o.dispose();
+		p = !0, o.dispose();
 	}));
-	function g() {
+	function _() {
 		o.refresh();
 	}
-	var _ = { refresh: g }, v = $y(), y = L(v), b = L(y), x = B(b, 2), S = z(x, !0), C = B(x, 2), w = (e) => {
-		var t = Xy();
-		U("click", t, () => o.refresh()), G(e, t);
+	var v = { refresh: _ }, y = eb(), b = L(y), x = L(b), S = B(x, 2), C = L(S), w = (e) => {
+		G(e, zr("Update failed"));
+	}, ee = (e) => {
+		var t = Xy(), r = R(t);
+		let i;
+		var a = z(B(r, 2), !0);
+		V(() => {
+			i = _i(r, 1, "status-dot svelte-11525tj", null, i, { updating: n().loading }), Y(r, "title", H(l)), K(a, H(l));
+		}), G(e, t);
 	};
 	q(C, (e) => {
-		n().error && e(w);
-	}), M(y);
-	var ee = B(y, 2), T = (e) => {
-		var t = Zy(), r = L(t, !0), i = B(r), a = (e) => {
+		n().error ? e(w) : (n().loading || H(c) && n().indexed) && e(ee, 1);
+	}), M(S);
+	var T = B(S, 2), E = (e) => {
+		var t = Zy();
+		U("click", t, () => o.refresh()), G(e, t);
+	};
+	q(T, (e) => {
+		n().error && e(E);
+	}), M(b);
+	var D = B(b, 2), O = (e) => {
+		var t = Qy(), r = L(t, !0), i = B(r), a = (e) => {
 			G(e, zr("Showing the previous analysis."));
 		};
 		q(i, (e) => {
 			n().indexed && e(a);
 		}), M(t), V(() => K(r, n().error)), G(e, t);
 	};
-	q(ee, (e) => {
-		n().error && e(T);
+	q(D, (e) => {
+		n().error && e(O);
 	});
-	var E = B(ee, 2), D = (e) => {
+	var k = B(D, 2), te = (e) => {
 		Ri(py(e, {
 			get indexed() {
 				return n().indexed;
 			},
 			keyboardScope: "root",
-			onPreferencesChange: p,
-			onPin: m,
+			onPreferencesChange: m,
+			onPin: h,
 			get sections() {
 				return t.sections;
 			},
@@ -12998,48 +13011,48 @@ function tb(e, t) {
 			set presentation(e) {
 				I(s, e);
 			}
-		}), (e) => I(d, e, !0), () => H(d));
-	}, O = (e) => {
-		G(e, Qy());
+		}), (e) => I(f, e, !0), () => H(f));
+	}, ne = (e) => {
+		G(e, $y());
 	};
-	q(E, (e) => {
-		n().indexed ? e(D) : n().loading && e(O, 1);
-	}), M(v), V(() => {
-		Y(b, "aria-pressed", H(c)), Y(b, "title", H(c) ? "Following new calls. Select to stop following." : "Select to follow new calls."), K(S, n().loading ? "Updating…" : n().error ? "Update failed" : "Live");
-	}), U("click", b, () => H(c) ? m() : h()), G(e, v);
-	var k = Ve(_);
-	return i(), k;
+	q(k, (e) => {
+		n().indexed ? e(te) : n().loading && e(ne, 1);
+	}), M(y), V(() => {
+		Y(x, "aria-pressed", H(c)), Y(x, "title", H(c) ? "Following new calls. Select to stop following." : "Select to follow new calls.");
+	}), U("click", x, () => H(c) ? h() : g()), G(e, y);
+	var re = Ve(v);
+	return i(), re;
 }
 kr(["click"]);
 //#endregion
 //#region scripts/theme-html.ts
-function nb(e) {
+function rb(e) {
 	let t = Object.entries(e.tokens).map(([e, t]) => `--${e}:${t};`), n = Object.entries(e.itemTypes).map(([e, t]) => `--item-type-${e}:${t};`), r = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='${e.tokens.secondary.replace("#", "%23")}' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`;
 	return `color-scheme:${e.colorScheme};${t.join("")}${n.join("")}--chevron:${r};`;
 }
-function rb(e = Object.values(ya), t = "html") {
+function ib(e = Object.values(ya), t = "html") {
 	let n = t === "html" ? ":root" : ":host", r = t === "html" ? "html{background:var(--page)}" : "", i = (e) => t === "html" ? `html[data-theme="${e}"]` : `:host([data-theme="${e}"])`;
-	return `${n}{${nb(ya.dark)}}${r}${e.map((e) => `${i(e.id)}{${nb(e)}}`).join("")}`;
+	return `${n}{${rb(ya.dark)}}${r}${e.map((e) => `${i(e.id)}{${rb(e)}}`).join("")}`;
 }
 //#endregion
 //#region src/lib/styles/workspace.css?inline
-var ib = ":root,:host{--text-xs:11px;--text-sm:12px;--text-md:13px;--text-lg:15px;--radius:8px;--control-radius:6px;--radius-small:2px;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--control-padding:7px 9px;--control-size:32px;--toggle-height:30px;--toggle-padding:4px 9px;--panel-padding:15px;--panel-gap:14px}*{box-sizing:border-box}button,select{background-color:var(--surface);border:1px solid var(--control-border);color:var(--text);border-radius:var(--control-radius);padding:var(--control-padding)}button{cursor:pointer}button:hover{background-color:var(--surface-raised)}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}summary:focus-visible{border-radius:var(--radius-small)}.sr-only{clip:rect(0, 0, 0, 0);white-space:nowrap;border:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}.toggle-group{flex-wrap:wrap;align-items:center;gap:5px;display:flex}.toggle-label{color:var(--text);margin-right:3px;font-weight:650}.toggle-group>button{min-height:var(--toggle-height);padding:var(--toggle-padding);border:1px solid var(--separator);background-color:var(--surface);color:var(--text);font:inherit}.toggle-group>button[aria-pressed=true]{border-color:var(--accent);background-color:var(--action);color:var(--active-text)}input{color:var(--text);background:var(--plot);border:1px solid var(--control-border)}summary{cursor:pointer}.disclosure{width:fit-content;color:var(--secondary);cursor:pointer;align-items:center;gap:7px;font-size:13px;list-style:none;display:inline-flex}.disclosure::-webkit-details-marker{display:none}.disclosure:before{content:\"\";border-top:4px solid #0000;border-bottom:4px solid #0000;border-left:6px solid;transition:transform .12s}details[open]>.disclosure:before,.disclosure[aria-expanded=true]:before{transform:rotate(90deg)}select{appearance:none;background-image:var(--chevron);background-position:right 12px center;background-repeat:no-repeat;background-size:12px 8px}@media (prefers-reduced-motion:reduce){*,:before,:after{scroll-behavior:auto!important}}", ab = {
+var ab = ":root,:host{--text-xs:11px;--text-sm:12px;--text-md:13px;--text-lg:15px;--radius:8px;--control-radius:6px;--radius-small:2px;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--control-padding:7px 9px;--control-size:32px;--toggle-height:30px;--toggle-padding:4px 9px;--panel-padding:15px;--panel-gap:14px}*{box-sizing:border-box}button,select{background-color:var(--surface);border:1px solid var(--control-border);color:var(--text);border-radius:var(--control-radius);padding:var(--control-padding)}button{cursor:pointer}button:hover{background-color:var(--surface-raised)}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}summary:focus-visible{border-radius:var(--radius-small)}.sr-only{clip:rect(0, 0, 0, 0);white-space:nowrap;border:0;width:1px;height:1px;margin:-1px;padding:0;position:absolute;overflow:hidden}.toggle-group{flex-wrap:wrap;align-items:center;gap:5px;display:flex}.toggle-label{color:var(--text);margin-right:3px;font-weight:650}.toggle-group>button{min-height:var(--toggle-height);padding:var(--toggle-padding);border:1px solid var(--separator);background-color:var(--surface);color:var(--text);font:inherit}.toggle-group>button[aria-pressed=true]{border-color:var(--accent);background-color:var(--action);color:var(--active-text)}input{color:var(--text);background:var(--plot);border:1px solid var(--control-border)}summary{cursor:pointer}.disclosure{width:fit-content;color:var(--secondary);cursor:pointer;align-items:center;gap:7px;font-size:13px;list-style:none;display:inline-flex}.disclosure::-webkit-details-marker{display:none}.disclosure:before{content:\"\";border-top:4px solid #0000;border-bottom:4px solid #0000;border-left:6px solid;transition:transform .12s}details[open]>.disclosure:before,.disclosure[aria-expanded=true]:before{transform:rotate(90deg)}select{appearance:none;background-image:var(--chevron);background-position:right 12px center;background-repeat:no-repeat;background-size:12px 8px}@media (prefers-reduced-motion:reduce){*,:before,:after{scroll-behavior:auto!important}}", ob = {
 	standard: Yv,
 	panel: Xv
 };
-function ob(e, t) {
+function sb(e, t) {
 	return {
 		label: No(e),
 		colour: ya[t].itemTypes[e]
 	};
 }
-var sb = /* @__PURE__ */ new WeakMap();
-function cb(e) {
-	let { target: t } = e, n = sb.get(t) ?? t.attachShadow({ mode: "open" });
+var cb = /* @__PURE__ */ new WeakMap();
+function lb(e) {
+	let { target: t } = e, n = cb.get(t) ?? t.attachShadow({ mode: "open" });
 	if (n.hasChildNodes()) throw Error("Highwater is already mounted in this target");
-	sb.set(t, n);
+	cb.set(t, n);
 	let r = t.getAttribute("data-theme"), i = document.createElement("style");
-	i.textContent = rb(void 0, ":host") + ib + "\n    :host { display:block; background:var(--page); color:var(--text);\n      font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif; }\n    .highwater-embed-root { container-type:inline-size; container-name:highwater; min-width:0; }\n    .highwater-embed-root.compact { font-size:13px; --control-padding:4px 8px; --control-size:24px;\n      --toggle-height:24px; --toggle-padding:3px 8px; --panel-padding:12px; --panel-gap:10px; }\n    .highwater-embed-root.compact :is(button:not(.step-call), select, input, summary) { font-size:12px; }\n  ";
+	i.textContent = ib(void 0, ":host") + ab + "\n    :host { display:block; background:var(--page); color:var(--text);\n      font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif; }\n    .highwater-embed-root { container-type:inline-size; container-name:highwater; min-width:0; }\n    .highwater-embed-root.compact { font-size:13px; --control-padding:4px 8px; --control-size:24px;\n      --toggle-height:24px; --toggle-padding:3px 8px; --panel-padding:12px; --panel-gap:10px; }\n    .highwater-embed-root.compact :is(button:not(.step-call), select, input, summary) { font-size:12px; }\n  ";
 	let a = document.createElement("div");
 	a.className = e.density === "compact" ? "highwater-embed-root compact" : "highwater-embed-root", n.append(i, a);
 	let o = !1;
@@ -13049,7 +13062,7 @@ function cb(e) {
 	s(e.theme);
 	let c;
 	try {
-		c = Kr(tb, {
+		c = Kr(nb, {
 			target: a,
 			props: {
 				loadAnalysis: e.loadAnalysis,
@@ -13072,4 +13085,4 @@ function cb(e) {
 	};
 }
 //#endregion
-export { ob as contextItemPresentation, cb as mountHighwater, ab as sectionPresets };
+export { sb as contextItemPresentation, lb as mountHighwater, ob as sectionPresets };

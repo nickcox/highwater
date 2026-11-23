@@ -33,6 +33,7 @@
     }),
   );
   let following = $state(true);
+  let statusLabel = $derived($controller.loading ? 'Updating…' : 'Live');
   let previousRevision = 0;
   let followRequest = 0;
   let view = $state<{ followLatest(): void }>();
@@ -85,9 +86,19 @@
         : 'Select to follow new calls.'}
       onclick={() => (following ? pin() : followLatest())}>Follow latest</button
     >
-    <span role="status"
-      >{$controller.loading ? 'Updating…' : $controller.error ? 'Update failed' : 'Live'}</span
-    >
+    <span role="status">
+      {#if $controller.error}
+        Update failed
+      {:else if $controller.loading || (following && $controller.indexed)}
+        <span
+          class="status-dot"
+          class:updating={$controller.loading}
+          title={statusLabel}
+          aria-hidden="true"
+        ></span>
+        <span class="sr-only">{statusLabel}</span>
+      {/if}
+    </span>
     {#if $controller.error}<button type="button" onclick={() => controller.refresh()}>Retry</button
       >{/if}
   </header>
@@ -129,9 +140,23 @@
     background-color: var(--action);
     color: var(--active-text);
   }
-  header span {
+  [role='status'] {
+    display: inline-flex;
+    align-items: center;
     color: var(--secondary);
     font-size: var(--text-sm);
+  }
+  [role='status']:empty {
+    position: absolute;
+  }
+  .status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--event-success);
+  }
+  .status-dot.updating {
+    background: var(--event-warning);
   }
   p[role='alert'] {
     color: var(--error);
