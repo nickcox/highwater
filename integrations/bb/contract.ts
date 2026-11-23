@@ -1,6 +1,12 @@
 import { defineRpcContract } from '@get-bb/plugin-sdk';
 import { z } from 'zod';
-import { summarySchema, threadRequestSchema, threadSummaryResultSchema } from './state';
+import {
+  itemContentInputSchema,
+  itemContentPageSchema,
+  summarySchema,
+  threadRequestSchema,
+  threadSummaryResultSchema,
+} from './state';
 export {
   summarySchema,
   threadIdSchema,
@@ -68,6 +74,10 @@ export const hostContract = defineRpcContract({
         })
         .strict(),
     ]),
+  },
+  itemContent: {
+    input: binary.extend({ sessionId, legacyPi, ...itemContentInputSchema.shape }).strict(),
+    output: z.union([itemContentPageSchema.extend({ status: z.literal('ok') }), errorSchema]),
   },
   readAnalysisPiece: {
     input: z.object({ transferId, index: z.number().int().nonnegative() }).strict(),

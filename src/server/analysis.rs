@@ -41,6 +41,7 @@ pub(super) struct AnalysisCacheKey {
     pub tokenization: TokenizationPolicy,
     pub schema_version: u32,
     pub output_version: u32,
+    pub compact_previews: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,6 +58,7 @@ struct DatabaseFlightKey {
     database: PathBuf,
     native_id: String,
     tokenization: TokenizationPolicy,
+    compact_previews: bool,
 }
 
 #[derive(Debug)]
@@ -193,22 +195,28 @@ impl AnalysisService {
         self: &Arc<Self>,
         locator: SessionLocator,
         config: AnalysisConfig,
+        compact_previews: bool,
     ) -> SharedResult {
         match locator {
-            SessionLocator::PiFile(path) => self.response(path, config).await,
+            SessionLocator::PiFile(path) => {
+                self.response_file(path, FileReader::Pi, config, compact_previews)
+                    .await
+            }
             SessionLocator::ClaudeCodeFile { path, kind } => {
-                self.response_file(path, FileReader::ClaudeCode(kind), config)
+                self.response_file(path, FileReader::ClaudeCode(kind), config, compact_previews)
                     .await
             }
             SessionLocator::VsCodeCopilotFile { path } => {
-                self.response_file(path, FileReader::VsCodeCopilot, config)
+                self.response_file(path, FileReader::VsCodeCopilot, config, compact_previews)
                     .await
             }
             SessionLocator::CodexFile { path } => {
-                self.response_file(path, FileReader::Codex, config).await
+                self.response_file(path, FileReader::Codex, config, compact_previews)
+                    .await
             }
             SessionLocator::CopilotFile { path } => {
-                self.response_file(path, FileReader::Copilot, config).await
+                self.response_file(path, FileReader::Copilot, config, compact_previews)
+                    .await
             }
             SessionLocator::OpenCode {
                 database,
@@ -218,6 +226,7 @@ impl AnalysisService {
                     database,
                     native_id,
                     tokenization: config.tokenization,
+                    compact_previews,
                 };
                 let (flight, start) = {
                     let mut state = self
@@ -317,6 +326,7 @@ impl AnalysisService {
             tokenization: config.tokenization,
             schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
             output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+            compact_previews: locator.compact_previews,
         };
         if let Some(response) = self
             .state
@@ -329,9 +339,9 @@ impl AnalysisService {
         let replay = replay::reconstruct(snapshot, OutputAccounting::Unknown)
             .map_err(LoadError::Replay)
             .map_err(FlightError::from)?;
-        let analysis =
+        let mut analysis =
             source::analyze_reconstructed(replay, config).map_err(FlightError::Analysis)?;
-        let body = serde_json::to_vec(&analysis).map_err(FlightError::Serialization)?;
+        let body = serialize_analysis(&mut analysis, key.compact_previews)?;
         let response = Arc::new(CachedResponse {
             approximate_bytes: body.len(),
             body: bytes::Bytes::from(body),
@@ -344,8 +354,10 @@ impl AnalysisService {
         Ok(response)
     }
 
+    #[cfg(test)]
     pub async fn response(self: &Arc<Self>, path: PathBuf, config: AnalysisConfig) -> SharedResult {
-        self.response_file(path, FileReader::Pi, config).await
+        self.response_file(path, FileReader::Pi, config, false)
+            .await
     }
 
     /// Pi files, Claude Code transcripts and Copilot Chat sessions share the size and
@@ -355,13 +367,17 @@ impl AnalysisService {
         path: PathBuf,
         reader: FileReader,
         config: AnalysisConfig,
+        compact_previews: bool,
     ) -> SharedResult {
         let key_path = path.clone();
-        let key_result =
-            tokio::task::spawn_blocking(move || file_cache_key(&key_path, reader, config))
-                .await
-                .map_err(FlightError::Task)
-                .and_then(|result| result);
+        let key_result = tokio::task::spawn_blocking(move || {
+            let mut key = file_cache_key(&key_path, reader, config)?;
+            key.compact_previews = compact_previews;
+            Ok(key)
+        })
+        .await
+        .map_err(FlightError::Task)
+        .and_then(|result| result);
         let key = match key_result {
             Ok(key) => key,
             Err(error) => {
@@ -519,6 +535,7 @@ pub(super) fn file_cache_key(
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+        compact_previews: false,
     })
 }
 
@@ -560,7 +577,7 @@ pub(super) fn execute_analysis(
     }
     let analysis_ms = started.elapsed().as_secs_f64() * 1000.0;
     let started = Instant::now();
-    let body = serde_json::to_vec(&analysis).map_err(FlightError::Serialization)?;
+    let body = serialize_analysis(&mut analysis, response_key.compact_previews)?;
     if !fingerprint_matches(&path, &response_key)? {
         return Err(FlightError::SourceChanged);
     }
@@ -574,6 +591,22 @@ pub(super) fn execute_analysis(
         body: bytes::Bytes::from(body),
         etag: etag_for_key(&response_key),
     }))
+}
+
+fn serialize_analysis(
+    analysis: &mut crate::api::Analysis,
+    compact_previews: bool,
+) -> Result<Vec<u8>, FlightError> {
+    if compact_previews {
+        for preview in analysis
+            .context_items
+            .iter_mut()
+            .filter_map(|item| item.preview.as_mut())
+        {
+            preview.expanded_text.clear();
+        }
+    }
+    serde_json::to_vec(analysis).map_err(FlightError::Serialization)
 }
 
 pub(super) fn classify_parse_failure(
@@ -630,5 +663,8 @@ pub(super) fn etag_for_key(key: &AnalysisCacheKey) -> String {
     hasher.update(key.tokenization.as_str().as_bytes());
     hasher.update(&key.schema_version.to_le_bytes());
     hasher.update(&key.output_version.to_le_bytes());
+    if key.compact_previews {
+        hasher.update(b"\0compact-previews");
+    }
     format!("\"{}\"", hasher.finalize().to_hex())
 }

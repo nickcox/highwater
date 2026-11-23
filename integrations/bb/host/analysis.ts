@@ -177,6 +177,7 @@ export class Analyses {
           return entry;
         },
         this.options.fetcher,
+        { headers: { 'X-Highwater-Preview': 'compact' } },
       );
     } catch (error) {
       if (server.signal.aborted)

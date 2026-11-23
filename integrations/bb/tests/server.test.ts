@@ -322,6 +322,7 @@ describe('analysis HTTP route', () => {
     });
     expect(host.harness.registrations.httpRoutes).toMatchObject([
       { method: 'GET', path: '/analysis', auth: 'local' },
+      { method: 'GET', path: '/item-content', auth: 'local' },
     ]);
   });
   it('passes If-None-Match unchanged and returns a bodyless 304 without opening a transfer', async () => {

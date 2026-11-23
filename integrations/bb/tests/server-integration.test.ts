@@ -76,6 +76,8 @@ for (const binaryPath of binaries) {
             .map((line) => JSON.parse(line));
           // bb's Pi filename identity need not equal the native session header ID.
           records[0].id = 'native-pi-session';
+          const longMessage = 'x'.repeat(8191) + '🌊tail';
+          records[1].message.content[0].text = longMessage;
           await writeFile(
             piFile,
             records.map((record) => JSON.stringify(record)).join('\n') + '\n',
@@ -102,6 +104,30 @@ for (const binaryPath of binaries) {
           expect(analysis.schemaVersion).toBe(1);
           if (providerId === 'pi') expect(analysis.session.id).toBe('native-pi-session');
           expect(analysis.modelCalls.length).toBeGreaterThan(0);
+          const userItem = analysis.contextItems.find(
+            (item: { kind: string }) => item.kind === 'userMessage',
+          );
+          expect(userItem.preview).not.toHaveProperty('expandedText');
+          const query = new URLSearchParams({
+            threadId,
+            nativeSessionId: analysis.session.id,
+            itemId: userItem.id,
+          });
+          const first = await server.harness.behavior.fetchHttp('GET', `/item-content?${query}`);
+          expect(first.status).toBe(200);
+          expect(first.headers.get('cache-control')).toBe('private, no-store');
+          const page = await first.json();
+          expect(page.text).toBeTruthy();
+          if (providerId === 'pi') {
+            expect(page.text).toBe('x'.repeat(8191));
+            query.set('cursor', page.nextCursor);
+            const next = await server.harness.behavior.fetchHttp('GET', `/item-content?${query}`);
+            expect(await next.json()).toEqual({ text: '🌊tail', nextCursor: null });
+            query.delete('cursor');
+            query.set('nativeSessionId', 'stale-session');
+            const stale = await server.harness.behavior.fetchHttp('GET', `/item-content?${query}`);
+            expect(stale.status).toBe(409);
+          }
           const etag = response.headers.get('etag');
           expect(etag).toBeTruthy();
           const unchanged = await server.harness.behavior.fetchHttp(

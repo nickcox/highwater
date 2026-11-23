@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { hostContract, rpcContract, threadRequestSchema, type ThreadState } from './contract';
 import { readAnalysis } from './server/analysis';
 import { hostErrorState, resolveThread } from './server/resolve';
+import { threadItemContentSchema } from './state';
 
 export { rpcContract } from './contract';
 const responseHeaders = { 'cache-control': 'private, no-store', vary: 'If-None-Match' };
@@ -91,6 +92,48 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
         return new Response(result.bytes, {
           headers: { ...headers, 'content-type': 'application/json', 'content-encoding': 'gzip' },
         });
+      } catch (error) {
+        if (signal.aborted) return new Response(null, { status: 499, headers: responseHeaders });
+        return jsonState(failure(error));
+      }
+    },
+    { auth: 'local' },
+  );
+
+  bb.http.route(
+    'GET',
+    '/item-content',
+    async (context) => {
+      const query = new URL(context.req.url).searchParams;
+      const parsed = threadItemContentSchema.safeParse({
+        threadId: query.get('threadId'),
+        nativeSessionId: query.get('nativeSessionId'),
+        itemId: query.get('itemId'),
+        cursor: query.get('cursor'),
+      });
+      if (!parsed.success || query.size !== (parsed.data.cursor === null ? 3 : 4)) {
+        return Response.json(
+          { error: { code: 'invalidRequest', message: 'The item content request is invalid.' } },
+          { status: 400, headers: responseHeaders },
+        );
+      }
+      const signal = AbortSignal.any([context.req.raw.signal, lifecycle.signal]);
+      try {
+        const { threadId, ...item } = parsed.data;
+        const session = await resolve(threadId, signal);
+        if (session.state !== 'resolved') return jsonState(session);
+        const { binaryPath, sessionId, legacyPi, hostId } = session;
+        const result = await host.call(
+          'itemContent',
+          { binaryPath, sessionId, ...(legacyPi ? { legacyPi } : {}), ...item },
+          { hostId, signal },
+        );
+        signal.throwIfAborted();
+        if (result.status === 'error') return jsonState(hostErrorState(result));
+        return Response.json(
+          { text: result.text, nextCursor: result.nextCursor },
+          { headers: responseHeaders },
+        );
       } catch (error) {
         if (signal.aborted) return new Response(null, { status: 499, headers: responseHeaders });
         return jsonState(failure(error));

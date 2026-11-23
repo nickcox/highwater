@@ -5,6 +5,7 @@ import { testAnalysis } from '../context-river/test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import { versionScenario } from '../testing/version-scenario';
 import ItemDetails from './ItemDetails.svelte';
+import type { ItemContentLoader } from '../api/client';
 import { inspectorSections } from '../state/inspector-sections';
 
 afterEach(cleanup);
@@ -132,6 +133,77 @@ describe('ItemDetails presence feedback', () => {
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Show less' })).toBeNull();
     expect(view.container.querySelector('.preview-details pre')).toBeNull();
+  });
+
+  it('loads a compact preview only on request, then appends the next page as text', async () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const base = indexed.itemById.get('a')!;
+    const item = {
+      ...base,
+      preview: { kind: 'text' as const, text: 'Short preview', truncated: true },
+    };
+    const loadItemContent = vi
+      .fn()
+      .mockResolvedValueOnce({ text: 'First\n<img src=x>', nextCursor: 'page-2' })
+      .mockResolvedValueOnce({ text: '\nLast', nextCursor: null });
+    const { container } = render(ItemDetails, {
+      props: {
+        indexed,
+        item,
+        loadItemContent,
+        sections: { ...inspectorSections(), preview: true },
+      },
+    });
+    expect(screen.getByText(/Short preview/)).toBeVisible();
+    expect(loadItemContent).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(loadItemContent).toHaveBeenNthCalledWith(
+      1,
+      indexed.analysis.session.id,
+      item.id,
+      null,
+      expect.any(AbortSignal),
+    );
+    await fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    expect(loadItemContent).toHaveBeenNthCalledWith(
+      2,
+      indexed.analysis.session.id,
+      item.id,
+      'page-2',
+      expect.any(AbortSignal),
+    );
+    expect(container.querySelector('.preview-details pre')?.textContent).toBe(
+      'First\n<img src=x>\nLast',
+    );
+    expect(container.querySelector('.preview-details img')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(screen.getByText(/Short preview/)).toBeVisible();
+  });
+
+  it('cancels an expanded preview request when the selected item changes', async () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const item = {
+      ...indexed.itemById.get('a')!,
+      preview: { kind: 'text' as const, text: 'First preview', truncated: true },
+    };
+    const loadItemContent = vi.fn<ItemContentLoader>(() => new Promise<never>(() => {}));
+    const view = render(ItemDetails, {
+      props: {
+        indexed,
+        item,
+        loadItemContent,
+        sections: { ...inspectorSections(), preview: true },
+      },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    const [, , , signal] = loadItemContent.mock.calls[0]!;
+    await view.rerender({
+      item: { ...item, id: 'other', preview: { ...item.preview, text: 'Second preview' } },
+    });
+    expect(signal.aborted).toBe(true);
+    expect(screen.getByText(/Second preview/)).toBeVisible();
+    expect(loadItemContent).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a selected item absent at the pinned call and offers explicit reveal', async () => {

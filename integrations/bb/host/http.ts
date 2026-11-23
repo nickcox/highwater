@@ -93,12 +93,15 @@ export async function request<T>(
   timeoutMs: number,
   action: (response: Response, signal: AbortSignal) => Promise<T>,
   fetcher: typeof fetch = fetch,
+  options: { signal?: AbortSignal; headers?: Record<string, string> } = {},
 ): Promise<T> {
   const timeout = AbortSignal.timeout(timeoutMs);
-  const signal = AbortSignal.any([timeout, server.signal]);
+  const signal = AbortSignal.any(
+    options.signal ? [timeout, server.signal, options.signal] : [timeout, server.signal],
+  );
   try {
     const response = await fetcher(server.baseUrl + path, {
-      headers: etag ? { 'If-None-Match': etag } : {},
+      headers: { ...options.headers, ...(etag ? { 'If-None-Match': etag } : {}) },
       signal,
       redirect: 'error',
     });

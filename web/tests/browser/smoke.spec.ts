@@ -3163,6 +3163,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   );
   const analysis = await (await analysisResponse).json();
   expect(analysis.schemaVersion).toBe(1);
+  expect(analysis.contextItems[0].preview).not.toHaveProperty('expandedText');
   expect(analysis.economics.cacheReadEligibleCalls).toBe(8);
   expect(analysis.economics.supportedPolicyIds).toEqual(
     expect.arrayContaining(['openai-responses-cache-read-v1', 'anthropic-messages-cache-v1']),

@@ -507,11 +507,11 @@ async fn duplicate_database_native_ids_are_ambiguous_and_cache_entries_are_isola
     second.edit();
     let service = Arc::new(AnalysisService::new(Arc::new(execute_analysis)));
     let a = service
-        .response_source(first.locator(), config())
+        .response_source(first.locator(), config(), false)
         .await
         .expect("first DB");
     let b = service
-        .response_source(second.locator(), config())
+        .response_source(second.locator(), config(), false)
         .await
         .expect("second DB");
     assert_ne!(a.etag, b.etag);
@@ -682,13 +682,19 @@ async fn database_flights_coalesce_while_queued_and_survive_initiator_cancellati
     let locator = fixture.locator();
     let first_service = Arc::clone(&service);
     let first_locator = locator.clone();
-    let first =
-        tokio::spawn(async move { first_service.response_source(first_locator, config()).await });
+    let first = tokio::spawn(async move {
+        first_service
+            .response_source(first_locator, config(), false)
+            .await
+    });
     tokio::task::yield_now().await;
     first.abort();
     let second_service = Arc::clone(&service);
-    let second =
-        tokio::spawn(async move { second_service.response_source(locator, config()).await });
+    let second = tokio::spawn(async move {
+        second_service
+            .response_source(locator, config(), false)
+            .await
+    });
     drop(permits);
     let result = tokio::time::timeout(Duration::from_secs(5), second)
         .await

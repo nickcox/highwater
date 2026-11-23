@@ -85,10 +85,13 @@ export function validateAndIndexAnalysis(analysis: SessionAnalysis): IndexedAnal
       if (
         typeof item.preview.text !== 'string' ||
         typeof item.preview.truncated !== 'boolean' ||
-        typeof item.preview.expandedText !== 'string' ||
-        typeof item.preview.expandedTruncated !== 'boolean' ||
         [...item.preview.text].length > 160 ||
-        [...item.preview.expandedText].length > 640
+        (item.preview.expandedTruncated !== undefined &&
+          typeof item.preview.expandedTruncated !== 'boolean') ||
+        (item.preview.expandedText !== undefined &&
+          (typeof item.preview.expandedText !== 'string' ||
+            typeof item.preview.expandedTruncated !== 'boolean' ||
+            [...item.preview.expandedText].length > 640))
       ) {
         throw new AnalysisValidationError(`Item ${item.id} has an invalid preview`);
       }

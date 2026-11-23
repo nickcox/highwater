@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import SessionView from '../components/SessionView.svelte';
   import { createAnalysisController, type AnalysisLoader } from './analysis-controller';
+  import type { ItemContentLoader } from '../api/client';
   import {
     defaultPresentationPreferences,
     readPresentationPreferences,
@@ -12,11 +13,13 @@
 
   let {
     loadAnalysis,
+    loadItemContent,
     preferencesKey,
     sections,
     defaultVerticalScale = 'session',
   }: {
     loadAnalysis: AnalysisLoader;
+    loadItemContent?: ItemContentLoader;
     preferencesKey: string;
     sections?: readonly SectionId[];
     defaultVerticalScale?: 'session' | 'visible';
@@ -112,6 +115,7 @@
     <SessionView
       bind:this={view}
       indexed={$controller.indexed}
+      {loadItemContent}
       bind:presentation
       keyboardScope="root"
       onPreferencesChange={savePreferences}

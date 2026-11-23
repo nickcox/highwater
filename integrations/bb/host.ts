@@ -6,7 +6,16 @@ import { hostContract } from './contract';
 import { Analyses, type AnalysisEntry, type AnalysisOptions } from './host/analysis';
 import { SessionCatalogue, matchSession } from './host/catalogue';
 import { HighwaterProcess, type ProcessOptions } from './host/process';
-import { HostFailure, failureResult, matchesEtag, waitFor } from './host/http';
+import {
+  HostFailure,
+  failureResult,
+  highwaterError,
+  matchesEtag,
+  readBody,
+  request,
+  waitFor,
+} from './host/http';
+import { itemContentPageSchema } from './state';
 
 export interface HostOptions {
   process?: Omit<ProcessOptions, 'dataDir' | 'legacyPi'>;
@@ -129,6 +138,30 @@ export function createHighwaterEntry(options: HostOptions = {}) {
           return matchesEtag(input.ifNoneMatch, entry.etag)
             ? { status: 'notModified' as const, etag: entry.etag }
             : getRuntime(context).analyses.open(entry);
+        }),
+      itemContent: (input, context) =>
+        boundary(context, async () => {
+          const { process } = getSource(context, input.legacyPi);
+          const server = await process.get(input.binaryPath, context.signal);
+          const query = new URLSearchParams({
+            itemId: input.itemId,
+            nativeSessionId: input.nativeSessionId,
+          });
+          if (input.cursor !== null) query.set('cursor', input.cursor);
+          return request(
+            server,
+            `/api/sessions/${encodeURIComponent(input.sessionId)}/item-content?${query}`,
+            null,
+            options.analysis?.timeoutMs ?? 20_000,
+            async (response) => {
+              if (response.status !== 200) return highwaterError(response);
+              const body = await readBody(response, 64 * 1024);
+              const page = itemContentPageSchema.parse(JSON.parse(body.toString('utf8')));
+              return { status: 'ok' as const, ...page };
+            },
+            options.analysis?.fetcher,
+            { signal: context.signal },
+          );
         }),
       readAnalysisPiece: (input, context) =>
         getRuntime(context).analyses.read(input.transferId, input.index),

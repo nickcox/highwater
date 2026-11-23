@@ -265,8 +265,8 @@ export interface ContextItemPreview {
   text: string;
   kind: 'text' | 'toolCall' | 'toolResult' | 'summary' | 'image' | 'unavailable';
   truncated: boolean;
-  expandedText: string;
-  expandedTruncated: boolean;
+  expandedText?: string;
+  expandedTruncated?: boolean;
 }
 
 export interface ContextItemTokenEstimate {

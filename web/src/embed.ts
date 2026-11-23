@@ -4,6 +4,8 @@ import { themeController } from './lib/theme/controller';
 import { themeCss } from '../scripts/theme-html';
 import workspaceCss from './lib/styles/workspace.css?inline';
 import type { AnalysisLoader } from './lib/embed/analysis-controller';
+import type { ItemContentLoader } from './lib/api/client';
+export type { ItemContentLoader } from './lib/api/client';
 import { PANEL_SECTIONS, STANDARD_SECTIONS, type SectionId } from './lib/state/session-sections';
 import { kindGroupLabel } from './lib/kind-labels';
 import { palettes } from './lib/theme/palettes';
@@ -20,6 +22,7 @@ export function contextItemPresentation(kind: ContextItemKind, mode: 'light' | '
 export interface HighwaterEmbedOptions {
   target: HTMLElement;
   loadAnalysis: AnalysisLoader;
+  loadItemContent?: ItemContentLoader;
   preferencesKey: string;
   theme: 'light' | 'dark';
   /** The River's vertical scale until the user chooses one; defaults to `session`. */
@@ -73,6 +76,7 @@ export function mountHighwater(options: HighwaterEmbedOptions): HighwaterEmbed {
       target: container,
       props: {
         loadAnalysis: options.loadAnalysis,
+        loadItemContent: options.loadItemContent,
         preferencesKey: options.preferencesKey,
         sections: options.sections,
         defaultVerticalScale: options.defaultVerticalScale,

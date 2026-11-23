@@ -25,6 +25,20 @@ export const threadStateSchema = z.discriminatedUnion('state', [
 ]);
 export type ThreadState = z.infer<typeof threadStateSchema>;
 
+export const itemContentInputSchema = z.object({
+  nativeSessionId: z.string().min(1).max(4096),
+  itemId: z.string().min(1).max(4096),
+  cursor: z
+    .string()
+    .regex(/^\d{1,20}\.[0-9a-f]{64}$/)
+    .nullable(),
+});
+export const threadItemContentSchema = itemContentInputSchema.extend({ threadId: threadIdSchema });
+export const itemContentPageSchema = z.strictObject({
+  text: z.string().max(8192),
+  nextCursor: itemContentInputSchema.shape.cursor,
+});
+
 export const contextItemKind = z.enum(CONTEXT_ITEM_KINDS);
 
 const compositionSchema = z.strictObject({

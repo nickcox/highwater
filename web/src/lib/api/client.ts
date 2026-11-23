@@ -159,12 +159,34 @@ export type AnalysisFetchResult =
   | { status: 'ok'; analysis: WireSessionAnalysis; etag: string | null }
   | { status: 'notModified'; etag: string | null };
 
+export interface ItemContentPage {
+  text: string;
+  nextCursor: string | null;
+}
+
+export type ItemContentLoader = (
+  sessionId: string,
+  itemId: string,
+  cursor: string | null,
+  signal: AbortSignal,
+) => Promise<ItemContentPage>;
+
+export const fetchItemContent: ItemContentLoader = async (sessionId, itemId, cursor, signal) => {
+  const query = new URLSearchParams({ itemId });
+  if (cursor !== null) query.set('cursor', cursor);
+  const response = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/item-content?${query}`,
+    { signal, cache: 'no-store' },
+  );
+  return responseJson<ItemContentPage>(response);
+};
+
 export async function fetchAnalysis(
   id: string,
   signal?: AbortSignal,
   etag?: string | null,
 ): Promise<AnalysisFetchResult> {
-  const headers = new Headers();
+  const headers = new Headers({ 'X-Highwater-Preview': 'compact' });
   if (etag) headers.set('If-None-Match', etag);
   const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/analysis`, {
     signal,

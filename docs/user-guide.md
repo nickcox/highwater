@@ -64,6 +64,8 @@ Each band is a context item, drawn at its estimated size at every model call it 
 
 **Selecting.** Click empty chart space or a call label to pin that call's details; the selected item stays selected. Click a band, or focus it and press Enter or Space, to select its item and pin the first call it was included in, wherever you clicked. That is the item's first appearance in the model's context, not necessarily the call that created it. Selecting never pans or zooms. Only the selected band is outlined; other bands keep their normal opacity. Hovering a band shows a preview of the item.
 
+In the context item’s **Content preview**, select **Show more** to load up to 8 KiB of its recorded text. For longer items, **Load more** adds the next page. Each request reads the selected item from the saved session. Content missing from the session stays unavailable.
+
 **Reported input.** Where the provider recorded each call's input, a dashed **Reported input** line shows it, and hatched **Unreconciled input** fills the gap between the stacked estimates and that line. Both appear in either display mode and either scale. The line breaks where a call has no comparable figure, and estimates above the reported input are never shrunk to fit. The gap is an approximate difference, not missing items, and it does not change item counts, lifetimes, token-turns, Composition or costs.
 
 **Versions.** A request carries one system prompt and one definition per tool, so when a new one replaces the previous one, Highwater shows them as versions of one item. Versions share a colour and a place in the stack, and each version's band runs into the next. A contrasting mark shows where the system prompt changes; tool definitions are too thin to mark.

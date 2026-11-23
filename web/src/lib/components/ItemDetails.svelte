@@ -2,7 +2,8 @@
   import InfoPopover from './InfoPopover.svelte';
   import { claudeEstimateNote, estimateMethodLabel } from '../token-estimate';
   import type { ContextItem, IndexedAnalysis } from '../types';
-  import type { SessionListItem } from '../api/client';
+  import type { ItemContentLoader, SessionListItem } from '../api/client';
+  import ItemPreview from './ItemPreview.svelte';
   import { childSessionOf, sessionHref } from '../session-links';
   import { displayItemLabel } from '../item-label';
   import { kindLabel } from '../kind-labels';
@@ -28,6 +29,8 @@
     onInspectCall = () => {},
     item,
     indexed,
+    sessionId,
+    loadItemContent,
     callIndex = null,
     pinnedCallIndex = null,
     onSelectItem = () => {},
@@ -38,6 +41,8 @@
     onInspectCall?: (index: number) => void;
     item: ContextItem | null;
     indexed: IndexedAnalysis;
+    sessionId?: string;
+    loadItemContent?: ItemContentLoader;
     callIndex?: number | null;
     pinnedCallIndex?: number | null;
     onSelectItem?: (id: string) => void;
@@ -111,17 +116,11 @@
         ) ?? null)
       : null,
   );
-  // Kept in sections so the choice survives the inspector closing; local so it re-renders.
-  let expandedPreview = $derived(sections.expandedPreview);
-  function togglePreview(): void {
-    expandedPreview = !expandedPreview;
-    sections.expandedPreview = expandedPreview;
+  let legacyExpanded = $derived(sections.expandedPreview);
+  function toggleLegacyPreview(): void {
+    legacyExpanded = !legacyExpanded;
+    sections.expandedPreview = legacyExpanded;
   }
-  let hasExpandedPreview = $derived(
-    item?.preview !== null &&
-      item?.preview !== undefined &&
-      (item.preview.expandedText !== item.preview.text || item.preview.expandedTruncated),
-  );
   let itemDiagnosticCodes = $derived([
     ...new Set(item?.tokenEstimates.flatMap((estimate) => estimate.noteCodes) ?? []),
   ]);
@@ -200,27 +199,16 @@
       </p>{/if}
     <details use:rememberSection={{ state: sections, key: 'preview' }}>
       <summary>Content preview</summary>
-      <div class="preview-details">
-        {#if hasExpandedPreview && expandedPreview && item.preview}
-          <pre>{item.preview.expandedText}</pre>
-          {#if item.preview.expandedTruncated}<p class="preview-note">
-              Expanded preview truncated.
-            </p>{/if}
-        {:else}
-          {#if item.preview?.text}<p class="content-preview">
-              <b>Content preview</b>
-              {item.preview.text}
-            </p>{:else}<p class="preview-note">No content preview is available.</p>{/if}
-        {/if}
-        {#if hasExpandedPreview}
-          <button
-            type="button"
-            class="preview-toggle"
-            aria-expanded={expandedPreview}
-            onclick={togglePreview}>{expandedPreview ? 'Show less' : 'Show more'}</button
-          >
-        {/if}
-      </div>
+      {#key JSON.stringify([sessionId ?? indexed.analysis.session.id, item.id])}
+        <ItemPreview
+          preview={item.preview}
+          itemId={item.id}
+          sessionId={sessionId ?? indexed.analysis.session.id}
+          {loadItemContent}
+          {legacyExpanded}
+          onToggleLegacy={toggleLegacyPreview}
+        />
+      {/key}
     </details>
     <dl class="essential-metrics">
       <div>
@@ -535,12 +523,6 @@
     color: var(--text);
     font-size: var(--text-sm);
   }
-  .content-preview {
-    color: var(--text);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .preview-note,
   .presence-note {
     color: var(--secondary);
     font-size: var(--text-sm);
@@ -551,31 +533,6 @@
   summary {
     color: var(--text);
     cursor: pointer;
-  }
-  .preview-toggle {
-    display: block;
-    width: fit-content;
-    margin: 7px 0 0 auto;
-    min-height: 28px;
-    padding: 4px 8px;
-    font-size: var(--text-xs);
-    color: var(--secondary);
-    background: transparent;
-    border: 1px solid transparent;
-  }
-  .preview-toggle:hover {
-    text-decoration: underline;
-    background: var(--plot);
-  }
-  .preview-details pre {
-    color: var(--text);
-    background: var(--plot);
-    border-radius: var(--control-radius);
-    margin: 7px 0 0;
-    padding: 8px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    font: inherit;
   }
   .essential-metrics,
   .detail-rows {

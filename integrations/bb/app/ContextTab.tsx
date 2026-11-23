@@ -3,6 +3,7 @@ import { experimental_useCodeTheme, experimental_useTabVisible } from '@get-bb/p
 import { mountHighwater, sectionPresets, type HighwaterEmbed } from '../vendor/highwater-embed';
 import { useThreadAnalysis } from './use-thread-analysis';
 import { ContextState } from './ContextState';
+import { fetchThreadItemContent } from './client';
 import pinned from '../host/binary-release.json';
 
 export function ContextTab({ threadId }: { threadId: string }) {
@@ -35,6 +36,8 @@ export function ContextTab({ threadId }: { threadId: string }) {
           deliveredRevision = thread.getSnapshot().revision;
         }
       },
+      loadItemContent: (sessionId, itemId, cursor, signal) =>
+        fetchThreadItemContent(pluginId, threadId, sessionId, itemId, cursor, signal),
     });
     view.current = handle;
     refreshedCycle.current = thread.getSnapshot().cycle;
@@ -42,7 +45,7 @@ export function ContextTab({ threadId }: { threadId: string }) {
       view.current = null;
       handle.destroy();
     };
-  }, [thread, pluginId, hasAnalysis]);
+  }, [thread, threadId, pluginId, hasAnalysis]);
   useEffect(() => {
     view.current?.setTheme(mode);
   }, [mode]);

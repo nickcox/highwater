@@ -83,7 +83,7 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   await page.getByRole('tab', { name: 'Composition' }).click();
   await expect(page.getByRole('heading', { name: /^Cumulative context usage ·/ })).toBeVisible();
   const unchanged = await page.request.get(`/api/sessions/${compaction.id}/analysis`, {
-    headers: { 'If-None-Match': response.headers()['etag'] },
+    headers: { 'If-None-Match': response.headers()['etag'], 'X-Highwater-Preview': 'compact' },
   });
   expect(unchanged.status()).toBe(304);
 

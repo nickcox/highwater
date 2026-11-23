@@ -625,6 +625,40 @@ async fn api_route_reuses_cache_and_returns_deterministic_output() {
 }
 
 #[tokio::test]
+async fn compact_previews_have_a_separate_analysis_etag() {
+    let app = router(test_state(
+        fixture_session("fixtures/pi/simple.jsonl", "simple.jsonl"),
+        AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        },
+        Arc::new(Mutex::new(AnalysisCache::default())),
+    ));
+    let legacy = app.clone().oneshot(request("simple.jsonl")).await.unwrap();
+    let legacy_etag = legacy.headers()[header::ETAG].clone();
+    let legacy_json: serde_json::Value =
+        serde_json::from_slice(&response_body(legacy).await).unwrap();
+    let mut compact_request = request("simple.jsonl");
+    compact_request
+        .headers_mut()
+        .insert("X-Highwater-Preview", "compact".parse().unwrap());
+    compact_request
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, legacy_etag.clone());
+    let compact = app.oneshot(compact_request).await.unwrap();
+    assert_eq!(compact.status(), StatusCode::OK);
+    assert_ne!(compact.headers()[header::ETAG], legacy_etag);
+    assert_eq!(compact.headers()[header::VARY], "X-Highwater-Preview");
+    let compact_json: serde_json::Value =
+        serde_json::from_slice(&response_body(compact).await).unwrap();
+    let old = &legacy_json["contextItems"][0]["preview"];
+    let new = &compact_json["contextItems"][0]["preview"];
+    assert!(old["expandedText"].is_string());
+    assert!(new.get("expandedText").is_none());
+    assert_eq!(new["text"], old["text"]);
+}
+
+#[tokio::test]
 async fn list_response_has_generation_scoped_headers_and_etag() {
     let app = router(test_state(
         fixture_session("fixtures/pi/simple.jsonl", "simple.jsonl"),
@@ -1102,6 +1136,7 @@ fn vanished_source_during_parse_failure_is_not_reported_as_bad_format() {
         tokenization: TokenizationPolicy::Auto,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+        compact_previews: false,
     };
     let result = classify_parse_failure(
         &path,
@@ -1138,6 +1173,7 @@ fn analysis_cache_enforces_entry_and_byte_limits() {
         tokenization: TokenizationPolicy::Heuristic,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+        compact_previews: false,
     };
     let mut cache = AnalysisCache::with_limits(3, 10);
     cache.insert(key(1), sized_response(6));
@@ -1173,6 +1209,7 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
+        compact_previews: false,
     };
     let mut cache = AnalysisCache::new(2);
     let cached = cached_response(&analysis);

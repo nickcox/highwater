@@ -71,7 +71,10 @@ describe('analysis loading and transfers', () => {
     expect(await value.load(testServer(), 'one')).toBe(first);
     const replacement = await value.load(testServer(), 'one');
     expect(replacement.etag).toBe('"v2"');
-    expect(fetcher.mock.calls[1][1]?.headers).toEqual({ 'If-None-Match': '"v1"' });
+    expect(fetcher.mock.calls[1][1]?.headers).toEqual({
+      'If-None-Match': '"v1"',
+      'X-Highwater-Preview': 'compact',
+    });
     expect(JSON.parse(gunzipSync(join(value, opened)).toString())).toEqual(analysis());
     expect(matchesEtag('"v1", "v2"', replacement.etag)).toBe(true);
     expect(matchesEtag('"v1"', replacement.etag)).toBe(false);
@@ -97,10 +100,10 @@ describe('analysis loading and transfers', () => {
     await value.load(testServer(), 'two');
     await value.load(testServer(), 'three');
     await value.load(testServer(), 'one');
-    expect(fetcher.mock.calls[3][1]?.headers).toEqual({});
+    expect(fetcher.mock.calls[3][1]?.headers).toEqual({ 'X-Highwater-Preview': 'compact' });
     expect(JSON.parse(gunzipSync(join(value, opened)).toString())).toEqual(analysis());
     await value.load(testServer(2), 'one');
-    expect(fetcher.mock.calls[4][1]?.headers).toEqual({});
+    expect(fetcher.mock.calls[4][1]?.headers).toEqual({ 'X-Highwater-Preview': 'compact' });
     expect(value.read(opened.transferId, 0)).toHaveProperty('piece');
   });
   it('enforces expiry, shared memory budgets and immutable versions of the same session', () => {

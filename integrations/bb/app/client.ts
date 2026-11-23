@@ -4,6 +4,8 @@ import {
   threadStateSchema,
   threadRequestSchema,
   threadSummaryResultSchema,
+  itemContentPageSchema,
+  threadItemContentSchema,
   type ThreadState,
   type ThreadSummaryResult,
 } from '../state';
@@ -14,6 +16,29 @@ export class ThreadStateError extends Error {
       detail.state === 'error' || detail.state === 'startFailed' ? detail.message : detail.state,
     );
   }
+}
+
+export async function fetchThreadItemContent(
+  pluginId: string,
+  threadId: string,
+  nativeSessionId: string,
+  itemId: string,
+  cursor: string | null,
+  signal: AbortSignal,
+) {
+  const input = threadItemContentSchema.parse({ threadId, nativeSessionId, itemId, cursor });
+  const query = new URLSearchParams({ threadId, nativeSessionId, itemId });
+  if (input.cursor !== null) query.set('cursor', input.cursor);
+  const response = await fetch(
+    `/api/v1/plugins/${encodeURIComponent(pluginId)}/http/item-content?${query}`,
+    { signal, credentials: 'same-origin', cache: 'no-store' },
+  );
+  const body: unknown = await response.json();
+  if (response.ok) return itemContentPageSchema.parse(body);
+  const error = errorBody.safeParse(body);
+  throw new Error(
+    error.success ? error.data.error.message : 'Could not load content for this thread.',
+  );
 }
 /** The analysis with the Highwater version that produced it, when bb reported one. */
 export type ThreadAnalysisResult =

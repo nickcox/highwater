@@ -4,6 +4,12 @@ import type { ContextItemKind } from '../context-item-kinds';
 export type AnalysisFetchResult =
   | { status: 'ok'; analysis: unknown; etag: string | null }
   | { status: 'notModified'; etag: string | null };
+export type ItemContentLoader = (
+  sessionId: string,
+  itemId: string,
+  cursor: string | null,
+  signal: AbortSignal,
+) => Promise<{ text: string; nextCursor: string | null }>;
 export type SectionId = 'summary' | 'call' | 'chart' | 'details' | 'lifespans';
 /** Section orders for `sections`: `standard` matches the standalone viewer. */
 export const sectionPresets: {
@@ -17,6 +23,7 @@ export function contextItemPresentation(
 export interface HighwaterEmbedOptions {
   target: HTMLElement;
   loadAnalysis(signal: AbortSignal, etag: string | null): Promise<AnalysisFetchResult>;
+  loadItemContent?: ItemContentLoader;
   preferencesKey: string;
   theme: 'light' | 'dark';
   /** The River's vertical scale until the user chooses one; defaults to `session`. */

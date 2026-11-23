@@ -97,7 +97,7 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   await expect(page).toHaveURL(/#session=opencode-/);
   const etag = response.headers()['etag'];
   const unchanged = await page.request.get(`/api/sessions/${openCode.id}/analysis`, {
-    headers: { 'If-None-Match': etag },
+    headers: { 'If-None-Match': etag, 'X-Highwater-Preview': 'compact' },
   });
   expect(unchanged.status()).toBe(304);
   await page.getByRole('tab', { name: 'Composition' }).click();
@@ -166,7 +166,9 @@ test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh',
   await expect(page.locator('#estimate-quality-note')).toContainText(
     'Some compaction records have no request usage',
   );
-  const initial = await page.request.get(`/api/sessions/${modern.id}/analysis`);
+  const initial = await page.request.get(`/api/sessions/${modern.id}/analysis`, {
+    headers: { 'X-Highwater-Preview': 'compact' },
+  });
   const analysis = await initial.json();
   expect(analysis.modelCalls).toHaveLength(3);
   expect(analysis.modelCalls[0].usage.recordedOutput).toBe(20);
@@ -211,11 +213,10 @@ test('integrated OpenCode modern checkpoints, usage-only calls and WAL refresh',
     database!,
   ]);
   const updated = await (await refreshed).json();
-  expect(
-    updated.contextItems.some((item: { preview: { expandedText: string } | null }) =>
-      item.preview?.expandedText.includes('Synthetic revised summary'),
-    ),
-  ).toBe(true);
+  const query = new URLSearchParams({ itemId: updated.compactions[0].summaryItemId });
+  const item = await page.request.get(`/api/sessions/${modern.id}/item-content?${query}`);
+  expect(item.ok()).toBe(true);
+  expect((await item.json()).text).toContain('Synthetic revised summary');
   expect(errors).toEqual([]);
 });
 

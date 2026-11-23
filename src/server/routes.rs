@@ -7,19 +7,20 @@ use super::{
     AppState, SessionFile, DEGRADED_SCAN_DEADLINE,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::Response,
     routing::get,
     Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(super) fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/sessions", get(sessions))
         .route("/api/events", get(events::handler))
         .route("/api/sessions/{id}/analysis", get(session_analysis))
+        .route("/api/sessions/{id}/item-content", get(item_content))
         .fallback(assets::static_file)
         .with_state(state)
 }
@@ -121,10 +122,50 @@ async fn session_analysis(
     let session = resolve_session(&snapshot.sessions, &id)?;
     let response = state
         .analysis
-        .response_source(session.source_locator(), state.config)
+        .response_source(
+            session.source_locator(),
+            state.config,
+            headers
+                .get("X-Highwater-Preview")
+                .is_some_and(|value| value == "compact"),
+        )
         .await
         .map_err(AppError::Shared)?;
     response_for(&response, &headers)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ItemContentQuery {
+    item_id: String,
+    native_session_id: Option<String>,
+    cursor: Option<String>,
+}
+
+async fn item_content(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(query): Query<ItemContentQuery>,
+) -> Result<Response, AppError> {
+    use axum::response::IntoResponse;
+    if query.item_id.is_empty() || query.item_id.len() > 4096 {
+        return Err(AppError::InvalidItemContentRequest);
+    }
+    let snapshot = state.catalog.snapshot()?;
+    let locator = resolve_session(&snapshot.sessions, &id)?.source_locator();
+    let page = super::item_content::read(
+        &state.analysis,
+        locator,
+        query.item_id,
+        query.native_session_id,
+        query.cursor,
+    )
+    .await?;
+    Ok((
+        [(header::CACHE_CONTROL, "private, no-store")],
+        axum::Json(page),
+    )
+        .into_response())
 }
 fn resolve_session<'a>(sessions: &'a [SessionFile], id: &str) -> Result<&'a SessionFile, AppError> {
     let mut matches = sessions.iter().filter(|session| session.id == id);
@@ -136,7 +177,9 @@ fn resolve_session<'a>(sessions: &'a [SessionFile], id: &str) -> Result<&'a Sess
 }
 
 fn response_for(response: &CachedResponse, headers: &HeaderMap) -> Result<Response, AppError> {
-    let mut builder = Response::builder().header(header::ETAG, response.etag.as_str());
+    let mut builder = Response::builder()
+        .header(header::ETAG, response.etag.as_str())
+        .header(header::VARY, "X-Highwater-Preview");
     if etag_matches(headers, &response.etag) {
         return builder
             .status(StatusCode::NOT_MODIFIED)

@@ -3,6 +3,7 @@
   import ThemeSelector from './lib/components/ThemeSelector.svelte';
   import SessionView from './lib/components/SessionView.svelte';
   import SessionPicker from './lib/components/SessionPicker.svelte';
+  import { fetchItemContent } from './lib/api/client';
   import { themeController } from './lib/theme/controller';
   import {
     readPresentationPreferences,
@@ -372,6 +373,7 @@
       {indexed}
       sessions={$sessionController.sessions}
       sessionReference={$sessionController.selectedSessionId}
+      loadItemContent={fetchItemContent}
       bind:presentation
       bind:viewState
       bind:riverSessionId

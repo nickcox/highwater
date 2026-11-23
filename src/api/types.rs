@@ -424,6 +424,7 @@ pub(crate) struct ContextItemPreview {
     pub text: String,
     pub kind: String,
     pub truncated: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub expanded_text: String,
     pub expanded_truncated: bool,
 }

@@ -2,11 +2,13 @@
   import CallDetails from './CallDetails.svelte';
   import ItemDetails from './ItemDetails.svelte';
   import type { ContextItem, IndexedAnalysis, ModelCall } from '../types';
-  import type { SessionListItem } from '../api/client';
+  import type { ItemContentLoader, SessionListItem } from '../api/client';
   import type { inspectorSections } from '../state/inspector-sections';
 
   let {
     indexed,
+    sessionId,
+    loadItemContent,
     pinnedCall,
     selectedItem,
     callSections,
@@ -23,6 +25,8 @@
     sessions = [],
   }: {
     indexed: IndexedAnalysis;
+    sessionId?: string;
+    loadItemContent?: ItemContentLoader;
     pinnedCall: ModelCall | null;
     selectedItem: ContextItem | null;
     callSections: ReturnType<typeof inspectorSections>;
@@ -84,6 +88,8 @@
       </div>
       <ItemDetails
         item={selectedItem}
+        {sessionId}
+        {loadItemContent}
         sections={itemSections}
         {onInspectCall}
         {indexed}

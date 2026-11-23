@@ -9,6 +9,7 @@ mod codex_tests;
 mod copilot_tests;
 mod error;
 mod events;
+mod item_content;
 mod local_origin;
 #[cfg(test)]
 mod opencode_tests;

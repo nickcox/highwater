@@ -3,6 +3,7 @@
   import { domRoot } from '../dom-root';
   import type { SessionListItem } from '../api/client';
   import type { SessionViewSnapshot } from '../state/session-view';
+  import type { ItemContentLoader } from '../api/client';
   import { inspectorSections } from '../state/inspector-sections';
   import {
     defaultPresentationPreferences,
@@ -33,6 +34,7 @@
     indexed,
     sessions = [],
     sessionReference = null,
+    loadItemContent,
     presentation = $bindable(defaultPresentationPreferences()),
     viewState = $bindable<SessionViewSnapshot | null>(null),
     riverSessionId = $bindable<string | null>(null),
@@ -48,6 +50,7 @@
     indexed: IndexedAnalysis;
     sessions?: SessionListItem[];
     sessionReference?: string | null;
+    loadItemContent?: ItemContentLoader;
     presentation?: PresentationPreferences;
     viewState?: SessionViewSnapshot | null;
     riverSessionId?: string | null;
@@ -897,6 +900,8 @@
         >
           <Inspector
             {indexed}
+            {sessionId}
+            {loadItemContent}
             {sessions}
             {pinnedCall}
             {selectedItem}

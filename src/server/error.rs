@@ -179,6 +179,12 @@ pub(crate) enum AppError {
     ResponseBuild(#[from] axum::http::Error),
     #[error("unknown session")]
     NotFound,
+    #[error("the context item has no recorded content")]
+    ItemContentUnavailable,
+    #[error("the item content request is invalid")]
+    InvalidItemContentRequest,
+    #[error("the context item changed")]
+    ItemContentChanged,
     #[error("ambiguous session reference")]
     AmbiguousSession,
     #[error("request host or origin is not this local server")]
@@ -189,6 +195,21 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, code, message) = match &self {
             Self::NotFound => NOT_FOUND,
+            Self::ItemContentUnavailable => (
+                StatusCode::NOT_FOUND,
+                "ITEM_CONTENT_UNAVAILABLE",
+                "Recorded content is unavailable for this item.",
+            ),
+            Self::InvalidItemContentRequest => (
+                StatusCode::BAD_REQUEST,
+                "INVALID_ITEM_CONTENT_REQUEST",
+                "The item content request is invalid.",
+            ),
+            Self::ItemContentChanged => (
+                StatusCode::CONFLICT,
+                "ITEM_CONTENT_CHANGED",
+                "The context item changed. Select Show less, then Show more to load it again.",
+            ),
             Self::AmbiguousSession => (
                 StatusCode::CONFLICT,
                 "AMBIGUOUS_SESSION",
