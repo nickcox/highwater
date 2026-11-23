@@ -135,7 +135,7 @@
       {@render previousStep()}
       <span class="range" aria-live="polite" data-testid="visible-call-range">{rangeText}</span>
       {@render nextStep()}
-      <CompactMenu label="More">{@render secondaryControls()}</CompactMenu>
+      <CompactMenu label="Zoom & jump">{@render secondaryControls()}</CompactMenu>
     </div>
   {:else}
     <div class="viewport-status">
@@ -152,22 +152,18 @@
 
 <style>
   .viewport-navigation {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-    align-items: start;
-    gap: 10px 16px;
-    margin: 8px 0 12px;
-    min-width: 0;
-  }
-  /* One button row tall, so the range lines up with the first row of controls even when
-     they wrap onto a second row. */
-  .viewport-status {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 12px;
+    gap: 6px 12px;
+    margin: 8px 0 12px;
     min-width: 0;
-    min-height: var(--control-size);
+  }
+  .viewport-status {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    margin-inline-end: auto;
   }
   .range {
     color: var(--text);
@@ -176,16 +172,13 @@
   }
   .controls {
     display: flex;
-    grid-column: 2;
-    grid-row: 1;
-    align-self: start;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-end;
     gap: 7px;
+    min-width: 0;
   }
   .jump-message {
-    grid-column: 1 / -1;
+    flex-basis: 100%;
     margin: 0;
     color: var(--secondary);
     font-size: var(--text-sm);
@@ -203,13 +196,9 @@
     font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
   }
-  .compact {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .compact .controls {
-    grid-column: 1;
+    flex-basis: 100%;
     flex-wrap: nowrap;
-    justify-content: flex-start;
   }
   .compact .range {
     min-width: 0;
@@ -219,15 +208,5 @@
   }
   .compact :global(.compact-menu) {
     margin-left: auto;
-  }
-  @container highwater (max-width: 760px) {
-    .viewport-navigation {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .controls {
-      grid-column: 1;
-      grid-row: 2;
-      justify-content: flex-start;
-    }
   }
 </style>

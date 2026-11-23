@@ -82,11 +82,7 @@ test('built module uses its container and theme without changing the host page o
     await expect(outside).toHaveCSS('background-color', 'rgb(200, 20, 40)');
     await page.screenshot({ path: testInfo.outputPath(`embed-${theme}.png`), fullPage: true });
   }
-  // The 420px view is compact, so the display toggles are in the View menu.
-  await app.locator('summary', { hasText: 'View' }).click();
   await app.getByRole('button', { name: 'Item types', exact: true }).click();
-  await page.keyboard.press('Escape');
-  await expect(app.getByRole('button', { name: 'Item types', exact: true })).toBeHidden();
   expect(
     await page.evaluate(
       () => JSON.parse(localStorage.getItem('test.highwater.presentation')!).river.display,
@@ -108,7 +104,7 @@ test('built module uses its container and theme without changing the host page o
   await expect(group).toBeFocused();
   await expect(app.locator('#pinned-call-summary')).toHaveText('Pinned call 2');
   await app.getByRole('button', { name: 'Clear selected item and pinned call' }).click();
-  // In the compact view this button is inside the closed More menu.
+  // In the compact view this button is inside the closed Zoom & jump menu.
   await expect(app.locator('button[aria-label="Fit all calls"]')).toBeDisabled();
   await app.getByRole('application', { name: 'Context River' }).focus();
   await page.evaluate(() =>
@@ -332,7 +328,7 @@ test('a wide panel order keeps the details beside the chart and lifespans', asyn
   expect(chart.y).toBeGreaterThan(call.y + call.height - 1);
 });
 
-test('a narrow panel puts secondary controls in menus and starts the chart in the first screen', async ({
+test('a narrow panel keeps view controls visible and puts zoom and jump controls in a menu', async ({
   page,
 }) => {
   await open(page, ['summary', 'call', 'chart', 'details', 'lifespans']);
@@ -353,19 +349,16 @@ test('a narrow panel puts secondary controls in menus and starts the chart in th
 
   const fitAll = app.getByRole('button', { name: 'Fit all calls' });
   await expect(fitAll).toBeHidden();
-  await app.locator('summary', { hasText: 'More' }).click();
+  await app.locator('summary', { hasText: 'Zoom & jump' }).click();
   await expect(fitAll).toBeVisible();
   await app.getByRole('application', { name: 'Context River' }).focus();
   await page.keyboard.press('Escape');
   await expect(fitAll).toBeHidden();
 
   const itemTypes = app.getByRole('button', { name: 'Item types', exact: true });
-  await expect(itemTypes).toBeHidden();
-  await app.locator('summary', { hasText: 'View' }).click();
+  await expect(itemTypes).toBeVisible();
   await itemTypes.click();
   await expect(itemTypes).toHaveAttribute('aria-pressed', 'true');
-  await page.mouse.click(5, 5);
-  await expect(itemTypes).toBeHidden();
 
   await page.evaluate(() => window.scrollTo(0, 0));
   const chartTop = await app
@@ -373,11 +366,13 @@ test('a narrow panel puts secondary controls in menus and starts the chart in th
     .evaluate((el) => el.getBoundingClientRect().top);
   expect(chartTop).toBeLessThan(900);
 
-  // From 520px the menus return; the one-line summary stays until 760px.
+  // Navigation expands before the chart header or summary.
+  await page.setViewportSize({ width: 570, height: 900 });
   await app.evaluate((el) => {
-    el.style.width = '700px';
+    el.style.width = '510px';
   });
   await expect(fitAll).toBeVisible();
+  await expect(app.getByRole('button', { name: 'Chart help' })).toHaveText('?');
   await expect(app.locator('.compact-metrics')).toBeVisible();
   expect(await listColumns()).toBe(1);
   await page.setViewportSize({ width: 900, height: 900 });
@@ -412,6 +407,29 @@ test('the compact bb panel uses smaller controls, List view, a lifespans filter 
   await expect(clear).toHaveText('Clear');
   expect((await clear.boundingBox())!.height).toBeLessThanOrEqual(25);
   await expect(clear).toHaveCSS('font-size', '12px');
+
+  const scale = app.getByRole('group', { name: 'Vertical scale' });
+  const display = app.getByRole('group', { name: 'River display' });
+  await expect(scale).toBeVisible();
+  await expect(display).toBeVisible();
+  const rowGap = async () => {
+    const scaleBox = (await scale.boundingBox())!;
+    const displayBox = (await display.boundingBox())!;
+    return displayBox.y - scaleBox.y - scaleBox.height;
+  };
+  await app.evaluate((el) => {
+    el.style.width = '340px';
+  });
+  await expect.poll(rowGap).toBeGreaterThanOrEqual(8);
+  await page.setViewportSize({ width: 570, height: 900 });
+  await app.evaluate((el) => {
+    el.style.width = '540px';
+  });
+  await expect.poll(rowGap).toBeLessThan(0);
+  await page.setViewportSize({ width: 460, height: 900 });
+  await app.evaluate((el) => {
+    el.style.width = '420px';
+  });
 
   // Following a long session shows its recent calls, not the whole session.
   const long = sessionScenario('longSession');
@@ -535,9 +553,7 @@ test('legends stay in view while a zoomed chart is scrolled to recent calls', as
   };
   await expect(app.locator('.input-reference-legend')).toBeVisible();
   expect(await inView('.input-reference-legend')).toBe(true);
-  await app.locator('summary', { hasText: 'View' }).click();
   await app.getByRole('button', { name: 'Item types', exact: true }).click();
-  await page.keyboard.press('Escape');
   await expect(app.locator('.group-type-legend')).toBeVisible();
   expect(await inView('.group-type-legend')).toBe(true);
 });

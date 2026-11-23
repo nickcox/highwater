@@ -432,7 +432,7 @@ test('mocked app loads a session, selects an item, and navigates the chart', asy
     await captureBaselineState(page, screenshotDirectory, 'desktop-session-details-expanded');
     await page.setViewportSize({ width: 390, height: 844 });
     await captureBaselineState(page, screenshotDirectory, 'narrow-selected-pinned');
-    // Back to desktop width, where Zoom in is not inside the More menu.
+    // Back to desktop width, where Zoom in is not inside the Zoom & jump menu.
     await page.setViewportSize({ width: 1280, height: 900 });
   }
   // Selection never dims other ribbons; they keep their normal fill opacity.
@@ -2061,8 +2061,6 @@ test('vertical scale controls explain local ribbon heights and keep the axis anc
     await captureBaselineState(page, scaleScreenshotDirectory, 'visible-scale-long-session');
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  // A narrow view keeps the scale toggles in the View menu.
-  await page.locator('summary', { hasText: 'View' }).click();
   await expect(page.getByRole('button', { name: 'Visible calls' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole('button', { name: 'Session scale' }).click();
@@ -2082,8 +2080,8 @@ test('Go to call remains with the zoom controls without overflow across toolbar 
   for (const width of [1440, 800, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const controls = page.getByRole('group', { name: 'Chart zoom and navigation' });
-    // A narrow view keeps Go to call in the More menu.
-    if (width < 520) await page.locator('summary', { hasText: 'More' }).click();
+    // A narrow view keeps Go to call in the Zoom & jump menu.
+    if (width <= 390) await page.locator('summary', { hasText: 'Zoom & jump' }).click();
     const input = controls.getByLabel('Call number');
     await expect(input).toBeVisible();
     await expect(controls.getByRole('button', { name: 'Go', exact: true })).toBeEnabled();
@@ -2138,8 +2136,8 @@ test('navigation controls keep their slot when the visible-range status changes'
   expect(Math.abs(controlsAfterHelp!.y - controlsBeforeHelp!.y)).toBeLessThan(1);
   await helpTrigger.click();
   await page.setViewportSize({ width: 390, height: 844 });
-  // A narrow view keeps zoom and Fit all in the More menu, which stays open while zooming.
-  await page.locator('summary', { hasText: 'More' }).click();
+  // A narrow view keeps zoom and Fit all in the Zoom & jump menu, which stays open while zooming.
+  await page.locator('summary', { hasText: 'Zoom & jump' }).click();
   await page.getByRole('button', { name: 'Fit all calls' }).click();
   await expect(page.locator('.zoom-level')).toHaveText('Zoom 1.0×');
   await zoomAndCheckStablePosition();
@@ -3064,10 +3062,10 @@ test('quiet workspace responsive evidence and actual rendered palette contrast',
       width,
       height: width === 1440 ? 1000 : width === 390 ? 844 : 900,
     });
-    // A phone-width view keeps Latest in the More menu; waiting for the menu also waits for the
+    // A phone-width view keeps Latest in the Zoom & jump menu; waiting for the menu also waits for the
     // narrow layout, which is applied in the frame after a resize.
-    const narrow = width <= 520;
-    if (narrow) await page.locator('summary', { hasText: 'More' }).click();
+    const narrow = width <= 390;
+    if (narrow) await page.locator('summary', { hasText: 'Zoom & jump' }).click();
     await expect(page.getByRole('button', { name: 'Latest', exact: true })).toBeVisible();
     if (narrow) await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

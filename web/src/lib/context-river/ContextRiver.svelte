@@ -3,7 +3,6 @@
 </script>
 
 <script lang="ts">
-  import CompactMenu from '../components/CompactMenu.svelte';
   const mergeId = `compaction-merge-${nextMergeId++}`;
   import { onMount, untrack } from 'svelte';
   import { domRoot } from '../dom-root';
@@ -99,7 +98,6 @@
     onEmptyClick,
     onEscape,
     consumeUnhandledEscape = true,
-    compact = false,
     preferences = defaultPresentationPreferences(),
     onPreferencesChange = () => {},
   }: {
@@ -121,7 +119,6 @@
     onEscape: () => void | boolean;
     consumeUnhandledEscape?: boolean;
     /** Put the scale and display toggles in a menu. */
-    compact?: boolean;
     preferences?: PresentationPreferences;
     onPreferencesChange?: (value: PresentationPreferences) => void;
   } = $props();
@@ -1437,7 +1434,7 @@
   }
 </script>
 
-{#snippet viewToggles()}
+<div class="vertical-scale-controls">
   <div class="toggle-group" role="group" aria-label="Vertical scale">
     <span class="toggle-label">Vertical scale</span>
     <button
@@ -1464,14 +1461,7 @@
       onclick={() => setDisplay('itemTypes')}>Item types</button
     >
   </div>
-{/snippet}
-{#if compact}
-  <div class="vertical-scale-controls compact">
-    <CompactMenu label="View">{@render viewToggles()}</CompactMenu>
-  </div>
-{:else}
-  <div class="vertical-scale-controls">{@render viewToggles()}</div>
-{/if}
+</div>
 <div class="chart-frame" style:--plot-left={`${margin.left}px`}>
   <div class="chart-plot" bind:this={chartPlot}>
     <div
@@ -1996,19 +1986,17 @@
 </div>
 
 <style>
-  .vertical-scale-controls.compact {
-    display: flex;
-    justify-content: flex-end;
-    margin: -6px 0 6px;
-  }
   .vertical-scale-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 16px;
+    gap: 8px 12px;
     margin: 6px 0 10px;
     color: var(--secondary);
     font-size: var(--text-md);
+  }
+  .vertical-scale-controls > .toggle-group {
+    white-space: nowrap;
   }
   .chart-frame {
     position: relative;
@@ -2333,10 +2321,5 @@
     stroke-width: 1.5;
     stroke-dasharray: 4 3;
     pointer-events: none;
-  }
-  @container highwater (max-width: 620px) {
-    .vertical-scale-controls {
-      display: block;
-    }
   }
 </style>

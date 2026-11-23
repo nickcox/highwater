@@ -110,16 +110,15 @@
   let riverSelectionVisibility = $state.raw<{ itemId: string; visible: boolean } | null>(null);
   let hoverCardHost = $state<HTMLDivElement | null>(null);
   let hoverCardPosition = $state.raw<{ left: number; top: number } | null>(null);
-  // Narrow views put secondary controls in menus. A view that has not been measured (as in
-  // tests without layout) keeps the full controls. Leaving needs 20px more than entering, so a
-  // scrollbar that appears or disappears with the layout change cannot switch it back.
-  // The one-line summary and the call overview's single column suit wider views than the menus
-  // do, so they share their own limit and change together.
+  // A view that has not been measured keeps the full controls. Each layout takes 20px
+  // more to leave than to enter so a scrollbar cannot switch it back.
   let compact = $state(false);
+  let compactNavigation = $state(false);
   let compactSummary = $state(false);
   function measureWidth(width: number): void {
     const next = width > 0 && (compact ? width <= 540 : width <= 520);
     if (next !== compact) compact = next;
+    compactNavigation = width > 0 && (compactNavigation ? width <= 480 : width <= 460);
     const summary = width > 0 && (compactSummary ? width <= 780 : width <= 760);
     if (summary !== compactSummary) compactSummary = summary;
   }
@@ -785,7 +784,7 @@
             {#if indexed.analysis.modelCalls.length > 0}
               {#key sessionId}
                 <ContextRiverNavigation
-                  {compact}
+                  compact={compactNavigation}
                   isVisible={visualizationView === 'river'}
                   viewport={viewportStatus}
                   {callIndices}
@@ -823,7 +822,6 @@
                       onEmptyClick={emptyClick}
                       onEscape={handleEscape}
                       consumeUnhandledEscape={keyboardScope === 'window'}
-                      {compact}
                     />
                   {/key}
                 {/if}
