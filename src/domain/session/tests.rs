@@ -44,10 +44,22 @@ fn lifetime_and_inclusive_counts_derive_from_presence() {
 }
 
 #[test]
-fn finish_reconstruction_clears_call_reference_to_dropped_compaction() {
-    let mut summary = item(Vec::new());
-    summary.id = "summary".into();
-    summary.kind = ContextItemKind::CompactionSummary;
+fn finish_reconstruction_keeps_unread_compaction_summaries() {
+    let summary = |id: &str, presence| NormalizedContextItem {
+        id: id.into(),
+        kind: ContextItemKind::CompactionSummary,
+        ..item(presence)
+    };
+    let compaction =
+        |id: &str, before_model_call, summary_id: &str, sources| NormalizedCompaction {
+            id: id.into(),
+            before_model_call,
+            source_item_ids: sources,
+            retained_item_ids: Vec::new(),
+            summary_item_id: summary_id.into(),
+            tokens_before: None,
+            details: CompactionDetails::default(),
+        };
     let session = NormalizedSession {
         id: "test".into(),
         source: SourceDescriptor {
@@ -57,7 +69,17 @@ fn finish_reconstruction_clears_call_reference_to_dropped_compaction() {
         },
         title: None,
         working_directory: None,
-        context_items: vec![summary],
+        context_items: vec![
+            summary("first-summary", Vec::new()),
+            summary(
+                "second-summary",
+                vec![PresenceRange {
+                    start_call: 1,
+                    end_call: 1,
+                }],
+            ),
+            summary("terminal-summary", Vec::new()),
+        ],
         model_calls: vec![NormalizedModelCall {
             tool_loadout_known: false,
             retried: false,
@@ -67,28 +89,32 @@ fn finish_reconstruction_clears_call_reference_to_dropped_compaction() {
             reported_usage: ReportedUsage::default(),
             stop_reason: None,
             timestamps: CallTimestamps::default(),
-            context_item_ids: Vec::new(),
+            context_item_ids: vec!["second-summary".into()],
             tool_calls_after: Vec::new(),
-            compaction_before: Some("compaction".into()),
+            compaction_before: Some("second".into()),
         }],
-        compactions: vec![NormalizedCompaction {
-            id: "compaction".into(),
-            before_model_call: 1,
-            source_item_ids: Vec::new(),
-            retained_item_ids: Vec::new(),
-            summary_item_id: "summary".into(),
-            tokens_before: None,
-            details: CompactionDetails::default(),
-        }],
+        compactions: vec![
+            compaction("first", 1, "first-summary", Vec::new()),
+            compaction("second", 1, "second-summary", vec!["first-summary".into()]),
+            compaction("terminal", 2, "terminal-summary", Vec::new()),
+        ],
         lineage: Vec::new(),
         harness_session_cost: None,
         turns: Vec::new(),
     }
-    .finish_reconstruction(UnusedSummaries::Drop);
+    .finish_reconstruction();
 
-    assert!(session.context_items.is_empty());
-    assert!(session.compactions.is_empty());
-    assert_eq!(session.model_calls[0].compaction_before, None);
+    assert_eq!(session.context_items.len(), 3);
+    assert_eq!(session.compactions.len(), 3);
+    assert_eq!(session.compactions[1].source_item_ids, ["first-summary"]);
+    assert_eq!(session.lineage.len(), 1);
+    assert_eq!(session.lineage[0].from, "first-summary");
+    assert_eq!(session.lineage[0].to, "second-summary");
+    assert_eq!(session.lineage[0].kind, "frameworkCompaction");
+    assert_eq!(
+        session.model_calls[0].compaction_before.as_deref(),
+        Some("second")
+    );
 }
 
 #[test]

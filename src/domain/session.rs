@@ -30,31 +30,18 @@ pub(crate) struct NormalizedSession {
     pub turns: Vec<RecordedTurn>,
 }
 
-/// Which compaction summaries with no presence a session keeps.
-pub(crate) enum UnusedSummaries {
-    /// Drop them, with their compactions.
-    Drop,
-    /// Keep the summary of a compaction after the last call (Pi).
-    KeepTerminal,
-}
-
 impl NormalizedSession {
-    /// The last step of every reader except OpenCode: keep shown items and compactions
-    /// and build lineage from the sources that remain.
-    pub(crate) fn finish_reconstruction(mut self, unused_summaries: UnusedSummaries) -> Self {
-        let terminal_boundary = self.model_calls.len() + 1;
-        let terminal_summaries: HashSet<&str> = match unused_summaries {
-            UnusedSummaries::Drop => HashSet::new(),
-            UnusedSummaries::KeepTerminal => self
-                .compactions
-                .iter()
-                .filter(|compaction| compaction.before_model_call == terminal_boundary)
-                .map(|compaction| compaction.summary_item_id.as_str())
-                .collect(),
-        };
-        self.context_items.retain(|item| {
-            !item.presence.is_empty() || terminal_summaries.contains(item.id.as_str())
-        });
+    /// The last step of every reader except OpenCode: keep the items some call read and
+    /// every compaction's summary, then build lineage from the sources that remain. A summary
+    /// that no call read is kept because its compaction's own call still cost something.
+    pub(crate) fn finish_reconstruction(mut self) -> Self {
+        let summaries: HashSet<&str> = self
+            .compactions
+            .iter()
+            .map(|compaction| compaction.summary_item_id.as_str())
+            .collect();
+        self.context_items
+            .retain(|item| !item.presence.is_empty() || summaries.contains(item.id.as_str()));
         let shown: HashSet<&str> = self
             .context_items
             .iter()

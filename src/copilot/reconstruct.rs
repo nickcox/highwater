@@ -837,7 +837,7 @@ impl State {
             compactions,
             lineage: Vec::new(),
         }
-        .finish_reconstruction(UnusedSummaries::Drop)
+        .finish_reconstruction()
     }
 }
 

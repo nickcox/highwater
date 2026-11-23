@@ -377,6 +377,6 @@ impl ReconstructionState {
             compactions: self.compactions,
             lineage: Vec::new(),
         }
-        .finish_reconstruction(UnusedSummaries::KeepTerminal)
+        .finish_reconstruction()
     }
 }
