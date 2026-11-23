@@ -199,7 +199,7 @@ pub(super) fn reconstruct(
             session_id,
             working_directory,
             SourceDescriptor {
-                kind: "claude-code".into(),
+                kind: Harness::ClaudeCode,
                 version,
                 cost_basis: CostBasis::Unknown,
             },

@@ -1,5 +1,5 @@
 use super::discovery::{find_files, read_listing, ChildThread, ListingCache, TitleIndex};
-use crate::domain::Limitation;
+use crate::domain::{Harness, Limitation};
 use std::{fs, io::Read, path::PathBuf};
 
 fn home() -> PathBuf {
@@ -188,7 +188,7 @@ fn pair(kind: &str, label: &str) -> (String, String) {
 fn calls_start_at_a_response_and_take_their_usage_from_the_next_token_count() {
     let loaded = loaded("007");
     let session = &loaded.session;
-    assert_eq!(session.source.kind, "codex");
+    assert_eq!(session.source.kind, Harness::Codex);
     assert_eq!(session.id, thread("007"));
     assert_eq!(
         session.model_calls.len(),

@@ -66,7 +66,7 @@ fn catalogue_entries_match_the_expected_listings() {
         let fixture = expected["fixture"].as_str().expect("fixture");
         let listing = &expected["listing"];
         let entry = entry_for(&entries, fixture);
-        assert_eq!(entry.harness, "claude-code");
+        assert_eq!(entry.harness, Harness::ClaudeCode);
         assert_eq!(
             entry.display_name,
             listing["title"].as_str().expect("title"),
@@ -187,11 +187,11 @@ fn a_removed_root_empties_its_entries_and_other_sources_are_kept() {
     assert_eq!(
         first
             .iter()
-            .filter(|entry| entry.harness == "claude-code")
+            .filter(|entry| entry.harness == Harness::ClaudeCode)
             .count(),
         1
     );
-    assert!(first.iter().any(|entry| entry.harness == "pi"));
+    assert!(first.iter().any(|entry| entry.harness == Harness::Pi));
     fs::remove_dir_all(&root).expect("remove root");
     let second = scanner
         .scan(Arc::new(AtomicBool::new(false)))
@@ -199,11 +199,11 @@ fn a_removed_root_empties_its_entries_and_other_sources_are_kept() {
     assert_eq!(
         second
             .iter()
-            .filter(|entry| entry.harness == "claude-code")
+            .filter(|entry| entry.harness == Harness::ClaudeCode)
             .count(),
         0
     );
-    assert!(second.iter().any(|entry| entry.harness == "pi"));
+    assert!(second.iter().any(|entry| entry.harness == Harness::Pi));
 }
 
 #[test]

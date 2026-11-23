@@ -105,7 +105,7 @@ pub(crate) fn reconstruct(text: &str, fallback_id: &str) -> Result<Reconstructio
             id,
             working_directory,
             SourceDescriptor {
-                kind: "copilot".into(),
+                kind: Harness::Copilot,
                 version,
                 cost_basis: CostBasis::Unknown,
             },

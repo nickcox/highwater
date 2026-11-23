@@ -7,7 +7,7 @@ use crate::domain::{ModelTarget, TokenizationPayload};
 use crate::source::{load, SessionLocator};
 use std::{collections::HashMap, io::Write, path::Path, path::PathBuf};
 
-fn local_sessions() -> Vec<(&'static str, SessionLocator)> {
+fn local_sessions() -> Vec<(Harness, SessionLocator)> {
     let home = PathBuf::from(std::env::var_os("HOME").expect("HOME is set"));
     let claude_root = std::env::var_os("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
@@ -16,20 +16,20 @@ fn local_sessions() -> Vec<(&'static str, SessionLocator)> {
     let mut sessions = Vec::new();
     for file in crate::claude_code::discovery::find_files(&claude_root, None).unwrap_or_default() {
         sessions.push((
-            "claude-code",
+            Harness::ClaudeCode,
             SessionLocator::ClaudeCodeFile {
                 path: file.path,
                 kind: file.kind,
             },
         ));
     }
-    fn walk(path: &Path, sessions: &mut Vec<(&'static str, SessionLocator)>) {
+    fn walk(path: &Path, sessions: &mut Vec<(Harness, SessionLocator)>) {
         for entry in std::fs::read_dir(path).into_iter().flatten().flatten() {
             let path = entry.path();
             if path.is_dir() {
                 walk(&path, sessions);
             } else if path.extension().and_then(|extension| extension.to_str()) == Some("jsonl") {
-                sessions.push(("pi", SessionLocator::PiFile(path)));
+                sessions.push((Harness::Pi, SessionLocator::PiFile(path)));
             }
         }
     }

@@ -43,7 +43,9 @@ fn catalogue_lists_sessions_with_calls_once() {
     let mut ids = ids;
     ids.sort_unstable();
     assert_eq!(ids, expected, "sessions without calls are not listed");
-    assert!(entries.iter().all(|entry| entry.harness == "copilot"));
+    assert!(entries
+        .iter()
+        .all(|entry| entry.harness == Harness::Copilot));
 
     let app = entries
         .iter()

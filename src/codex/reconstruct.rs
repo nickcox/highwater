@@ -110,7 +110,7 @@ pub(crate) fn reconstruct(text: &str, fallback_id: &str) -> Result<Reconstructio
             thread_id,
             working_directory,
             SourceDescriptor {
-                kind: "codex".into(),
+                kind: Harness::Codex,
                 version,
                 cost_basis: CostBasis::Unknown,
             },

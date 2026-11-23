@@ -1,6 +1,9 @@
 //! Bounded, read-only access to the totals recorded in session logs.
 
-use crate::{claude_code, copilot, domain::HarnessSessionCost};
+use crate::{
+    claude_code, copilot,
+    domain::{Harness, HarnessSessionCost},
+};
 use std::{
     fs::File,
     io::{self, BufRead, BufReader, Read, Seek, SeekFrom},
@@ -267,7 +270,7 @@ pub(crate) fn codex_total(path: &Path) -> Option<(f64, bool)> {
     let mut totals = CostSum::default();
     let mut partial = false;
     for call in &loaded.session.model_calls {
-        let cost = crate::analysis::assess_cost(call, "codex");
+        let cost = crate::analysis::assess_cost(call, Harness::Codex);
         partial |= cost.amount.is_none();
         totals.add(cost.amount);
     }

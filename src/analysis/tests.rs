@@ -262,7 +262,7 @@ struct FakeSourceAdapter;
 impl SessionSourceAdapter for FakeSourceAdapter {
     fn source_descriptor(&self) -> SourceDescriptor {
         SourceDescriptor {
-            kind: "fake".into(),
+            kind: Harness::Test("fake"),
             version: "test-v1".into(),
             cost_basis: CostBasis::Unknown,
         }
@@ -285,7 +285,7 @@ fn analysis_accepts_a_source_neutral_fake_adapter() {
         },
     )
     .expect("analysis");
-    assert_eq!(analysis.session.source, "fake");
+    assert_eq!(analysis.session.source.as_str(), "fake");
     assert_eq!(analysis.context_items[0].id, "opaque-item");
 }
 
@@ -590,7 +590,7 @@ fn valid_zero_call_terminal_summary_is_accepted() {
         turns: Vec::new(),
         id: "terminal".into(),
         source: SourceDescriptor {
-            kind: "fake".into(),
+            kind: Harness::Test("fake"),
             version: "1".into(),
             cost_basis: CostBasis::Unknown,
         },

@@ -98,7 +98,7 @@ pub(super) fn session_report(
     );
     SessionReport {
         reference: session.id.clone(),
-        harness: session.harness.clone(),
+        harness: session.harness.as_str().into(),
         title: session.display_name.clone(),
         working_directory: session.working_directory.clone(),
         parent: session.parent_reference.clone(),
@@ -189,7 +189,7 @@ pub(super) fn call_prices(
     normalized: &NormalizedSession,
 ) -> Vec<Option<InputPrice>> {
     let table = pricing::embedded();
-    let harness = analysis.session.source.as_str();
+    let harness = analysis.session.source;
     analysis
         .model_calls
         .iter()

@@ -28,7 +28,7 @@ fn push(
 fn economics_session(usage: ReportedUsage) -> NormalizedSession {
     let mut session = fake_session();
     session.source = SourceDescriptor {
-        kind: "pi".into(),
+        kind: Harness::Pi,
         version: "0.78.0".into(),
         cost_basis: CostBasis::PiModelRates,
     };
@@ -181,7 +181,7 @@ fn export_live_contract() {
         "pi-messages",
     ] {
         let mut session = fake_session();
-        session.source.kind = "pi".into();
+        session.source.kind = Harness::Pi;
         let call = &mut session.model_calls[0];
         call.target.api = Some(api.into());
         call.stop_reason = Some("stop".into());
@@ -273,7 +273,7 @@ fn export_live_contract() {
         ),
     ] {
         let mut session = fake_session();
-        session.source.kind = "pi".into();
+        session.source.kind = Harness::Pi;
         let call = &mut session.model_calls[0];
         call.target.api = Some(api.into());
         call.stop_reason = Some(reason.into());
@@ -327,7 +327,7 @@ fn export_live_contract() {
     );
     let mut non_pi = economics_session(zero_usage);
     non_pi.source = SourceDescriptor {
-        kind: "other-adapter".into(),
+        kind: Harness::Test("other-adapter"),
         version: "1".into(),
         cost_basis: CostBasis::SourceModelRates,
     };
@@ -668,7 +668,7 @@ fn export_live_contract() {
         ),
     ] {
         let mut session = fake_session();
-        session.source.kind = "future-harness".into();
+        session.source.kind = Harness::Test("future-harness");
         session.model_calls[0].reported_usage = ReportedUsage {
             output: normalized,
             recorded_output: Some(raw),
@@ -683,7 +683,7 @@ fn export_live_contract() {
     for (name, harness, provider, model, recorded_cost, output, timed) in [
         (
             "cost-recorded",
-            "opencode",
+            Harness::OpenCode,
             "anthropic",
             "claude-sonnet-4-6",
             Some(0.25),
@@ -692,7 +692,7 @@ fn export_live_contract() {
         ),
         (
             "cost-estimated",
-            "opencode",
+            Harness::OpenCode,
             "anthropic",
             "claude-sonnet-4-6",
             None,
@@ -701,7 +701,7 @@ fn export_live_contract() {
         ),
         (
             "cost-api-equivalent",
-            "pi",
+            Harness::Pi,
             "openai-codex",
             "gpt-6.1-sol",
             Some(0.02),
@@ -710,7 +710,7 @@ fn export_live_contract() {
         ),
         (
             "cost-api-equivalent-range",
-            "opencode",
+            Harness::OpenCode,
             "openai",
             "gpt-5.6-sol",
             Some(0.0),
@@ -719,7 +719,7 @@ fn export_live_contract() {
         ),
         (
             "cost-free",
-            "opencode",
+            Harness::OpenCode,
             "opencode",
             "big-pickle",
             Some(0.0),
@@ -728,7 +728,7 @@ fn export_live_contract() {
         ),
         (
             "cost-unknown",
-            "opencode",
+            Harness::OpenCode,
             "anthropic",
             "claude-sonnet-4-6",
             None,
@@ -737,7 +737,7 @@ fn export_live_contract() {
         ),
     ] {
         let mut session = fake_session();
-        session.source.kind = harness.into();
+        session.source.kind = harness;
         let call = &mut session.model_calls[0];
         call.target = ModelTarget {
             provider: Some(provider.into()),
@@ -762,7 +762,7 @@ fn export_live_contract() {
             ..ReportedUsage::default()
         };
         let mut analysis = analyze(session, config(TokenizationPolicy::Off)).expect("cost case");
-        if harness == "opencode" {
+        if harness == Harness::OpenCode {
             // Every OpenCode response carries its reconstruction limits.
             crate::source::add_reconstruction(
                 &mut analysis,

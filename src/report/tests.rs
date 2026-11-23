@@ -250,7 +250,7 @@ fn item_costs_add_up_to_each_sessions_reported_input_cost() {
                 pricing::input_price(
                     table,
                     CallToPrice {
-                        harness: &analysis.session.source,
+                        harness: analysis.session.source,
                         provider: call.provider.as_deref(),
                         model: call.model.as_deref(),
                         at_ms: call.timing.recorded_at_ms.or(call.timing.started_at_ms),

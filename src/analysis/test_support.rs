@@ -23,7 +23,7 @@ pub(super) fn fake_session() -> NormalizedSession {
         turns: Vec::new(),
         id: "fake".into(),
         source: SourceDescriptor {
-            kind: "fake".into(),
+            kind: Harness::Test("fake"),
             version: "1".into(),
             cost_basis: CostBasis::Unknown,
         },

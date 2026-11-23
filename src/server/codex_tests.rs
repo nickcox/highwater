@@ -48,7 +48,7 @@ fn catalogue_lists_codex_sessions_with_titles_and_child_sessions() {
         .collect();
     expected.sort_unstable();
     assert_eq!(ids, expected, "the session without usage is not listed");
-    assert!(entries.iter().all(|entry| entry.harness == "codex"));
+    assert!(entries.iter().all(|entry| entry.harness == Harness::Codex));
 
     let main = entry(&entries, "001");
     assert_eq!(main.display_name, "Synthetic Codex task");

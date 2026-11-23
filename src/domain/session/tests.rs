@@ -51,7 +51,7 @@ fn finish_reconstruction_clears_call_reference_to_dropped_compaction() {
     let session = NormalizedSession {
         id: "test".into(),
         source: SourceDescriptor {
-            kind: "test".into(),
+            kind: Harness::Test("test"),
             version: "1".into(),
             cost_basis: CostBasis::Unknown,
         },

@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 pub(crate) use table::{Billing, PriceTable, StartBasis};
 use table::{PricePeriod, Rates};
 
-use crate::domain::ReportedUsage;
+use crate::domain::{Harness, ReportedUsage};
 
 const EMBEDDED: &str = include_str!("../../data/prices/prices.json");
 
@@ -103,8 +103,7 @@ impl CostAssessment {
 /// What the pricing module needs to know about one call.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CallToPrice<'a> {
-    /// The source kind, such as "pi" or "opencode".
-    pub harness: &'a str,
+    pub harness: Harness,
     pub provider: Option<&'a str>,
     pub model: Option<&'a str>,
     /// The call's completion time, or its start when that is all there is.
@@ -182,7 +181,7 @@ pub(crate) fn assess(table: &PriceTable, call: CallToPrice<'_>) -> CostAssessmen
 
     let (billing, rule) = match mode {
         Some(mode) => (mode.billing, CostRule::BillingModeTable),
-        None if call.harness == "opencode"
+        None if call.harness == Harness::OpenCode
             && provider == "openai"
             && recorded == Some(0.0)
             && listed_rates.is_some_and(|rates| !rates.is_free()) =>

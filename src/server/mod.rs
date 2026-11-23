@@ -22,7 +22,10 @@ mod vscode_copilot_tests;
 use routes::router;
 mod watcher;
 
-use crate::analysis::{AnalysisConfig, TokenizationPolicy};
+use crate::{
+    analysis::{AnalysisConfig, TokenizationPolicy},
+    domain::Harness,
+};
 #[cfg(test)]
 use analysis::{
     analysis_cache_key, classify_parse_failure, etag_for_key, AnalysisCache, AnalysisCacheKey,
@@ -183,7 +186,7 @@ pub(crate) struct SessionFile {
     pub(crate) started_at: Option<DateTime<Utc>>,
     byte_size: Option<u64>,
     pub(crate) modified_at: Option<DateTime<Utc>>,
-    pub(crate) harness: String,
+    pub(crate) harness: Harness,
     pub(crate) parent_reference: Option<String>,
     /// A Claude Code subagent's type, from its metadata file. Omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,14 +211,6 @@ impl SessionFile {
 /// The startup line, for example `Discovered 1,206 sessions: 150 Pi, 980 Claude Code (612 child
 /// sessions)`. A harness with no sessions is left out, in the session picker's order.
 fn discovery_summary(sessions: &[SessionFile]) -> String {
-    const HARNESSES: [(&str, &str); 6] = [
-        ("pi", "Pi"),
-        ("opencode", "OpenCode"),
-        ("claude-code", "Claude Code"),
-        ("codex", "Codex"),
-        ("copilot", "Copilot"),
-        ("vscode-copilot", "VS Code Copilot"),
-    ];
     let count = |count: usize, noun: &str| {
         let count = crate::domain::grouped(count as u64);
         if count == "1" {
@@ -224,12 +219,11 @@ fn discovery_summary(sessions: &[SessionFile]) -> String {
             format!("{count} {noun}s")
         }
     };
-    let harnesses: Vec<String> = HARNESSES
-        .iter()
-        .filter_map(|(harness, name)| {
-            let listed = sessions
-                .iter()
-                .filter(|session| session.harness == *harness);
+    let harnesses: Vec<String> = Harness::ALL
+        .into_iter()
+        .filter_map(|harness| {
+            let name = harness.display_name();
+            let listed = sessions.iter().filter(|session| session.harness == harness);
             let total = listed.clone().count();
             let children = listed
                 .filter(|session| session.parent_reference.is_some())

@@ -238,7 +238,7 @@ fn select<'a>(
         .filter(|session| {
             args.harness
                 .as_deref()
-                .is_none_or(|harness| session.harness == harness)
+                .is_none_or(|harness| session.harness.as_str() == harness)
         })
         .filter(|session| since.is_none_or(|since| updated(session).is_some_and(|at| at >= since)))
         .filter(|session| {

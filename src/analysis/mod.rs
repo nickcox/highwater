@@ -251,10 +251,7 @@ fn derive_calls(
     let derived_transitions = &prepared.transitions;
     let destination_estimates = &prepared.destination_estimates;
     let (cumulative_usages, usage_totals) = usage_rollup(&session.model_calls);
-    let (call_economics, economics_summary) = if matches!(
-        session.source.kind.as_str(),
-        "claude-code" | "codex" | "copilot" | "vscode-copilot"
-    ) {
+    let (call_economics, economics_summary) = if session.source.kind.records_usage_only() {
         economics::derive_usage_only(&session.model_calls)
     } else {
         economics::derive_with_cost_basis(&session.model_calls, session.source.cost_basis)
@@ -499,12 +496,12 @@ fn derive_calls(
             metrics_include_partial_estimates,
             age,
         };
-        let cost_assessment = assess_cost(work.call, &session.source.kind);
+        let cost_assessment = assess_cost(work.call, session.source.kind);
         let cost_assessment_api = cost_assessment.to_api();
         cost_assessments.push(cost_assessment);
         model_calls.push(to_api_call(
             work,
-            &session.source.kind,
+            session.source.kind,
             profile,
             call_economics[position].clone(),
             ApiCallDerived {
@@ -543,7 +540,7 @@ fn derive_calls(
 }
 
 /// Prices a call by the time it completed, or started when that is all there is.
-pub(crate) fn assess_cost(call: &NormalizedModelCall, harness: &str) -> pricing::CostAssessment {
+pub(crate) fn assess_cost(call: &NormalizedModelCall, harness: Harness) -> pricing::CostAssessment {
     let timing = timing::call_timing(call, harness);
     pricing::assess(
         pricing::embedded(),
@@ -870,7 +867,7 @@ fn assemble_analysis(
         economics: economics_summary,
         session: SessionSummary {
             id: session.id.clone(),
-            source: session.source.kind.clone(),
+            source: session.source.kind,
             title: session.title.clone(),
             working_directory: session.working_directory.clone(),
             reported_prompt_tokens: subtotals.prompt,
@@ -928,7 +925,7 @@ fn assemble_analysis(
 
 fn to_api_call(
     work: &CallWork<'_>,
-    harness: &str,
+    harness: Harness,
     profile: &TokenizationProfile,
     economics: CallEconomics,
     derived: ApiCallDerived,

@@ -31,7 +31,7 @@ fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> Ses
         started_at: None,
         byte_size: Some(1),
         modified_at: None,
-        harness: "pi".into(),
+        harness: Harness::Pi,
         parent_reference: None,
         subagent_type: None,
         locator: None,
@@ -1225,18 +1225,18 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
 
 #[test]
 fn discovery_summary_counts_sessions_and_child_sessions_by_harness() {
-    let session = |harness: &str, parent: Option<&str>| SessionFile {
-        harness: harness.into(),
+    let session = |harness: Harness, parent: Option<&str>| SessionFile {
+        harness,
         parent_reference: parent.map(Into::into),
         ..fixture_session("", "")
     };
     let mut sessions = vec![
-        session("claude-code", None),
-        session("claude-code", Some("parent")),
-        session("vscode-copilot", None),
-        session("opencode", Some("parent")),
+        session(Harness::ClaudeCode, None),
+        session(Harness::ClaudeCode, Some("parent")),
+        session(Harness::VsCodeCopilot, None),
+        session(Harness::OpenCode, Some("parent")),
     ];
-    sessions.extend((0..1_000).map(|_| session("pi", None)));
+    sessions.extend((0..1_000).map(|_| session(Harness::Pi, None)));
 
     assert_eq!(
         discovery_summary(&sessions),

@@ -302,12 +302,12 @@ fn mixed_catalog_metadata_has_harness_relationships_and_no_database_locator() {
     let mut sources = fixture.sources();
     sources.pi_root = Some(std::fs::canonicalize("fixtures/pi").expect("Pi fixtures"));
     let entries = scan(&scanner(&sources));
-    assert!(entries.iter().any(|entry| entry.harness == "pi"));
+    assert!(entries.iter().any(|entry| entry.harness == Harness::Pi));
     let child = entries
         .iter()
         .find(|entry| entry.display_name == "Child")
         .expect("child");
-    assert_eq!(child.harness, "opencode");
+    assert_eq!(child.harness, Harness::OpenCode);
     assert_eq!(
         child.parent_reference.as_deref(),
         Some(crate::source::opencode_reference("ses_example").as_str())

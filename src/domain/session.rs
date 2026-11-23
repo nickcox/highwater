@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests;
 
-use super::source::CostBasis;
+use super::{source::CostBasis, Harness};
 use std::collections::{BTreeMap, HashSet};
 
 /// Largest integer that can be represented exactly by the TypeScript/JSON contract.
@@ -11,7 +11,7 @@ pub(crate) const MAX_SAFE_JSON_INTEGER: u64 = 9_007_199_254_740_991;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SourceDescriptor {
-    pub kind: String,
+    pub kind: Harness,
     pub version: String,
     pub cost_basis: CostBasis,
 }

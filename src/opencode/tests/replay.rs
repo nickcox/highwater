@@ -2,7 +2,7 @@ use super::Fixture;
 use crate::{
     analysis::{analyze, AnalysisConfig, TokenizationPolicy},
     domain::{
-        ContextItemKind, Limitation, NormalizedSession, OutputReasoningRelationship,
+        ContextItemKind, Harness, Limitation, NormalizedSession, OutputReasoningRelationship,
         TokenizationPayload,
     },
     opencode::{
@@ -86,7 +86,7 @@ fn config() -> AnalysisConfig {
 fn validate(result: &ReplayResult) {
     let analysis =
         analyze(result.session.clone(), config()).expect("normalized invariants and DTO assembly");
-    assert_eq!(analysis.session.source, "opencode");
+    assert_eq!(analysis.session.source.as_str(), "opencode");
     for call in &analysis.model_calls {
         assert!(call.timing.duration_ms.is_none(), "not Pi timing");
         assert!(call.economics.pi_prompt_cost.is_none(), "not Pi economics");
@@ -918,7 +918,7 @@ fn source_neutral_loader_preserves_replay_limitations() {
         native_id: "ses_example".into(),
     };
     let loaded = load(&locator, None).expect("source-neutral loading");
-    assert_eq!(loaded.normalized.source.kind, "opencode");
+    assert_eq!(loaded.normalized.source.kind, Harness::OpenCode);
     assert_eq!(loaded.stats.records, 5);
     assert_eq!(loaded.stats.selected_records, 5);
     // The fixture's stored total shows output excludes reasoning.

@@ -1,5 +1,5 @@
 use super::discovery::{find_files, parse_workspace, read_listing, ListingCache};
-use crate::domain::{ContextItemKind, HarnessSessionCost, Limitation, NormalizedSession};
+use crate::domain::{ContextItemKind, Harness, HarnessSessionCost, Limitation, NormalizedSession};
 use std::{fs, path::PathBuf};
 
 fn home() -> PathBuf {
@@ -99,7 +99,7 @@ fn an_app_session_has_one_call_per_assistant_turn() {
     let loaded = load("001");
     let session = &loaded.session;
     assert_eq!(session.id, session_id("001"));
-    assert_eq!(session.source.kind, "copilot");
+    assert_eq!(session.source.kind, Harness::Copilot);
     assert_eq!(session.source.version, "1.0.106");
     assert_eq!(session.title.as_deref(), Some("Synthetic: app session"));
     assert_eq!(

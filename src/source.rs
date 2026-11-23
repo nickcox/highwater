@@ -2,7 +2,7 @@
 //! remain server responsibilities; never deserialize these locators from HTTP.
 
 use crate::{
-    domain::{Limitation, NormalizedSession, SourceError},
+    domain::{Harness, Limitation, NormalizedSession, SourceError},
     opencode::{
         replay::{self, ReplayError},
         storage::{self, StorageError},
@@ -42,39 +42,39 @@ pub(crate) enum SessionLocator {
 
 /// The portable reference an OpenCode session is listed under.
 pub(crate) fn opencode_reference(native_id: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater OpenCode session reference v1");
-    hash.update(b"id\0");
-    hash.update(native_id.as_bytes());
-    format!("opencode-{}", &hash.finalize().to_hex()[..12])
+    Harness::OpenCode.session_reference(|hash| {
+        hash.update(b"id\0");
+        hash.update(native_id.as_bytes());
+    })
 }
 
 /// Main sessions and subagents get different references, because a subagent's
 /// records carry its parent's session ID.
 pub(crate) fn claude_code_reference(session_id: &str, agent_id: Option<&str>) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater Claude Code session reference v1");
-    hash.update(b"id\0");
-    hash.update(session_id.as_bytes());
-    if let Some(agent_id) = agent_id {
-        hash.update(b"\0agent\0");
-        hash.update(agent_id.as_bytes());
-    }
-    format!("claude-code-{}", &hash.finalize().to_hex()[..12])
+    Harness::ClaudeCode.session_reference(|hash| {
+        hash.update(b"id\0");
+        hash.update(session_id.as_bytes());
+        if let Some(agent_id) = agent_id {
+            hash.update(b"\0agent\0");
+            hash.update(agent_id.as_bytes());
+        }
+    })
 }
 
 /// The portable reference a Copilot session is listed under.
 pub(crate) fn copilot_reference(session_id: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater Copilot session reference v1");
-    hash.update(b"id\0");
-    hash.update(session_id.as_bytes());
-    format!("copilot-{}", &hash.finalize().to_hex()[..12])
+    Harness::Copilot.session_reference(|hash| {
+        hash.update(b"id\0");
+        hash.update(session_id.as_bytes());
+    })
 }
 
 /// The portable reference a Codex thread is listed under.
 pub(crate) fn codex_reference(thread_id: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater Codex session reference v1");
-    hash.update(b"id\0");
-    hash.update(thread_id.as_bytes());
-    format!("codex-{}", &hash.finalize().to_hex()[..12])
+    Harness::Codex.session_reference(|hash| {
+        hash.update(b"id\0");
+        hash.update(thread_id.as_bytes());
+    })
 }
 
 #[derive(Debug, Clone, Copy)]

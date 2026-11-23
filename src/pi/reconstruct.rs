@@ -42,7 +42,7 @@ fn source_error_from_parse(error: PiParseError) -> SourceError {
 impl SessionSourceAdapter for PiSourceAdapter {
     fn source_descriptor(&self) -> SourceDescriptor {
         SourceDescriptor {
-            kind: "pi".into(),
+            kind: Harness::Pi,
             version: "jsonl-v1".into(),
             cost_basis: CostBasis::PiModelRates,
         }

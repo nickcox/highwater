@@ -1,6 +1,6 @@
 use crate::{
     api::CallTiming,
-    domain::{NormalizedModelCall, MAX_SAFE_JSON_INTEGER},
+    domain::{Harness, NormalizedModelCall, MAX_SAFE_JSON_INTEGER},
 };
 
 fn valid_instant(value: Option<i64>) -> Option<i64> {
@@ -15,25 +15,26 @@ fn valid_instant(value: Option<i64>) -> Option<i64> {
 /// VS Code Copilot's start instant comes only from a call's trace span, which runs from
 /// sending the request to the end of the response. Copilot's comes from the duration its
 /// usage record reports, which covers the same.
-pub(super) fn call_timing(call: &NormalizedModelCall, harness: &str) -> CallTiming {
+pub(super) fn call_timing(call: &NormalizedModelCall, harness: Harness) -> CallTiming {
     let mut timing = CallTiming {
         started_at_ms: valid_instant(call.timestamps.started_at_ms),
         recorded_at_ms: valid_instant(call.timestamps.recorded_at_ms),
         ..CallTiming::default()
     };
-    if harness == "vscode-copilot" || harness == "copilot" {
+    let recorded_basis = match harness {
+        Harness::Copilot => Some("copilot-usage-duration"),
+        Harness::VsCodeCopilot => Some("vscode-copilot-trace-spans"),
+        _ => None,
+    };
+    if let Some(basis) = recorded_basis {
         if let Some(ms) = duration(&timing) {
             timing.duration_ms = Some(ms);
-            timing.basis = Some(if harness == "copilot" {
-                "copilot-usage-duration"
-            } else {
-                "vscode-copilot-trace-spans"
-            });
+            timing.basis = Some(basis);
             timing.effective_output_tokens_per_second = rate(call, ms);
         }
         return timing;
     }
-    if harness != "pi"
+    if harness != Harness::Pi
         || !matches!(
             call.target.api.as_deref(),
             Some(
@@ -90,23 +91,26 @@ fn rate(call: &NormalizedModelCall, ms: u64) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{analysis::test_support::fake_session, domain::CallTimestamps};
+    use crate::{
+        analysis::test_support::fake_session,
+        domain::{CallTimestamps, Harness},
+    };
 
     fn call_timing(call: &NormalizedModelCall) -> CallTiming {
-        super::call_timing(call, "pi")
+        super::call_timing(call, Harness::Pi)
     }
 
     #[test]
     fn copilot_trace_spans_give_a_duration_and_rate() {
         let mut call = call();
         call.stop_reason = None;
-        let timing = super::call_timing(&call, "vscode-copilot");
+        let timing = super::call_timing(&call, Harness::VsCodeCopilot);
         assert_eq!(timing.duration_ms, Some(2000));
         assert_eq!(timing.effective_output_tokens_per_second, Some(50.0));
         assert_eq!(timing.basis, Some("vscode-copilot-trace-spans"));
         // Without a trace span there is no start instant.
         call.timestamps.started_at_ms = None;
-        let timing = super::call_timing(&call, "vscode-copilot");
+        let timing = super::call_timing(&call, Harness::VsCodeCopilot);
         assert_eq!(timing.duration_ms, None);
         assert_eq!(timing.basis, None);
     }
@@ -114,7 +118,7 @@ mod tests {
     #[test]
     fn other_sources_keep_instants_without_claiming_pi_timing_semantics() {
         let call = call();
-        let timing = super::call_timing(&call, "opencode");
+        let timing = super::call_timing(&call, Harness::OpenCode);
         assert_eq!(timing.started_at_ms, call.timestamps.started_at_ms);
         assert_eq!(timing.duration_ms, None);
         assert_eq!(timing.basis, None);

@@ -1,6 +1,6 @@
 use super::{
     totals::{SessionTotal, TotalKey},
-    AppError, SessionFile,
+    AppError, Harness, SessionFile,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -284,7 +284,7 @@ pub(super) fn discover(
                 byte_size: Some(metadata.len()),
                 modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
                 modified_nanos,
-                harness: "pi".into(),
+                harness: Harness::Pi,
                 parent_reference: None,
                 subagent_type: None,
                 locator: None,

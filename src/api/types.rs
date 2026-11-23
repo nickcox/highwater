@@ -1,3 +1,4 @@
+use crate::domain::Harness;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -30,7 +31,7 @@ pub(crate) struct ReconstructionCoverage {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionSummary {
     pub id: String,
-    pub source: String,
+    pub source: Harness,
     pub title: Option<String>,
     pub working_directory: Option<String>,
     pub reported_prompt_tokens: Option<u64>,

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::Harness;
 use std::sync::Arc;
 
 fn conditional(value: &str) -> HeaderMap {
@@ -24,7 +25,7 @@ async fn ambiguous_short_references_never_select_an_arbitrary_file() {
         started_at: None,
         byte_size: Some(1),
         modified_at: None,
-        harness: "pi".into(),
+        harness: Harness::Pi,
         parent_reference: None,
         subagent_type: None,
         locator: None,

@@ -103,7 +103,7 @@ pub(super) fn reconstruct(
             text(session.get("customTitle")),
             working_directory,
             SourceDescriptor {
-                kind: "vscode-copilot".into(),
+                kind: Harness::VsCodeCopilot,
                 version,
                 cost_basis: CostBasis::Unknown,
             },

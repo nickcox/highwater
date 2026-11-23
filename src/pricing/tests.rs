@@ -59,7 +59,7 @@ fn usage(input: u64, cache_read: u64, output: u64, recorded_cost: Option<f64>) -
 }
 
 fn call<'a>(
-    harness: &'a str,
+    harness: Harness,
     provider: &'a str,
     model: &'a str,
     at: &str,
@@ -96,7 +96,7 @@ fn embedded_table_parses_and_prices_known_models() {
         .expect("copilot");
     assert!(before_june.rates.as_ref().is_some_and(Rates::is_free));
     assert!(table
-        .billing_mode("pi", "openai-codex", ms("2026-10-01T00:00:00Z"))
+        .billing_mode(Harness::Pi, "openai-codex", ms("2026-10-01T00:00:00Z"))
         .is_some_and(|mode| mode.billing == Billing::Subscription));
     assert!(!table.data.models_dev_commit.is_empty());
     assert!(!table.data.models_dev_committed_at.is_empty());
@@ -204,7 +204,7 @@ fn per_token_call_with_a_recorded_cost_keeps_it() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "anthropic",
             "claude",
             "2026-09-01T00:00:00Z",
@@ -223,7 +223,7 @@ fn per_token_call_without_a_cost_is_estimated_at_the_providers_rate() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "anthropic",
             "claude",
             "2026-09-01T00:00:00Z",
@@ -249,7 +249,7 @@ fn zero_on_a_free_listing_is_free() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "opencode",
             "free-model",
             "2026-09-01T00:00:00Z",
@@ -268,7 +268,7 @@ fn pi_codex_calls_get_an_api_equivalent_cost_with_pis_figure_kept() {
     let assessed = assess(
         &table(),
         call(
-            "pi",
+            Harness::Pi,
             "openai-codex",
             "gpt-x",
             "2026-09-01T00:00:00Z",
@@ -296,7 +296,7 @@ fn pi_codex_calls_get_an_api_equivalent_cost_with_pis_figure_kept() {
     let other = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "openai-codex",
             "gpt-x",
             "2026-09-01T00:00:00Z",
@@ -313,7 +313,7 @@ fn copilot_billing_changes_on_the_first_of_june() {
     let before = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "github-copilot",
             "gpt-x",
             "2026-05-31T23:59:59Z",
@@ -330,7 +330,7 @@ fn copilot_billing_changes_on_the_first_of_june() {
     let early = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "github-copilot",
             "gpt-x",
             "2026-06-01T10:00:00Z",
@@ -341,7 +341,7 @@ fn copilot_billing_changes_on_the_first_of_june() {
     let later = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "github-copilot",
             "gpt-x",
             "2026-06-02T00:00:00Z",
@@ -354,7 +354,7 @@ fn copilot_billing_changes_on_the_first_of_june() {
     let billed = assess(
         &table(),
         call(
-            "pi",
+            Harness::Pi,
             "github-copilot",
             "gpt-x",
             "2026-06-02T00:00:00Z",
@@ -376,7 +376,13 @@ fn opencode_openai_zero_with_a_listed_price_is_a_subscription() {
     let zero = usage(1_000_000, 0, 0, Some(0.0));
     let assessed = assess(
         &table(),
-        call("opencode", "openai", "gpt-x", "2026-09-01T00:00:00Z", &zero),
+        call(
+            Harness::OpenCode,
+            "openai",
+            "gpt-x",
+            "2026-09-01T00:00:00Z",
+            &zero,
+        ),
     );
     assert_eq!(assessed.kind, CostKind::ApiEquivalent);
     assert_eq!(assessed.rule, CostRule::OpencodeZeroWithListedPrice);
@@ -386,7 +392,7 @@ fn opencode_openai_zero_with_a_listed_price_is_a_subscription() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "openai",
             "gpt-x",
             "2026-09-01T00:00:00Z",
@@ -400,7 +406,13 @@ fn opencode_openai_zero_with_a_listed_price_is_a_subscription() {
     // Pi is never given this rule.
     let assessed = assess(
         &table(),
-        call("pi", "openai", "gpt-x", "2026-09-01T00:00:00Z", &zero),
+        call(
+            Harness::Pi,
+            "openai",
+            "gpt-x",
+            "2026-09-01T00:00:00Z",
+            &zero,
+        ),
     );
     assert_eq!(assessed.kind, CostKind::Estimated);
 }
@@ -415,7 +427,7 @@ fn unknown_reasoning_overlap_gives_a_range() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "openai",
             "gpt-x",
             "2026-09-01T00:00:00Z",
@@ -429,7 +441,7 @@ fn unknown_reasoning_overlap_gives_a_range() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "openai",
             "gpt-x",
             "2026-09-01T00:00:00Z",
@@ -451,7 +463,7 @@ fn a_tiny_range_is_shown_as_one_amount() {
     let assessed = assess(
         &table(),
         call(
-            "opencode",
+            Harness::OpenCode,
             "openai",
             "gpt-x",
             "2026-09-01T00:00:00Z",
@@ -476,26 +488,44 @@ fn calls_that_cannot_be_priced_are_unknown_with_a_reason() {
     no_input.input = None;
     let cases = [
         (
-            call("pi", "openai", "gpt-x", "2026-09-01T00:00:00Z", &failed),
+            call(
+                Harness::Pi,
+                "openai",
+                "gpt-x",
+                "2026-09-01T00:00:00Z",
+                &failed,
+            ),
             CostRule::FailedAttempt,
         ),
         (
             CallToPrice {
                 at_ms: None,
-                ..call("pi", "openai", "gpt-x", "2026-09-01T00:00:00Z", &measured)
+                ..call(
+                    Harness::Pi,
+                    "openai",
+                    "gpt-x",
+                    "2026-09-01T00:00:00Z",
+                    &measured,
+                )
             },
             CostRule::MissingTime,
         ),
         (
             CallToPrice {
                 model: None,
-                ..call("pi", "openai", "gpt-x", "2026-09-01T00:00:00Z", &measured)
+                ..call(
+                    Harness::Pi,
+                    "openai",
+                    "gpt-x",
+                    "2026-09-01T00:00:00Z",
+                    &measured,
+                )
             },
             CostRule::NoPrice,
         ),
         (
             call(
-                "pi",
+                Harness::Pi,
                 "openai",
                 "unlisted",
                 "2026-09-01T00:00:00Z",
@@ -504,7 +534,13 @@ fn calls_that_cannot_be_priced_are_unknown_with_a_reason() {
             CostRule::NoPrice,
         ),
         (
-            call("pi", "openai", "gpt-x", "2026-09-01T00:00:00Z", &no_input),
+            call(
+                Harness::Pi,
+                "openai",
+                "gpt-x",
+                "2026-09-01T00:00:00Z",
+                &no_input,
+            ),
             CostRule::MissingUsage,
         ),
     ];

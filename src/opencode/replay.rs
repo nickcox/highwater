@@ -177,7 +177,7 @@ pub(crate) fn reconstruct(
             turns: Vec::new(),
             id: snapshot.metadata.id,
             source: SourceDescriptor {
-                kind: "opencode".into(),
+                kind: Harness::OpenCode,
                 version: match snapshot.generation {
                     Generation::Legacy => "sqlite-message-part-v1",
                     Generation::Modern => "sqlite-session-message-v2",

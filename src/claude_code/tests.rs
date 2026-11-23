@@ -2,7 +2,7 @@ use super::{
     discovery::{find_files, read_listing, DiscoveryError, ListingCache, TranscriptFile},
     FileKind,
 };
-use crate::domain::Limitation;
+use crate::domain::{Harness, Limitation};
 use serde_json::Value;
 use std::{
     fs,
@@ -286,7 +286,7 @@ fn calls_context_and_compactions_match_the_expected_results() {
         let path = fixture_root().join(expected["fixture"].as_str().expect("fixture"));
         let loaded = super::load(&path, fixture_kind(&expected)).expect("load");
         let session = &loaded.session;
-        assert_eq!(session.source.kind, "claude-code", "{name}");
+        assert_eq!(session.source.kind, Harness::ClaudeCode, "{name}");
         assert_eq!(
             session.working_directory.as_deref(),
             expected["listing"]["workingDirectory"].as_str(),

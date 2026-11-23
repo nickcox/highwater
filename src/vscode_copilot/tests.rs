@@ -1,6 +1,6 @@
 use super::{change_log, discovery, load};
 use crate::domain::{
-    AssistantContentBlock, ContentPart, ContextItemKind, Limitation, SourceError,
+    AssistantContentBlock, ContentPart, ContextItemKind, Harness, Limitation, SourceError,
     TokenizationPayload,
 };
 use serde_json::json;
@@ -186,7 +186,7 @@ fn each_round_is_a_model_call_and_a_cancelled_request_is_left_out() {
     let loaded = load(&agent_session()).expect("load");
     let session = &loaded.session;
     assert_eq!(session.id, "11111111-agent");
-    assert_eq!(session.source.kind, "vscode-copilot");
+    assert_eq!(session.source.kind, Harness::VsCodeCopilot);
     assert_eq!(session.source.version, "0.54.0");
     assert_eq!(
         session.title.as_deref(),

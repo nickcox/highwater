@@ -17,18 +17,10 @@
 use super::reconciliation::{reported_prompt_tokens, UsageCompleteness};
 use super::tokenization::{ProfileRegistry, TokenCoverage, TokenizationPolicy};
 use crate::domain::{
-    ContextItemKind, NormalizedContextItem, NormalizedModelCall, NormalizedSession, PresenceRange,
-    TokenizationPayload,
+    ContextItemKind, Harness, NormalizedContextItem, NormalizedModelCall, NormalizedSession,
+    PresenceRange, TokenizationPayload,
 };
 use std::collections::{BTreeMap, HashMap};
-
-const SOURCES: [&str; 5] = [
-    "claude-code",
-    "codex",
-    "copilot",
-    "opencode",
-    "vscode-copilot",
-];
 
 /// Estimates go into `registry`, which the analysis keeps, so it does not tokenize these items again.
 pub(super) fn add_unrecorded_context(
@@ -36,7 +28,7 @@ pub(super) fn add_unrecorded_context(
     registry: &mut ProfileRegistry,
     policy: TokenizationPolicy,
 ) {
-    if policy == TokenizationPolicy::Off || !SOURCES.contains(&session.source.kind.as_str()) {
+    if policy == TokenizationPolicy::Off || !session.source.kind.estimates_unrecorded_context() {
         return;
     }
     let calls = &session.model_calls;
@@ -62,11 +54,12 @@ pub(super) fn add_unrecorded_context(
             // A Copilot session file reports input only on a request's last call, so the
             // segment's earlier calls, which carried the same system prompt and tools, start
             // with the content measured later.
-            let first = if session.source.kind == "vscode-copilot" || is_web_search(&calls[start]) {
-                calls[start].index
-            } else {
-                anchor
-            };
+            let first =
+                if session.source.kind == Harness::VsCodeCopilot || is_web_search(&calls[start]) {
+                    calls[start].index
+                } else {
+                    anchor
+                };
             added.push((item, first, calls[end - 1].index));
         }
         start = end;

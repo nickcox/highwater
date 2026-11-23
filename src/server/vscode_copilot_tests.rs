@@ -50,7 +50,7 @@ fn sessions_with_requests_are_listed_once() {
         .iter()
         .find(|entry| entry.display_name == "Fix the failing parser test")
         .expect("agent session");
-    assert_eq!(agent.harness, "vscode-copilot");
+    assert_eq!(agent.harness, Harness::VsCodeCopilot);
     assert_eq!(
         agent.id,
         sources::vscode_copilot_reference("11111111-agent")

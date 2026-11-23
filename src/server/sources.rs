@@ -12,6 +12,7 @@ use crate::{
     },
     codex::discovery::{self as codex_discovery, ListingCache as CodexListingCache, TitleIndex},
     copilot::discovery::{self as copilot_discovery, ListingCache as CopilotListingCache},
+    domain::Harness,
     opencode::storage::{self, CatalogTracker},
     source::{
         claude_code_reference, codex_reference, copilot_reference, opencode_reference,
@@ -29,6 +30,50 @@ use std::{
         Arc, Mutex,
     },
 };
+
+#[cfg(test)]
+#[test]
+fn session_references_keep_their_existing_values() {
+    let root = canonical_root(Path::new("fixtures/pi")).expect("fixture root");
+    let pi = discover(&root, None)
+        .expect("Pi sessions")
+        .into_iter()
+        .find(|entry| entry.file_name == "simple.jsonl")
+        .expect("Pi fixture");
+    let fallback = TranscriptFile {
+        path: PathBuf::from("fallback.jsonl"),
+        kind: FileKind::Subagent,
+        stamp: discovery::FileStamp {
+            byte_size: 0,
+            modified_nanos: None,
+        },
+        modified: None,
+        metadata_stamp: None,
+    };
+    let references = [
+        pi.id,
+        opencode_reference("native-id"),
+        claude_code_reference("native-id", None),
+        claude_code_reference("native-id", Some("agent-id")),
+        claude_code_fallback_reference(&fallback),
+        codex_reference("native-id"),
+        copilot_reference("native-id"),
+        vscode_copilot_reference("native-id"),
+    ];
+    assert_eq!(
+        references,
+        [
+            "pi-b23b39f035d5",
+            "opencode-aa1df3e6ac6b",
+            "claude-code-1707e344604f",
+            "claude-code-f77a31648405",
+            "claude-code-65df0603632a",
+            "codex-75d7f0e4a3ac",
+            "copilot-3f9e422bb032",
+            "vscode-copilot-75d209591391",
+        ]
+    );
+}
 
 pub(super) struct SourceSet {
     pub pi_root: Option<PathBuf>,
@@ -208,10 +253,10 @@ pub(super) fn default_vscode_user_dirs(home: &Path) -> Vec<PathBuf> {
 }
 
 pub(super) fn vscode_copilot_reference(session_id: &str) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater VS Code Copilot session reference v1");
-    hash.update(b"id\0");
-    hash.update(session_id.as_bytes());
-    format!("vscode-copilot-{}", &hash.finalize().to_hex()[..12])
+    Harness::VsCodeCopilot.session_reference(|hash| {
+        hash.update(b"id\0");
+        hash.update(session_id.as_bytes());
+    })
 }
 
 fn vscode_copilot_entry(
@@ -251,7 +296,7 @@ fn vscode_copilot_entry(
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: "vscode-copilot".into(),
+        harness: Harness::VsCodeCopilot,
         parent_reference: None,
         subagent_type: None,
         locator: Some(SessionLocator::VsCodeCopilotFile { path: file.path }),
@@ -290,10 +335,10 @@ impl VsCodeCopilotSource {
 /// A transcript without a session ID (for example one whose first record is
 /// still being written) is listed under a reference derived from its file name.
 fn claude_code_fallback_reference(file: &TranscriptFile) -> String {
-    let mut hash = blake3::Hasher::new_derive_key("Highwater Claude Code session reference v1");
-    hash.update(b"file\0");
-    hash.update(file.path.file_name().unwrap_or_default().as_encoded_bytes());
-    format!("claude-code-{}", &hash.finalize().to_hex()[..12])
+    Harness::ClaudeCode.session_reference(|hash| {
+        hash.update(b"file\0");
+        hash.update(file.path.file_name().unwrap_or_default().as_encoded_bytes());
+    })
 }
 
 fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
@@ -350,7 +395,7 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: "claude-code".into(),
+        harness: Harness::ClaudeCode,
         parent_reference: session_id
             .filter(|_| subagent)
             .map(|session_id| claude_code_reference(session_id, None)),
@@ -447,7 +492,7 @@ fn codex_entry(
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: "codex".into(),
+        harness: Harness::Codex,
         parent_reference: child.map(|child| codex_reference(&child.parent_thread_id)),
         subagent_type: child
             .and_then(|child| child.kind.as_deref())
@@ -533,7 +578,7 @@ fn copilot_entry(
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: "copilot".into(),
+        harness: Harness::Copilot,
         parent_reference: None,
         subagent_type: None,
         locator: Some(SessionLocator::CopilotFile { path: file.path }),
@@ -709,7 +754,7 @@ impl MixedScanner {
                                 session.updated_at_ms,
                             ),
                             modified_nanos: None,
-                            harness: "opencode".into(),
+                            harness: Harness::OpenCode,
                             parent_reference: session.parent_id.as_deref().map(opencode_reference),
                             subagent_type: None,
                             locator: Some(SessionLocator::OpenCode {
