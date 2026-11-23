@@ -181,6 +181,7 @@ describe('Context row and segment', () => {
       } else {
         const button = slot.getByRole('button', { name: /Open Context tab/ });
         expect(button.textContent).toBe('31%');
+        expect(button.firstElementChild?.getAttribute('data-icon')).toBe('highwater/gauge');
         const bar = button.querySelector('[data-context-composition]')!;
         expect(Array.from(bar.querySelectorAll('span'), (part) => part.style.width)).toEqual([
           '25%',
@@ -219,7 +220,7 @@ describe('Context row and segment', () => {
       );
     },
   );
-  it('shows just the percentage in the banner when composition is unavailable', async () => {
+  it('keeps the percentage in the banner when composition is unavailable', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockImplementation(async () => Response.json(ok(undefined, null))),

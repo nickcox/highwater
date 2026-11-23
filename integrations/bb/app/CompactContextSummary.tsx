@@ -1,4 +1,8 @@
-import { experimental_useCodeTheme, experimental_usePluginId } from '@get-bb/plugin-sdk/app';
+import {
+  experimental_Icon as Icon,
+  experimental_useCodeTheme,
+  experimental_usePluginId,
+} from '@get-bb/plugin-sdk/app';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Button } from '../components/ui/button';
 import type { ContextComposition } from '../state';
@@ -46,6 +50,7 @@ export function CompactContextSummary({
                 : 'Open Context tab, usage unavailable'
             }
           >
+            <Icon name="highwater/gauge" className="size-3.5 shrink-0" aria-hidden />
             {segments && (
               <span
                 className="flex h-[7px] w-[72px] shrink-0 overflow-hidden rounded"
