@@ -294,7 +294,5 @@ fn revision_item(
         metadata,
         serialized_size_bytes: entry.source_bytes,
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     }
 }

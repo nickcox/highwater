@@ -17,8 +17,6 @@ pub(super) fn fake_session() -> NormalizedSession {
             start_call: 1,
             end_call: 1,
         }],
-        first_model_call: 1,
-        last_model_call: 1,
     };
     NormalizedSession {
         harness_session_cost: None,

@@ -4,16 +4,6 @@ use super::*;
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 struct ItemIndex(usize);
 
-#[derive(Debug)]
-struct PendingCompaction {
-    record_id: String,
-    source_item_ids: Vec<String>,
-    retained_item_ids: Vec<String>,
-    before_model_call: usize,
-    tokens_before: Option<u64>,
-    summary_call: Option<usize>,
-}
-
 /// What a compaction entry records besides its summary.
 pub(super) struct CompactionRecord {
     pub first_kept_position: Option<usize>,
@@ -53,7 +43,7 @@ pub(super) struct ReconstructionState {
     legacy_tools: Vec<ItemIndex>,
     /// Thinking items that leave the context at the next user message.
     turn_thinking: Vec<ItemIndex>,
-    compactions: Vec<PendingCompaction>,
+    compactions: Vec<NormalizedCompaction>,
     last_compaction: Option<String>,
 }
 
@@ -179,7 +169,7 @@ impl ReconstructionState {
                 .chain(&self.active)
             {
                 let item = &mut self.items[item_index.0];
-                extend_presence(item, index);
+                item.extend_presence(index);
             }
             let contextual = assistant_response_is_contextual(call.stop_reason.as_deref());
             self.calls.push(NormalizedModelCall {
@@ -318,14 +308,19 @@ impl ReconstructionState {
                 .insert("inherited".into(), "true".into());
             return;
         }
-        self.last_compaction = Some(summary_id);
-        self.compactions.push(PendingCompaction {
-            record_id,
+        self.last_compaction = Some(summary_id.clone());
+        self.compactions.push(NormalizedCompaction {
+            id: summary_id.clone(),
+            summary_item_id: summary_id,
             source_item_ids,
             retained_item_ids,
             before_model_call: self.calls.len() + 1,
             tokens_before,
-            summary_call,
+            details: CompactionDetails {
+                rule: Some(CompactionRule::KeptFromEntry),
+                summary_call,
+                ..CompactionDetails::default()
+            },
         });
     }
 
@@ -339,7 +334,7 @@ impl ReconstructionState {
     ) -> usize {
         let index = self.calls.len() + 1;
         for member in members {
-            extend_presence(&mut self.items[member.0], index);
+            self.items[member.0].extend_presence(index);
         }
         let target = self
             .calls
@@ -370,93 +365,18 @@ impl ReconstructionState {
 
     /// Visibility filtering, pruning, and output ordering happen only here.
     pub(super) fn finish(self) -> NormalizedSession {
-        let Self {
-            id,
-            source,
-            working_directory,
-            mut items,
-            calls,
-            compactions,
-            ..
-        } = self;
-        for item in &mut items {
-            // Materialize the legacy normalized lifetime fields only at finalization.
-            let lifetime = item.lifetime();
-            item.first_model_call = lifetime.map_or(0, |lifetime| lifetime.first_call);
-            item.last_model_call = lifetime.map_or(0, |lifetime| lifetime.last_call);
-        }
-        let mut lineage = Vec::new();
-        let mut compaction_dtos = Vec::new();
-        for compaction in compactions {
-            let summary_id = format!("pi:{id}:compaction:{}", compaction.record_id);
-            for old_id in &compaction.source_item_ids {
-                lineage.push(NormalizedLineageEdge {
-                    from: old_id.clone(),
-                    to: summary_id.clone(),
-                    kind: "frameworkCompaction".into(),
-                });
-            }
-            compaction_dtos.push(NormalizedCompaction {
-                id: summary_id.clone(),
-                before_model_call: compaction.before_model_call,
-                source_item_ids: compaction.source_item_ids,
-                retained_item_ids: compaction.retained_item_ids,
-                summary_item_id: summary_id,
-                tokens_before: compaction.tokens_before,
-                details: CompactionDetails {
-                    rule: Some(CompactionRule::KeptFromEntry),
-                    summary_call: compaction.summary_call,
-                    ..CompactionDetails::default()
-                },
-            });
-        }
-        let terminal_boundary = calls.len() + 1;
-        let terminal_summary_ids: HashSet<String> = compaction_dtos
-            .iter()
-            .filter(|event| event.before_model_call == terminal_boundary)
-            .map(|event| event.summary_item_id.clone())
-            .collect();
-        let mut context_items: Vec<_> = items
-            .into_iter()
-            .filter(|item| !item.presence.is_empty() || terminal_summary_ids.contains(&item.id))
-            .collect();
-        let visible_ids: HashSet<String> =
-            context_items.iter().map(|item| item.id.clone()).collect();
-        compaction_dtos.retain(|event| visible_ids.contains(&event.summary_item_id));
-        for event in &mut compaction_dtos {
-            event.source_item_ids.retain(|id| visible_ids.contains(id));
-            event
-                .retained_item_ids
-                .retain(|id| visible_ids.contains(id));
-        }
-        lineage.retain(|edge| visible_ids.contains(&edge.from) && visible_ids.contains(&edge.to));
-        context_items.sort_by(|left, right| {
-            left.first_model_call
-                .cmp(&right.first_model_call)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        compaction_dtos.sort_by(|left, right| {
-            left.before_model_call
-                .cmp(&right.before_model_call)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        lineage.sort_by(|left, right| {
-            left.to
-                .cmp(&right.to)
-                .then_with(|| left.from.cmp(&right.from))
-                .then_with(|| left.kind.cmp(&right.kind))
-        });
         NormalizedSession {
             harness_session_cost: None,
             turns: Vec::new(),
-            id,
-            source,
+            id: self.id,
+            source: self.source,
             title: None,
-            working_directory,
-            context_items,
-            model_calls: calls,
-            compactions: compaction_dtos,
-            lineage,
+            working_directory: self.working_directory,
+            context_items: self.items,
+            model_calls: self.calls,
+            compactions: self.compactions,
+            lineage: Vec::new(),
         }
+        .finish_reconstruction(UnusedSummaries::KeepTerminal)
     }
 }

@@ -57,8 +57,6 @@ fn terminal_session() -> NormalizedSession {
     item.kind = ContextItemKind::CompactionSummary;
     item.payload = TokenizationPayload::CompactionSummary(String::new());
     item.presence.clear();
-    item.first_model_call = 0;
-    item.last_model_call = 0;
     session.model_calls.clear();
     session.compactions.push(NormalizedCompaction {
         id: "compaction".into(),
@@ -403,7 +401,6 @@ fn export_live_contract() {
     next.target.model = Some("not-a-known-model".into());
     mixed.model_calls.push(next);
     mixed.context_items[0].presence[0].end_call = 2;
-    mixed.context_items[0].last_model_call = 2;
     push(
         &mut cases,
         "mixed-estimate-coverage",
@@ -432,7 +429,6 @@ fn export_live_contract() {
         })
         .collect();
     for item in &mut repeated.context_items {
-        item.last_model_call = 4;
         item.presence[0].end_call = 4;
     }
     cases.push((

@@ -302,8 +302,6 @@ impl<'t> State<'t> {
                 serialized_size_bytes: content_bytes(&context),
                 payload: TokenizationPayload::CustomMessage(context),
                 presence: Vec::new(),
-                first_model_call: 0,
-                last_model_call: 0,
             });
         }
         let message = request
@@ -340,8 +338,6 @@ impl<'t> State<'t> {
             serialized_size_bytes: content_bytes(&content),
             payload: TokenizationPayload::UserMessage(content),
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
         let prompt_tokens = counter(
             request
@@ -526,8 +522,6 @@ impl<'t> State<'t> {
             serialized_size_bytes: bytes,
             payload,
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
         index
     }
@@ -554,7 +548,7 @@ impl<'t> State<'t> {
             .map(|item| self.items[*item].id.clone())
             .collect();
         for item in in_context {
-            extend_presence(&mut self.items[item], index);
+            self.items[item].extend_presence(index);
         }
         let mut blocks = Vec::new();
         if !round.response.is_empty() {
@@ -645,8 +639,6 @@ impl<'t> State<'t> {
                     thinking_reported: true,
                 },
                 presence: Vec::new(),
-                first_model_call: 0,
-                last_model_call: 0,
             });
         }
         for (id, name, arguments) in tools {
@@ -718,8 +710,6 @@ impl<'t> State<'t> {
             serialized_size_bytes: byte_length(summary),
             payload: TokenizationPayload::CompactionSummary(summary.to_owned()),
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
         let (context, conversation): (Vec<usize>, Vec<usize>) = retained
             .iter()
@@ -801,8 +791,6 @@ impl<'t> State<'t> {
                 is_error: false,
             },
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
     }
 
@@ -830,57 +818,10 @@ impl<'t> State<'t> {
             ..
         } = self;
         for item in &mut items {
-            let lifetime = item.lifetime();
-            item.first_model_call = lifetime.map_or(0, |lifetime| lifetime.first_call);
-            item.last_model_call = lifetime.map_or(0, |lifetime| lifetime.last_call);
             if item.label.is_empty() {
                 item.label = assistant_label(&item.payload);
             }
         }
-        // An item added after the last call (the final response) was never sent.
-        let visible: HashSet<String> = items
-            .iter()
-            .filter(|item| !item.presence.is_empty())
-            .map(|item| item.id.clone())
-            .collect();
-        let compactions: Vec<NormalizedCompaction> = compactions
-            .into_iter()
-            .filter(|compaction| visible.contains(&compaction.summary_item_id))
-            .map(|mut compaction| {
-                compaction.source_item_ids.retain(|id| visible.contains(id));
-                compaction
-                    .retained_item_ids
-                    .retain(|id| visible.contains(id));
-                compaction
-            })
-            .collect();
-        let mut lineage: Vec<NormalizedLineageEdge> = compactions
-            .iter()
-            .flat_map(|compaction| {
-                compaction
-                    .source_item_ids
-                    .iter()
-                    .map(|source| NormalizedLineageEdge {
-                        from: source.clone(),
-                        to: compaction.summary_item_id.clone(),
-                        kind: "frameworkCompaction".into(),
-                    })
-            })
-            .collect();
-        lineage.sort_by(|left, right| {
-            left.to
-                .cmp(&right.to)
-                .then_with(|| left.from.cmp(&right.from))
-        });
-        let mut context_items: Vec<_> = items
-            .into_iter()
-            .filter(|item| visible.contains(&item.id))
-            .collect();
-        context_items.sort_by(|left, right| {
-            left.first_model_call
-                .cmp(&right.first_model_call)
-                .then_with(|| left.id.cmp(&right.id))
-        });
         NormalizedSession {
             // Copilot's own total for the session: the credits it recorded for each request.
             harness_session_cost: (credits > 0.0).then_some(HarnessSessionCost {
@@ -891,12 +832,13 @@ impl<'t> State<'t> {
             source,
             title,
             working_directory,
-            context_items,
+            context_items: items,
             model_calls: calls,
             turns,
             compactions,
-            lineage,
+            lineage: Vec::new(),
         }
+        .finish_reconstruction(UnusedSummaries::Drop)
     }
 }
 
@@ -1068,19 +1010,6 @@ fn content_bytes(content: &MessageContent) -> u64 {
             _ => 0,
         })
         .fold(0_u64, u64::saturating_add)
-}
-
-fn extend_presence(item: &mut NormalizedContextItem, call_index: usize) {
-    if let Some(last) = item.presence.last_mut() {
-        if last.end_call.checked_add(1) == Some(call_index) {
-            last.end_call = call_index;
-            return;
-        }
-    }
-    item.presence.push(PresenceRange {
-        start_call: call_index,
-        end_call: call_index,
-    });
 }
 
 fn assistant_label(payload: &TokenizationPayload) -> String {

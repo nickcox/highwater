@@ -362,11 +362,7 @@ pub(super) fn validate_normalized_session(
             .map(Vec::as_slice)
             .unwrap_or_default();
         if item.presence.is_empty() {
-            if !expected.is_empty()
-                || item.first_model_call != 0
-                || item.last_model_call != 0
-                || !summary_ids.contains(item.id.as_str())
-            {
+            if !expected.is_empty() || !summary_ids.contains(item.id.as_str()) {
                 return Err(invalid_session(format!(
                     "item {} has no presence but is not a structural compaction summary",
                     item.id
@@ -395,12 +391,9 @@ pub(super) fn validate_normalized_session(
             }
             previous_end = range.end_call;
         }
-        if item.presence.as_slice() != expected
-            || item.first_model_call != item.presence[0].start_call
-            || item.last_model_call != previous_end
-        {
+        if item.presence.as_slice() != expected {
             return Err(invalid_session(format!(
-                "item {} lifetime or presence does not match call membership",
+                "item {} presence does not match call membership",
                 item.id
             )));
         }

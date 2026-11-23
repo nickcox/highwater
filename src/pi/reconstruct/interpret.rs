@@ -45,8 +45,6 @@ fn context_item(
         metadata: BTreeMap::new(),
         serialized_size_bytes: entry.source_bytes,
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     }
 }
 

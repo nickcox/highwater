@@ -407,8 +407,8 @@ fn changed_checkpoints_retain_only_unchanged_global_revisions() {
                     Some("keep")
                 );
                 assert_eq!(item.presence.len(), 1);
-                assert_eq!(item.first_model_call, 1);
-                assert_eq!(item.last_model_call, 2);
+                let lifetime = item.lifetime().expect("tool loadout presence");
+                assert_eq!((lifetime.first_call, lifetime.last_call), (1, 2));
             }
         }
     }

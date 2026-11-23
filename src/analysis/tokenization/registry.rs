@@ -424,8 +424,6 @@ mod tests {
             serialized_size_bytes: 20,
             payload: TokenizationPayload::UserMessage(MessageContent::text(text)),
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         }
     }
 
@@ -594,8 +592,6 @@ mod tests {
                 thinking_reported: false,
             },
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         };
         let destination_absent = ModelTarget {
             provider: Some("provider".into()),

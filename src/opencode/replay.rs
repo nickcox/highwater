@@ -163,8 +163,6 @@ impl State {
             serialized_size_bytes: 0,
             payload,
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
         position
     }
@@ -192,22 +190,7 @@ impl State {
                 None => item.original,
             };
             let item = &mut self.session.context_items[position];
-            if let Some(last) = item
-                .presence
-                .last_mut()
-                .filter(|last| last.end_call.checked_add(1) == Some(call_index))
-            {
-                last.end_call = call_index;
-            } else {
-                item.presence.push(PresenceRange {
-                    start_call: call_index,
-                    end_call: call_index,
-                });
-            }
-            if item.first_model_call == 0 {
-                item.first_model_call = call_index;
-            }
-            item.last_model_call = call_index;
+            item.extend_presence(call_index);
             result.push(item.id.clone());
         }
         result
@@ -524,12 +507,7 @@ fn assistant(
             None,
         );
         let item = &mut state.session.context_items[index];
-        item.presence.push(PresenceRange {
-            start_call: call_index,
-            end_call: call_index,
-        });
-        item.first_model_call = call_index;
-        item.last_model_call = call_index;
+        item.extend_presence(call_index);
         context_item_ids.push(item.id.clone());
     }
     let mut blocks = Vec::new();

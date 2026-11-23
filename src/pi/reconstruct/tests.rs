@@ -239,7 +239,7 @@ fn normalized_fixture_parity() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "5578112a14b3f17f90f358fecfb9eed879b4c09a9aa49900add9a8337bb24be8"
+        "d2b2e1a0da8d9089bf341c4211c5af3d828f1f8c661889c992d1b4a6cf9d9ee2"
     );
 }
 
@@ -325,7 +325,10 @@ fn consecutive_compactions_keep_stable_indexes_and_defer_response_filtering() {
         .iter()
         .find(|item| item.source_record_id.as_deref() == Some("a2"))
         .expect("response used by next call");
-    assert_eq!(response.first_model_call, 3);
+    assert_eq!(
+        response.lifetime().map(|lifetime| lifetime.first_call),
+        Some(3)
+    );
     assert_eq!(
         response.presence,
         vec![PresenceRange {
@@ -549,7 +552,10 @@ fn compaction_preserves_retained_tail_and_starts_summary_exposure() {
         .iter()
         .find(|item| item.id == event.summary_item_id)
         .expect("summary");
-    assert_eq!(summary.first_model_call, 3);
+    assert_eq!(
+        summary.lifetime().map(|lifetime| lifetime.first_call),
+        Some(3)
+    );
     assert_eq!(
         summary.presence,
         vec![PresenceRange {
@@ -569,7 +575,7 @@ fn terminal_compaction_summary_is_kept_without_fake_presence() {
         .find(|item| item.id == event.summary_item_id)
         .expect("summary");
     assert!(summary.presence.is_empty());
-    assert_eq!(summary.first_model_call, 0);
+    assert_eq!(summary.lifetime(), None);
 }
 
 #[test]

@@ -76,8 +76,6 @@ pub(super) fn add_unrecorded_context(
             start_call: first,
             end_call: last,
         }];
-        item.first_model_call = first;
-        item.last_model_call = last;
         for call in &mut session.model_calls {
             if (first..=last).contains(&call.index) {
                 call.context_item_ids.insert(0, item.id.clone());
@@ -169,8 +167,6 @@ fn unrecorded_context(
             approximate,
         },
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     }
 }
 
@@ -264,7 +260,10 @@ mod tests {
         );
         let spans: Vec<_> = unrecorded(&session)
             .iter()
-            .map(|item| (item.first_model_call, item.last_model_call))
+            .map(|item| {
+                let lifetime = item.lifetime().expect("unrecorded context presence");
+                (lifetime.first_call, lifetime.last_call)
+            })
             .collect();
         // The search response is not measured, but the item measured after it covers it.
         assert_eq!(spans, [(1, 1), (2, 3), (4, 4)]);
@@ -283,7 +282,10 @@ mod tests {
         let items = unrecorded(&session);
         let spans: Vec<_> = items
             .iter()
-            .map(|item| (item.first_model_call, item.last_model_call))
+            .map(|item| {
+                let lifetime = item.lifetime().expect("unrecorded context presence");
+                (lifetime.first_call, lifetime.last_call)
+            })
             .collect();
         // One before the compaction and one measured again at the call after it.
         assert_eq!(spans, [(1, 3), (4, 4)]);
@@ -335,7 +337,10 @@ mod tests {
         );
         let items = unrecorded(&session);
         assert_eq!(items.len(), 1);
-        assert_eq!(items[0].first_model_call, 2);
+        assert_eq!(
+            items[0].lifetime().map(|lifetime| lifetime.first_call),
+            Some(2)
+        );
     }
 
     #[test]

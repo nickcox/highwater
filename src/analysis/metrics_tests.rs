@@ -35,8 +35,6 @@ fn item(id: &str, first: usize) -> NormalizedContextItem {
             start_call: first,
             end_call: first,
         }],
-        first_model_call: first,
-        last_model_call: first,
     }
 }
 

@@ -317,7 +317,7 @@ impl State<'_> {
             .map(|item| self.items[*item].id.clone())
             .collect();
         for item in &self.active {
-            extend_presence(&mut self.items[*item], index);
+            self.items[*item].extend_presence(index);
         }
         let failed = record.flag("isApiErrorMessage");
         let model = message
@@ -390,8 +390,6 @@ impl State<'_> {
                 thinking_reported: false,
             },
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
         self.responses.insert(
             message_id.clone(),
@@ -578,8 +576,6 @@ impl State<'_> {
             serialized_size_bytes: record.source_bytes,
             payload,
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         };
         if kind == ContextItemKind::CompactionSummary {
             self.apply_summary(item);
@@ -642,8 +638,6 @@ impl State<'_> {
                 is_error,
             },
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
     }
 
@@ -734,8 +728,6 @@ impl State<'_> {
             serialized_size_bytes: record.source_bytes,
             payload: TokenizationPayload::CustomMessage(MessageContent { parts }),
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         });
     }
 
@@ -890,67 +882,25 @@ impl State<'_> {
             ..
         } = self;
         for item in &mut items {
-            let lifetime = item.lifetime();
-            item.first_model_call = lifetime.map_or(0, |lifetime| lifetime.first_call);
-            item.last_model_call = lifetime.map_or(0, |lifetime| lifetime.last_call);
             if item.label.is_empty() {
                 item.label = assistant_label(&item.payload);
             }
         }
-        let visible: HashSet<String> = items
-            .iter()
-            .filter(|item| !item.presence.is_empty())
-            .map(|item| item.id.clone())
-            .collect();
-        let mut lineage = Vec::new();
-        let mut normalized_compactions = Vec::new();
-        for compaction in compactions {
-            let Some(summary) = compaction.summary_item_id else {
-                continue;
-            };
-            if !visible.contains(&summary) {
-                continue;
-            }
-            let sources: Vec<String> = compaction
-                .source_item_ids
-                .into_iter()
-                .filter(|id| visible.contains(id))
-                .collect();
-            for source in &sources {
-                lineage.push(NormalizedLineageEdge {
-                    from: source.clone(),
-                    to: summary.clone(),
-                    kind: "frameworkCompaction".into(),
-                });
-            }
-            normalized_compactions.push(NormalizedCompaction {
-                id: summary.clone(),
-                before_model_call: compaction.before_model_call,
-                source_item_ids: sources,
-                retained_item_ids: compaction
-                    .retained_item_ids
-                    .into_iter()
-                    .filter(|id| visible.contains(id))
-                    .collect(),
-                summary_item_id: summary,
-                tokens_before: compaction.tokens_before,
-                details: compaction.details,
-            });
-        }
-        let mut context_items: Vec<_> = items
+        let compactions = compactions
             .into_iter()
-            .filter(|item| visible.contains(&item.id))
+            .filter_map(|compaction| {
+                let summary = compaction.summary_item_id?;
+                Some(NormalizedCompaction {
+                    id: summary.clone(),
+                    before_model_call: compaction.before_model_call,
+                    source_item_ids: compaction.source_item_ids,
+                    retained_item_ids: compaction.retained_item_ids,
+                    summary_item_id: summary,
+                    tokens_before: compaction.tokens_before,
+                    details: compaction.details,
+                })
+            })
             .collect();
-        context_items.sort_by(|left, right| {
-            left.first_model_call
-                .cmp(&right.first_model_call)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        lineage.sort_by(|left, right| {
-            left.to
-                .cmp(&right.to)
-                .then_with(|| left.from.cmp(&right.from))
-        });
         NormalizedSession {
             harness_session_cost: None,
             turns,
@@ -958,25 +908,13 @@ impl State<'_> {
             source,
             title: None,
             working_directory,
-            context_items,
+            context_items: items,
             model_calls: calls,
-            compactions: normalized_compactions,
-            lineage,
+            compactions,
+            lineage: Vec::new(),
         }
+        .finish_reconstruction(UnusedSummaries::Drop)
     }
-}
-
-pub(crate) fn extend_presence(item: &mut NormalizedContextItem, call_index: usize) {
-    if let Some(last) = item.presence.last_mut() {
-        if last.end_call.checked_add(1) == Some(call_index) {
-            last.end_call = call_index;
-            return;
-        }
-    }
-    item.presence.push(PresenceRange {
-        start_call: call_index,
-        end_call: call_index,
-    });
 }
 
 fn timestamp_ms(record: &Record) -> Option<i64> {

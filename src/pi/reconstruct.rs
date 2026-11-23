@@ -823,19 +823,6 @@ fn canonical_json(value: &Value) -> String {
     serde_json::to_string(value).expect("serde_json::Value is serializable")
 }
 
-fn extend_presence(item: &mut NormalizedContextItem, call_index: usize) {
-    if let Some(last) = item.presence.last_mut() {
-        if last.end_call.checked_add(1) == Some(call_index) {
-            last.end_call = call_index;
-            return;
-        }
-    }
-    item.presence.push(PresenceRange {
-        start_call: call_index,
-        end_call: call_index,
-    });
-}
-
 use std::collections::BTreeMap;
 
 #[cfg(test)]

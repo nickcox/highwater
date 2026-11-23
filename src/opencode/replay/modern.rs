@@ -243,12 +243,7 @@ fn push_call(
             None,
         );
         let item = &mut state.session.context_items[prompt];
-        item.presence.push(PresenceRange {
-            start_call: index,
-            end_call: index,
-        });
-        item.first_model_call = index;
-        item.last_model_call = index;
+        item.extend_presence(index);
         members.push(item.id.clone());
     }
     let pending = state.pending_compaction.take();

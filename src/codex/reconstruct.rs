@@ -2,10 +2,7 @@
 //! docs/sources/codex.md describes the rules.
 
 use crate::{
-    claude_code::{
-        reconstruct::{assistant_label, extend_presence},
-        Limitation,
-    },
+    claude_code::{reconstruct::assistant_label, Limitation},
     domain::*,
     pi::reconstruct::{bounded_label, display_path_argument, first_nonempty_line},
 };
@@ -28,17 +25,6 @@ struct OpenResponse {
     after_input: bool,
     /// The first call of its turn.
     starts_turn: bool,
-}
-
-struct PendingCompaction {
-    before_model_call: usize,
-    source_item_ids: Vec<String>,
-    retained_item_ids: Vec<String>,
-    summary_item_id: String,
-    /// The compaction's own call, which Codex 0.167 and later record.
-    summary_call: Option<usize>,
-    /// Whether this is a `compacted` record rather than a reset inferred from usage.
-    recorded: bool,
 }
 
 struct TurnStart {
@@ -69,7 +55,7 @@ struct State {
     turn_thinking: Vec<usize>,
     /// Tool name and arguments by call ID, for labelling results.
     tool_calls: HashMap<String, (String, String)>,
-    compactions: Vec<PendingCompaction>,
+    compactions: Vec<NormalizedCompaction>,
     next_compaction: Option<String>,
     limitations: BTreeSet<Limitation>,
     /// A forked or spawned thread's file starts with a copy of the parent's history,
@@ -451,7 +437,7 @@ impl State {
                 .map(|item| self.items[*item].id.clone())
                 .collect();
             for item in &self.active {
-                extend_presence(&mut self.items[*item], index);
+                self.items[*item].extend_presence(index);
             }
             self.calls.push(NormalizedModelCall {
                 retried: false,
@@ -592,23 +578,24 @@ impl State {
                 "Context reset · inferred from usage",
             );
             let index = call + 1;
-            extend_presence(&mut self.items[summary], index);
+            self.items[summary].extend_presence(index);
             let summary_id = self.items[summary].id.clone();
             self.calls[call]
                 .context_item_ids
                 .insert(self.loadout, summary_id.clone());
             self.active.insert(self.loadout, summary);
             self.calls[call].compaction_before = Some(summary_id.clone());
-            self.compactions.push(PendingCompaction {
+            self.compactions.push(NormalizedCompaction {
                 before_model_call: index,
                 source_item_ids: earlier
                     .iter()
                     .map(|index| self.items[*index].id.clone())
                     .collect(),
                 retained_item_ids: Vec::new(),
+                id: summary_id.clone(),
                 summary_item_id: summary_id,
-                summary_call: None,
-                recorded: false,
+                tokens_before: None,
+                details: CompactionDetails::default(),
             });
             self.limitations.insert(Limitation::InferredContextReset);
         }
@@ -872,18 +859,23 @@ impl State {
             if let Some(compaction) = self.compactions.last_mut() {
                 compaction.source_item_ids.extend(source_item_ids);
                 compaction.retained_item_ids.extend(retained_item_ids);
-                compaction.summary_call = compaction.summary_call.or(summary_call);
+                compaction.details.summary_call = compaction.details.summary_call.or(summary_call);
             }
             return;
         }
         let summary_id = self.items[summary.expect("set above")].id.clone();
-        self.compactions.push(PendingCompaction {
+        self.compactions.push(NormalizedCompaction {
             before_model_call: self.calls.len() + 1,
             source_item_ids,
             retained_item_ids,
+            id: summary_id.clone(),
             summary_item_id: summary_id.clone(),
-            summary_call,
-            recorded: true,
+            tokens_before: None,
+            details: CompactionDetails {
+                rule: Some(CompactionRule::ReplacementHistory),
+                summary_call,
+                ..CompactionDetails::default()
+            },
         });
         self.next_compaction = Some(summary_id);
     }
@@ -907,7 +899,7 @@ impl State {
             .map(|item| self.items[*item].id.clone())
             .collect();
         for item in &self.active {
-            extend_presence(&mut self.items[*item], index);
+            self.items[*item].extend_presence(index);
         }
         self.calls.push(NormalizedModelCall {
             retried: false,
@@ -951,90 +943,16 @@ impl State {
     ) -> NormalizedSession {
         let Self {
             mut items,
-            mut calls,
+            calls,
             turns,
             compactions,
             ..
         } = self;
         for item in &mut items {
-            let lifetime = item.lifetime();
-            item.first_model_call = lifetime.map_or(0, |lifetime| lifetime.first_call);
-            item.last_model_call = lifetime.map_or(0, |lifetime| lifetime.last_call);
             if item.label.is_empty() {
                 item.label = assistant_label(&item.payload);
             }
         }
-        let visible: HashSet<String> = items
-            .iter()
-            .filter(|item| !item.presence.is_empty())
-            .map(|item| item.id.clone())
-            .collect();
-        let mut lineage = Vec::new();
-        let mut normalized_compactions = Vec::new();
-        for compaction in compactions {
-            if !visible.contains(&compaction.summary_item_id) {
-                continue;
-            }
-            let sources: Vec<String> = compaction
-                .source_item_ids
-                .into_iter()
-                .filter(|id| visible.contains(id))
-                .collect();
-            for source in &sources {
-                lineage.push(NormalizedLineageEdge {
-                    from: source.clone(),
-                    to: compaction.summary_item_id.clone(),
-                    kind: "frameworkCompaction".into(),
-                });
-            }
-            normalized_compactions.push(NormalizedCompaction {
-                id: compaction.summary_item_id.clone(),
-                before_model_call: compaction.before_model_call,
-                source_item_ids: sources,
-                retained_item_ids: compaction
-                    .retained_item_ids
-                    .into_iter()
-                    .filter(|id| visible.contains(id))
-                    .collect(),
-                summary_item_id: compaction.summary_item_id,
-                tokens_before: None,
-                details: CompactionDetails {
-                    rule: compaction
-                        .recorded
-                        .then_some(CompactionRule::ReplacementHistory),
-                    summary_call: compaction.summary_call,
-                    ..CompactionDetails::default()
-                },
-            });
-        }
-        // A call only names a compaction that is shown.
-        let shown: HashSet<&str> = normalized_compactions
-            .iter()
-            .map(|compaction| compaction.id.as_str())
-            .collect();
-        for call in &mut calls {
-            if call
-                .compaction_before
-                .as_deref()
-                .is_some_and(|id| !shown.contains(id))
-            {
-                call.compaction_before = None;
-            }
-        }
-        let mut context_items: Vec<_> = items
-            .into_iter()
-            .filter(|item| visible.contains(&item.id))
-            .collect();
-        context_items.sort_by(|left, right| {
-            left.first_model_call
-                .cmp(&right.first_model_call)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        lineage.sort_by(|left, right| {
-            left.to
-                .cmp(&right.to)
-                .then_with(|| left.from.cmp(&right.from))
-        });
         NormalizedSession {
             harness_session_cost: None,
             turns,
@@ -1042,11 +960,12 @@ impl State {
             source,
             title: None,
             working_directory,
-            context_items,
+            context_items: items,
             model_calls: calls,
-            compactions: normalized_compactions,
-            lineage,
+            compactions,
+            lineage: Vec::new(),
         }
+        .finish_reconstruction(UnusedSummaries::Drop)
     }
 }
 
@@ -1120,8 +1039,6 @@ fn item(
         serialized_size_bytes: bytes,
         payload,
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     }
 }
 

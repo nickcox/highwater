@@ -194,14 +194,10 @@ fn pruned_tool_results_have_immutable_original_and_placeholder_revisions() {
         .collect::<Vec<_>>();
     assert_eq!(results.len(), 2);
     assert_ne!(results[0].id, results[1].id);
-    assert_eq!(
-        (results[0].first_model_call, results[0].last_model_call),
-        (2, 2)
-    );
-    assert_eq!(
-        (results[1].first_model_call, results[1].last_model_call),
-        (3, 3)
-    );
+    for (item, call) in results.iter().zip([2, 3]) {
+        let lifetime = item.lifetime().expect("tool result presence");
+        assert_eq!((lifetime.first_call, lifetime.last_call), (call, call));
+    }
     assert!(result.session.compactions.is_empty());
     assert!(result.session.lineage.is_empty());
     for (item, expected) in results
@@ -361,7 +357,8 @@ fn compaction_reasoning_is_preserved_in_subsequent_context_and_token_turns() {
             .find(|item| item.id == summary_id)
             .expect("summary");
         assert_eq!(item.kind, ContextItemKind::CompactionSummary);
-        assert_eq!((item.first_model_call, item.last_model_call), (2, 2));
+        let lifetime = item.lifetime().expect("compaction reasoning presence");
+        assert_eq!((lifetime.first_call, lifetime.last_call), (2, 2));
         assert!(!replay.session.model_calls[0]
             .context_item_ids
             .contains(&summary_id));

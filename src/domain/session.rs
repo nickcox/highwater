@@ -1,10 +1,10 @@
-//! Source-neutral records. Presence is authoritative; lifetime zeros are legacy boundary fields.
+//! Source-neutral records. An item's lifetime is derived from its presence.
 
 #[cfg(test)]
 mod tests;
 
 use super::source::CostBasis;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 /// Largest integer that can be represented exactly by the TypeScript/JSON contract.
 pub(crate) const MAX_SAFE_JSON_INTEGER: u64 = 9_007_199_254_740_991;
@@ -28,6 +28,97 @@ pub(crate) struct NormalizedSession {
     pub lineage: Vec<NormalizedLineageEdge>,
     pub harness_session_cost: Option<HarnessSessionCost>,
     pub turns: Vec<RecordedTurn>,
+}
+
+/// Which compaction summaries with no presence a session keeps.
+pub(crate) enum UnusedSummaries {
+    /// Drop them, with their compactions.
+    Drop,
+    /// Keep the summary of a compaction after the last call (Pi).
+    KeepTerminal,
+}
+
+impl NormalizedSession {
+    /// The last step of every reader except OpenCode: keep shown items and compactions
+    /// and build lineage from the sources that remain.
+    pub(crate) fn finish_reconstruction(mut self, unused_summaries: UnusedSummaries) -> Self {
+        let terminal_boundary = self.model_calls.len() + 1;
+        let terminal_summaries: HashSet<&str> = match unused_summaries {
+            UnusedSummaries::Drop => HashSet::new(),
+            UnusedSummaries::KeepTerminal => self
+                .compactions
+                .iter()
+                .filter(|compaction| compaction.before_model_call == terminal_boundary)
+                .map(|compaction| compaction.summary_item_id.as_str())
+                .collect(),
+        };
+        self.context_items.retain(|item| {
+            !item.presence.is_empty() || terminal_summaries.contains(item.id.as_str())
+        });
+        let shown: HashSet<&str> = self
+            .context_items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect();
+        self.compactions
+            .retain(|compaction| shown.contains(compaction.summary_item_id.as_str()));
+        for compaction in &mut self.compactions {
+            compaction
+                .source_item_ids
+                .retain(|id| shown.contains(id.as_str()));
+            compaction
+                .retained_item_ids
+                .retain(|id| shown.contains(id.as_str()));
+        }
+        self.lineage = self
+            .compactions
+            .iter()
+            .flat_map(|compaction| {
+                compaction
+                    .source_item_ids
+                    .iter()
+                    .map(|source| NormalizedLineageEdge {
+                        from: source.clone(),
+                        to: compaction.summary_item_id.clone(),
+                        kind: "frameworkCompaction".into(),
+                    })
+            })
+            .collect();
+        let shown_compactions: HashSet<&str> = self
+            .compactions
+            .iter()
+            .map(|compaction| compaction.id.as_str())
+            .collect();
+        for call in &mut self.model_calls {
+            if call
+                .compaction_before
+                .as_deref()
+                .is_some_and(|id| !shown_compactions.contains(id))
+            {
+                call.compaction_before = None;
+            }
+        }
+        let first_call = |item: &NormalizedContextItem| {
+            item.lifetime().map_or(0, |lifetime| lifetime.first_call)
+        };
+        self.context_items.sort_by(|left, right| {
+            first_call(left)
+                .cmp(&first_call(right))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        self.compactions.sort_by(|left, right| {
+            left.before_model_call
+                .cmp(&right.before_model_call)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        self.lineage.sort_by(|left, right| {
+            left.to
+                .cmp(&right.to)
+                .then_with(|| left.from.cmp(&right.from))
+                .then_with(|| left.kind.cmp(&right.kind))
+        });
+        self
+    }
 }
 
 /// An identified user request and its inclusive range of projected calls.
@@ -167,8 +258,6 @@ pub(crate) struct NormalizedContextItem {
     pub serialized_size_bytes: u64,
     pub payload: TokenizationPayload,
     pub presence: Vec<PresenceRange>,
-    pub first_model_call: usize,
-    pub last_model_call: usize,
 }
 
 impl NormalizedContextItem {
@@ -194,8 +283,6 @@ impl NormalizedContextItem {
                 source_model: Some(model),
             },
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         }
     }
 
@@ -228,12 +315,23 @@ impl NormalizedContextItem {
                 None => TokenizationPayload::Unavailable,
             },
             presence: Vec::new(),
-            first_model_call: 0,
-            last_model_call: 0,
         }
     }
 
-    /// Derived from authoritative presence, not the legacy zero lifetime sentinel.
+    pub(crate) fn extend_presence(&mut self, call_index: usize) {
+        if let Some(last) = self.presence.last_mut() {
+            if last.end_call.checked_add(1) == Some(call_index) {
+                last.end_call = call_index;
+                return;
+            }
+        }
+        self.presence.push(PresenceRange {
+            start_call: call_index,
+            end_call: call_index,
+        });
+    }
+
+    /// The first and last calls in the item's presence, if it has any.
     /// Analysis callers validate all ranges and call membership before deriving metrics.
     pub(crate) fn lifetime(&self) -> Option<ItemLifetime> {
         let first_call = self.presence.first()?.start_call;

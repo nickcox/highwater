@@ -175,7 +175,6 @@ fn item_token_turn_overflow_is_sticky_and_invalidates_session_subtotals() {
         })
         .collect();
     for item in &mut session.context_items {
-        item.last_model_call = 4;
         item.presence[0].end_call = 4;
     }
     // MAX + 1 exhausts the first item. Missing and numeric-zero observations
@@ -356,8 +355,6 @@ fn transition_membership_preserves_context_order_and_metrics() {
             start_call,
             end_call,
         }],
-        first_model_call: start_call,
-        last_model_call: end_call,
     };
     session.context_items = vec![
         item("a", 1, 1),
@@ -524,8 +521,6 @@ fn normalized_presence_must_match_membership_and_ranges() {
         start_call: 2,
         end_call: 1,
     }];
-    session.context_items[0].first_model_call = 2;
-    session.context_items[0].last_model_call = 1;
     let error = analyze(
         session,
         AnalysisConfig {
@@ -589,8 +584,6 @@ fn valid_zero_call_terminal_summary_is_accepted() {
         serialized_size_bytes: 10,
         payload: TokenizationPayload::CompactionSummary(String::new()),
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     };
     let session = NormalizedSession {
         harness_session_cost: None,
@@ -648,8 +641,6 @@ fn terminal_summary_cannot_be_referenced_by_an_earlier_call() {
         serialized_size_bytes: 10,
         payload: TokenizationPayload::CompactionSummary(String::new()),
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     });
     session.model_calls[0]
         .context_item_ids
@@ -689,8 +680,6 @@ fn terminal_summary_does_not_degrade_applicable_exposure() {
         serialized_size_bytes: 10,
         payload: TokenizationPayload::CompactionSummary(String::new()),
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     });
     session.compactions.push(NormalizedCompaction {
         id: "compaction".into(),
@@ -803,7 +792,6 @@ fn mixed_complete_and_unavailable_item_calls_are_partial_with_numeric_value() {
         start_call: 1,
         end_call: 2,
     }];
-    session.context_items[0].last_model_call = 2;
     session.model_calls.push(NormalizedModelCall {
         retried: false,
         tool_loadout_known: false,
@@ -1295,8 +1283,6 @@ fn analyze_with_compaction_details(
         serialized_size_bytes: 10,
         payload: TokenizationPayload::CompactionSummary(String::new()),
         presence: Vec::new(),
-        first_model_call: 0,
-        last_model_call: 0,
     });
     session.compactions.push(NormalizedCompaction {
         id: "compaction".into(),
