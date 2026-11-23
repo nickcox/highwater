@@ -267,7 +267,7 @@ fn normalized_fixture_parity() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "eb8686e4b8df2845b360513423be8707e12623a9bf0f962d0b2fbd4570499fc0"
+        "4e25fc6cabccf9c49a9efb2e67581c6009dac275d2af4e0ecf6622c5f585848b"
     );
 }
 
@@ -378,6 +378,107 @@ fn consecutive_compactions_keep_stable_indexes_and_defer_response_filtering() {
     );
 }
 
+fn timed_message(id: &str, parent: Option<&str>, time: &str, message: Value) -> Value {
+    let mut record = message_record(id, parent, message);
+    record["timestamp"] = serde_json::json!(format!("2026-09-15T{time}Z"));
+    record
+}
+
+#[test]
+fn completed_turns_include_tool_calls_but_not_time_between_prompts() {
+    use serde_json::json;
+
+    let session = parse_records(&[
+        timed_message(
+            "u1",
+            None,
+            "10:00:00",
+            json!({"role":"user","content":"Read a file"}),
+        ),
+        timed_message(
+            "a1",
+            Some("u1"),
+            "10:00:01",
+            json!({"role":"assistant","stopReason":"toolUse",
+            "content":[{"type":"toolCall","id":"read-1","name":"read","arguments":{"path":"file.txt"}}]}),
+        ),
+        timed_message(
+            "t1",
+            Some("a1"),
+            "10:00:03",
+            json!({"role":"toolResult","toolCallId":"read-1","content":"contents"}),
+        ),
+        timed_message(
+            "a2",
+            Some("t1"),
+            "10:00:05.250",
+            json!({"role":"assistant","stopReason":"stop","content":"Done"}),
+        ),
+        timed_message(
+            "u2",
+            Some("a2"),
+            "10:01:00",
+            json!({"role":"user","content":"Thanks"}),
+        ),
+        timed_message(
+            "a3",
+            Some("u2"),
+            "10:01:01",
+            json!({"role":"assistant","stopReason":"stop","content":"No problem"}),
+        ),
+    ]);
+    let [first, second] = session.turns.as_slice() else {
+        panic!("expected two recorded turns");
+    };
+    assert_eq!((first.first_call, first.last_call), (1, 2));
+    assert_eq!(first.prompt.as_deref(), Some("Read a file"));
+    assert_eq!(first.duration_ms, Some(5_250));
+    assert_eq!(first.status, Some(TurnStatus::Completed));
+    assert!(!first.combined_calls);
+    assert_eq!((second.first_call, second.last_call), (3, 3));
+    assert_eq!(second.duration_ms, Some(1_000));
+}
+
+#[test]
+fn a_completed_turn_needs_no_timing_but_a_tool_request_is_not_a_completed_turn() {
+    use serde_json::json;
+
+    let session = parse_records(&[
+        message_record("u1", None, json!({"role":"user","content":"First"})),
+        message_record(
+            "a1",
+            Some("u1"),
+            json!({"role":"assistant","stopReason":"stop"}),
+        ),
+        timed_message(
+            "u2",
+            Some("a1"),
+            "10:00:03",
+            json!({"role":"user","content":"Second"}),
+        ),
+        timed_message(
+            "a2",
+            Some("u2"),
+            "10:00:02",
+            json!({"role":"assistant","stopReason":"stop"}),
+        ),
+        message_record("u3", Some("a2"), json!({"role":"user","content":"Third"})),
+        message_record(
+            "a3",
+            Some("u3"),
+            json!({"role":"assistant","stopReason":"toolUse"}),
+        ),
+    ]);
+    assert_eq!(
+        session
+            .turns
+            .iter()
+            .map(|turn| (turn.first_call, turn.last_call, turn.duration_ms))
+            .collect::<Vec<_>>(),
+        [(1, 1, None), (2, 2, None)]
+    );
+}
+
 #[test]
 fn a_fork_starts_with_the_parent_history_but_not_its_calls() {
     let at = |time: &str| format!("2026-09-15T{time}.000Z");
@@ -399,7 +500,7 @@ fn a_fork_starts_with_the_parent_history_but_not_its_calls() {
             "a1",
             Some("u1"),
             "10:00:01",
-            serde_json::json!({"role":"assistant","content":"first answer"}),
+            serde_json::json!({"role":"assistant","stopReason":"stop","content":"first answer"}),
         ),
         record(
             "u2",
@@ -413,7 +514,7 @@ fn a_fork_starts_with_the_parent_history_but_not_its_calls() {
             "a2",
             Some("c1"),
             "10:00:04",
-            serde_json::json!({"role":"assistant","content":"second answer"}),
+            serde_json::json!({"role":"assistant","stopReason":"stop","content":"second answer"}),
         ),
         record(
             "u3",
@@ -425,9 +526,15 @@ fn a_fork_starts_with_the_parent_history_but_not_its_calls() {
             "a3",
             Some("u3"),
             "12:00:02",
-            serde_json::json!({"role":"assistant","content":"fork answer"}),
+            serde_json::json!({"role":"assistant","stopReason":"stop","content":"fork answer"}),
         ),
     ]);
+    let [turn] = session.turns.as_slice() else {
+        panic!("expected only the fork's turn");
+    };
+    assert_eq!((turn.first_call, turn.last_call), (1, 1));
+    assert_eq!(turn.prompt.as_deref(), Some("in the fork"));
+    assert_eq!(turn.duration_ms, Some(1_000));
     assert_eq!(
         session.model_calls.len(),
         1,

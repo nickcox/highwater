@@ -78,6 +78,8 @@ for (const binaryPath of binaries) {
           records[0].id = 'native-pi-session';
           const longMessage = 'x'.repeat(8191) + '🌊tail';
           records[1].message.content[0].text = longMessage;
+          records[1].timestamp = '2026-01-01T00:00:01Z';
+          records[2].timestamp = '2026-01-01T00:00:04Z';
           await writeFile(
             piFile,
             records.map((record) => JSON.stringify(record)).join('\n') + '\n',
@@ -102,7 +104,15 @@ for (const binaryPath of binaries) {
             gunzipSync(Buffer.from(await response.arrayBuffer())).toString('utf8'),
           );
           expect(analysis.schemaVersion).toBe(1);
-          if (providerId === 'pi') expect(analysis.session.id).toBe('native-pi-session');
+          if (providerId === 'pi') {
+            expect(analysis.session.id).toBe('native-pi-session');
+            expect(analysis.turns[0]).toMatchObject({
+              firstCall: 1,
+              lastCall: 1,
+              durationMs: 3000,
+              status: 'completed',
+            });
+          }
           expect(analysis.modelCalls.length).toBeGreaterThan(0);
           const userItem = analysis.contextItems.find(
             (item: { kind: string }) => item.kind === 'userMessage',

@@ -204,6 +204,26 @@ describe('CallDetails change lists', () => {
     expect(screen.queryByRole('region', { name: 'Turn' })).toBeNull();
   });
 
+  it('labels Pi turn elapsed time as estimated from the transcript', async () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'pi';
+    analysis.turns = [
+      {
+        firstCall: 1,
+        lastCall: 1,
+        prompt: 'Run the tests',
+        durationMs: 2000,
+        status: 'completed',
+        combinedCalls: false,
+      },
+    ];
+    const indexed = indexTestAnalysis(analysis);
+    render(CallDetails, { props: { call: indexed.analysis.modelCalls[0], indexed, pinned: true } });
+    expect(screen.getByRole('region', { name: 'Turn' })).toHaveTextContent('≈ 2 s');
+    await fireEvent.click(screen.getByRole('button', { name: 'What turn elapsed time measures' }));
+    expect(screen.getByText(/Estimated from the user message/)).toBeVisible();
+  });
+
   it('shows a single call’s turn position without a bar', () => {
     const analysis = testAnalysis();
     analysis.turns = [

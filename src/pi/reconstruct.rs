@@ -157,7 +157,12 @@ fn reconstruct_selected(
                     state.apply_reported_thinking(&response_id, tokens, model);
                 }
             }
-            interpret::SelectedEntry::Message(item) => state.apply_message(item, None),
+            interpret::SelectedEntry::Message(item) => {
+                if item.kind == ContextItemKind::UserMessage {
+                    state.start_turn(&item, timestamp(&entries[*entry_index]));
+                }
+                state.apply_message(item, None);
+            }
             interpret::SelectedEntry::System(update) => {
                 state.apply_system(*update, &entries[*entry_index])
             }

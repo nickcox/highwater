@@ -105,7 +105,7 @@ Versions of an item share one row, with a mark at each change; clicking a segmen
 
 On wide screens the River and the lifespans list share the main column, and the call and item inspector appears beside them only while a call or item is selected. Key values and actions stay visible; usage breakdowns, token diagnostics, profiles and identifiers are in disclosures, which stay open or closed as you left them for the rest of the session. **Copy** buttons say when an ID has been copied.
 
-For recognised Codex, Claude Code and VS Code Copilot turns, the **Turn** section below the pinned call’s metrics shows the user prompt, recorded call counts and a bar marking the pinned call’s position in the turn. **Elapsed** measures the whole turn, including tool work, and is unavailable when the source does not record a usable duration. Calls outside a recognised turn have no Turn section.
+For recognised Pi, Codex, Claude Code and VS Code Copilot turns, the **Turn** section below the pinned call’s metrics shows the user prompt, recorded call counts and the pinned call’s position in the turn. **Elapsed** includes tool work. For Pi, Highwater groups calls between user messages and estimates elapsed time from the user entry to the final assistant reply. It shows the turn only if the last assistant call ended normally, and omits the duration if either timestamp is missing or invalid. Calls outside a recognised turn have no Turn section.
 
 The item inspector shows "version N of M" for a versioned item and lists every version with its calls and tokens. For each new system prompt version, it says what changed at that call: tools added, tool definitions changed or tools removed, or otherwise that the prompt text changed.
 

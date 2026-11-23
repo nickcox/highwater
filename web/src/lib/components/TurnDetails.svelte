@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isPiSource } from '../cost-basis';
   import type { IndexedAnalysis, RecordedTurn } from '../types';
   import { responseDuration } from './call-timing';
   import InfoPopover from './InfoPopover.svelte';
@@ -23,10 +24,13 @@
   const timingId = $props.id();
   let position = $derived(callIndex - turn.firstCall + 1);
   let positionPercent = $derived(count > 1 ? ((position - 1) / (count - 1)) * 100 : 0);
+  let estimatedElapsed = $derived(isPiSource(indexed.analysis.session.source));
   let timingNote = $derived(
-    indexed.analysis.session.source === 'vscode-copilot'
-      ? 'From the saved request and completion timestamps, including tool work.'
-      : 'Whole-turn time reported by the harness, including tool work.',
+    estimatedElapsed
+      ? 'Estimated from the user message and final assistant response timestamps, including tool work.'
+      : indexed.analysis.session.source === 'vscode-copilot'
+        ? 'From the saved request and completion timestamps, including tool work.'
+        : 'Whole-turn time reported by the harness, including tool work.',
   );
   const statuses = { completed: 'Completed', failed: 'Failed', interrupted: 'Interrupted' };
 </script>
@@ -45,7 +49,11 @@
             label="What turn elapsed time measures">{timingNote}</InfoPopover
           >{/if}
       </dt>
-      <dd class:duration={turn.durationMs !== null}>{responseDuration(turn.durationMs)}</dd>
+      <dd class:duration={turn.durationMs !== null}>
+        {estimatedElapsed && turn.durationMs !== null ? '≈ ' : ''}{responseDuration(
+          turn.durationMs,
+        )}
+      </dd>
     </div>
     <div>
       <dt>{turn.combinedCalls ? 'Call entries' : 'Recorded model calls'}</dt>

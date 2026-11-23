@@ -5988,26 +5988,26 @@ function qu(e, t) {
 		let e = 0;
 		for (let n = t.turn.firstCall; n <= t.turn.lastCall; n++) e += t.indexed.callByIndex.get(n)?.toolCallsAfter.length ?? 0;
 		return e;
-	}), a = /* @__PURE__ */ P(() => t.callIndex - t.turn.firstCall + 1), o = /* @__PURE__ */ P(() => H(r) > 1 ? (H(a) - 1) / (H(r) - 1) * 100 : 0), s = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" ? "From the saved request and completion timestamps, including tool work." : "Whole-turn time reported by the harness, including tool work."), c = {
+	}), a = /* @__PURE__ */ P(() => t.callIndex - t.turn.firstCall + 1), o = /* @__PURE__ */ P(() => H(r) > 1 ? (H(a) - 1) / (H(r) - 1) * 100 : 0), s = /* @__PURE__ */ P(() => Wl(t.indexed.analysis.session.source)), c = /* @__PURE__ */ P(() => H(s) ? "Estimated from the user message and final assistant response timestamps, including tool work." : t.indexed.analysis.session.source === "vscode-copilot" ? "From the saved request and completion timestamps, including tool work." : "Whole-turn time reported by the harness, including tool work."), l = {
 		completed: "Completed",
 		failed: "Failed",
 		interrupted: "Interrupted"
 	};
-	var l = Gu(), u = L(l), d = B(L(u), 2), f = (e) => {
+	var u = Gu(), d = L(u), f = B(L(d), 2), p = (e) => {
 		var n = Vu(), r = z(n, !0);
-		V(() => K(r, c[t.turn.status])), G(e, n);
+		V(() => K(r, l[t.turn.status])), G(e, n);
 	};
-	q(d, (e) => {
-		t.turn.status && e(f);
-	}), M(u);
-	var p = B(u, 2), m = (e) => {
+	q(f, (e) => {
+		t.turn.status && e(p);
+	}), M(d);
+	var m = B(d, 2), h = (e) => {
 		var n = Hu(), r = z(n, !0);
 		V(() => K(r, t.turn.prompt)), G(e, n);
 	};
-	q(p, (e) => {
-		t.turn.prompt && e(m);
+	q(m, (e) => {
+		t.turn.prompt && e(h);
 	});
-	var h = B(p, 2), g = L(h), _ = L(g), v = B(L(_)), y = (e) => {
+	var g = B(m, 2), _ = L(g), v = L(_), y = B(L(v)), b = (e) => {
 		{
 			let t = /* @__PURE__ */ P(() => `${n}-elapsed`);
 			va(e, {
@@ -6018,39 +6018,39 @@ function qu(e, t) {
 				children: (e, t) => {
 					xe();
 					var n = zr();
-					V(() => K(n, H(s))), G(e, n);
+					V(() => K(n, H(c))), G(e, n);
 				},
 				$$slots: { default: !0 }
 			});
 		}
 	};
-	q(v, (e) => {
-		t.turn.durationMs !== null && e(y);
-	}), M(_);
-	var b = B(_, 2);
-	let x;
-	var S = z(b, !0);
-	M(g);
-	var C = B(g, 2), w = L(C), ee = z(w, !0), T = z(B(w, 2), !0);
-	M(C);
-	var E = B(C, 2), D = z(B(L(E), 2), !0);
-	M(E), M(h);
-	var O = B(h, 2), k = (e) => {
+	q(y, (e) => {
+		t.turn.durationMs !== null && e(b);
+	}), M(v);
+	var x = B(v, 2);
+	let S;
+	var C = z(x);
+	M(_);
+	var w = B(_, 2), ee = L(w), T = z(ee, !0), E = z(B(ee, 2), !0);
+	M(w);
+	var D = B(w, 2), O = z(B(L(D), 2), !0);
+	M(D), M(g);
+	var k = B(g, 2), te = (e) => {
 		G(e, Uu());
 	};
-	q(O, (e) => {
-		t.turn.combinedCalls && e(k);
+	q(k, (e) => {
+		t.turn.combinedCalls && e(te);
 	});
-	var te = B(O, 2), ne = L(te), re = z(ne), ie = B(ne, 2), ae = (e) => {
+	var ne = B(k, 2), re = L(ne), ie = z(re), ae = B(re, 2), oe = (e) => {
 		var t = Wu(), n = L(t);
 		let r;
 		M(t), V(() => r = yi(n, "", r, { left: `${H(o)}%` })), G(e, t);
 	};
-	q(ie, (e) => {
-		H(r) > 1 && e(ae);
-	}), M(te), M(l), V((e) => {
-		x = _i(b, 1, "svelte-1nxhbxv", null, x, { duration: t.turn.durationMs !== null }), K(S, e), K(ee, t.turn.combinedCalls ? "Call entries" : "Recorded model calls"), K(T, H(r)), K(D, H(i)), K(re, `${t.turn.combinedCalls ? "Entry" : "Call"} ${H(a) ?? ""} of ${H(r) ?? ""} in this turn`);
-	}, [() => zu(t.turn.durationMs)]), G(e, l), Ve();
+	q(ae, (e) => {
+		H(r) > 1 && e(oe);
+	}), M(ne), M(u), V((e) => {
+		S = _i(x, 1, "svelte-1nxhbxv", null, S, { duration: t.turn.durationMs !== null }), K(C, `${H(s) && t.turn.durationMs !== null ? "≈ " : ""}${e ?? ""}`), K(T, t.turn.combinedCalls ? "Call entries" : "Recorded model calls"), K(E, H(r)), K(O, H(i)), K(ie, `${t.turn.combinedCalls ? "Entry" : "Call"} ${H(a) ?? ""} of ${H(r) ?? ""} in this turn`);
+	}, [() => zu(t.turn.durationMs)]), G(e, u), Ve();
 }
 //#endregion
 //#region src/lib/components/CallDetails.svelte

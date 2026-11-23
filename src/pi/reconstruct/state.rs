@@ -28,6 +28,12 @@ fn insert_item(
     index
 }
 
+struct TurnStart {
+    first_call: usize,
+    prompt: Option<String>,
+    recorded_at_ms: Option<i64>,
+}
+
 /// Authoritative stable-index storage. Nothing is filtered or reordered until
 /// `finish`; compaction only changes active membership, never stored indexes.
 pub(super) struct ReconstructionState {
@@ -37,6 +43,8 @@ pub(super) struct ReconstructionState {
     items: Vec<NormalizedContextItem>,
     item_indices: HashMap<String, ItemIndex>,
     calls: Vec<NormalizedModelCall>,
+    pending_turn: Option<TurnStart>,
+    turns: Vec<RecordedTurn>,
     active: Vec<ItemIndex>,
     system: system_context::SystemReplay,
     global: Vec<ItemIndex>,
@@ -60,6 +68,8 @@ impl ReconstructionState {
             items: Vec::new(),
             item_indices: HashMap::new(),
             calls: Vec::new(),
+            pending_turn: None,
+            turns: Vec::new(),
             active: Vec::new(),
             system: system_context::SystemReplay::default(),
             global: Vec::new(),
@@ -68,6 +78,51 @@ impl ReconstructionState {
             compactions: Vec::new(),
             last_compaction: None,
         }
+    }
+
+    pub(super) fn start_turn(
+        &mut self,
+        item: &NormalizedContextItem,
+        recorded_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    ) {
+        self.finish_turn();
+        self.pending_turn = Some(TurnStart {
+            first_call: self.calls.len() + 1,
+            prompt: item.label.strip_prefix("User · ").map(str::to_owned),
+            recorded_at_ms: recorded_at.map(|time| time.timestamp_millis()),
+        });
+    }
+
+    fn finish_turn(&mut self) {
+        let Some(turn) = self.pending_turn.take() else {
+            return;
+        };
+        // A compaction after the last reply is not part of that reply's turn.
+        let Some(last) = self.calls[turn.first_call - 1..]
+            .iter()
+            .rev()
+            .find(|call| call.stop_reason.as_deref() != Some("compaction-call"))
+        else {
+            return;
+        };
+        if last.stop_reason.as_deref() != Some("stop") {
+            return;
+        }
+        let duration_ms = last
+            .timestamps
+            .recorded_at_ms
+            .zip(turn.recorded_at_ms)
+            .and_then(|(end, start)| end.checked_sub(start))
+            .and_then(|duration| u64::try_from(duration).ok())
+            .and_then(turn_duration_ms);
+        self.turns.push(RecordedTurn {
+            first_call: turn.first_call,
+            last_call: last.index,
+            prompt: turn.prompt,
+            duration_ms,
+            status: Some(TurnStatus::Completed),
+            combined_calls: false,
+        });
     }
 
     pub(super) fn apply_system(&mut self, update: system_context::SystemUpdate, entry: &PiEntry) {
@@ -364,10 +419,11 @@ impl ReconstructionState {
     }
 
     /// Visibility filtering, pruning, and output ordering happen only here.
-    pub(super) fn finish(self) -> NormalizedSession {
+    pub(super) fn finish(mut self) -> NormalizedSession {
+        self.finish_turn();
         NormalizedSession {
             harness_session_cost: None,
-            turns: Vec::new(),
+            turns: self.turns,
             id: self.id,
             source: self.source,
             title: None,
