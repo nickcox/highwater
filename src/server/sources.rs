@@ -7,11 +7,12 @@ use super::{
 };
 use crate::{
     claude_code::{
-        discovery::{self, DiscoveryError, Listing, ListingCache, TranscriptFile},
+        discovery::{self, Listing, ListingCache, TranscriptFile},
         FileKind,
     },
     codex::discovery::{self as codex_discovery, ListingCache as CodexListingCache, TitleIndex},
     copilot::discovery::{self as copilot_discovery, ListingCache as CopilotListingCache},
+    discovery::DiscoveryError,
     domain::Harness,
     opencode::storage::{self, CatalogTracker},
     source::{
@@ -43,7 +44,7 @@ fn session_references_keep_their_existing_values() {
     let fallback = TranscriptFile {
         path: PathBuf::from("fallback.jsonl"),
         kind: FileKind::Subagent,
-        stamp: discovery::FileStamp {
+        stamp: crate::discovery::FileStamp {
             byte_size: 0,
             modified_nanos: None,
         },
@@ -322,7 +323,7 @@ impl VsCodeCopilotSource {
             // Most session files are chats that were opened and never used.
             if let Some(listing) = self
                 .listings
-                .listing(&file)?
+                .listing(&file, vscode_discovery::read_listing)?
                 .filter(|listing| listing.requests > 0)
             {
                 entries.push(vscode_copilot_entry(file, listing));
@@ -430,7 +431,7 @@ impl ClaudeCodeSource {
             // A transcript with no responses has nothing to show, so it is not offered.
             if let Some(listing) = self
                 .listings
-                .listing(&file)?
+                .listing(&file, discovery::read_listing)?
                 .filter(|listing| listing.has_responses)
             {
                 entries.push(claude_code_entry(file, listing));
@@ -522,7 +523,7 @@ impl CodexSource {
             // A session with no reported call has nothing to show, so it is not offered.
             if let Some(listing) = self
                 .listings
-                .listing(&file)?
+                .listing(&file, codex_discovery::read_listing)?
                 .filter(|listing| listing.has_responses)
             {
                 let title = listing
@@ -604,7 +605,7 @@ impl CopilotSource {
             // A session with no reported call has nothing to show, so it is not offered.
             if let Some(listing) = self
                 .listings
-                .listing(&file)?
+                .listing(&file, copilot_discovery::read_listing)?
                 .filter(|listing| listing.has_responses)
             {
                 entries.push(copilot_entry(file, listing));

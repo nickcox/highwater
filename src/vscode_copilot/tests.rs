@@ -173,10 +173,14 @@ fn listing_cache_rereads_only_changed_files() {
     let files = discovery::find_files(&user_dir(), None).expect("discovery");
     let mut cache = discovery::ListingCache::default();
     for file in &files {
-        cache.listing(file).expect("listing");
+        cache
+            .listing(file, discovery::read_listing)
+            .expect("listing");
     }
     for file in &files {
-        cache.listing(file).expect("listing");
+        cache
+            .listing(file, discovery::read_listing)
+            .expect("listing");
     }
     assert_eq!(cache.reads, files.len());
 }

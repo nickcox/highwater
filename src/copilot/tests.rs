@@ -82,8 +82,8 @@ fn listings_read_the_workspace_and_whether_a_call_reported_usage() {
     assert!(!read_listing(&files[2]).expect("unused").has_responses);
 
     let mut cache = ListingCache::default();
-    cache.listing(&files[0]).expect("first read");
-    cache.listing(&files[0]).expect("cached");
+    cache.listing(&files[0], read_listing).expect("first read");
+    cache.listing(&files[0], read_listing).expect("cached");
     assert_eq!(cache.reads, 1);
 }
 

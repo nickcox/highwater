@@ -1,10 +1,10 @@
 //! Finds session files under a Codex home folder and reads the few fields the catalogue
 //! shows, without reconstructing the conversation.
 
-use crate::claude_code::discovery::{DiscoveryError, FileStamp};
+use crate::discovery::{DiscoveryError, FileStamp, ListedFile};
 use serde_json::Value;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{self, DirEntry},
     io::{self, BufRead},
     path::{Path, PathBuf},
@@ -200,36 +200,21 @@ fn read_meta(meta: &Value, listing: &mut Listing) {
 
 /// Listings keyed by path and file stamp, so an unchanged session is not read again on
 /// every catalogue refresh.
-#[derive(Debug, Default)]
-pub(crate) struct ListingCache {
-    entries: HashMap<PathBuf, (FileStamp, Listing)>,
-    /// Sessions read since the cache was created, for tests.
-    pub(crate) reads: usize,
-}
+pub(crate) type ListingCache = crate::discovery::ListingCache<SessionFile, Listing>;
 
-impl ListingCache {
-    /// `Ok(None)` when the session was removed after it was found.
-    pub(crate) fn listing(&mut self, file: &SessionFile) -> io::Result<Option<Listing>> {
-        if let Some((stamp, listing)) = self.entries.get(&file.path) {
-            if *stamp == file.stamp && stamp.modified_nanos.is_some() {
-                return Ok(Some(listing.clone()));
-            }
-        }
-        self.reads += 1;
-        let listing = match read_listing(file) {
-            Ok(listing) => listing,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error),
-        };
-        self.entries
-            .insert(file.path.clone(), (file.stamp, listing.clone()));
-        Ok(Some(listing))
+impl ListedFile for SessionFile {
+    type Key = FileStamp;
+
+    fn path(&self) -> &Path {
+        &self.path
     }
 
-    /// Forget sessions that were not found by the latest discovery.
-    pub(crate) fn retain(&mut self, files: &[SessionFile]) {
-        let current: HashSet<&PathBuf> = files.iter().map(|file| &file.path).collect();
-        self.entries.retain(|path, _| current.contains(path));
+    fn key(&self) -> Self::Key {
+        self.stamp
+    }
+
+    fn stamp(&self) -> FileStamp {
+        self.stamp
     }
 }
 

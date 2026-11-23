@@ -3,6 +3,7 @@ mod api;
 mod claude_code;
 mod codex;
 mod copilot;
+mod discovery;
 mod domain;
 mod opencode;
 mod pi;

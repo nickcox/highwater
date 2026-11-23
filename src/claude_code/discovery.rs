@@ -2,45 +2,18 @@
 //! fields the catalogue shows, without reconstructing the conversation.
 
 use super::FileKind;
+use crate::discovery::{DiscoveryError, FileStamp, ListedFile};
 use serde_json::Value;
 use std::{
-    collections::{HashMap, HashSet},
     fs::{self, DirEntry},
     io::{self, BufRead, BufReader, Read},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
+    time::SystemTime,
 };
-use thiserror::Error;
 
 /// Subagent metadata files are a few hundred bytes; anything larger is not one.
 const MAX_METADATA_BYTES: u64 = 64 * 1024;
-
-#[derive(Debug, Error)]
-pub(crate) enum DiscoveryError {
-    #[error("cannot read the transcript directory: {0}")]
-    Io(#[from] io::Error),
-    #[error("a transcript entry is outside the configured root")]
-    OutsideRoot,
-    #[error("discovery was cancelled")]
-    Cancelled,
-}
-
-/// A size and modification time, used to tell whether a file changed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct FileStamp {
-    pub byte_size: u64,
-    pub modified_nanos: Option<u128>,
-}
-
-impl FileStamp {
-    pub(crate) fn of(metadata: &fs::Metadata) -> Self {
-        Self {
-            byte_size: metadata.len(),
-            modified_nanos: modified_nanos(metadata.modified().ok()),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TranscriptFile {
@@ -178,12 +151,6 @@ fn transcript(
     }))
 }
 
-fn modified_nanos(modified: Option<SystemTime>) -> Option<u128> {
-    modified
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_nanos())
-}
-
 /// `agent-x.jsonl` has its metadata in `agent-x.meta.json`.
 fn metadata_path(transcript: &Path) -> PathBuf {
     let stem = transcript
@@ -315,42 +282,20 @@ fn read_subagent_metadata(path: &Path) -> SubagentMetadata {
     }
 }
 
-/// Listings keyed by path and file stamps, so an unchanged transcript is not
-/// read again on every catalogue refresh.
-#[derive(Debug, Default)]
-pub(crate) struct ListingCache {
-    entries: HashMap<PathBuf, (FileStamp, Option<FileStamp>, Listing)>,
-    /// Transcripts read since the cache was created, for tests.
-    pub(crate) reads: usize,
-}
+pub(crate) type ListingCache = crate::discovery::ListingCache<TranscriptFile, Listing>;
 
-impl ListingCache {
-    /// `Ok(None)` when the transcript was removed after it was found.
-    pub(crate) fn listing(&mut self, file: &TranscriptFile) -> io::Result<Option<Listing>> {
-        if let Some((stamp, metadata_stamp, listing)) = self.entries.get(&file.path) {
-            if *stamp == file.stamp
-                && stamp.modified_nanos.is_some()
-                && *metadata_stamp == file.metadata_stamp
-            {
-                return Ok(Some(listing.clone()));
-            }
-        }
-        self.reads += 1;
-        let listing = match read_listing(file) {
-            Ok(listing) => listing,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error),
-        };
-        self.entries.insert(
-            file.path.clone(),
-            (file.stamp, file.metadata_stamp, listing.clone()),
-        );
-        Ok(Some(listing))
+impl ListedFile for TranscriptFile {
+    type Key = (FileStamp, Option<FileStamp>);
+
+    fn path(&self) -> &Path {
+        &self.path
     }
 
-    /// Forget transcripts that were not found by the latest discovery.
-    pub(crate) fn retain(&mut self, files: &[TranscriptFile]) {
-        let current: HashSet<&PathBuf> = files.iter().map(|file| &file.path).collect();
-        self.entries.retain(|path, _| current.contains(path));
+    fn key(&self) -> Self::Key {
+        (self.stamp, self.metadata_stamp)
+    }
+
+    fn stamp(&self) -> FileStamp {
+        self.stamp
     }
 }

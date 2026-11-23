@@ -2,7 +2,7 @@
 
 use super::{LiveState, SessionCatalog, SessionFile};
 use crate::{
-    claude_code::discovery::FileStamp,
+    discovery::FileStamp,
     session_totals::{claude_code_total, codex_total, copilot_total, pi_total},
     source::SessionLocator,
 };

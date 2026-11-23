@@ -1,6 +1,8 @@
 use super::reconstruct::tool_action;
+use crate::discovery::DiscoveryError;
+
 use super::{
-    discovery::{find_files, read_listing, DiscoveryError, ListingCache, TranscriptFile},
+    discovery::{find_files, read_listing, ListingCache, TranscriptFile},
     FileKind,
 };
 use crate::domain::{Harness, Limitation, ToolAction};
@@ -181,11 +183,11 @@ fn listing_cache_reads_a_transcript_again_only_after_it_changes() {
     let mut cache = ListingCache::default();
     let find = || find_files(&root, None).expect("discovery");
     let first = cache
-        .listing(&find()[0])
+        .listing(&find()[0], read_listing)
         .expect("listing")
         .expect("present");
     let second = cache
-        .listing(&find()[0])
+        .listing(&find()[0], read_listing)
         .expect("listing")
         .expect("present");
     assert_eq!(first, second);
@@ -203,13 +205,19 @@ fn listing_cache_reads_a_transcript_again_only_after_it_changes() {
     .expect("append");
     drop(file);
     let files = find();
-    let third = cache.listing(&files[0]).expect("listing").expect("present");
+    let third = cache
+        .listing(&files[0], read_listing)
+        .expect("listing")
+        .expect("present");
     assert_eq!(cache.reads, 2);
     assert_eq!(third.title.as_deref(), Some("Reading notes"));
 
     fs::remove_file(&path).expect("remove");
     cache.retain(&find());
-    assert_eq!(cache.listing(&files[0]).expect("removed"), None);
+    assert_eq!(
+        cache.listing(&files[0], read_listing).expect("removed"),
+        None
+    );
 }
 
 #[test]

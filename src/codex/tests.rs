@@ -141,10 +141,10 @@ fn the_latest_title_for_a_thread_wins_and_unchanged_files_are_not_read_again() {
     let files = find_files(&home(), None).expect("discovery");
     let mut cache = ListingCache::default();
     for file in &files {
-        cache.listing(file).expect("listing");
+        cache.listing(file, read_listing).expect("listing");
     }
     for file in &files {
-        cache.listing(file).expect("listing");
+        cache.listing(file, read_listing).expect("listing");
     }
     assert_eq!(cache.reads, files.len());
 }
