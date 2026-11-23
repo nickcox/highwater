@@ -1,7 +1,8 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { mkdir, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import semver from 'semver';
 import type { HostStatus } from '../contract';
 import { BinaryProvisioner, pinnedRelease, type ProvisionOptions } from './provision';
@@ -147,10 +148,17 @@ export class HighwaterProcess {
       });
     }
     try {
+      const expected = (this.options.provisioning?.release ?? pinnedRelease).version;
+      if (!override) {
+        const installed = await this.startFromPath(args, expected, key);
+        if (installed) {
+          this.failures = 0;
+          return installed;
+        }
+      }
       const binary = override ?? (await this.provisioner.get(this.lifetime.signal));
       const found = await this.probe(binary);
       // An explicit override may be any version; the Context tab says when it differs from the pin.
-      const expected = (this.options.provisioning?.release ?? pinnedRelease).version;
       if (!override && found !== expected)
         throw new Error(`Cached Highwater reports ${found}, not pinned version ${expected}.`);
       if (this.closed) throw new Error('The Highwater host has been disposed.');
@@ -164,6 +172,39 @@ export class HighwaterProcess {
       this.lastFailure = error instanceof Error ? error.message : String(error);
       throw new ProcessUnavailable({ state: 'failed', message: this.lastFailure });
     }
+  }
+  private async startFromPath(
+    args: string[],
+    minimumVersion: string,
+    key: string,
+  ): Promise<HighwaterServer | null> {
+    const windows = process.platform === 'win32';
+    const path = windows
+      ? Object.entries(this.env).find(([name]) => name.toLowerCase() === 'path')?.[1]
+      : this.env.PATH;
+    const executable = windows ? 'highwater.exe' : 'highwater';
+    for (const entry of path?.split(delimiter) ?? []) {
+      if (!entry) continue;
+      const binary = resolve(windows ? entry.replace(/^"(.*)"$/, '$1') : entry, executable);
+      try {
+        if (!(await stat(binary)).isFile()) continue;
+        await access(binary, constants.X_OK);
+      } catch {
+        continue;
+      }
+      // Check the first executable in PATH order, as a normal command lookup would.
+      try {
+        const found = await this.probe(binary);
+        this.lifetime.signal.throwIfAborted();
+        return semver.gte(found, minimumVersion)
+          ? await this.start(binary, args, found, key)
+          : null;
+      } catch {
+        this.lifetime.signal.throwIfAborted();
+        return null;
+      }
+    }
+    return null;
   }
   private probe(binary: string, external?: AbortSignal): Promise<string> {
     const signal = external

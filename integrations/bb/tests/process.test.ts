@@ -1,7 +1,8 @@
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HighwaterProcess } from '../host/process';
+import { pinnedRelease } from '../host/provision';
 import { binaries, claudeFixtures, tempDirectory, writePi, expectedVersion } from './helpers';
 
 const processes: HighwaterProcess[] = [];
@@ -68,6 +69,28 @@ describe.each(binaries)('real process: %s', (binary) => {
 });
 
 describe('process states', () => {
+  it.each([
+    ['matching', expectedVersion],
+    ['newer', '0.0.1'],
+  ])('uses a %s executable from PATH and gives an explicit override precedence', async (_, pin) => {
+    const env = { PATH: '' };
+    const fetcher = vi.fn<typeof fetch>();
+    const { home, value } = await setup({
+      env,
+      provisioning: { release: { ...pinnedRelease, version: pin }, fetcher },
+    });
+    env.PATH = home;
+    const path = join(home, process.platform === 'win32' ? 'highwater.exe' : 'highwater');
+    await copyFile(binaries[0], path);
+    await chmod(path, 0o700);
+    const server = await value.get(null);
+    expect(server.version).toBe(expectedVersion);
+    expect((await fetch(server.baseUrl + '/api/sessions')).status).toBe(200);
+    expect((await value.get(null)).pid).toBe(server.pid);
+    expect(await value.status(join(home, 'missing-override'))).toEqual({ state: 'missing' });
+    expect(server.signal.aborted).toBe(true);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it('reports missing binaries and supports explicit overrides', async () => {
     const { home, value } = await setup();
     expect(await value.status(join(home, 'does-not-exist'))).toEqual({ state: 'missing' });

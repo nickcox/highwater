@@ -25,7 +25,7 @@ export function stateMessage(state: ThreadState): { title: string; detail: strin
       return {
         title: 'Highwater binary not found',
         detail:
-          'The explicit Highwater binary could not be found. Correct its path, or clear the setting to download the pinned release automatically.',
+          'The explicit Highwater binary could not be found. Correct its path, or clear the setting to let Highwater choose an executable.',
       };
     case 'startFailed':
       return { title: 'Highwater could not start', detail: state.message };

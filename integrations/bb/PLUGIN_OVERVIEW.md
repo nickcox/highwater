@@ -12,7 +12,7 @@ The wider thread card also shows call and compaction counts, recent input growth
 
 ## Requirements
 
-No separate Highwater installation is required. On first use, the plugin downloads a pinned binary from GitHub on the agent machine, verifies its archive and executable checksums, and caches it privately. First use requires internet access; verified cached binaries work offline. The Highwater binary setting can select an existing executable instead. Errors explain what happened and provide Retry.
+The plugin can use a Highwater executable on the agent machine’s PATH if it reports the pinned version or newer. Otherwise, it downloads a pinned binary from GitHub, verifies its archive and executable checksums, and caches it privately for offline use. The Highwater binary setting can select an existing executable instead. Errors explain what happened and provide Retry.
 
 Release downloads cover macOS arm64/x64, Linux arm64/x64 with glibc 2.35 or newer, and Windows x64. Interactive use is verified locally on macOS arm64, and automated host checks pass in Linux and macOS CI. Other-machine operation, Windows plugin execution and remote access remain unvalidated. Large sessions update less frequently because refreshes are limited by analysis time. The bb integration is experimental.
 

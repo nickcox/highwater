@@ -20,7 +20,7 @@ export default function highwaterPlugin(bb: BbPluginApi): void {
       default: '',
       label: 'Highwater binary',
       description:
-        'Leave empty to download the Highwater release this plugin was built for. An explicit executable should be the same version; another version runs with a notice.',
+        'Leave empty to use the pinned version or newer from the agent machine’s PATH, with the pinned release as a fallback.',
       experimental_schema: z.string().max(4096),
     },
   });

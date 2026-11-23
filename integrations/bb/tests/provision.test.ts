@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { join } from 'node:path';
-import { lstat, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { pack } from 'tar-stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BinaryProvisioner, pinnedRelease, type BinaryRelease } from '../host/provision';
@@ -127,7 +127,7 @@ function provisioner(home: string, release: BinaryRelease, fetcher: typeof fetch
 
 describe('binary provisioning', () => {
   it.each(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-x64'])(
-    'selects and caches %s without consulting PATH',
+    'selects and caches the pinned release for %s',
     async (platform) => {
       const home = await directory();
       const f = await fixture(
@@ -311,7 +311,7 @@ describe('binary provisioning', () => {
     const contents = await readdir(join(home, 'binaries', '0.5.2'));
     expect(contents.some((n) => n.startsWith('.install-'))).toBe(false);
   });
-  it('automatically provisions and starts a real binary with no Highwater on PATH; one cancelled caller does not cancel another', async () => {
+  it('automatically provisions and starts a real binary when PATH has no compatible Highwater; one cancelled caller does not cancel another', async () => {
     const home = await directory();
     await writePi(home);
     const platform = `${process.platform}-${process.arch}`;
@@ -326,10 +326,15 @@ describe('binary provisioning', () => {
       await gate;
       return new Response(new Uint8Array(f.archive));
     });
+    if (process.platform !== 'win32') {
+      const executable = join(home, 'highwater');
+      await writeFile(executable, `#!${process.execPath}\nconsole.log('highwater 0.0.1');\n`);
+      await chmod(executable, 0o700);
+    }
     const p = new HighwaterProcess({
       dataDir: join(home, 'data'),
       home,
-      env: { PATH: join(home, 'no-tools') },
+      env: { PATH: home },
       provisioning: { release: f.release, fetcher },
     });
     processes.push(p);
