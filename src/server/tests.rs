@@ -33,6 +33,7 @@ fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> Ses
         modified_at: None,
         harness: Harness::Pi,
         parent_reference: None,
+        forked_from_reference: None,
         subagent_type: None,
         locator: None,
         source_revision: None,

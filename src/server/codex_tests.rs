@@ -73,11 +73,72 @@ fn catalogue_lists_codex_sessions_with_titles_and_child_sessions() {
     assert_eq!(spawned.display_name, "Hopper");
     assert_eq!(spawned.parent_reference, Some(reference("001")));
     assert_eq!(spawned.subagent_type.as_deref(), Some("code_review"));
+    let fork = entries
+        .iter()
+        .find(|entry| entry.id == codex_reference("01a30000-0000-7000-8000-000000000008"))
+        .expect("fork session");
+    assert_eq!(fork.parent_reference, None);
+    assert_eq!(fork.forked_from_reference, Some(reference("007")));
 
     let json = serde_json::to_value(main).expect("listing");
     assert!(json.get("path").is_none());
     assert!(json.get("locator").is_none());
     assert!(!json.to_string().contains("fixtures"));
+}
+
+#[test]
+fn a_fork_links_past_a_session_without_calls_in_another_home() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = fs::canonicalize(directory.path()).expect("canonical home");
+    let fork_home = root.join("fork");
+    let bridge_home = root.join("bridge");
+    for home in [&fork_home, &bridge_home] {
+        fs::create_dir_all(home.join("archived_sessions")).expect("archive");
+    }
+    let fixture_id = "01a30000-0000-7000-8000-000000000008";
+    let fork_id = "01a30000-0000-7000-8000-000000000009";
+    let bridge_id = "01a20000-0000-7000-8000-000000000001";
+    let ancestor_id = "01a10000-0000-7000-8000-000000000007";
+    let fork_name = format!("rollout-2026-10-01T15-00-00-{fork_id}.jsonl");
+    let fork = fs::read_to_string(home().join(format!(
+        "sessions/2026/10/01/rollout-2026-10-01T15-00-00-{fixture_id}.jsonl"
+    )))
+    .expect("fork fixture");
+    let (header, records) = fork.split_once('\n').expect("fork records");
+    let mut header: serde_json::Value = serde_json::from_str(header).expect("fork metadata");
+    header["payload"]["id"] = fork_id.into();
+    header["payload"]["session_id"] = fork_id.into();
+    header["payload"]["forked_from_id"] = bridge_id.into();
+    header["payload"]["history_base"] = serde_json::json!({ "thread_id": bridge_id });
+    fs::write(
+        fork_home.join("archived_sessions").join(fork_name),
+        format!("{header}\n{records}"),
+    )
+    .expect("fork file");
+    let parent = serde_json::json!({
+        "type": "session_meta",
+        "payload": { "id": bridge_id, "history_base": { "thread_id": ancestor_id } },
+    });
+    fs::write(
+        bridge_home
+            .join("archived_sessions")
+            .join(format!("rollout-2026-10-01T14-30-00-{bridge_id}.jsonl")),
+        format!("{parent}\n"),
+    )
+    .expect("parent file");
+
+    let entries = scan(&codex_only(vec![home(), fork_home, bridge_home]));
+    assert!(entries
+        .iter()
+        .all(|entry| entry.id != codex_reference(bridge_id)));
+    let fork = entries
+        .iter()
+        .find(|entry| entry.id == codex_reference(fork_id))
+        .expect("fork is listed");
+    assert_eq!(
+        fork.forked_from_reference,
+        Some(codex_reference(ancestor_id))
+    );
 }
 
 #[test]

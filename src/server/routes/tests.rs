@@ -27,6 +27,7 @@ async fn ambiguous_short_references_never_select_an_arbitrary_file() {
         modified_at: None,
         harness: Harness::Pi,
         parent_reference: None,
+        forked_from_reference: None,
         subagent_type: None,
         locator: None,
         source_revision: None,

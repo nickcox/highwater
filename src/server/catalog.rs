@@ -286,6 +286,7 @@ pub(super) fn discover(
                 modified_nanos,
                 harness: Harness::Pi,
                 parent_reference: None,
+                forked_from_reference: None,
                 subagent_type: None,
                 locator: None,
                 source_revision: None,

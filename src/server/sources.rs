@@ -23,7 +23,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -299,6 +299,7 @@ fn vscode_copilot_entry(
         modified_nanos: file.stamp.modified_nanos,
         harness: Harness::VsCodeCopilot,
         parent_reference: None,
+        forked_from_reference: None,
         subagent_type: None,
         locator: Some(SessionLocator::VsCodeCopilotFile { path: file.path }),
         source_revision: None,
@@ -400,6 +401,7 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
         parent_reference: session_id
             .filter(|_| subagent)
             .map(|session_id| claude_code_reference(session_id, None)),
+        forked_from_reference: None,
         subagent_type: listing
             .subagent
             .as_ref()
@@ -495,6 +497,11 @@ fn codex_entry(
         modified_nanos: file.stamp.modified_nanos,
         harness: Harness::Codex,
         parent_reference: child.map(|child| codex_reference(&child.parent_thread_id)),
+        forked_from_reference: listing
+            .forked_from
+            .as_deref()
+            .filter(|_| child.is_none())
+            .map(codex_reference),
         subagent_type: child
             .and_then(|child| child.kind.as_deref())
             .map(|kind| kind.chars().take(80).collect()),
@@ -508,6 +515,7 @@ struct CodexSource {
     listings: CodexListingCache,
     titles: TitleIndex,
     last_good: Vec<SessionFile>,
+    history_redirects: HashMap<String, String>,
 }
 
 impl CodexSource {
@@ -516,23 +524,31 @@ impl CodexSource {
         self.listings.retain(&files);
         self.titles.refresh(&self.home);
         let mut entries = Vec::with_capacity(files.len());
+        let mut history_redirects = HashMap::new();
         for file in files {
             if cancelled.load(Ordering::Acquire) {
                 return Err(DiscoveryError::Cancelled);
             }
-            // A session with no reported call has nothing to show, so it is not offered.
-            if let Some(listing) = self
+            let Some(listing) = self
                 .listings
                 .listing(&file, codex_discovery::read_listing)?
-                .filter(|listing| listing.has_responses)
-            {
-                let title = listing
-                    .thread_id
-                    .as_deref()
-                    .and_then(|id| self.titles.title(id));
-                entries.push(codex_entry(file, listing, title));
+            else {
+                continue;
+            };
+            // Keep ancestry from files without calls so forks can link past them.
+            if !listing.has_responses {
+                if let (Some(id), Some(parent)) = (&listing.thread_id, &listing.forked_from) {
+                    history_redirects.insert(codex_reference(id), codex_reference(parent));
+                }
+                continue;
             }
+            let title = listing
+                .thread_id
+                .as_deref()
+                .and_then(|id| self.titles.title(id));
+            entries.push(codex_entry(file, listing, title));
         }
+        self.history_redirects = history_redirects;
         Ok(entries)
     }
 }
@@ -581,6 +597,7 @@ fn copilot_entry(
         modified_nanos: file.stamp.modified_nanos,
         harness: Harness::Copilot,
         parent_reference: None,
+        forked_from_reference: None,
         subagent_type: None,
         locator: Some(SessionLocator::CopilotFile { path: file.path }),
         source_revision: None,
@@ -677,6 +694,7 @@ impl MixedScanner {
                         listings: CodexListingCache::default(),
                         titles: TitleIndex::default(),
                         last_good: Vec::new(),
+                        history_redirects: HashMap::new(),
                     })
                     .collect(),
                 copilot: sources
@@ -757,6 +775,7 @@ impl MixedScanner {
                             modified_nanos: None,
                             harness: Harness::OpenCode,
                             parent_reference: session.parent_id.as_deref().map(opencode_reference),
+                            forked_from_reference: None,
                             subagent_type: None,
                             locator: Some(SessionLocator::OpenCode {
                                 database: source.path.clone(),
@@ -875,12 +894,30 @@ impl MixedScanner {
             .collect();
         codex.sort_by_key(|entry| std::cmp::Reverse(entry.modified_nanos));
         let mut codex_ids = HashSet::new();
-        entries.extend(
-            codex
-                .into_iter()
-                .filter(|entry| codex_ids.insert(entry.id.clone()))
-                .cloned(),
-        );
+        codex.retain(|entry| codex_ids.insert(entry.id.clone()));
+        let history_redirects: HashMap<&str, &str> = state
+            .codex
+            .iter()
+            .flat_map(|source| &source.history_redirects)
+            .map(|(id, parent)| (id.as_str(), parent.as_str()))
+            .collect();
+        entries.extend(codex.into_iter().map(|entry| {
+            let mut entry = entry.clone();
+            if let Some(parent) = entry.forked_from_reference.as_deref() {
+                let mut seen = HashSet::from([entry.id.as_str()]);
+                let mut current = Some(parent);
+                entry.forked_from_reference = loop {
+                    let Some(id) = current.filter(|id| seen.insert(*id)) else {
+                        break None;
+                    };
+                    if codex_ids.contains(id) {
+                        break Some(id.to_owned());
+                    }
+                    current = history_redirects.get(id).copied();
+                };
+            }
+            entry
+        }));
         // Repeated home folders, or a copy of a session in another home folder, can list the
         // same session twice. The most recently changed copy is kept.
         let mut copilot: Vec<&SessionFile> = state

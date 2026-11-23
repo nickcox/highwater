@@ -45,6 +45,11 @@
       : undefined,
   );
   let children = $derived(sessionId ? childSessions(sessions, sessionId) : []);
+  let forkedFrom = $derived(
+    listed?.forkedFromReference
+      ? sessions.find((candidate) => candidate.id === listed?.forkedFromReference)
+      : undefined,
+  );
   const childLabel = (child: SessionListItem) =>
     [child.displayName, child.subagentType, formatSessionTime(child.startedAt)]
       .filter(Boolean)
@@ -401,11 +406,14 @@
       </details>
     </details>
   </div>
-  {#if parent || children.length > 0}
+  {#if parent || forkedFrom || children.length > 0}
     <div class="session-relations">
       {#if parent && sessionId}<p>
           Child session of <a href={sessionHref(parent.id, sessionId)}>{parent.displayName}</a>
         </p>{/if}
+      {#if forkedFrom}
+        <p>Forked from <a href={sessionHref(forkedFrom.id)}>{forkedFrom.displayName}</a></p>
+      {/if}
       {#if children.length > 0}
         <details>
           <summary class="disclosure"

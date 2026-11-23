@@ -188,6 +188,9 @@ pub(crate) struct SessionFile {
     pub(crate) modified_at: Option<DateTime<Utc>>,
     pub(crate) harness: Harness,
     pub(crate) parent_reference: Option<String>,
+    /// A Codex fork's nearest ancestor with a chart.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) forked_from_reference: Option<String>,
     /// A Claude Code subagent's type, from its metadata file. Omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) subagent_type: Option<String>,

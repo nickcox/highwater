@@ -10,6 +10,7 @@ export interface SessionListItem {
   modifiedAt: string | null;
   harness?: 'pi' | 'opencode' | 'claude-code' | 'codex' | 'copilot' | 'vscode-copilot';
   parentReference?: string | null;
+  forkedFromReference?: string;
   /** A Claude Code subagent's type, such as `statusline-setup`. */
   subagentType?: string;
   /** Absent before a lookup or for unsupported sources; null if no total is available. */

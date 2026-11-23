@@ -258,6 +258,20 @@ describe('SessionSummary related sessions', () => {
     ).toHaveAttribute('href', '#session=parent&child=child-1');
     expect(relations.querySelector('details')).toBeNull();
   });
+
+  it('links an ordinary fork to its source session without a tool-call jump', () => {
+    const indexed = indexTestAnalysis(testAnalysis());
+    const fork = { ...listed('fork', 'Forked task'), forkedFromReference: 'parent' };
+    const { container } = render(SessionSummary, {
+      props: { indexed, sessionId: 'fork', sessions: [...sessions, fork] },
+    });
+    const summary = within(container);
+    expect(summary.getByText('Forked from')).toBeInTheDocument();
+    expect(summary.getByRole('link', { name: 'Parent task' })).toHaveAttribute(
+      'href',
+      '#session=parent',
+    );
+  });
 });
 
 describe('SessionSummary in a narrow view', () => {

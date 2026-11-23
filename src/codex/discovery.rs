@@ -31,6 +31,7 @@ pub(crate) struct Listing {
     pub started_at: Option<String>,
     pub working_directory: Option<String>,
     pub child: Option<ChildThread>,
+    pub forked_from: Option<String>,
     /// Whether any call reported its usage. A session without one has nothing to chart.
     pub has_responses: bool,
 }
@@ -170,6 +171,10 @@ fn read_meta(meta: &Value, listing: &mut Listing) {
     listing.thread_id = text(meta, "id");
     listing.started_at = text(meta, "timestamp");
     listing.working_directory = text(meta, "cwd");
+    listing.forked_from = meta
+        .get("history_base")
+        .and_then(|base| text(base, "thread_id"))
+        .or_else(|| text(meta, "forked_from_id"));
     let Some(subagent) = meta.get("source").and_then(|source| source.get("subagent")) else {
         return;
     };
