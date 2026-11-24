@@ -458,9 +458,11 @@ test('the compact bb panel uses smaller controls, List view, a lifespans filter 
     el.style.width = '340px';
   });
   await expect.poll(rowGap).toBeGreaterThanOrEqual(8);
-  await page.setViewportSize({ width: 570, height: 900 });
+  // Where the full navigation returns, the toggles share a row. They need more width with
+  // Linux fonts than with macOS fonts.
+  await page.setViewportSize({ width: 600, height: 900 });
   await app.evaluate((el) => {
-    el.style.width = '540px';
+    el.style.width = '560px';
   });
   await expect.poll(rowGap).toBeLessThan(0);
   await page.setViewportSize({ width: 460, height: 900 });
