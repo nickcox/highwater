@@ -57,7 +57,10 @@ export function ContextTab({ threadId }: { threadId: string }) {
   }, [snapshot, visible]);
 
   return (
-    <div className="h-full min-h-0 overflow-auto text-foreground" data-highwater-thread={threadId}>
+    <div
+      className="flex h-full min-h-0 flex-col overflow-auto text-foreground"
+      data-highwater-thread={threadId}
+    >
       {!hasAnalysis && (
         <ContextState
           state={snapshot.state}
@@ -72,7 +75,9 @@ export function ContextTab({ threadId }: { threadId: string }) {
           {pinned.version}, so some views may not work.
         </p>
       )}
-      <div ref={target} hidden={!hasAnalysis} className="bg-transparent" />
+      {/* Fills the rest of the panel, so Highwater's background reaches the bottom of the panel
+          when the content is shorter. */}
+      <div ref={target} hidden={!hasAnalysis} className="shrink-0 grow bg-transparent" />
     </div>
   );
 }
