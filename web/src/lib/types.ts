@@ -422,6 +422,9 @@ export interface RecordedTurn {
   lastCall: number;
   prompt: string | null;
   durationMs: number | null;
+  /** Estimated from the prompt's and final reply's timestamps. Absent from analyses by
+   * Highwater 0.5.6 and earlier, where only Pi's durations were estimated. */
+  durationEstimated?: boolean;
   status: 'completed' | 'failed' | 'interrupted' | null;
   combinedCalls: boolean;
 }

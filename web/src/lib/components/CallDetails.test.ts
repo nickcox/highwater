@@ -204,6 +204,57 @@ describe('CallDetails change lists', () => {
     expect(screen.queryByRole('region', { name: 'Turn' })).toBeNull();
   });
 
+  it('labels a Claude Code turn as estimated when the analysis says so', async () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'claude-code';
+    analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: ['missingHistoricalSystemPrompt'],
+    };
+    analysis.turns = [
+      {
+        firstCall: 1,
+        lastCall: 1,
+        prompt: 'Run the tests',
+        durationMs: 2000,
+        durationEstimated: true,
+        status: 'completed',
+        combinedCalls: false,
+      },
+    ];
+    const indexed = indexTestAnalysis(analysis);
+    render(CallDetails, { props: { call: indexed.analysis.modelCalls[0], indexed, pinned: true } });
+    expect(screen.getByRole('region', { name: 'Turn' })).toHaveTextContent('≈ 2 s');
+    await fireEvent.click(screen.getByRole('button', { name: 'What turn elapsed time measures' }));
+    expect(screen.getByText(/Estimated from the user message/)).toBeVisible();
+  });
+
+  it('shows a recorded Claude Code turn duration without the estimate mark', async () => {
+    const analysis = testAnalysis();
+    analysis.session.source = 'claude-code';
+    analysis.reconstruction = {
+      status: 'partial',
+      explanationCodes: ['missingHistoricalSystemPrompt'],
+    };
+    analysis.turns = [
+      {
+        firstCall: 1,
+        lastCall: 1,
+        prompt: 'Run the tests',
+        durationMs: 2000,
+        durationEstimated: false,
+        status: null,
+        combinedCalls: false,
+      },
+    ];
+    const indexed = indexTestAnalysis(analysis);
+    render(CallDetails, { props: { call: indexed.analysis.modelCalls[0], indexed, pinned: true } });
+    expect(screen.getByRole('region', { name: 'Turn' })).not.toHaveTextContent('≈');
+    await fireEvent.click(screen.getByRole('button', { name: 'What turn elapsed time measures' }));
+    expect(screen.getByText(/Whole-turn time reported by the harness/)).toBeVisible();
+  });
+
+  // Analyses from Highwater 0.5.6 and earlier do not say whether a duration is estimated.
   it('labels Pi turn elapsed time as estimated from the transcript', async () => {
     const analysis = testAnalysis();
     analysis.session.source = 'pi';

@@ -435,6 +435,7 @@ impl<'t> State<'t> {
             last_call: self.calls.len(),
             prompt: first_nonempty_line(message),
             duration_ms,
+            duration_estimated: false,
             status,
             combined_calls,
         });

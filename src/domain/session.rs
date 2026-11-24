@@ -116,6 +116,9 @@ pub(crate) struct RecordedTurn {
     pub last_call: usize,
     pub prompt: Option<String>,
     pub duration_ms: Option<u64>,
+    /// Highwater estimated the duration from the prompt's and final reply's timestamps,
+    /// rather than the harness recording it or recording the request's own start and end.
+    pub duration_estimated: bool,
     pub status: Option<TurnStatus>,
     /// The source combined multiple model calls into one projected call.
     pub combined_calls: bool,

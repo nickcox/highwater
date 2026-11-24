@@ -120,6 +120,7 @@ impl ReconstructionState {
             last_call: last.index,
             prompt: turn.prompt,
             duration_ms,
+            duration_estimated: true,
             status: Some(TurnStatus::Completed),
             combined_calls: false,
         });

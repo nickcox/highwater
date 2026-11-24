@@ -137,11 +137,15 @@ pub(super) fn reconstruct(
     // Duration records can be siblings of the next user message, not on the selected
     // branch themselves. Consider them only when their parent is on that branch.
     let mut markers: HashMap<&str, Vec<(usize, u64)>> = HashMap::new();
+    // Only the interactive CLI writes duration records. Sessions without any, such as those
+    // run through the Agent SDK, have their turns estimated from timestamps instead.
+    let mut recorded_durations = false;
     for (index, record) in records.iter().enumerate() {
         if record.kind() == "system"
             && record.subtype() == Some("turn_duration")
             && !record.flag("isSidechain")
         {
+            recorded_durations = true;
             if let (Some(parent), Some(duration)) = (
                 record.parent(),
                 record
@@ -165,11 +169,14 @@ pub(super) fn reconstruct(
             .find(|item| item.kind == ContextItemKind::UserMessage)
         {
             if let Some(turn) = pending.take() {
-                state.turns.extend(turn.finish(first_call, index));
+                state
+                    .turns
+                    .extend(turn.finish(first_call, index, recorded_durations, records));
             }
             pending = Some(PendingTurn {
                 first_call,
                 prompt: user.label.strip_prefix("User · ").map(str::to_owned),
+                prompt_at_ms: timestamp_ms(record),
                 last_assistant: index,
                 candidates: Vec::new(),
             });
@@ -188,9 +195,12 @@ pub(super) fn reconstruct(
         }
     }
     if let Some(turn) = pending {
-        state
-            .turns
-            .extend(turn.finish(state.calls.len(), records.len()));
+        state.turns.extend(turn.finish(
+            state.calls.len(),
+            records.len(),
+            recorded_durations,
+            records,
+        ));
     }
     let working_directory = state.working_directory.clone();
     Ok(Reconstruction {
@@ -210,15 +220,26 @@ pub(super) fn reconstruct(
 struct PendingTurn {
     first_call: usize,
     prompt: Option<String>,
+    prompt_at_ms: Option<i64>,
     last_assistant: usize,
     /// Marker position, call count at its parent, and recorded duration.
     candidates: Vec<(usize, usize, u64)>,
 }
 
 impl PendingTurn {
-    fn finish(self, end: usize, next_prompt: usize) -> Option<RecordedTurn> {
+    fn finish(
+        self,
+        end: usize,
+        next_prompt: usize,
+        recorded_durations: bool,
+        records: &[Record],
+    ) -> Option<RecordedTurn> {
         if end <= self.first_call {
             return None;
+        }
+        if !recorded_durations {
+            let last = &records[self.last_assistant];
+            return self.estimate(end, last);
         }
         let mut durations = self
             .candidates
@@ -236,7 +257,35 @@ impl PendingTurn {
             last_call: end,
             prompt: self.prompt,
             duration_ms: Some(duration_ms),
+            duration_estimated: false,
             status: None,
+            combined_calls: false,
+        })
+    }
+
+    /// A turn whose final reply ended normally or with an API error, timed from the prompt
+    /// to that reply. A turn that was interrupted or is still running is left out.
+    fn estimate(self, end: usize, last: &Record) -> Option<RecordedTurn> {
+        let status = if last.flag("isApiErrorMessage") {
+            TurnStatus::Failed
+        } else {
+            match last.message()?.get("stop_reason").and_then(Value::as_str) {
+                Some("end_turn" | "stop_sequence") => TurnStatus::Completed,
+                _ => return None,
+            }
+        };
+        let duration_ms = timestamp_ms(last)
+            .zip(self.prompt_at_ms)
+            .and_then(|(end, start)| end.checked_sub(start))
+            .and_then(|duration| u64::try_from(duration).ok())
+            .and_then(turn_duration_ms);
+        Some(RecordedTurn {
+            first_call: self.first_call + 1,
+            last_call: end,
+            prompt: self.prompt,
+            duration_ms,
+            duration_estimated: true,
+            status: Some(status),
             combined_calls: false,
         })
     }

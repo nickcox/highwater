@@ -5988,7 +5988,7 @@ function qu(e, t) {
 		let e = 0;
 		for (let n = t.turn.firstCall; n <= t.turn.lastCall; n++) e += t.indexed.callByIndex.get(n)?.toolCallsAfter.length ?? 0;
 		return e;
-	}), a = /* @__PURE__ */ P(() => t.callIndex - t.turn.firstCall + 1), o = /* @__PURE__ */ P(() => H(r) > 1 ? (H(a) - 1) / (H(r) - 1) * 100 : 0), s = /* @__PURE__ */ P(() => Wl(t.indexed.analysis.session.source)), c = /* @__PURE__ */ P(() => H(s) ? "Estimated from the user message and final assistant response timestamps, including tool work." : t.indexed.analysis.session.source === "vscode-copilot" ? "From the saved request and completion timestamps, including tool work." : "Whole-turn time reported by the harness, including tool work."), l = {
+	}), a = /* @__PURE__ */ P(() => t.callIndex - t.turn.firstCall + 1), o = /* @__PURE__ */ P(() => H(r) > 1 ? (H(a) - 1) / (H(r) - 1) * 100 : 0), s = /* @__PURE__ */ P(() => t.turn.durationEstimated ?? Wl(t.indexed.analysis.session.source)), c = /* @__PURE__ */ P(() => H(s) ? "Estimated from the user message and final assistant response timestamps, including tool work." : t.indexed.analysis.session.source === "vscode-copilot" ? "From the saved request and completion timestamps, including tool work." : "Whole-turn time reported by the harness, including tool work."), l = {
 		completed: "Completed",
 		failed: "Failed",
 		interrupted: "Interrupted"
@@ -12906,7 +12906,7 @@ function Xy(e) {
 				"completed",
 				"failed",
 				"interrupted"
-			].includes(r.status) || typeof r.combinedCalls != "boolean") throw new $("Invalid turn details");
+			].includes(r.status) || r.durationEstimated !== void 0 && typeof r.durationEstimated != "boolean" || typeof r.combinedCalls != "boolean") throw new $("Invalid turn details");
 			for (let e = r.firstCall; e <= r.lastCall; e++) if (!t.has(e)) throw new $("Turn references a missing call");
 			n = r.lastCall;
 		}

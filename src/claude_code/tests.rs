@@ -491,6 +491,114 @@ fn turn_duration_matches_its_branch_without_requiring_the_marker_on_the_branch()
     assert_eq!((turns[1].first_call, turns[1].last_call), (2, 2));
     assert_eq!(turns[1].duration_ms, Some(2000));
     assert_eq!(turns[1].status, None);
+    assert!(turns.iter().all(|turn| !turn.duration_estimated));
+}
+
+#[test]
+fn turns_are_estimated_from_timestamps_without_duration_records() {
+    use crate::domain::TurnStatus;
+    // An Agent SDK session: no turn_duration records.
+    let at = |second: u32| format!("2026-10-01T00:00:{second:02}.000Z");
+    let header = |time: &str| format!(r#""sessionId":"s","cwd":"/synthetic","timestamp":"{time}""#);
+    let prompt = |id: &str, parent: &str, second: u32, extra: &str, text: &str| {
+        format!(
+            r#"{{"type":"user","uuid":"{id}","parentUuid":{parent},{},{extra}"message":{{"role":"user","content":"{text}"}}}}"#,
+            header(&at(second))
+        )
+    };
+    let tool_result = |id: &str, parent: &str, second: u32, tool: &str| {
+        format!(
+            r#"{{"type":"user","uuid":"{id}","parentUuid":"{parent}",{},"message":{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"{tool}","content":"ok"}}]}}}}"#,
+            header(&at(second))
+        )
+    };
+    let reply = |id: &str, parent: &str, second: u32, stop: &str, extra: &str| {
+        let content = if stop == "tool_use" {
+            format!(r#"{{"type":"tool_use","id":"tool-{id}","name":"Read","input":{{}}}}"#)
+        } else {
+            r#"{"type":"text","text":"Done"}"#.to_owned()
+        };
+        format!(
+            r#"{{"type":"assistant","uuid":"{id}","parentUuid":"{parent}",{},{extra}"message":{{"id":"{id}","role":"assistant","model":"claude-sonnet-4-6","stop_reason":"{stop}","content":[{content}]}}}}"#,
+            header(&at(second))
+        )
+    };
+    let records = [
+        // Completed after a tool call: calls 1–2.
+        prompt("u1", "null", 0, "", "first"),
+        reply("a1", "u1", 2, "tool_use", ""),
+        tool_result("r1", "a1", 3, "tool-a1"),
+        reply("a2", "r1", 7, "end_turn", ""),
+        // A meta message does not start a turn.
+        prompt("m1", "\"a2\"", 8, r#""isMeta":true,"#, "meta"),
+        // Interrupted while a tool ran: call 3 is not in a turn.
+        prompt("u2", "\"m1\"", 10, "", "second"),
+        reply("a3", "u2", 11, "tool_use", ""),
+        tool_result("r3", "a3", 12, "tool-a3"),
+        // A background task's notification is a turn like any prompt: call 4.
+        prompt(
+            "u3",
+            "\"r3\"",
+            20,
+            r#""origin":{"kind":"task-notification"},"#,
+            "task done",
+        ),
+        reply("a4", "u3", 25, "end_turn", ""),
+        // An API error ends the turn as failed: call 5.
+        prompt("u4", "\"a4\"", 30, "", "third"),
+        reply(
+            "a5",
+            "u4",
+            31,
+            "stop_sequence",
+            r#""isApiErrorMessage":true,"#,
+        ),
+        // Still running: call 6 is not in a turn yet.
+        prompt("u5", "\"a5\"", 40, "", "fourth"),
+        reply("a6", "u5", 41, "tool_use", ""),
+    ];
+    let loaded = load_text(&records.join("\n")).expect("turns");
+    let turns = &loaded.session.turns;
+    let summary: Vec<_> = turns
+        .iter()
+        .map(|turn| {
+            (
+                turn.first_call,
+                turn.last_call,
+                turn.prompt.as_deref(),
+                turn.duration_ms,
+                turn.status,
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (1, 2, Some("first"), Some(7000), Some(TurnStatus::Completed)),
+            (
+                4,
+                4,
+                Some("task done"),
+                Some(5000),
+                Some(TurnStatus::Completed)
+            ),
+            (5, 5, Some("third"), Some(1000), Some(TurnStatus::Failed)),
+        ]
+    );
+    assert!(turns.iter().all(|turn| turn.duration_estimated));
+}
+
+#[test]
+fn an_estimated_turn_without_a_prompt_timestamp_has_no_duration() {
+    let records = [
+        r#"{"type":"user","uuid":"u1","parentUuid":null,"sessionId":"s","cwd":"/synthetic","message":{"role":"user","content":"hi"}}"#,
+        r#"{"type":"assistant","uuid":"a1","parentUuid":"u1","sessionId":"s","cwd":"/synthetic","timestamp":"2026-10-01T00:00:05.000Z","message":{"id":"a1","role":"assistant","model":"claude-sonnet-4-6","stop_reason":"end_turn","content":[{"type":"text","text":"Done"}]}}"#,
+    ];
+    let loaded = load_text(&records.join("\n")).expect("turn");
+    let turns = &loaded.session.turns;
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].duration_ms, None);
+    assert!(turns[0].duration_estimated);
 }
 
 #[test]

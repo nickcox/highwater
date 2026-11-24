@@ -163,6 +163,6 @@ fn fixture_outputs_match_pinned_digest() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "c2f8070478f17bb4da9ebed54978d850fc0124b3db7d2013bd9ca40df7da12ee"
+        "6a6eed7b18c2fda3b1d3e1e1d9ac4ed166e6d1fd738943f81e0cf36b047b748a"
     );
 }

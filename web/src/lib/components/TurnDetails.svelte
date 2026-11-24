@@ -24,7 +24,9 @@
   const timingId = $props.id();
   let position = $derived(callIndex - turn.firstCall + 1);
   let positionPercent = $derived(count > 1 ? ((position - 1) / (count - 1)) * 100 : 0);
-  let estimatedElapsed = $derived(isPiSource(indexed.analysis.session.source));
+  let estimatedElapsed = $derived(
+    turn.durationEstimated ?? isPiSource(indexed.analysis.session.source),
+  );
   let timingNote = $derived(
     estimatedElapsed
       ? 'Estimated from the user message and final assistant response timestamps, including tool work.'

@@ -202,6 +202,7 @@ impl State {
                 .get("duration_ms")
                 .and_then(Value::as_u64)
                 .and_then(turn_duration_ms),
+            duration_estimated: false,
             status: Some(if kind == "turn_aborted" {
                 TurnStatus::Interrupted
             } else if payload.get("error").is_some_and(|error| !error.is_null()) {

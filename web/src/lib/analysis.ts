@@ -106,6 +106,7 @@ function validateEnvelope(input: SessionAnalysis): void {
         (turn.durationMs !== null &&
           (!Number.isSafeInteger(turn.durationMs) || turn.durationMs < 0)) ||
         ![null, 'completed', 'failed', 'interrupted'].includes(turn.status) ||
+        (turn.durationEstimated !== undefined && typeof turn.durationEstimated !== 'boolean') ||
         typeof turn.combinedCalls !== 'boolean'
       )
         throw new AnalysisValidationError('Invalid turn details');
