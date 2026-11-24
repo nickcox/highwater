@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.5.6 – 2026-11-24
+
+- In a context item's **Content preview**, **Show more** loads up to 8 KiB of the item's recorded text, and **Load more** adds the next page of a longer item.
+- The Call inspector shows a **Turn** section for Pi turns too, with the user prompt, recorded call counts, the pinned call's position in the turn and an estimate of the turn's elapsed time.
+- A Codex fork shows a **Forked from** link to the session it was forked from.
+- Claude Code, Codex, Copilot, VS Code Copilot and Pi sessions keep a compaction's marker and details when no later call reads its summary, such as a compaction replaced by another one or one at the end of the session. Before, the River left these compactions out.
+- `highwater report` recognises each harness's own shell and file-reading tools. A tool that takes a command but is not the harness's shell tool, such as Claude Code's Monitor, no longer counts as a shell command, and Copilot's view tool is compared by the path it read.
+- In narrow windows, the vertical scale and display controls stay above the chart instead of moving into a **View** menu. Zoom, **Fit all**, **Latest** and **Go to call** are under **Zoom & jump** (previously **More**) only until they fit on one row.
+- The BB plugin uses a Highwater executable on the agent machine's PATH when it is the plugin's version or newer, and downloads the pinned release only when there is none.
+- In BB, **Follow latest** shows a green dot when the Context tab is up to date and an amber dot while it updates, the context summary above the composer shows the Highwater gauge icon, and the Context tab fills the side panel's height.
+
 ## 0.5.5 – 2026-11-21
 
 - Find Pi sessions in BB's current provider directory. Threads with transcripts in the legacy directory still open.

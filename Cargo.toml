@@ -1,6 +1,6 @@
 [package]
 name = "highwater"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2021"
 rust-version = "1.88"
 description = "A local viewer for how coding-agent sessions use their context window, call by call"
