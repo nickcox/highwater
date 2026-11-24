@@ -80,6 +80,7 @@ export function mountHighwater(options: HighwaterEmbedOptions): HighwaterEmbed {
         preferencesKey: options.preferencesKey,
         sections: options.sections,
         defaultVerticalScale: options.defaultVerticalScale,
+        density: options.density,
       },
     });
   } catch (error) {

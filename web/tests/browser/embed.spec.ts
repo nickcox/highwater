@@ -328,6 +328,32 @@ test('a wide panel order keeps the details beside the chart and lifespans', asyn
   expect(chart.y).toBeGreaterThan(call.y + call.height - 1);
 });
 
+test('the compact density shows the full River navigation from a narrower width', async ({
+  page,
+}) => {
+  await open(page, undefined, 'compact');
+  await page.setViewportSize({ width: 700, height: 900 });
+  const app = page.locator('#embed');
+  const setWidth = (width: number) =>
+    app.evaluate((el, width) => {
+      el.style.width = `${width}px`;
+    }, width);
+  const fitAll = app.getByRole('button', { name: 'Fit all calls' });
+  const rowTop = (name: string) =>
+    app
+      .getByRole('button', { name, exact: true })
+      .evaluate((el) => Math.round(el.getBoundingClientRect().top));
+
+  // The session view is 24px narrower than the embed: 506px uses the menu.
+  await setWidth(530);
+  await expect(fitAll).toBeHidden();
+  // At 536px each row fits; the standard density would still use the menu.
+  await setWidth(560);
+  await expect(fitAll).toBeVisible();
+  expect(await rowTop('Go')).toBe(await rowTop('Fit all calls'));
+  expect(await rowTop('Item types')).toBe(await rowTop('Visible calls'));
+});
+
 test('a narrow panel keeps view controls visible and puts zoom and jump controls in a menu', async ({
   page,
 }) => {
@@ -366,13 +392,24 @@ test('a narrow panel keeps view controls visible and puts zoom and jump controls
     .evaluate((el) => el.getBoundingClientRect().top);
   expect(chartTop).toBeLessThan(900);
 
-  // Navigation expands before the chart header or summary.
-  await page.setViewportSize({ width: 570, height: 900 });
+  // The chart header expands before navigation, which waits until its controls and the
+  // scale and display toggles each fit on one row.
+  await page.setViewportSize({ width: 640, height: 900 });
   await app.evaluate((el) => {
-    el.style.width = '510px';
+    el.style.width = '575px';
+  });
+  await expect(app.getByRole('button', { name: 'Chart help' })).not.toHaveText('?');
+  await expect(fitAll).toBeHidden();
+  await app.evaluate((el) => {
+    el.style.width = '600px';
   });
   await expect(fitAll).toBeVisible();
-  await expect(app.getByRole('button', { name: 'Chart help' })).toHaveText('?');
+  const rowTop = (name: string) =>
+    app
+      .getByRole('button', { name, exact: true })
+      .evaluate((el) => Math.round(el.getBoundingClientRect().top));
+  expect(await rowTop('Go')).toBe(await rowTop('Fit all calls'));
+  expect(await rowTop('Item types')).toBe(await rowTop('Visible calls'));
   await expect(app.locator('.compact-metrics')).toBeVisible();
   expect(await listColumns()).toBe(1);
   await page.setViewportSize({ width: 900, height: 900 });

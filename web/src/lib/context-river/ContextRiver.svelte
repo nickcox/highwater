@@ -118,7 +118,6 @@
     onEmptyClick: (index: number) => void;
     onEscape: () => void | boolean;
     consumeUnhandledEscape?: boolean;
-    /** Put the scale and display toggles in a menu. */
     preferences?: PresentationPreferences;
     onPreferencesChange?: (value: PresentationPreferences) => void;
   } = $props();

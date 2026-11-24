@@ -46,6 +46,7 @@
     onPin = () => {},
     sections = STANDARD_SECTIONS,
     following = false,
+    density = 'standard',
   }: {
     indexed: IndexedAnalysis;
     sessions?: SessionListItem[];
@@ -65,6 +66,8 @@
     sections?: readonly SectionId[];
     /** Whether the host is following the latest call, which the call section names. */
     following?: boolean;
+    /** The embed's density, which sets the width the full River navigation needs. */
+    density?: 'standard' | 'compact';
   } = $props();
   const orderedSections = normaliseSections(untrack(() => sections));
   const wide = wideSectionPlacement(orderedSections);
@@ -121,7 +124,12 @@
   function measureWidth(width: number): void {
     const next = width > 0 && (compact ? width <= 540 : width <= 520);
     if (next !== compact) compact = next;
-    compactNavigation = width > 0 && (compactNavigation ? width <= 480 : width <= 460);
+    // The full navigation and the scale and display toggles each need one row of about 540px
+    // at the standard density and 500px at the compact density. Below that they would wrap, so
+    // the menu stays until then.
+    const navigationLimit = density === 'compact' ? 510 : 540;
+    compactNavigation =
+      width > 0 && (compactNavigation ? width <= navigationLimit + 20 : width <= navigationLimit);
     const summary = width > 0 && (compactSummary ? width <= 780 : width <= 760);
     if (summary !== compactSummary) compactSummary = summary;
   }

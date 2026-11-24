@@ -20,50 +20,50 @@ function m(e, t) {
 	for (let r of e) if (n.push(r), n.length === t) break;
 	return n;
 }
-var h = 1024, g = 2048, _ = 4096, v = 8192, y = 16384, b = 32768, x = 1 << 25, S = 65536, C = 1 << 19, w = 1 << 20, ee = 1 << 25, T = 65536, E = 1 << 21, D = 1 << 22, O = 1 << 23, k = Symbol("$state"), te = Symbol("component"), ne = Symbol("legacy props"), re = Symbol(""), ie = Symbol("attributes"), ae = Symbol("class"), oe = Symbol("style"), se = Symbol("text"), ce = Symbol("form reset"), le = new class extends Error {
+var h = 1024, g = 2048, _ = 4096, v = 8192, y = 16384, b = 32768, x = 1 << 25, S = 65536, ee = 1 << 19, C = 1 << 20, w = 1 << 25, T = 65536, E = 1 << 21, D = 1 << 22, O = 1 << 23, k = Symbol("$state"), te = Symbol("component"), A = Symbol("legacy props"), ne = Symbol(""), re = Symbol("attributes"), ie = Symbol("class"), ae = Symbol("style"), oe = Symbol("text"), se = Symbol("form reset"), ce = new class extends Error {
 	name = "StaleReactionError";
 	message = "The reaction that called `getAbortSignal()` was re-run or destroyed";
-}(), ue = !!globalThis.document?.contentType && /* @__PURE__ */ globalThis.document.contentType.includes("xml"), de = {}, fe = Symbol("uninitialized"), pe = "http://www.w3.org/1999/xhtml";
-function me() {
+}(), le = !!globalThis.document?.contentType && /* @__PURE__ */ globalThis.document.contentType.includes("xml"), ue = {}, de = Symbol("uninitialized"), fe = "http://www.w3.org/1999/xhtml";
+function pe() {
 	console.warn("https://svelte.dev/e/derived_inert");
 }
-function he(e) {
+function me(e) {
 	console.warn("https://svelte.dev/e/hydration_mismatch");
 }
-function ge() {
+function he() {
 	console.warn("https://svelte.dev/e/select_multiple_invalid_value");
 }
-function _e() {
+function ge() {
 	console.warn("https://svelte.dev/e/svelte_boundary_reset_noop");
 }
 //#endregion
 //#region node_modules/svelte/src/internal/client/dom/hydration.js
-var A = !1;
+var j = !1;
+function _e(e) {
+	j = e;
+}
+var M;
 function ve(e) {
-	A = e;
+	if (e === null) throw me(), ue;
+	return M = e;
 }
-var j;
-function ye(e) {
-	if (e === null) throw he(), de;
-	return j = e;
+function ye() {
+	return ve(/* @__PURE__ */ dn(M));
 }
-function be() {
-	return ye(/* @__PURE__ */ dn(j));
-}
-function M(e) {
-	if (A) {
-		if (/* @__PURE__ */ dn(j) !== null) throw he(), de;
-		j = e;
+function N(e) {
+	if (j) {
+		if (/* @__PURE__ */ dn(M) !== null) throw me(), ue;
+		M = e;
 	}
 }
-function xe(e = 1) {
-	if (A) {
-		for (var t = e, n = j; t--;) n = /* @__PURE__ */ dn(n);
-		j = n;
+function be(e = 1) {
+	if (j) {
+		for (var t = e, n = M; t--;) n = /* @__PURE__ */ dn(n);
+		M = n;
 	}
 }
-function Se(e = !0) {
-	for (var t = 0, n = j;;) {
+function xe(e = !0) {
+	for (var t = 0, n = M;;) {
 		if (n.nodeType === 8) {
 			var r = n.data;
 			if (r === "]") {
@@ -75,45 +75,45 @@ function Se(e = !0) {
 		e && n.remove(), n = i;
 	}
 }
-function Ce(e) {
-	if (!e || e.nodeType !== 8) throw he(), de;
+function Se(e) {
+	if (!e || e.nodeType !== 8) throw me(), ue;
 	return e.data;
 }
 //#endregion
 //#region node_modules/svelte/src/internal/client/reactivity/equality.js
-function we(e) {
+function Ce(e) {
 	return e === this.v;
 }
-function Te(e, t) {
+function we(e, t) {
 	return e == e ? e !== t || typeof e == "object" && !!e || typeof e == "function" : t == t;
 }
-function Ee(e) {
-	return !Te(e, this.v);
+function Te(e) {
+	return !we(e, this.v);
 }
-function De(e) {
+function Ee(e) {
 	throw Error("https://svelte.dev/e/lifecycle_outside_component");
 }
 //#endregion
 //#region node_modules/svelte/src/internal/client/errors.js
-function Oe() {
+function De() {
 	throw Error("https://svelte.dev/e/async_derived_orphan");
 }
-function ke(e, t, n) {
+function Oe(e, t, n) {
 	throw Error("https://svelte.dev/e/each_key_duplicate");
 }
-function Ae(e) {
+function ke(e) {
 	throw Error("https://svelte.dev/e/effect_in_teardown");
 }
-function je() {
+function Ae() {
 	throw Error("https://svelte.dev/e/effect_in_unowned_derived");
 }
-function Me(e) {
+function je(e) {
 	throw Error("https://svelte.dev/e/effect_orphan");
 }
-function Ne() {
+function Me() {
 	throw Error("https://svelte.dev/e/effect_update_depth_exceeded");
 }
-function N(e) {
+function Ne(e) {
 	throw Error("https://svelte.dev/e/props_invalid_value");
 }
 function Pe() {
@@ -209,7 +209,7 @@ var et = [];
 function tt(e, t = d) {
 	let n = null, r = /* @__PURE__ */ new Set();
 	function i(t) {
-		if (Te(e, t) && (e = t, n)) {
+		if (we(e, t) && (e = t, n)) {
 			let t = !et.length;
 			for (let t of r) t[1](), et.push(t, e);
 			if (t) {
@@ -287,7 +287,7 @@ var lt = !1;
 function ut() {
 	lt || (lt = !0, document.addEventListener("reset", (e) => {
 		Promise.resolve().then(() => {
-			if (!e.defaultPrevented) for (let t of e.target.elements) t[ce]?.();
+			if (!e.defaultPrevented) for (let t of e.target.elements) t[se]?.();
 		});
 	}, { capture: !0 }));
 }
@@ -304,8 +304,8 @@ function dt(e) {
 }
 function ft(e, t, n, r = n) {
 	e.addEventListener(t, () => dt(n));
-	let i = e[ce];
-	e[ce] = i ? () => {
+	let i = e[se];
+	e[se] = i ? () => {
 		i(), r(!0);
 	} : () => r(!0), ut();
 }
@@ -360,16 +360,16 @@ function gt() {
 /*#__NO_SIDE_EFFECTS__*/
 function _t(e) {
 	var t = 2 | g;
-	return Xn !== null && (Xn.f |= C), {
+	return Xn !== null && (Xn.f |= ee), {
 		ctx: Re,
 		deps: null,
 		effects: null,
-		equals: we,
+		equals: Ce,
 		f: t,
 		fn: e,
 		reactions: null,
 		rv: 0,
-		v: fe,
+		v: de,
 		wv: 0,
 		parent: Xn,
 		ac: null
@@ -379,14 +379,14 @@ var vt = Symbol("obsolete");
 /*#__NO_SIDE_EFFECTS__*/
 function yt(e, t, n) {
 	let r = Xn;
-	r === null && Oe();
-	var i = void 0, a = Jt(fe), o = !qn, s = /* @__PURE__ */ new Set();
+	r === null && De();
+	var i = void 0, a = Jt(de), o = !qn, s = /* @__PURE__ */ new Set();
 	return On(() => {
 		var t = Xn, n = p();
 		i = n.promise;
 		try {
 			Promise.resolve(e()).then(n.resolve, (e) => {
-				e !== le && n.reject(e);
+				e !== ce && n.reject(e);
 			}).finally(ht);
 		} catch (e) {
 			n.reject(e), ht();
@@ -422,7 +422,7 @@ function P(e) {
 /*#__NO_SIDE_EFFECTS__*/
 function bt(e) {
 	let t = /* @__PURE__ */ _t(e);
-	return t.equals = Ee, t;
+	return t.equals = Te, t;
 }
 function xt(e) {
 	var t = e.effects;
@@ -433,7 +433,7 @@ function xt(e) {
 }
 function St(e) {
 	var t, n = Xn, r = e.parent;
-	if (!Gn && r !== null && e.v !== fe && r.f & 24576) return me(), e.v;
+	if (!Gn && r !== null && e.v !== de && r.f & 24576) return pe(), e.v;
 	Zn(r);
 	try {
 		e.f &= ~T, xt(e), t = dr(e);
@@ -452,7 +452,7 @@ function Ct(e) {
 }
 function wt(e) {
 	if (e.effects !== null) for (let t of e.effects) (t.teardown || t.ac) && (t.teardown?.(), t.ac !== null && dt(() => {
-		t.ac.abort(le), t.ac = null;
+		t.ac.abort(ce), t.ac = null;
 	}), t.fn !== null && (t.teardown = d), mr(t, 0), Nn(t));
 }
 function Tt(e) {
@@ -609,7 +609,7 @@ var Et = null, Dt = null, Ot = null, kt = null, At = null, jt = !1, Mt = !1, Nt 
 		for (var t = 0; t < e.length; t += 1) Qe(e[t], this.#u, this.#d);
 	}
 	capture(e, t, n = !1) {
-		e.v !== fe && !this.previous.has(e) && this.previous.set(e, e.v), e.f & 8388608 || (this.current.set(e, [t, n]), kt?.set(e, t)), this.is_fork || (e.v = t);
+		e.v !== de && !this.previous.has(e) && this.previous.set(e, e.v), e.f & 8388608 || (this.current.set(e, [t, n]), kt?.set(e, t)), this.is_fork || (e.v = t);
 	}
 	activate() {
 		Dt = this;
@@ -712,7 +712,7 @@ function Rt(e) {
 }
 function zt() {
 	try {
-		Ne();
+		Me();
 	} catch (e) {
 		_n(e, At);
 	}
@@ -761,7 +761,7 @@ function Jt(e, t) {
 		f: 0,
 		v: e,
 		reactions: null,
-		equals: we,
+		equals: Ce,
 		rv: 0,
 		wv: 0
 	};
@@ -774,7 +774,7 @@ function F(e, t) {
 /*#__NO_SIDE_EFFECTS__*/
 function Yt(e, t = !1, n = !0) {
 	let r = Jt(e);
-	return t || (r.equals = Ee), r;
+	return t || (r.equals = Te), r;
 }
 function I(e, t, n = !1) {
 	return qn !== null && (!Jn || qn.f & 131072) && Ue() && qn.f & 4325394 && (Qn === null || !Qn.has(e)) && Ie(), Xt(e, n ? en(t) : t, Pt);
@@ -849,18 +849,18 @@ function en(t) {
 			var n = r.get(t);
 			if (n === void 0) {
 				if (t in e) {
-					let e = f(() => /* @__PURE__ */ F(fe, u));
+					let e = f(() => /* @__PURE__ */ F(de, u));
 					r.set(t, e), Qt(o);
 				}
-			} else I(n, fe), Qt(o);
+			} else I(n, de), Qt(o);
 			return !0;
 		},
 		get(e, n, i) {
 			if (n === k) return t;
 			var o = r.get(n), s = n in e;
-			if (o === void 0 && (!s || a(e, n)?.writable) && (o = f(() => /* @__PURE__ */ F(en(s ? e[n] : fe), u)), r.set(n, o)), o !== void 0) {
+			if (o === void 0 && (!s || a(e, n)?.writable) && (o = f(() => /* @__PURE__ */ F(en(s ? e[n] : de), u)), r.set(n, o)), o !== void 0) {
 				var c = H(o);
-				return c === fe ? void 0 : c;
+				return c === de ? void 0 : c;
 			}
 			return Reflect.get(e, n, i);
 		},
@@ -871,7 +871,7 @@ function en(t) {
 				i && (n.value = H(i));
 			} else if (n === void 0) {
 				var a = r.get(t), o = a?.v;
-				if (a !== void 0 && o !== fe) return {
+				if (a !== void 0 && o !== de) return {
 					enumerable: !0,
 					configurable: !0,
 					value: o,
@@ -882,18 +882,18 @@ function en(t) {
 		},
 		has(e, t) {
 			if (t === k) return !0;
-			var n = r.get(t), i = n !== void 0 && n.v !== fe || Reflect.has(e, t);
-			return (n !== void 0 || Xn !== null && (!i || a(e, t)?.writable)) && (n === void 0 && (n = f(() => /* @__PURE__ */ F(i ? en(e[t]) : fe, u)), r.set(t, n)), H(n) === fe) ? !1 : i;
+			var n = r.get(t), i = n !== void 0 && n.v !== de || Reflect.has(e, t);
+			return (n !== void 0 || Xn !== null && (!i || a(e, t)?.writable)) && (n === void 0 && (n = f(() => /* @__PURE__ */ F(i ? en(e[t]) : de, u)), r.set(t, n)), H(n) === de) ? !1 : i;
 		},
 		set(e, t, n, s) {
 			var c = r.get(t), l = t in e;
 			if (i && t === "length") for (var d = n; d < c.v; d += 1) {
 				var p = r.get(d + "");
-				p === void 0 ? d in e && (p = f(() => /* @__PURE__ */ F(fe, u)), r.set(d + "", p)) : I(p, fe);
+				p === void 0 ? d in e && (p = f(() => /* @__PURE__ */ F(de, u)), r.set(d + "", p)) : I(p, de);
 			}
 			if (c === void 0) (!l || a(e, t)?.writable) && (c = f(() => /* @__PURE__ */ F(void 0, u)), I(c, en(n)), r.set(t, c));
 			else {
-				l = c.v !== fe;
+				l = c.v !== de;
 				var m = f(() => en(n));
 				I(c, m);
 			}
@@ -911,9 +911,9 @@ function en(t) {
 			H(o);
 			var t = Reflect.ownKeys(e).filter((e) => {
 				var t = r.get(e);
-				return t === void 0 || t.v !== fe;
+				return t === void 0 || t.v !== de;
 			});
-			for (var [n, i] of r) i.v !== fe && !(n in e) && t.push(n);
+			for (var [n, i] of r) i.v !== de && !(n in e) && t.push(n);
 			return t;
 		},
 		setPrototypeOf() {
@@ -935,7 +935,7 @@ function cn() {
 	if (rn === void 0) {
 		rn = window, an = /Firefox/.test(navigator.userAgent);
 		var e = Element.prototype, t = Node.prototype, n = Text.prototype;
-		on = a(t, "firstChild").get, sn = a(t, "nextSibling").get, u(e) && (e[ae] = void 0, e[ie] = null, e[oe] = void 0, e.__e = void 0), u(n) && (n[se] = void 0);
+		on = a(t, "firstChild").get, sn = a(t, "nextSibling").get, u(e) && (e[ie] = void 0, e[re] = null, e[ae] = void 0, e.__e = void 0), u(n) && (n[oe] = void 0);
 	}
 }
 function ln(e = "") {
@@ -950,46 +950,46 @@ function dn(e) {
 	return sn.call(e);
 }
 function L(e, t) {
-	if (!A) return /* @__PURE__ */ un(e);
-	var n = /* @__PURE__ */ un(j);
-	if (n === null) n = j.appendChild(ln());
+	if (!j) return /* @__PURE__ */ un(e);
+	var n = /* @__PURE__ */ un(M);
+	if (n === null) n = M.appendChild(ln());
 	else if (t && n.nodeType !== 3) {
 		var r = ln();
-		return n?.before(r), ye(r), r;
+		return n?.before(r), ve(r), r;
 	}
-	return t && hn(n), ye(n), n;
+	return t && hn(n), ve(n), n;
 }
 function R(e, t = !1) {
-	if (!A) {
+	if (!j) {
 		var n = /* @__PURE__ */ un(e);
 		return n instanceof Comment && n.data === "" ? /* @__PURE__ */ dn(n) : n;
 	}
 	if (t) {
-		if (j?.nodeType !== 3) {
+		if (M?.nodeType !== 3) {
 			var r = ln();
-			return j?.before(r), ye(r), r;
+			return M?.before(r), ve(r), r;
 		}
-		hn(j);
+		hn(M);
 	}
-	return j;
+	return M;
 }
 function z(e, t = !1) {
-	if (!A) return /* @__PURE__ */ un(e);
+	if (!j) return /* @__PURE__ */ un(e);
 	var n = L(e, t);
-	return M(e), n;
+	return N(e), n;
 }
 function B(e, t = 1, n = !1) {
-	let r = A ? j : e;
+	let r = j ? M : e;
 	for (var i; t--;) i = r, r = /* @__PURE__ */ dn(r);
-	if (!A) return r;
+	if (!j) return r;
 	if (n) {
 		if (r?.nodeType !== 3) {
 			var a = ln();
-			return r === null ? i?.after(a) : r.before(a), ye(a), a;
+			return r === null ? i?.after(a) : r.before(a), ve(a), a;
 		}
 		hn(r);
 	}
-	return ye(r), r;
+	return ve(r), r;
 }
 function fn(e) {
 	e.textContent = "";
@@ -1031,7 +1031,7 @@ function _n(e, t) {
 //#endregion
 //#region node_modules/svelte/src/internal/client/reactivity/effects.js
 function vn(e) {
-	Xn === null && (qn === null && Me(e), je()), Gn && Ae(e);
+	Xn === null && (qn === null && je(e), Ae()), Gn && ke(e);
 }
 function yn(e, t) {
 	var n = t.last;
@@ -1089,14 +1089,14 @@ function Cn(e) {
 	} else return wn(e);
 }
 function wn(e) {
-	return bn(4 | w, e);
+	return bn(4 | C, e);
 }
 function Tn(e) {
-	return vn("$effect.pre"), bn(8 | w, e);
+	return vn("$effect.pre"), bn(8 | C, e);
 }
 function En(e) {
 	Lt.ensure();
-	let t = bn(64 | C, e);
+	let t = bn(64 | ee, e);
 	return (e = {}) => new Promise((n) => {
 		e.outro ? Rn(t, () => {
 			Fn(t), n(void 0);
@@ -1107,7 +1107,7 @@ function Dn(e) {
 	return bn(4, e);
 }
 function On(e) {
-	return bn(D | C, e);
+	return bn(D | ee, e);
 }
 function kn(e, t = 0) {
 	return bn(8 | t, e);
@@ -1123,7 +1123,7 @@ function An(e, t = 0) {
 	return bn(16 | t, e);
 }
 function jn(e) {
-	return bn(32 | C, e);
+	return bn(32 | ee, e);
 }
 function Mn(e) {
 	var t = e.teardown;
@@ -1144,7 +1144,7 @@ function Nn(e, t = !1) {
 	for (e.first = e.last = null; n !== null;) {
 		let e = n.ac;
 		e !== null && dt(() => {
-			e.abort(le);
+			e.abort(ce);
 		});
 		var r = n.next;
 		n.f & 64 ? n.parent = null : Fn(n, t), n = r;
@@ -1272,7 +1272,7 @@ function ur(e, t, n = !0) {
 function dr(e) {
 	var t = er, n = tr, r = nr, i = qn, a = Qn, o = Re, s = Jn, c = or, l = e.f;
 	er = null, tr = 0, nr = null, qn = l & 96 ? null : e, Qn = null, ze(e.ctx), Jn = !1, or = ++ar, e.ac !== null && (dt(() => {
-		e.ac.abort(le);
+		e.ac.abort(ce);
 	}), e.ac = null);
 	try {
 		e.f |= E;
@@ -1313,8 +1313,8 @@ function pr(e, r) {
 	}
 	if (i === null && r.f & 2 && (er === null || !n.call(er, r))) {
 		var s = r;
-		s.f & 512 && (s.f ^= 512, s.f &= ~T), s.v !== fe && Xe(s), s.ac !== null && dt(() => {
-			s.ac.abort(le), s.ac = null, Ye(s, g);
+		s.f & 512 && (s.f ^= 512, s.f &= ~T), s.v !== de && Xe(s), s.ac !== null && dt(() => {
+			s.ac.abort(ce), s.ac = null, Ye(s, g);
 		}), wt(s), mr(s, 0);
 	}
 }
@@ -1369,7 +1369,7 @@ function _r(e) {
 	if (e.f |= 512, e.deps !== null) for (let t of e.deps) (t.reactions ??= []).push(e), t.f & 2 && !(t.f & 512) && (Tt(t), _r(t));
 }
 function vr(e) {
-	if (e.v === fe) return !0;
+	if (e.v === de) return !0;
 	if (e.deps === null) return !1;
 	for (let t of e.deps) if (Kt.has(t) || t.f & 2 && vr(t)) return !0;
 	return !1;
@@ -1514,7 +1514,7 @@ function Ir(e, t) {
 function W(e, t) {
 	var n = !!(t & 1), r = !!(t & 2), i, a = !e.startsWith("<!>");
 	return () => {
-		if (A) return Ir(j, null), j;
+		if (j) return Ir(M, null), M;
 		i === void 0 && (i = Fr(a ? e : "<!>" + e), n || (i = /* @__PURE__ */ un(i)));
 		var t = r || an ? document.importNode(i, !0) : i.cloneNode(!0);
 		if (n) {
@@ -1528,7 +1528,7 @@ function W(e, t) {
 function Lr(e, t, n = "svg") {
 	var r = !e.startsWith("<!>"), i = !!(t & 1), a = `<${n}>${r ? e : "<!>" + e}</${n}>`, o;
 	return () => {
-		if (A) return Ir(j, null), j;
+		if (j) return Ir(M, null), M;
 		if (!o) {
 			var e = /* @__PURE__ */ un(Fr(a));
 			if (i) for (o = document.createDocumentFragment(); /* @__PURE__ */ un(e);) o.appendChild(/* @__PURE__ */ un(e));
@@ -1547,30 +1547,30 @@ function Rr(e, t) {
 	return /* @__PURE__ */ Lr(e, t, "svg");
 }
 function zr(e = "") {
-	if (!A) {
+	if (!j) {
 		var t = ln(e + "");
 		return Ir(t, t), t;
 	}
-	var n = j;
-	return n.nodeType === 3 ? hn(n) : (n.before(n = ln()), ye(n)), Ir(n, n), n;
+	var n = M;
+	return n.nodeType === 3 ? hn(n) : (n.before(n = ln()), ve(n)), Ir(n, n), n;
 }
 function Br() {
-	if (A) return Ir(j, null), j;
+	if (j) return Ir(M, null), M;
 	var e = document.createDocumentFragment(), t = document.createComment(""), n = ln();
 	return e.append(t, n), Ir(t, n), e;
 }
 function G(e, t) {
-	if (A) {
+	if (j) {
 		var n = Xn;
-		(!(n.f & 32768) || n.nodes.end === null) && (n.nodes.end = j), be();
+		(!(n.f & 32768) || n.nodes.end === null) && (n.nodes.end = M), ye();
 		return;
 	}
 	e !== null && e.before(t);
 }
 function Vr() {
-	if (A && j && j.nodeType === 8 && j.textContent?.startsWith("$")) {
-		let e = j.textContent.substring(1);
-		return be(), e;
+	if (j && M && M.nodeType === 8 && M.textContent?.startsWith("$")) {
+		let e = M.textContent.substring(1);
+		return ye(), e;
 	}
 	return (window.__svelte ??= {}).uid ??= 1, `c${window.__svelte.uid++}`;
 }
@@ -1588,7 +1588,7 @@ function Hr(e) {
 }
 //#endregion
 //#region node_modules/svelte/src/internal/client/dom/blocks/boundary.js
-var Ur = S | C;
+var Ur = S | ee;
 function Wr(e, t, n, r) {
 	new Gr(e, t, n, r);
 }
@@ -1597,7 +1597,7 @@ var Gr = class {
 	is_pending = !1;
 	transform_error;
 	#e;
-	#t = A ? j : null;
+	#t = j ? M : null;
 	#n;
 	#r;
 	#i;
@@ -1619,16 +1619,16 @@ var Gr = class {
 			var t = Xn;
 			t.b = this, t.f |= 128, n(e);
 		}, this.parent = Xn.b, this.transform_error = r ?? this.parent?.transform_error ?? ((e) => e), this.#i = An(() => {
-			if (A) {
+			if (j) {
 				let e = this.#t;
-				be();
+				ye();
 				let t = e.data === "[!";
 				if (e.data.startsWith("[?")) {
 					let t = JSON.parse(e.data.slice(2));
 					this.#_(t);
 				} else t ? this.#y() : this.#g();
 			} else this.#b();
-		}, Ur), A && (this.#e = j);
+		}, Ur), j && (this.#e = M);
 	}
 	#g() {
 		try {
@@ -1647,7 +1647,7 @@ var Gr = class {
 		var t = !1, n = !1;
 		let r = () => {
 			if (t) {
-				_e();
+				ge();
 				return;
 			}
 			t = !0, n && Le(), this.#s !== null && Rn(this.#s, () => {
@@ -1750,7 +1750,7 @@ var Gr = class {
 		})) : this.#w(e);
 	}
 	#w(e) {
-		this.#a &&= (Fn(this.#a), null), this.#o &&= (Fn(this.#o), null), this.#s &&= (Fn(this.#s), null), A && (ye(this.#t), xe(), ye(Se()));
+		this.#a &&= (Fn(this.#a), null), this.#o &&= (Fn(this.#o), null), this.#s &&= (Fn(this.#s), null), j && (ve(this.#t), be(), ve(xe()));
 		let t = this.#n.failed, n = (e) => {
 			let { reset: n, invoke_onerror: r } = this.#v(e);
 			r(), t && (this.#s = this.#S(() => {
@@ -1778,7 +1778,7 @@ var Gr = class {
 };
 function K(e, t) {
 	var n = t == null ? "" : typeof t == "object" ? `${t}` : t;
-	n !== (e[se] ??= e.nodeValue) && (e[se] = n, e.nodeValue = `${n}`);
+	n !== (e[oe] ??= e.nodeValue) && (e[oe] = n, e.nodeValue = `${n}`);
 }
 function Kr(e, t) {
 	return Jr(e, t);
@@ -1791,7 +1791,7 @@ function Jr(e, { target: t, anchor: n, props: i = {}, events: a, context: o, int
 		Wr(s, { pending: () => {} }, (t) => {
 			Be({});
 			var n = Re;
-			if (o && (n.c = o), a && (i.$$events = a), A && Ir(t, null), l = e(t, i) || He(), A && (Xn.nodes.end = j, j === null || j.nodeType !== 8 || j.data !== "]")) throw he(), de;
+			if (o && (n.c = o), a && (i.$$events = a), j && Ir(t, null), l = e(t, i) || He(), j && (Xn.nodes.end = M, M === null || M.nodeType !== 8 || M.data !== "]")) throw me(), ue;
 			Ve();
 		}, c);
 		var u = /* @__PURE__ */ new Set(), d = (e) => {
@@ -1885,21 +1885,21 @@ var Zr = class {
 			for (let [t, r] of this.#t) t === e ? n.unskip_effect(r) : n.skip_effect(r);
 			for (let [t, r] of this.#n) t === e ? n.unskip_effect(r.effect) : n.skip_effect(r.effect);
 			n.oncommit(this.#a), n.ondiscard(this.#o);
-		} else A && (this.anchor = j), this.#a(n);
+		} else j && (this.anchor = M), this.#a(n);
 	}
 };
 //#endregion
 //#region node_modules/svelte/src/internal/client/dom/blocks/if.js
 function q(e, t, n = !1) {
 	var r;
-	A && (r = j, be());
+	j && (r = M, ye());
 	var i = new Zr(e), a = n ? S : 0;
 	function o(e, t) {
-		if (A) {
-			var n = Ce(r);
+		if (j) {
+			var n = Se(r);
 			if (e !== parseInt(n.substring(1))) {
-				var a = Se();
-				ye(a), i.anchor = a, ve(!1), i.ensure(e, t), ve(!0);
+				var a = xe();
+				ve(a), i.anchor = a, _e(!1), i.ensure(e, t), _e(!0);
 				return;
 			}
 		}
@@ -1916,7 +1916,7 @@ function q(e, t, n = !1) {
 //#region node_modules/svelte/src/internal/client/dom/blocks/key.js
 var Qr = Symbol("NaN");
 function $r(e, t, n) {
-	A && be();
+	j && ye();
 	var r = new Zr(e), i = !Ue();
 	An(() => {
 		var e = t();
@@ -1960,7 +1960,7 @@ function ni(e, t, n = !0) {
 	}
 	for (var i = 0; i < t.length; i++) {
 		var a = t[i];
-		r?.has(a) ? (a.f |= ee, Hn(a, document.createDocumentFragment())) : Fn(t[i], n);
+		r?.has(a) ? (a.f |= w, Hn(a, document.createDocumentFragment())) : Fn(t[i], n);
 	}
 }
 var ri;
@@ -1968,15 +1968,15 @@ function J(t, n, i, a, o, s = null) {
 	var c = t, l = /* @__PURE__ */ new Map();
 	if (n & 4) {
 		var u = t;
-		c = A ? ye(/* @__PURE__ */ un(u)) : u.appendChild(ln());
+		c = j ? ve(/* @__PURE__ */ un(u)) : u.appendChild(ln());
 	}
-	A && be();
+	j && ye();
 	var d = null, f = /* @__PURE__ */ bt(() => {
 		var t = i();
 		return e(t) ? t : t == null ? [] : r(t);
 	}), p, m = /* @__PURE__ */ new Map(), h = !0;
 	function g(e) {
-		v.effect.f & 16384 || (v.pending.delete(e), v.fallback = d, ai(v, p, c, n, a), d !== null && (p.length === 0 ? d.f & 33554432 ? (d.f ^= ee, si(d, null, c)) : Bn(d) : Rn(d, () => {
+		v.effect.f & 16384 || (v.pending.delete(e), v.fallback = d, ai(v, p, c, n, a), d !== null && (p.length === 0 ? d.f & 33554432 ? (d.f ^= w, si(d, null, c)) : Bn(d) : Rn(d, () => {
 			d = null;
 		})));
 	}
@@ -1988,19 +1988,19 @@ function J(t, n, i, a, o, s = null) {
 			p = H(f);
 			var e = p.length;
 			let t = !1;
-			A && Ce(c) === "[!" != (e === 0) && (c = Se(), ye(c), ve(!1), t = !0);
+			j && Se(c) === "[!" != (e === 0) && (c = xe(), ve(c), _e(!1), t = !0);
 			for (var r = /* @__PURE__ */ new Set(), u = Dt, v = pn(), y = 0; y < e; y += 1) {
-				A && j.nodeType === 8 && j.data === "]" && (c = j, t = !0, ve(!1));
+				j && M.nodeType === 8 && M.data === "]" && (c = M, t = !0, _e(!1));
 				var b = p[y], x = a(b, y), S = h ? null : l.get(x);
-				S ? (S.v && Xt(S.v, b), S.i && Xt(S.i, y), v && u.unskip_effect(S.e)) : (S = oi(l, h ? c : ri ??= ln(), b, x, y, o, n, i), h || (S.e.f |= ee), l.set(x, S)), r.add(x);
+				S ? (S.v && Xt(S.v, b), S.i && Xt(S.i, y), v && u.unskip_effect(S.e)) : (S = oi(l, h ? c : ri ??= ln(), b, x, y, o, n, i), h || (S.e.f |= w), l.set(x, S)), r.add(x);
 			}
-			if (e === 0 && s && !d && (h ? d = jn(() => s(c)) : (d = jn(() => s(ri ??= ln())), d.f |= ee)), e > r.size && ke("", "", ""), A && e > 0 && ye(Se()), !h) {
+			if (e === 0 && s && !d && (h ? d = jn(() => s(c)) : (d = jn(() => s(ri ??= ln())), d.f |= w)), e > r.size && Oe("", "", ""), j && e > 0 && ve(xe()), !h) {
 				if (m.set(u, r), v) {
 					for (let [e, t] of l) r.has(e) || u.skip_effect(t.e);
 					u.oncommit(g), u.ondiscard(_);
 				} else g(u);
 			}
-			t && ve(!0), H(f);
+			t && _e(!0), H(f);
 		}),
 		flags: n,
 		items: l,
@@ -2008,7 +2008,7 @@ function J(t, n, i, a, o, s = null) {
 		outrogroups: null,
 		fallback: d
 	};
-	h = !1, A && (c = j);
+	h = !1, j && (c = M);
 }
 function ii(e) {
 	for (; e !== null && !(e.f & 32);) e = e.next;
@@ -2020,7 +2020,7 @@ function ai(e, t, n, i, a) {
 	for (v = 0; v < s; v += 1) {
 		if (h = t[v], g = a(h, v), _ = c.get(g).e, e.outrogroups !== null) for (let t of e.outrogroups) t.pending.delete(_), t.done.delete(_);
 		if (_.f & 8192 && (Bn(_), o && (_.nodes?.a?.unfix(), (f ??= /* @__PURE__ */ new Set()).delete(_))), _.f & 33554432) {
-			if (_.f ^= ee, _ === l) si(_, null, n);
+			if (_.f ^= w, _ === l) si(_, null, n);
 			else {
 				var y = d ? d.next : l;
 				_ === e.effect.last && (e.effect.last = _.prev), _.prev && (_.prev.next = _.next), _.next && (_.next.prev = _.prev), ci(e, d, _), ci(e, _, y), si(_, y, n), d = _, p = [], m = [], l = ii(d.next);
@@ -2032,10 +2032,10 @@ function ai(e, t, n, i, a) {
 				if (p.length < m.length) {
 					var b = m[0], x;
 					d = b.prev;
-					var S = p[0], C = p[p.length - 1];
+					var S = p[0], ee = p[p.length - 1];
 					for (x = 0; x < p.length; x += 1) si(p[x], b, n);
 					for (x = 0; x < m.length; x += 1) u.delete(m[x]);
-					ci(e, S.prev, C.next), ci(e, d, S), ci(e, C, b), l = b, d = C, --v, p = [], m = [];
+					ci(e, S.prev, ee.next), ci(e, d, S), ci(e, ee, b), l = b, d = ee, --v, p = [], m = [];
 				} else u.delete(_), si(_, l, n), ci(e, _.prev, _.next), ci(e, _, d === null ? e.effect.first : d.next), ci(e, d, _), d = _;
 				continue;
 			}
@@ -2049,17 +2049,17 @@ function ai(e, t, n, i, a) {
 		e.outrogroups.size === 0 && (e.outrogroups = null);
 	}
 	if (l !== null || u !== void 0) {
-		var w = [];
-		if (u !== void 0) for (_ of u) _.f & 8192 || w.push(_);
-		for (; l !== null;) !(l.f & 8192) && l !== e.fallback && w.push(l), l = ii(l.next);
-		var T = w.length;
+		var C = [];
+		if (u !== void 0) for (_ of u) _.f & 8192 || C.push(_);
+		for (; l !== null;) !(l.f & 8192) && l !== e.fallback && C.push(l), l = ii(l.next);
+		var T = C.length;
 		if (T > 0) {
 			var E = i & 4 && s === 0 ? n : null;
 			if (o) {
-				for (v = 0; v < T; v += 1) w[v].nodes?.a?.measure();
-				for (v = 0; v < T; v += 1) w[v].nodes?.a?.fix();
+				for (v = 0; v < T; v += 1) C[v].nodes?.a?.measure();
+				for (v = 0; v < T; v += 1) C[v].nodes?.a?.fix();
 			}
-			ti(e, w, E);
+			ti(e, C, E);
 		}
 	}
 	o && Ke(() => {
@@ -2116,7 +2116,7 @@ function di(e, t, n) {
 			var i = !1, a = {};
 			kn(() => {
 				var e = n();
-				br(e), i && Te(a, e) && (a = e, r.update(e));
+				br(e), i && we(a, e) && (a = e, r.update(e));
 			}), i = !0;
 		}
 		if (r?.destroy) return () => r.destroy();
@@ -2181,10 +2181,10 @@ function gi(e, t) {
 //#endregion
 //#region node_modules/svelte/src/internal/client/dom/elements/class.js
 function _i(e, t, n, r, i, a) {
-	var o = e[ae];
-	if (A || o !== n || o === void 0) {
+	var o = e[ie];
+	if (j || o !== n || o === void 0) {
 		var s = pi(n, r, a);
-		(!A || s !== e.getAttribute("class")) && (s == null ? e.removeAttribute("class") : t ? e.className = s : e.setAttribute("class", s)), e[ae] = n;
+		(!j || s !== e.getAttribute("class")) && (s == null ? e.removeAttribute("class") : t ? e.className = s : e.setAttribute("class", s)), e[ie] = n;
 	} else if (a && i !== a) for (var c in a) {
 		var l = !!a[c];
 		(i == null || l !== !!i[c]) && e.classList.toggle(c, l);
@@ -2200,10 +2200,10 @@ function vi(e, t = {}, n, r) {
 	}
 }
 function yi(e, t, n, r) {
-	var i = e[oe];
-	if (A || i !== t) {
+	var i = e[ae];
+	if (j || i !== t) {
 		var a = gi(t, r);
-		(!A || a !== e.getAttribute("style")) && (a == null ? e.removeAttribute("style") : e.style.cssText = a), e[oe] = t;
+		(!j || a !== e.getAttribute("style")) && (a == null ? e.removeAttribute("style") : e.style.cssText = a), e[ae] = t;
 	} else r && (Array.isArray(r) ? (vi(e, n?.[0], r[0]), vi(e, n?.[1], r[1], "important")) : vi(e, n, r));
 	return r;
 }
@@ -2232,7 +2232,7 @@ function xi(t, n) {
 function Si(t, n, r = !1) {
 	if (t.multiple) {
 		if (n == null) return;
-		if (!e(n)) return ge();
+		if (!e(n)) return he();
 		for (var i of t.options) i.selected = n.includes(Ti(i));
 		return;
 	}
@@ -2291,9 +2291,9 @@ function Ei(e) {
 }
 //#endregion
 //#region node_modules/svelte/src/internal/client/dom/elements/attributes.js
-var Di = Symbol("is custom element"), Oi = Symbol("is html"), ki = ue ? "link" : "LINK";
+var Di = Symbol("is custom element"), Oi = Symbol("is html"), ki = le ? "link" : "LINK";
 function Ai(e) {
-	if (A) {
+	if (j) {
 		var t = !1, n = () => {
 			if (!t) {
 				if (t = !0, e.hasAttribute("value")) {
@@ -2306,17 +2306,17 @@ function Ai(e) {
 				}
 			}
 		};
-		e[ce] = n, Ke(n), ut();
+		e[se] = n, Ke(n), ut();
 	}
 }
 function Y(e, t, n, r) {
 	var i = ji(e);
-	A && (i[t] = e.getAttribute(t), t === "src" || t === "srcset" || t === "href" && e.nodeName === ki) || i[t] !== (i[t] = n) && (t === "loading" && (e[re] = n), n == null ? e.removeAttribute(t) : typeof n != "string" && Ni(e).has(t) ? e[t] = n : e.setAttribute(t, n));
+	j && (i[t] = e.getAttribute(t), t === "src" || t === "srcset" || t === "href" && e.nodeName === ki) || i[t] !== (i[t] = n) && (t === "loading" && (e[ne] = n), n == null ? e.removeAttribute(t) : typeof n != "string" && Ni(e).has(t) ? e[t] = n : e.setAttribute(t, n));
 }
 function ji(e) {
-	return e[ie] ??= {
+	return e[re] ??= {
 		[Di]: e.nodeName.includes("-"),
-		[Oi]: e.namespaceURI === pe
+		[Oi]: e.namespaceURI === fe
 	};
 }
 var Mi = /* @__PURE__ */ new Map();
@@ -2343,7 +2343,7 @@ function Pi(e, t, n = t) {
 				o === s && s === c && l > c ? (e.selectionStart = l, e.selectionEnd = l) : (e.selectionStart = o, e.selectionEnd = Math.min(s, l));
 			}
 		}
-	}), (A && e.defaultValue !== e.value || yr(t) == null && e.value) && (n(Fi(e) ? Ii(e.value) : e.value), Dt !== null && r.add(Dt)), kn(() => {
+	}), (j && e.defaultValue !== e.value || yr(t) == null && e.value) && (n(Fi(e) ? Ii(e.value) : e.value), Dt !== null && r.add(Dt)), kn(() => {
 		var n = t();
 		if (e === document.activeElement) {
 			var i = Dt;
@@ -2402,11 +2402,11 @@ function X(e, t, n, r) {
 	var i = !0, o = !!(n & 8), s = !!(n & 16), c = r, l = !0, u = void 0, d = () => s && i ? (u ??= /* @__PURE__ */ _t(r), H(u)) : (l && (l = !1, c = s ? yr(r) : r), c);
 	let f;
 	if (o) {
-		var p = k in e || ne in e;
+		var p = k in e || A in e;
 		f = a(e, t)?.set ?? (p && t in e ? (n) => e[t] = n : void 0);
 	}
 	var m, h = !1;
-	o ? [m, h] = ct(() => e[t]) : m = e[t], m === void 0 && r !== void 0 && (m = d(), f && (i && N(t), f(m)));
+	o ? [m, h] = ct(() => e[t]) : m = e[t], m === void 0 && r !== void 0 && (m = d(), f && (i && Ne(t), f(m)));
 	var g = i ? () => {
 		var n = e[t];
 		return n === void 0 ? d() : (l = !0, n);
@@ -2433,13 +2433,13 @@ function X(e, t, n, r) {
 	});
 }
 function Bi(e) {
-	Re === null && De("onMount"), Cn(() => {
+	Re === null && Ee("onMount"), Cn(() => {
 		let t = yr(e);
 		if (typeof t == "function") return t;
 	});
 }
 function Vi(e) {
-	Re === null && De("onDestroy"), Bi(() => () => yr(e));
+	Re === null && Ee("onDestroy"), Bi(() => () => yr(e));
 }
 //#endregion
 //#region node_modules/svelte/src/internal/disclose-version.js
@@ -2675,7 +2675,7 @@ function va(e, t) {
 	Ri(m, (e) => I(n, e), () => H(n));
 	var h = B(m, 2);
 	let g;
-	li(L(h), () => t.children ?? d), M(h), Ri(h, (e) => I(r, e), () => H(r)), M(p), V(() => {
+	li(L(h), () => t.children ?? d), N(h), Ri(h, (e) => I(r, e), () => H(r)), N(p), V(() => {
 		Y(m, "aria-label", t.label), Y(m, "aria-expanded", H(a)), Y(m, "aria-controls", t.id), Y(h, "id", t.id), g = _i(h, 1, "info-popover svelte-jsd3h9", null, g, { placing: !H(o) }), Y(h, "hidden", !H(a)), yi(h, H(i));
 	}), U("keydown", p, u), U("click", m, () => H(a) ? l(!0) : c()), G(e, p), Ve();
 }
@@ -3048,7 +3048,7 @@ function Xa(e, t) {
 		}
 	}
 	var i = Ja(), a = L(i), o = z(B(a, 2), !0);
-	M(i), V(() => {
+	N(i), V(() => {
 		Y(a, "aria-label", `Copy ${t.label}`), K(o, H(n));
 	}), U("click", a, r), G(e, i), Ve();
 }
@@ -3782,60 +3782,60 @@ var rs = /* @__PURE__ */ W("<div class=\"presentation-controls svelte-8fl9lq\" r
 };
 function Rs(e, t) {
 	Be(t, !0), ui(e, Ls);
-	let n = () => ot(Na, "$activePalette", r), [r, i] = st(), a = X(t, "pinnedCallIndex", 3, null), o = X(t, "selectedItemId", 3, null), s = X(t, "isVisible", 3, !1), c = X(t, "scope", 7, "cumulative"), l = X(t, "endpointNotice", 3, ""), u = X(t, "onScopeChange", 3, null), d = X(t, "onUnpinCall", 3, () => {}), f = X(t, "onRevealInRiver", 3, () => {}), p = X(t, "onViewDetails", 3, () => {}), m = X(t, "onFindInLifespans", 3, () => {}), h = X(t, "compact", 3, !1), g = /* @__PURE__ */ F(void 0), _ = /* @__PURE__ */ F(null), v = /* @__PURE__ */ F(null), y = /* @__PURE__ */ F(800), b = /* @__PURE__ */ F(null), x = /* @__PURE__ */ P(() => H(b) ?? (h() ? "list" : "treemap")), S = /* @__PURE__ */ F(null), C = es(), w = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls), ee = /* @__PURE__ */ P(() => a() === null ? -1 : H(w).findIndex((e) => e.index === a())), T = /* @__PURE__ */ P(() => H(ee) < 0 ? null : H(w)[H(ee)]), E = /* @__PURE__ */ P(() => H(ee) > 0 ? H(w)[H(ee) - 1] : null), D = /* @__PURE__ */ P(() => H(ee) >= 0 && H(ee) < H(w).length - 1 ? H(w)[H(ee) + 1] : null), O = /* @__PURE__ */ P(() => s() ? C.get(t.indexed, c(), a()) : null), k = /* @__PURE__ */ P(() => H(O) ? Ko(H(O).items) : []), te = /* @__PURE__ */ P(() => H(O) !== null && H(O).hasPositiveWeights && !H(O).totalOverflow), ne = /* @__PURE__ */ P(() => H(O) && H(te) ? ns(H(O), H(y), 360) : {
+	let n = () => ot(Na, "$activePalette", r), [r, i] = st(), a = X(t, "pinnedCallIndex", 3, null), o = X(t, "selectedItemId", 3, null), s = X(t, "isVisible", 3, !1), c = X(t, "scope", 7, "cumulative"), l = X(t, "endpointNotice", 3, ""), u = X(t, "onScopeChange", 3, null), d = X(t, "onUnpinCall", 3, () => {}), f = X(t, "onRevealInRiver", 3, () => {}), p = X(t, "onViewDetails", 3, () => {}), m = X(t, "onFindInLifespans", 3, () => {}), h = X(t, "compact", 3, !1), g = /* @__PURE__ */ F(void 0), _ = /* @__PURE__ */ F(null), v = /* @__PURE__ */ F(null), y = /* @__PURE__ */ F(800), b = /* @__PURE__ */ F(null), x = /* @__PURE__ */ P(() => H(b) ?? (h() ? "list" : "treemap")), S = /* @__PURE__ */ F(null), ee = es(), C = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls), w = /* @__PURE__ */ P(() => a() === null ? -1 : H(C).findIndex((e) => e.index === a())), T = /* @__PURE__ */ P(() => H(w) < 0 ? null : H(C)[H(w)]), E = /* @__PURE__ */ P(() => H(w) > 0 ? H(C)[H(w) - 1] : null), D = /* @__PURE__ */ P(() => H(w) >= 0 && H(w) < H(C).length - 1 ? H(C)[H(w) + 1] : null), O = /* @__PURE__ */ P(() => s() ? ee.get(t.indexed, c(), a()) : null), k = /* @__PURE__ */ P(() => H(O) ? Ko(H(O).items) : []), te = /* @__PURE__ */ P(() => H(O) !== null && H(O).hasPositiveWeights && !H(O).totalOverflow), A = /* @__PURE__ */ P(() => H(O) && H(te) ? ns(H(O), H(y), 360) : {
 		width: H(y),
 		height: 360,
 		rectangles: [],
 		groups: []
-	}), re = /* @__PURE__ */ P(() => new Set(H(ne).rectangles.map(({ item: e }) => e.id))), ie = /* @__PURE__ */ P(() => H(te) && H(ne).rectangles.length > 0), ae = /* @__PURE__ */ P(() => H(ie) ? H(x) : "list"), oe = /* @__PURE__ */ P(() => H(ae) === "treemap" ? H(k).filter((e) => H(re).has(e.id)) : H(k));
+	}), ne = /* @__PURE__ */ P(() => new Set(H(A).rectangles.map(({ item: e }) => e.id))), re = /* @__PURE__ */ P(() => H(te) && H(A).rectangles.length > 0), ie = /* @__PURE__ */ P(() => H(re) ? H(x) : "list"), ae = /* @__PURE__ */ P(() => H(ie) === "treemap" ? H(k).filter((e) => H(ne).has(e.id)) : H(k));
 	Tn(() => {
-		H(oe).length > 0 && !H(oe).some((e) => e.id === H(S)) && I(S, H(oe)[0].id, !0);
+		H(ae).length > 0 && !H(ae).some((e) => e.id === H(S)) && I(S, H(ae)[0].id, !0);
 	});
-	let se = /* @__PURE__ */ P(() => H(oe).findIndex((e) => e.id === H(S))), ce = /* @__PURE__ */ P(() => H(k).findIndex((e) => e.id === H(S))), le = /* @__PURE__ */ P(() => H(ce) < 0 ? void 0 : De(H(ce))), ue = /* @__PURE__ */ P(() => o() ? t.indexed.itemById.get(o()) ?? null : null), de = /* @__PURE__ */ P(() => H(O)?.items.find((e) => e.id === o()) ?? null), fe = /* @__PURE__ */ P(() => H(ue) !== null && H(ue).presence.length > 0), pe = /* @__PURE__ */ P(() => (H(O)?.profileIds ?? []).map((e) => {
+	let oe = /* @__PURE__ */ P(() => H(ae).findIndex((e) => e.id === H(S))), se = /* @__PURE__ */ P(() => H(k).findIndex((e) => e.id === H(S))), ce = /* @__PURE__ */ P(() => H(se) < 0 ? void 0 : Ee(H(se))), le = /* @__PURE__ */ P(() => o() ? t.indexed.itemById.get(o()) ?? null : null), ue = /* @__PURE__ */ P(() => H(O)?.items.find((e) => e.id === o()) ?? null), de = /* @__PURE__ */ P(() => H(le) !== null && H(le).presence.length > 0), fe = /* @__PURE__ */ P(() => (H(O)?.profileIds ?? []).map((e) => {
 		let n = t.indexed.analysis.tokenAnalysis.profiles.find((t) => t.id === e);
 		return {
 			id: e,
-			description: n ? `${n.provider} / ${n.model} · ${ke(n.method)}` : "Tokenization profile unavailable"
+			description: n ? `${n.provider} / ${n.model} · ${Oe(n.method)}` : "Tokenization profile unavailable"
 		};
-	})), me = /* @__PURE__ */ P(() => H(pe).length === 0 ? "Token estimate method unavailable" : H(pe).length === 1 ? H(pe)[0].description : `Mixed profiles across ${Z(H(pe).length)} call profiles`), he = /* @__PURE__ */ P(() => c() === "atCall" ? H(T) ? `Context composition · Call ${H(T).index}` : "Context composition · No call selected" : H(O)?.scopeEndCallIndex === null || H(O)?.scopeEndCallIndex === void 0 || a() === null ? "Cumulative context usage · Whole session" : `Cumulative context usage · Calls ${H(O).scopeStartCallIndex}–${H(O).scopeEndCallIndex}`), ge = /* @__PURE__ */ P(() => c() === "atCall" ? `${Z(H(O)?.items.length ?? 0)} present items` : `${Z(H(O)?.scopeCallCount ?? 0)} model calls included`), _e = /* @__PURE__ */ P(() => c() === "atCall" ? "Estimated tokens" : "Estimated token-turns"), A = /* @__PURE__ */ P(() => c() === "atCall" ? "estimated item tokens" : "estimated token-turns"), ve = /* @__PURE__ */ P(() => (H(O)?.missingItemCallCount ?? 0) > 0 || (H(O)?.partialItemCallCount ?? 0) > 0 || (H(O)?.unavailableCoverageItemCallCount ?? 0) > 0), j = /* @__PURE__ */ P(() => H(O)?.numericItemCallCount ?? 0), ye = /* @__PURE__ */ P(() => H(O)?.totalItemCallCount ?? 0), be = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => e.tokens === 0).length ?? 0), Se = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => e.tokens === null && !e.overflowed).length ?? 0), Ce = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => e.overflowed).length ?? 0), we = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => (e.tokens ?? 0) > 0).length ?? 0), Te = /* @__PURE__ */ P(() => H(ne).rectangles.length), Ee = /* @__PURE__ */ P(() => Math.max(0, H(we) - H(Te)));
-	function De(e) {
+	})), pe = /* @__PURE__ */ P(() => H(fe).length === 0 ? "Token estimate method unavailable" : H(fe).length === 1 ? H(fe)[0].description : `Mixed profiles across ${Z(H(fe).length)} call profiles`), me = /* @__PURE__ */ P(() => c() === "atCall" ? H(T) ? `Context composition · Call ${H(T).index}` : "Context composition · No call selected" : H(O)?.scopeEndCallIndex === null || H(O)?.scopeEndCallIndex === void 0 || a() === null ? "Cumulative context usage · Whole session" : `Cumulative context usage · Calls ${H(O).scopeStartCallIndex}–${H(O).scopeEndCallIndex}`), he = /* @__PURE__ */ P(() => c() === "atCall" ? `${Z(H(O)?.items.length ?? 0)} present items` : `${Z(H(O)?.scopeCallCount ?? 0)} model calls included`), ge = /* @__PURE__ */ P(() => c() === "atCall" ? "Estimated tokens" : "Estimated token-turns"), j = /* @__PURE__ */ P(() => c() === "atCall" ? "estimated item tokens" : "estimated token-turns"), _e = /* @__PURE__ */ P(() => (H(O)?.missingItemCallCount ?? 0) > 0 || (H(O)?.partialItemCallCount ?? 0) > 0 || (H(O)?.unavailableCoverageItemCallCount ?? 0) > 0), M = /* @__PURE__ */ P(() => H(O)?.numericItemCallCount ?? 0), ve = /* @__PURE__ */ P(() => H(O)?.totalItemCallCount ?? 0), ye = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => e.tokens === 0).length ?? 0), xe = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => e.tokens === null && !e.overflowed).length ?? 0), Se = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => e.overflowed).length ?? 0), Ce = /* @__PURE__ */ P(() => H(O)?.items.filter((e) => (e.tokens ?? 0) > 0).length ?? 0), we = /* @__PURE__ */ P(() => H(A).rectangles.length), Te = /* @__PURE__ */ P(() => Math.max(0, H(Ce) - H(we)));
+	function Ee(e) {
 		return `composition-option-${c()}-${a() ?? "whole"}-${e}`;
 	}
-	function Oe(e) {
+	function De(e) {
 		return `composition-tile-clip-${c()}-${a() ?? "whole"}-${e}`;
 	}
-	function ke(e) {
+	function Oe(e) {
 		return ha(e, "Mixed or unavailable estimate method");
 	}
-	function Ae(e) {
-		let t = e.tokens === null ? e.overflowed ? "safe subtotal unavailable because the sum overflowed" : "token estimate unavailable" : `${Z(e.tokens)} estimated ${c() === "atCall" ? "tokens" : "token-turns"}`, n = e.share === null ? "" : `${Ha(e.share)} of ${H(ve) ? "available-estimate subset" : "numeric item estimates"}`, r = e.estimateMethods.length > 1 ? "mixed estimate methods" : ke(e.estimateMethod), i = `estimate coverage ${e.estimateCoverage}`, a = c() === "cumulative" ? `${e.knownContributionCount} of ${e.scopePresenceCount} item-call contributions have numeric estimates; ${e.missingContributionCount} unavailable` : "", o = e.explanations.map((e) => `${e.title}: ${e.impact}`).join("; "), s = e.ageAtCall === null ? "age unavailable" : `age ${e.ageAtCall} calls at the ${c() === "atCall" ? "inspected call" : "scope endpoint"}`;
+	function ke(e) {
+		let t = e.tokens === null ? e.overflowed ? "safe subtotal unavailable because the sum overflowed" : "token estimate unavailable" : `${Z(e.tokens)} estimated ${c() === "atCall" ? "tokens" : "token-turns"}`, n = e.share === null ? "" : `${Ha(e.share)} of ${H(_e) ? "available-estimate subset" : "numeric item estimates"}`, r = e.estimateMethods.length > 1 ? "mixed estimate methods" : Oe(e.estimateMethod), i = `estimate coverage ${e.estimateCoverage}`, a = c() === "cumulative" ? `${e.knownContributionCount} of ${e.scopePresenceCount} item-call contributions have numeric estimates; ${e.missingContributionCount} unavailable` : "", o = e.explanations.map((e) => `${e.title}: ${e.impact}`).join("; "), s = e.ageAtCall === null ? "age unavailable" : `age ${e.ageAtCall} calls at the ${c() === "atCall" ? "inspected call" : "scope endpoint"}`;
 		return `${e.label}, ${e.kindLabel}, ${t}, ${r}, ${i}${n ? `, ${n}` : ""}${a ? `, ${a}` : ""}${o ? `, ${o}` : ""}, ${s}`;
 	}
-	function je(e) {
+	function Ae(e) {
 		I(S, e.id, !0), t.onSelectItem(e.id);
 	}
-	async function Me() {
-		if (await gr(), H(ae) !== "list" || !H(_) || !H(le)) return;
-		let e = Hi(H(_)).getElementById(H(le));
+	async function je() {
+		if (await gr(), H(ie) !== "list" || !H(_) || !H(ce)) return;
+		let e = Hi(H(_)).getElementById(H(ce));
 		if (!e || !H(_).contains(e)) return;
 		let t = H(_).getBoundingClientRect(), n = e.getBoundingClientRect();
 		n.top < t.top ? H(_).scrollTop += n.top - t.top : n.bottom > t.bottom && (H(_).scrollTop += n.bottom - t.bottom);
 	}
-	function Ne(e) {
-		if (H(oe).length === 0) return;
-		let t = H(se) < 0 ? 0 : H(se);
-		if (e.key === "ArrowDown" || e.key === "ArrowRight") t = Math.min(H(oe).length - 1, t + 1);
+	function Me(e) {
+		if (H(ae).length === 0) return;
+		let t = H(oe) < 0 ? 0 : H(oe);
+		if (e.key === "ArrowDown" || e.key === "ArrowRight") t = Math.min(H(ae).length - 1, t + 1);
 		else if (e.key === "ArrowUp" || e.key === "ArrowLeft") t = Math.max(0, t - 1);
 		else if (e.key === "Home") t = 0;
-		else if (e.key === "End") t = H(oe).length - 1;
+		else if (e.key === "End") t = H(ae).length - 1;
 		else if (e.key === "Enter" || e.key === " ") {
-			let n = H(oe)[t];
-			n && je(n), e.preventDefault();
+			let n = H(ae)[t];
+			n && Ae(n), e.preventDefault();
 			return;
 		} else return;
-		e.preventDefault(), I(S, H(oe)[t]?.id ?? null, !0), Me();
+		e.preventDefault(), I(S, H(ae)[t]?.id ?? null, !0), je();
 	}
-	function N(e) {
+	function Ne(e) {
 		I(b, e, !0);
 	}
 	function Pe(e) {
@@ -3848,14 +3848,14 @@ function Rs(e, t) {
 		return e.tokens === null ? e.overflowed ? "Subtotal exceeds safe range" : "Unavailable" : `${Z(e.tokens)} ${c() === "atCall" ? "estimated tokens" : "estimated token-turns"}`;
 	}
 	function Le(e) {
-		return e.share === null ? "Share unavailable" : `${Ha(e.share)} of ${H(ve) ? "available-estimate subset" : "numeric estimates"}`;
+		return e.share === null ? "Share unavailable" : `${Ha(e.share)} of ${H(_e) ? "available-estimate subset" : "numeric estimates"}`;
 	}
 	function Re() {
-		return !H(O) || H(ye) === 0 ? "No item appearances are in this scope" : H(j) === H(ye) ? "Numeric estimates available for all item appearances in this scope" : `Numeric estimates available for ${Z(H(j))} of ${Z(H(ye))} item appearances in this scope`;
+		return !H(O) || H(ve) === 0 ? "No item appearances are in this scope" : H(M) === H(ve) ? "Numeric estimates available for all item appearances in this scope" : `Numeric estimates available for ${Z(H(M))} of ${Z(H(ve))} item appearances in this scope`;
 	}
 	function ze() {
 		let e = [];
-		return H(be) > 0 && e.push(`${Z(H(be))} zero-valued items`), H(Se) > 0 && e.push(`${Z(H(Se))} unavailable estimates`), H(Ce) > 0 && e.push(`${Z(H(Ce))} overflowed subtotals`), H(Ee) > 0 && e.push(`${Z(H(Ee))} positive items too small to render at this layout size`), e.join("; ");
+		return H(ye) > 0 && e.push(`${Z(H(ye))} zero-valued items`), H(xe) > 0 && e.push(`${Z(H(xe))} unavailable estimates`), H(Se) > 0 && e.push(`${Z(H(Se))} overflowed subtotals`), H(Te) > 0 && e.push(`${Z(H(Te))} positive items too small to render at this layout size`), e.join("; ");
 	}
 	function He() {
 		if (!H(O)) return "";
@@ -3881,27 +3881,27 @@ function Rs(e, t) {
 	});
 	var We = Is(), Ge = L(We), Ke = (e) => {
 		var t = is(), n = L(t), r = L(n), i = B(r, 2);
-		M(n);
+		N(n);
 		var a = B(n, 2), o = (e) => {
 			var t = rs(), n = L(t), r = B(n, 2);
-			M(t), V(() => {
+			N(t), V(() => {
 				Y(n, "aria-pressed", H(x) === "treemap"), Y(r, "aria-pressed", H(x) === "list");
-			}), U("click", n, () => N("treemap")), U("click", r, () => N("list")), G(e, t);
+			}), U("click", n, () => Ne("treemap")), U("click", r, () => Ne("list")), G(e, t);
 		};
 		q(a, (e) => {
 			H(O) && (c() !== "atCall" || H(T) !== null) && e(o);
-		}), M(t), V(() => {
+		}), N(t), V(() => {
 			Y(r, "aria-pressed", c() === "atCall"), Y(i, "aria-pressed", c() === "cumulative");
 		}), U("click", r, () => Pe("atCall")), U("click", i, () => Pe("cumulative")), G(e, t);
 	};
 	q(Ge, (e) => {
-		H(w).length > 0 && e(Ke);
+		H(C).length > 0 && e(Ke);
 	});
 	var qe = B(Ge, 2), Je = (e) => {
 		G(e, as());
 	}, Ye = (e) => {
 		var n = os(), r = B(L(n), 2);
-		M(n), U("click", r, () => t.onPinCall(H(w)[H(w).length - 1].index)), G(e, n);
+		N(n), U("click", r, () => t.onPinCall(H(C)[H(C).length - 1].index)), G(e, n);
 	}, Xe = (e) => {
 		G(e, ss());
 	}, Ze = (e) => {
@@ -3914,10 +3914,10 @@ function Rs(e, t) {
 			l() && c() === "cumulative" && a() === null && e(u);
 		});
 		var h = B(s, 2), g = L(h), y = L(g), b = z(y, !0), x = z(B(y, 2));
-		M(g);
-		var C = B(g, 2), w = (e) => {
+		N(g);
+		var ee = B(g, 2), C = (e) => {
 			var n = us(), r = L(n), i = L(r), a = B(i, 2);
-			M(r);
+			N(r);
 			var o = B(r, 2), s = (e) => {
 				var t = ls();
 				U("click", t, function(...e) {
@@ -3926,60 +3926,60 @@ function Rs(e, t) {
 			};
 			q(o, (e) => {
 				c() === "cumulative" && e(s);
-			}), M(n), V(() => {
+			}), N(n), V(() => {
 				i.disabled = H(E) === null, a.disabled = H(D) === null;
 			}), U("click", i, () => H(E) && t.onPinCall(H(E).index)), U("click", a, () => H(D) && t.onPinCall(H(D).index)), G(e, n);
 		};
-		q(C, (e) => {
-			a() !== null && e(w);
-		}), M(h);
-		var ee = B(h, 2), te = (e) => {
+		q(ee, (e) => {
+			a() !== null && e(C);
+		}), N(h);
+		var w = B(h, 2), te = (e) => {
 			var t = ds(), n = z(t, !0);
 			V((e) => K(n, e), [() => Re()]), G(e, t);
 		};
-		q(ee, (e) => {
-			(H(ye) === 0 || H(j) !== H(ye)) && e(te);
+		q(w, (e) => {
+			(H(ve) === 0 || H(M) !== H(ve)) && e(te);
 		});
-		var re = B(ee, 2), ie = L(re), oe = L(ie), se = B(oe), ce = (e) => {
+		var ne = B(w, 2), re = L(ne), ae = L(re), oe = B(ae), se = (e) => {
 			va(e, {
 				id: "composition-totals-note",
 				label: "About these totals",
 				children: (e, t) => {
-					xe(), G(e, zr("Totals and shares use only the item appearances with numeric estimates. Some\n            appearances have no estimate or are only partly counted, so the totals can be lower than\n            the true figure."));
+					be(), G(e, zr("Totals and shares use only the item appearances with numeric estimates. Some\n            appearances have no estimate or are only partly counted, so the totals can be lower than\n            the true figure."));
 				},
 				$$slots: { default: !0 }
 			});
 		};
-		q(se, (e) => {
-			H(ve) && e(ce);
-		}), M(ie);
-		var be = B(ie, 2), Se = L(be), Ce = B(Se), we = (e) => {
+		q(oe, (e) => {
+			H(_e) && e(se);
+		}), N(re);
+		var ye = B(re, 2), xe = L(ye), Se = B(xe), Ce = (e) => {
 			var t = zr();
 			V((e) => K(t, `· ${e ?? ""} with numeric estimates`), [() => Z(H(O).measuredItemCount)]), G(e, t);
 		};
-		q(Ce, (e) => {
-			H(O).unmeasuredItemCount > 0 && e(we);
-		}), M(be);
-		var Te = B(be, 2), Ee = (e) => {
+		q(Se, (e) => {
+			H(O).unmeasuredItemCount > 0 && e(Ce);
+		}), N(ye);
+		var we = B(ye, 2), Te = (e) => {
 			var t = fs(), n = z(t);
 			V((e) => K(n, `${e ?? ""} items unavailable`), [() => Z(H(O).unmeasuredItemCount)]), G(e, t);
 		};
-		q(Te, (e) => {
-			H(O).unmeasuredItemCount > 0 && e(Ee);
-		}), M(re);
-		var Me = B(re, 2), Pe = B(L(Me), 2), Be = z(Pe), Ve = B(Pe, 2), Ue = (e) => {
+		q(we, (e) => {
+			H(O).unmeasuredItemCount > 0 && e(Te);
+		}), N(ne);
+		var je = B(ne, 2), Pe = B(L(je), 2), Be = z(Pe), Ve = B(Pe, 2), Ue = (e) => {
 			var t = ms();
-			J(t, 21, () => H(pe), (e) => e.id, (e, t) => {
+			J(t, 21, () => H(fe), (e) => e.id, (e, t) => {
 				var n = ps(), r = L(n), i = B(r), a = z(i, !0);
 				Xa(B(i, 2), {
 					get value() {
 						return H(t).id;
 					},
 					label: "profile ID"
-				}), M(n), V(() => {
+				}), N(n), V(() => {
 					K(r, `${H(t).description ?? ""} · `), K(a, H(t).id);
 				}), G(e, n);
-			}), M(t), G(e, t);
+			}), N(t), G(e, t);
 		}, We = (e) => {
 			var t = hs(), n = L(t), r = z(n, !0);
 			Xa(B(n, 2), {
@@ -3987,14 +3987,14 @@ function Rs(e, t) {
 					return H(T).tokenizationProfileId;
 				},
 				label: "profile ID"
-			}), M(t), V(() => K(r, H(T).tokenizationProfileId)), G(e, t);
+			}), N(t), V(() => K(r, H(T).tokenizationProfileId)), G(e, t);
 		};
 		q(Ve, (e) => {
-			c() === "cumulative" && H(pe).length > 0 ? e(Ue) : c() === "atCall" && H(T)?.tokenizationProfileId && e(We, 1);
+			c() === "cumulative" && H(fe).length > 0 ? e(Ue) : c() === "atCall" && H(T)?.tokenizationProfileId && e(We, 1);
 		});
 		var Ge = z(B(Ve, 2));
-		M(Me);
-		var Ke = B(Me, 2), qe = (e) => {
+		N(je);
+		var Ke = B(je, 2), qe = (e) => {
 			var t = gs(), n = z(t, !0);
 			V(() => K(n, H(r))), G(e, t);
 		};
@@ -4016,39 +4016,39 @@ function Rs(e, t) {
 		};
 		q(tt, (e) => {
 			c() === "cumulative" ? e(nt) : e(rt, -1);
-		}), M(et), xe(4), M($e), M(Ze), Ri(Ze, (e) => I(v, e), () => H(v));
+		}), N(et), be(4), N($e), N(Ze), Ri(Ze, (e) => I(v, e), () => H(v));
 		var it = B(Ze, 2), at = (e) => {
 			var r = Es(), i = R(r), a = (e) => {
 				var t = ys(), n = L(t), r = B(n);
-				M(t), V((e, t, r) => K(n, `Treemap shows ${e ?? ""} of ${t ?? ""} items. ${r ?? ""}. `), [
-					() => Z(H(ne).rectangles.length),
+				N(t), V((e, t, r) => K(n, `Treemap shows ${e ?? ""} of ${t ?? ""} items. ${r ?? ""}. `), [
+					() => Z(H(A).rectangles.length),
 					() => Z(H(O).items.length),
 					() => ze()
-				]), U("click", r, () => N("list")), G(e, t);
+				]), U("click", r, () => Ne("list")), G(e, t);
 			};
 			q(i, (e) => {
-				H(ne).rectangles.length < H(O).items.length && e(a);
+				H(A).rectangles.length < H(O).items.length && e(a);
 			});
 			var s = B(i, 2), c = L(s);
 			Y(c, "height", 360);
 			var l = L(c), u = L(l);
-			J(u, 17, () => H(ne).groups, (e) => e.kind, (e, t) => {
+			J(u, 17, () => H(A).groups, (e) => e.kind, (e, t) => {
 				var n = bs(), r = L(n);
-				Y(r, "height", 13), M(n), V((e) => {
+				Y(r, "height", 13), N(n), V((e) => {
 					Y(n, "id", `composition-group-clip-${H(t).kind}`), Y(r, "x", H(t).x + 3), Y(r, "y", H(t).y + 1), Y(r, "width", e);
 				}, [() => Math.max(0, H(t).width - 6)]), G(e, n);
-			}), J(B(u), 17, () => H(ne).rectangles, (e) => e.item.id, (e, t) => {
+			}), J(B(u), 17, () => H(A).rectangles, (e) => e.item.id, (e, t) => {
 				var n = bs(), r = z(n);
 				V((e, i, a) => {
 					Y(n, "id", e), Y(r, "x", H(t).x + 4), Y(r, "y", H(t).y + 3), Y(r, "width", i), Y(r, "height", a);
 				}, [
-					() => Oe(H(t).optionIndex),
+					() => De(H(t).optionIndex),
 					() => Math.max(0, H(t).width - 8),
 					() => Math.max(0, H(t).height - 6)
 				]), G(e, n);
-			}), M(l);
+			}), N(l);
 			var d = B(l);
-			J(d, 17, () => H(ne).groups, (e) => e.kind, (e, t) => {
+			J(d, 17, () => H(A).groups, (e) => e.kind, (e, t) => {
 				var n = Ss(), r = L(n), i = z(r, !0), a = B(r), o = B(a), s = (e) => {
 					var n = xs(), r = z(n, !0);
 					V(() => {
@@ -4057,10 +4057,10 @@ function Rs(e, t) {
 				};
 				q(o, (e) => {
 					H(t).labelText && e(s);
-				}), M(n), V(() => {
+				}), N(n), V(() => {
 					Y(n, "aria-label", `${H(t).label} group`), K(i, H(t).label), Y(a, "x", H(t).x), Y(a, "y", H(t).y), Y(a, "width", H(t).width), Y(a, "height", H(t).height);
 				}), G(e, n);
-			}), J(B(d), 17, () => H(ne).rectangles, (e) => e.item.id, (e, r) => {
+			}), J(B(d), 17, () => H(A).rectangles, (e) => e.item.id, (e, r) => {
 				var i = Ts();
 				let a;
 				var s = L(i), c = z(s, !0), l = B(s);
@@ -4082,26 +4082,26 @@ function Rs(e, t) {
 					};
 					q(c, (e) => {
 						H(r).height >= 49 && e(l);
-					}), M(i), V((e, t) => {
+					}), N(i), V((e, t) => {
 						Y(i, "clip-path", e), Y(a, "x", H(r).x + 5), Y(a, "y", H(r).y + 16), o = yi(a, "", o, { fill: t }), K(s, H(r).labelText);
-					}, [() => `url(#${Oe(H(r).optionIndex)})`, () => Ea(Ta(t.indexed, H(r).item.id, n()))]), G(e, i);
+					}, [() => `url(#${De(H(r).optionIndex)})`, () => Ea(Ta(t.indexed, H(r).item.id, n()))]), G(e, i);
 				};
 				q(d, (e) => {
 					H(r).labelFits && H(r).labelText && e(f);
-				}), M(i), V((e, t, n, s) => {
+				}), N(i), V((e, t, n, s) => {
 					Y(i, "id", e), Y(i, "aria-selected", o() === H(r).item.id), Y(i, "aria-label", t), Y(i, "data-composition-item", H(r).item.id), a = _i(i, 0, "svelte-8fl9lq", null, a, {
 						selected: o() === H(r).item.id,
 						active: H(S) === H(r).item.id
 					}), K(c, n), Y(l, "x", H(r).x), Y(l, "y", H(r).y), Y(l, "width", H(r).width), Y(l, "height", H(r).height), Y(l, "fill", s), u = _i(l, 0, "svelte-8fl9lq", null, u, { partial: H(r).item.estimateCoverage !== "complete" });
 				}, [
-					() => De(H(r).optionIndex),
-					() => Ae(H(r).item),
-					() => Ae(H(r).item),
+					() => Ee(H(r).optionIndex),
+					() => ke(H(r).item),
+					() => ke(H(r).item),
 					() => Ta(t.indexed, H(r).item.id, n())
-				]), U("pointerup", i, () => je(H(r).item)), G(e, i);
-			}), M(c), M(s), V(() => {
-				Y(c, "width", H(ne).width), Y(c, "viewBox", `0 0 ${H(ne).width} 360`), Y(c, "aria-label", `${H(he)} treemap; ${H(ne).rectangles.length} visible tiles of ${H(O).items.length} items; use arrow keys to inspect`), Y(c, "aria-activedescendant", H(le));
-			}), U("keydown", c, Ne), G(e, r);
+				]), U("pointerup", i, () => Ae(H(r).item)), G(e, i);
+			}), N(c), N(s), V(() => {
+				Y(c, "width", H(A).width), Y(c, "viewBox", `0 0 ${H(A).width} 360`), Y(c, "aria-label", `${H(me)} treemap; ${H(A).rectangles.length} visible tiles of ${H(O).items.length} items; use arrow keys to inspect`), Y(c, "aria-activedescendant", H(ce));
+			}), U("keydown", c, Me), G(e, r);
 		}, ot = (e) => {
 			var r = ks();
 			J(r, 23, () => H(k), (e) => e.id, (e, r, i) => {
@@ -4133,28 +4133,28 @@ function Rs(e, t) {
 				}), J(B(_, 2), 17, () => H(r).explanations, (e) => e.title, (e, t) => {
 					var n = Ds(), r = z(n);
 					V(() => K(r, `${H(t).title ?? ""}: ${H(t).impact ?? ""}`)), G(e, n);
-				}), M(u);
-				var y = B(u, 2), b = L(y), x = z(b, !0), C = B(b, 2), w = z(C, !0), ee = z(B(C, 2), !0);
-				M(y), M(a), V((e, t, n, i, u, d) => {
+				}), N(u);
+				var y = B(u, 2), b = L(y), x = z(b, !0), ee = B(b, 2), C = z(ee, !0), w = z(B(ee, 2), !0);
+				N(y), N(a), V((e, t, n, i, u, d) => {
 					Y(a, "id", e), s = _i(a, 1, "composition-row svelte-8fl9lq", null, s, {
 						selected: o() === H(r).id,
 						active: H(S) === H(r).id,
 						unavailable: H(r).tokens === null
-					}), Y(a, "aria-selected", o() === H(r).id), Y(a, "aria-label", t), Y(a, "data-composition-item", H(r).id), yi(l, n), K(f, H(r).label), K(m, `${H(r).kindLabel ?? ""} · ${i ?? ""} · ${H(r).estimateCoverage ?? ""} estimate coverage`), K(x, u), K(w, d), K(ee, H(r).ageAtCall === null ? "Age unavailable" : `${H(r).ageAtCall} calls old at ${c() === "atCall" ? "this call" : "scope endpoint"}`);
+					}), Y(a, "aria-selected", o() === H(r).id), Y(a, "aria-label", t), Y(a, "data-composition-item", H(r).id), yi(l, n), K(f, H(r).label), K(m, `${H(r).kindLabel ?? ""} · ${i ?? ""} · ${H(r).estimateCoverage ?? ""} estimate coverage`), K(x, u), K(C, d), K(w, H(r).ageAtCall === null ? "Age unavailable" : `${H(r).ageAtCall} calls old at ${c() === "atCall" ? "this call" : "scope endpoint"}`);
 				}, [
-					() => De(H(i)),
-					() => Ae(H(r)),
+					() => Ee(H(i)),
+					() => ke(H(r)),
 					() => `background:${Ta(t.indexed, H(r).id, n())}`,
-					() => H(r).estimateMethods.length > 1 ? "Mixed estimate methods" : ke(H(r).estimateMethod),
+					() => H(r).estimateMethods.length > 1 ? "Mixed estimate methods" : Oe(H(r).estimateMethod),
 					() => Ie(H(r)),
 					() => Le(H(r))
-				]), U("pointerup", a, () => je(H(r))), G(e, a);
-			}), M(r), Ri(r, (e) => I(_, e), () => H(_)), V(() => {
-				Y(r, "aria-label", `${H(he)} items ranked by estimated contribution; ${H(k).length} items`), Y(r, "aria-activedescendant", H(le));
-			}), U("keydown", r, Ne), G(e, r);
+				]), U("pointerup", a, () => Ae(H(r))), G(e, a);
+			}), N(r), Ri(r, (e) => I(_, e), () => H(_)), V(() => {
+				Y(r, "aria-label", `${H(me)} items ranked by estimated contribution; ${H(k).length} items`), Y(r, "aria-activedescendant", H(ce));
+			}), U("keydown", r, Me), G(e, r);
 		};
 		q(it, (e) => {
-			H(ae) === "treemap" ? e(at) : e(ot, -1);
+			H(ie) === "treemap" ? e(at) : e(ot, -1);
 		});
 		var st = B(it, 2), ct = (e) => {
 			var t = Ns(), n = L(t), r = L(n), i = z(r, !0), a = B(r, 2), o = (e) => {
@@ -4162,43 +4162,43 @@ function Rs(e, t) {
 					var t = Ds(), n = z(t);
 					V((e, t, r) => K(n, `Known subtotal; ${e ?? ""} item-call
                 estimates unavailable, ${t ?? ""} partial-coverage, and ${r ?? ""} unavailable-semantic.`), [
-						() => Z(H(de).missingContributionCount),
-						() => Z(H(de).partialEstimateContributionCount),
-						() => Z(H(de).unavailableCoverageContributionCount)
+						() => Z(H(ue).missingContributionCount),
+						() => Z(H(ue).partialEstimateContributionCount),
+						() => Z(H(ue).unavailableCoverageContributionCount)
 					]), G(e, t);
 				};
 				q(i, (e) => {
-					(H(de).missingContributionCount > 0 || H(de).partialEstimateContributionCount > 0 || H(de).unavailableCoverageContributionCount > 0) && e(a);
-				}), V((e, t) => K(r, `${e ?? ""} · ${t ?? ""}`), [() => Ie(H(de)), () => Le(H(de))]), G(e, t);
+					(H(ue).missingContributionCount > 0 || H(ue).partialEstimateContributionCount > 0 || H(ue).unavailableCoverageContributionCount > 0) && e(a);
+				}), V((e, t) => K(r, `${e ?? ""} · ${t ?? ""}`), [() => Ie(H(ue)), () => Le(H(ue))]), G(e, t);
 			}, s = (e) => {
 				var t = js(), n = z(t, !0);
 				V(() => K(n, c() === "atCall" ? `Not present at call ${H(T)?.index ?? "Unknown"}.` : "No contribution within this cumulative scope.")), G(e, t);
 			};
 			q(a, (e) => {
-				H(de) ? e(o) : e(s, -1);
-			}), M(n);
+				H(ue) ? e(o) : e(s, -1);
+			}), N(n);
 			var l = B(n, 2), u = L(l), d = B(u, 2), h = B(d, 2), g = (e) => {
 				var t = Ms();
-				U("click", t, () => f()(H(ue).id)), G(e, t);
+				U("click", t, () => f()(H(le).id)), G(e, t);
 			};
 			q(h, (e) => {
-				H(fe) && e(g);
-			}), M(l), M(t), V(() => K(i, H(ue).label)), U("click", u, function(...e) {
+				H(de) && e(g);
+			}), N(l), N(t), V(() => K(i, H(le).label)), U("click", u, function(...e) {
 				p()?.apply(this, e);
-			}), U("click", d, () => m()(H(ue).id)), G(e, t);
+			}), U("click", d, () => m()(H(le).id)), G(e, t);
 		};
 		q(st, (e) => {
-			o() && H(ue) && e(ct);
+			o() && H(le) && e(ct);
 		});
 		var lt = B(st, 2), ut = (e) => {
 			var t = Ps(), n = B(L(t), 4), r = L(n), i = z(B(L(r), 2));
-			M(r);
+			N(r);
 			var a = B(r, 2), o = z(B(L(a), 2));
-			M(a);
+			N(a);
 			var s = B(a, 2), c = z(B(L(s), 2));
-			M(s);
+			N(s);
 			var l = B(s, 2), u = z(B(L(l), 2), !0);
-			M(l), M(n), M(t), V((e, t, n, r) => {
+			N(l), N(n), N(t), V((e, t, n, r) => {
 				K(i, `${e ?? ""} tokens`), K(o, `${t ?? ""} tokens`), K(c, `${n ?? ""} tokens`), K(u, r);
 			}, [
 				() => Z(H(T).reportedPromptTokens),
@@ -4210,23 +4210,23 @@ function Rs(e, t) {
 		q(lt, (e) => {
 			c() === "atCall" && H(T) && e(ut);
 		}), V((e, t, n, r, i, a, o) => {
-			K(b, H(he)), K(x, `${H(_e) ?? ""} · ${H(ge) ?? ""}`), K(oe, `${e ?? ""}
-        ${H(A) ?? ""}`), K(Se, `${t ?? ""} items `), K(Be, `Tokenizer: ${H(me) ?? ""}`), K(Ge, `${n ?? ""} of ${r ?? ""} item appearances
+			K(b, H(me)), K(x, `${H(ge) ?? ""} · ${H(he) ?? ""}`), K(ae, `${e ?? ""}
+        ${H(j) ?? ""}`), K(xe, `${t ?? ""} items `), K(Be, `Tokenizer: ${H(pe) ?? ""}`), K(Ge, `${n ?? ""} of ${r ?? ""} item appearances
         have numeric estimates in this ${c() === "atCall" ? "call" : "cumulative scope"}.
         ${i ?? ""} are missing, ${a ?? ""} have partial payload coverage, and ${o ?? ""} have unavailable semantic coverage.`);
 		}, [
 			() => Z(H(O).measuredTokenTotal),
 			() => Z(H(O).items.length),
-			() => Z(H(j)),
-			() => Z(H(ye)),
+			() => Z(H(M)),
+			() => Z(H(ve)),
 			() => Z(H(O).missingItemCallCount),
 			() => Z(H(O).partialItemCallCount),
 			() => Z(H(O).unavailableCoverageItemCallCount)
 		]), U("keydown", Qe, Fe), G(e, i);
 	};
 	q(qe, (e) => {
-		H(w).length === 0 ? e(Je) : c() === "atCall" && !H(T) ? e(Ye, 1) : H(O) ? e(Ze, -1) : e(Xe, 2);
-	}), M(We), Ri(We, (e) => I(g, e), () => H(g)), G(e, We), Ve(), i();
+		H(C).length === 0 ? e(Je) : c() === "atCall" && !H(T) ? e(Ye, 1) : H(O) ? e(Ze, -1) : e(Xe, 2);
+	}), N(We), Ri(We, (e) => I(g, e), () => H(g)), G(e, We), Ve(), i();
 }
 kr([
 	"click",
@@ -4261,16 +4261,16 @@ function Hs(e, t) {
 		i(Number(H(o)) === n ? "" : `Call ${H(o)} is not available; moving to call ${n}.`), t.onJumpToCall(n), r()();
 	}
 	var f = Bs(), p = L(f), m = L(p), h = B(L(m));
-	Ai(h), M(m);
+	Ai(h), N(m);
 	var g = B(m, 2);
-	M(p);
+	N(p);
 	var _ = B(p, 2), v = (e) => {
 		var t = zs(), n = z(t, !0);
 		V(() => K(n, i())), G(e, t);
 	};
 	q(_, (e) => {
 		i() && !a() && e(v);
-	}), M(f), V(() => {
+	}), N(f), V(() => {
 		Y(h, "min", H(c)), Y(h, "max", H(l)), h.disabled = H(s), g.disabled = H(s);
 	}), Or("submit", p, d), U("keydown", h, u), Pi(h, () => H(o), (e) => I(o, e)), G(e, f), Ve();
 }
@@ -4292,7 +4292,7 @@ function Gs(e, t) {
 		return document.addEventListener("pointerdown", e, !0), () => document.removeEventListener("pointerdown", e, !0);
 	});
 	var i = Us(), a = L(i), o = z(a, !0), s = B(a, 2);
-	li(L(s), () => t.children), M(s), M(i), Ri(i, (e) => r = e, () => r), V(() => {
+	li(L(s), () => t.children), N(s), N(i), Ri(i, (e) => r = e, () => r), V(() => {
 		K(o, t.label), Y(s, "aria-label", t.label);
 	}), zi("open", "toggle", i, (e) => I(n, e), () => H(n)), G(e, i), Ve();
 }
@@ -4361,27 +4361,27 @@ function ec(e, t) {
 				i(e);
 			},
 			$$slots: { default: !0 }
-		}), M(t), V(() => K(s, H(g))), G(e, t);
+		}), N(t), V(() => K(s, H(g))), G(e, t);
 	}, x = (e) => {
 		var t = Xs(), a = R(t), o = z(L(a), !0);
-		M(a);
+		N(a);
 		var s = B(a, 2), c = L(s);
 		n(c);
 		var l = B(c, 2);
 		r(l);
 		var u = B(l, 2);
-		i(u), M(s), V(() => K(o, H(g))), G(e, t);
+		i(u), N(s), V(() => K(o, H(g))), G(e, t);
 	};
 	q(y, (e) => {
 		l() ? e(b) : e(x, -1);
 	});
-	var S = B(y, 2), C = (e) => {
+	var S = B(y, 2), ee = (e) => {
 		var t = Zs(), n = z(t, !0);
 		V(() => K(n, H(u))), G(e, t);
 	};
 	q(S, (e) => {
-		H(u) && e(C);
-	}), M(_), V(() => v = _i(_, 1, "viewport-navigation svelte-i2yay7", null, v, { compact: l() })), G(e, _), Ve();
+		H(u) && e(ee);
+	}), N(_), V(() => v = _i(_, 1, "viewport-navigation svelte-i2yay7", null, v, { compact: l() })), G(e, _), Ve();
 }
 kr(["click"]);
 //#endregion
@@ -4522,67 +4522,67 @@ function Jc(e, t) {
 	Vi(() => {
 		x = !1;
 	});
-	let S = /* @__PURE__ */ P(() => t.indexed.analysis.contextItems), C = /* @__PURE__ */ P(() => Lo(H(S))), w = /* @__PURE__ */ P(() => ic(H(S))), ee = /* @__PURE__ */ P(() => H(w) === null ? null : t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === H(w)) ?? null), T = /* @__PURE__ */ P(() => H(ee) ? `${H(ee).provider}/${H(ee).model} · ${H(ee).method}` : H(w) ?? "unavailable"), E = /* @__PURE__ */ P(() => o() === null ? null : t.indexed.contextSetByCall.get(o()) ?? null), D = /* @__PURE__ */ P(() => H(S).filter((e) => (t.indexed.versionByItemId.get(e.id)?.number ?? 1) === 1)), O = /* @__PURE__ */ P(() => new Map(H(D).map((e) => [e.id, gc(t.indexed.itemById, t.indexed.versionByItemId, e.id)]))), k = /* @__PURE__ */ P(() => (e) => H(O).get(e.id) ?? [e]), te = /* @__PURE__ */ P(() => cc(H(D), H(m), H(w), H(k))), ne = /* @__PURE__ */ P(() => H(f) === "presentAtPin" && H(E) !== null ? H(te).filter((e) => H(k)(e).some((e) => H(E).has(e.id))) : H(te)), re = /* @__PURE__ */ P(() => H(u).trim().slice(0, 120).toLowerCase()), ie = /* @__PURE__ */ P(() => H(ne).filter((e) => {
-		let t = H(d) === "all" || e.kind === H(d), n = H(re).length === 0 || H(k)(e).some((e) => e.label.toLowerCase().includes(H(re)) || (e.preview?.text ?? "").toLowerCase().includes(H(re)));
+	let S = /* @__PURE__ */ P(() => t.indexed.analysis.contextItems), ee = /* @__PURE__ */ P(() => Lo(H(S))), C = /* @__PURE__ */ P(() => ic(H(S))), w = /* @__PURE__ */ P(() => H(C) === null ? null : t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === H(C)) ?? null), T = /* @__PURE__ */ P(() => H(w) ? `${H(w).provider}/${H(w).model} · ${H(w).method}` : H(C) ?? "unavailable"), E = /* @__PURE__ */ P(() => o() === null ? null : t.indexed.contextSetByCall.get(o()) ?? null), D = /* @__PURE__ */ P(() => H(S).filter((e) => (t.indexed.versionByItemId.get(e.id)?.number ?? 1) === 1)), O = /* @__PURE__ */ P(() => new Map(H(D).map((e) => [e.id, gc(t.indexed.itemById, t.indexed.versionByItemId, e.id)]))), k = /* @__PURE__ */ P(() => (e) => H(O).get(e.id) ?? [e]), te = /* @__PURE__ */ P(() => cc(H(D), H(m), H(C), H(k))), A = /* @__PURE__ */ P(() => H(f) === "presentAtPin" && H(E) !== null ? H(te).filter((e) => H(k)(e).some((e) => H(E).has(e.id))) : H(te)), ne = /* @__PURE__ */ P(() => H(u).trim().slice(0, 120).toLowerCase()), re = /* @__PURE__ */ P(() => H(A).filter((e) => {
+		let t = H(d) === "all" || e.kind === H(d), n = H(ne).length === 0 || H(k)(e).some((e) => e.label.toLowerCase().includes(H(ne)) || (e.preview?.text ?? "").toLowerCase().includes(H(ne)));
 		return t && n;
-	})), ae = /* @__PURE__ */ P(() => H(ie).reduce((e, t) => e + H(k)(t).length, 0)), oe = /* @__PURE__ */ P(() => H(ie).slice(0, H(h))), se = /* @__PURE__ */ P(() => H(ie).length - H(oe).length), ce = /* @__PURE__ */ P(() => l.filter((e) => H(S).some((t) => t.kind === e))), le = /* @__PURE__ */ P(() => +!!H(re) + (H(d) === "all" ? 0 : 1) + (H(f) === "all" ? 0 : 1)), ue = /* @__PURE__ */ P(() => H(re).length > 0 || H(d) !== "all" || H(f) !== "all"), de = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.map((e) => e.index)), fe = /* @__PURE__ */ P(() => lc(H(de))), pe = /* @__PURE__ */ P(() => H(de).length), me = /* @__PURE__ */ P(() => new Map(H(de).map((e, t) => [e, t]))), he = /* @__PURE__ */ P(() => o() === null || !H(me).has(o()) ? null : A(o())), ge = /* @__PURE__ */ P(() => a() !== null && H(ue) && !H(ie).some((e) => Ce(e, a())));
+	})), ie = /* @__PURE__ */ P(() => H(re).reduce((e, t) => e + H(k)(t).length, 0)), ae = /* @__PURE__ */ P(() => H(re).slice(0, H(h))), oe = /* @__PURE__ */ P(() => H(re).length - H(ae).length), se = /* @__PURE__ */ P(() => l.filter((e) => H(S).some((t) => t.kind === e))), ce = /* @__PURE__ */ P(() => +!!H(ne) + (H(d) === "all" ? 0 : 1) + (H(f) === "all" ? 0 : 1)), le = /* @__PURE__ */ P(() => H(ne).length > 0 || H(d) !== "all" || H(f) !== "all"), ue = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.map((e) => e.index)), de = /* @__PURE__ */ P(() => lc(H(ue))), fe = /* @__PURE__ */ P(() => H(ue).length), pe = /* @__PURE__ */ P(() => new Map(H(ue).map((e, t) => [e, t]))), me = /* @__PURE__ */ P(() => o() === null || !H(pe).has(o()) ? null : j(o())), he = /* @__PURE__ */ P(() => a() !== null && H(le) && !H(re).some((e) => Se(e, a())));
 	Tn(() => {
-		H(d) !== "all" && !H(ce).includes(H(d)) && I(d, "all");
+		H(d) !== "all" && !H(se).includes(H(d)) && I(d, "all");
 	}), Tn(() => {
-		H(m) === "size" && H(w) === null && I(m, "tokenTurns");
+		H(m) === "size" && H(C) === null && I(m, "tokenTurns");
 	}), Tn(() => {
 		H(f) === "presentAtPin" && o() === null && (I(f, "all"), I(p, "Pin cleared; showing all items."));
 	}), Tn(() => {
 		H(f) === "all" && o() !== null && I(p, "");
 	}), Tn(() => {
-		H(re), H(d), H(f), H(m), I(h, 50);
+		H(ne), H(d), H(f), H(m), I(h, 50);
 	}), Tn(() => {
 		if (s() && s().requestId !== _) {
 			_ = s().requestId, I(v, s().itemId, !0), I(y, ""), I(g, !0);
 			let e = s().requestId;
-			gr().then(() => Ne(e));
+			gr().then(() => Me(e));
 		}
 	}), Tn(() => {
 		!s() && H(v) && (I(v, null), I(y, ""));
 	});
-	function _e(e) {
+	function ge(e) {
 		return `${Q(e)} item${e === 1 ? "" : "s"}`;
 	}
-	function A(e) {
-		let t = H(me).get(e);
-		return t === void 0 ? 0 : H(pe) <= 1 ? 50 : t / (H(pe) - 1) * 100;
+	function j(e) {
+		let t = H(pe).get(e);
+		return t === void 0 ? 0 : H(fe) <= 1 ? 50 : t / (H(fe) - 1) * 100;
 	}
-	function ve(e, n, r) {
+	function _e(e, n, r) {
 		if (e.detail === 0) {
 			t.onSelectItem(n);
 			return;
 		}
-		let i = e.currentTarget.closest(".track")?.getBoundingClientRect(), a = i && i.width > 0 ? tc(H(de), r, (e.clientX - i.left) / i.width) : null;
+		let i = e.currentTarget.closest(".track")?.getBoundingClientRect(), a = i && i.width > 0 ? tc(H(ue), r, (e.clientX - i.left) / i.width) : null;
 		a === null ? t.onSelectItem(n) : t.onSelectItem(n, a);
 	}
-	function j(e, t, n = !1, r = !1) {
-		let i = H(pe) <= 1 ? 8 : Math.min(2.2, 35 / Math.max(1, H(pe) - 1)), a = n ? ye(e.startCall) : Math.max(0, A(e.startCall) - i), o = r ? ye(e.endCall + 1) : Math.min(100, A(e.endCall) + i);
+	function M(e, t, n = !1, r = !1) {
+		let i = H(fe) <= 1 ? 8 : Math.min(2.2, 35 / Math.max(1, H(fe) - 1)), a = n ? ve(e.startCall) : Math.max(0, j(e.startCall) - i), o = r ? ve(e.endCall + 1) : Math.min(100, j(e.endCall) + i);
 		return `left:${a}%;width:${Math.max(1, o - a)}%;background-color:${t}`;
 	}
-	function ye(e) {
-		let t = H(de)[0] ?? 1;
-		if (e > (H(de)[H(de).length - 1] ?? 0)) return 100;
-		let n = A(e), r = A(e - 1);
+	function ve(e) {
+		let t = H(ue)[0] ?? 1;
+		if (e > (H(ue)[H(ue).length - 1] ?? 0)) return 100;
+		let n = j(e), r = j(e - 1);
 		return e <= t ? Math.max(0, n - 1) : (n + r) / 2;
 	}
-	function be(e) {
-		return H(C).get(e.id) ?? Se(e);
+	function ye(e) {
+		return H(ee).get(e.id) ?? xe(e);
 	}
-	function Se(e) {
+	function xe(e) {
 		return Fo(e, "Unlabelled item");
 	}
-	function Ce(e, t) {
+	function Se(e, t) {
 		return H(k)(e).some((e) => e.id === t);
 	}
-	function we(e) {
+	function Ce(e) {
 		return t.indexed.versionByItemId.get(e)?.firstId ?? e;
 	}
-	function Te(e) {
+	function we(e) {
 		let t = [];
 		for (let n of H(k)(e).flatMap((e) => e.presence)) {
 			let e = t[t.length - 1];
@@ -4593,33 +4593,33 @@ function Jc(e, t) {
 		}
 		return t;
 	}
-	function Ee(e) {
-		let t = Te(e);
+	function Te(e) {
+		let t = we(e);
 		if (t.length === 0) return "No model-call presence";
 		let n = H(k)(e).length, r = n > 1 ? ` · ${n} versions` : "";
 		return `Present at ${t.map((e) => e.startCall === e.endCall ? `call ${e.startCall}` : `calls ${e.startCall}–${e.endCall}`).join(", ")}${r}`;
 	}
-	function De(e) {
+	function Ee(e) {
 		return H(k)(e).reduce((e, t) => e + t.tokenTurnsCoverage.coveredCalls, 0);
 	}
-	function Oe(e) {
+	function De(e) {
 		return H(k)(e).reduce((e, t) => e + t.tokenTurnsCoverage.totalCalls, 0);
 	}
-	function ke(e, n) {
+	function Oe(e, n) {
 		return (t.indexed.compactionBySourceId.get(e) ?? []).some((e) => e.beforeModelCall === n.endCall + 1);
 	}
-	function Ae() {
-		return `Full-session call axis ${H(de).length === 0 ? "this session has no model calls" : `from call ${H(de)[0]} to ${H(de)[H(de).length - 1]}; ticks ${H(fe).join(", ")}`}; dashed markers show compaction boundaries${o() === null ? "" : `; solid vertical marker shows pinned call ${o()}`}; independent of chart zoom`;
+	function ke() {
+		return `Full-session call axis ${H(ue).length === 0 ? "this session has no model calls" : `from call ${H(ue)[0]} to ${H(ue)[H(ue).length - 1]}; ticks ${H(de).join(", ")}`}; dashed markers show compaction boundaries${o() === null ? "" : `; solid vertical marker shows pinned call ${o()}`}; independent of chart zoom`;
 	}
-	function je() {
+	function Ae() {
 		I(u, ""), I(d, "all"), I(f, "all"), I(p, ""), I(y, "");
 	}
-	function Me(e) {
+	function je(e) {
 		return `lifespan-item-${encodeURIComponent(e)}`;
 	}
-	async function Ne(e = _) {
+	async function Me(e = _) {
 		if (!x || e !== _ || !H(v)) return;
-		let t = we(H(v)), n = H(ie).findIndex((e) => e.id === t);
+		let t = Ce(H(v)), n = H(re).findIndex((e) => e.id === t);
 		if (n >= H(h) && (I(h, Math.ceil((n + 1) / 50) * 50), await gr(), !x || e !== _)) return;
 		let r = [...H(b)?.querySelectorAll("[data-lifespan-item-id]") ?? []].find((e) => e.dataset.lifespanItemId === t);
 		r ? (r.scrollIntoView({ block: "center" }), r.focus({ preventScroll: !0 }), I(y, "")) : (I(y, "The selected item is hidden by current lifespan filters."), gr().then(() => {
@@ -4627,34 +4627,34 @@ function Jc(e, t) {
 			e?.scrollIntoView({ block: "center" }), e?.focus();
 		}));
 	}
-	async function N() {
-		je(), await gr(), await Ne();
+	async function Ne() {
+		Ae(), await gr(), await Me();
 	}
 	function Pe() {
 		I(h, H(h) + 50);
 	}
 	var Fe = Kc(), Ie = L(Fe), Le = L(Ie), Re = B(L(Le), 2), ze = z(L(Re));
-	M(Re);
+	N(Re);
 	var He = B(Re, 2), Ue = (e) => {
 		var t = yc(), n = z(t);
-		V((e, t) => K(n, `${e ?? ""} of ${t ?? ""} items`), [() => Q(H(ae)), () => Q(H(S).length)]), G(e, t);
+		V((e, t) => K(n, `${e ?? ""} of ${t ?? ""} items`), [() => Q(H(ie)), () => Q(H(S).length)]), G(e, t);
 	};
 	q(He, (e) => {
-		H(ue) && e(Ue);
-	}), M(Le);
+		H(le) && e(Ue);
+	}), N(Le);
 	var We = B(Le, 2), Ge = (e) => {
 		var r = Gc();
 		{
 			let e = (e) => {
 				var t = Sc(), n = L(t), r = B(L(n), 2);
-				Ai(r), Y(r, "maxlength", 120), M(n);
+				Ai(r), Y(r, "maxlength", 120), N(n);
 				var i = B(n, 2), a = B(L(i), 2), s = L(a);
-				s.value = s.__value = "all", J(B(s), 16, () => H(ce), (e) => e, (e, t) => {
+				s.value = s.__value = "all", J(B(s), 16, () => H(se), (e) => e, (e, t) => {
 					var n = bc(), r = z(n, !0), i = {};
 					V((e) => {
 						K(r, e), i !== (i = t) && (n.value = (n.__value = i) ?? "");
 					}, [() => Mo(t)]), G(e, n);
-				}), M(a), Ci(a), M(i);
+				}), N(a), Ci(a), N(i);
 				var c = B(i, 2), l = B(L(c), 2), p = L(l);
 				p.value = p.__value = "tokenTurns";
 				var h = B(p);
@@ -4662,25 +4662,25 @@ function Jc(e, t) {
 				var g = B(h);
 				g.value = g.__value = "firstAppearance";
 				var _ = B(g);
-				_.value = _.__value = "presenceCount", M(l), Ci(l), M(c);
+				_.value = _.__value = "presenceCount", N(l), Ci(l), N(c);
 				var v = B(c, 2), y = B(L(v), 2), b = L(y);
 				b.value = b.__value = "all";
 				var x = B(b), S = z(x);
-				x.value = x.__value = "presentAtPin", M(y), Ci(y), M(v);
-				var C = B(v, 2), ee = (e) => {
+				x.value = x.__value = "presentAtPin", N(y), Ci(y), N(v);
+				var ee = B(v, 2), w = (e) => {
 					var t = xc();
-					U("click", t, je), G(e, t);
+					U("click", t, Ae), G(e, t);
 				};
-				q(C, (e) => {
-					H(ue) && e(ee);
-				}), M(t), V(() => {
-					h.disabled = H(w) === null, x.disabled = o() === null, K(S, `Present at call ${o() ?? "(pin a call first)" ?? ""}`);
+				q(ee, (e) => {
+					H(le) && e(w);
+				}), N(t), V(() => {
+					h.disabled = H(C) === null, x.disabled = o() === null, K(S, `Present at call ${o() ?? "(pin a call first)" ?? ""}`);
 				}), Pi(r, () => H(u), (e) => I(u, e)), wi(a, () => H(d), (e) => I(d, e)), wi(l, () => H(m), (e) => I(m, e)), wi(y, () => H(f), (e) => I(f, e)), G(e, t);
 			};
 			var i = L(r), s = (t) => {
 				var n = Cc(), r = L(n);
 				{
-					let t = /* @__PURE__ */ P(() => H(le) > 0 ? `Filter and sort (${H(le)})` : "Filter and sort");
+					let t = /* @__PURE__ */ P(() => H(ce) > 0 ? `Filter and sort (${H(ce)})` : "Filter and sort");
 					Gs(r, {
 						get label() {
 							return H(t);
@@ -4691,7 +4691,7 @@ function Jc(e, t) {
 						$$slots: { default: !0 }
 					});
 				}
-				M(n), G(t, n);
+				N(n), G(t, n);
 			}, l = (t) => {
 				e(t);
 			};
@@ -4699,103 +4699,103 @@ function Jc(e, t) {
 				c() ? e(s) : e(l, -1);
 			});
 			var h = B(i, 2), g = L(h), _ = z(B(L(g)), !0);
-			M(g);
+			N(g);
 			var b = B(g, 2), x = (e) => {
 				var t = wc(), n = z(t);
 				V(() => {
 					t.disabled = H(f) === "presentAtPin", K(n, `Show items present at call ${o() ?? ""}`);
 				}), U("click", t, () => I(f, "presentAtPin")), G(e, t);
-			}, C = (e) => {
+			}, ee = (e) => {
 				G(e, Tc());
 			};
 			q(b, (e) => {
-				o() === null ? e(C, -1) : e(x);
-			}), M(h);
-			var ee = B(h, 2), E = (e) => {
+				o() === null ? e(ee, -1) : e(x);
+			}), N(h);
+			var w = B(h, 2), E = (e) => {
 				var t = Ec(), n = z(t, !0);
 				V(() => K(n, H(p))), G(e, t);
 			};
-			q(ee, (e) => {
+			q(w, (e) => {
 				H(p) && e(E);
 			});
-			var D = B(ee, 2), O = (e) => {
+			var D = B(w, 2), O = (e) => {
 				var n = Oc(), r = L(n), i = B(r), a = (e) => {
 					var t = Dc();
-					U("click", t, N), G(e, t);
+					U("click", t, Ne), G(e, t);
 				}, o = /* @__PURE__ */ P(() => H(v) && t.indexed.itemById.has(H(v)));
 				q(i, (e) => {
 					H(o) && e(a);
-				}), M(n), V(() => K(r, `${H(y) ?? ""} `)), G(e, n);
+				}), N(n), V(() => K(r, `${H(y) ?? ""} `)), G(e, n);
 			};
 			q(D, (e) => {
 				H(y) && e(O);
 			});
-			var te = B(D, 2), ne = (e) => {
+			var te = B(D, 2), A = (e) => {
 				var t = kc(), n = z(t);
 				V(() => K(n, `Size uses one shared profile (${H(T) ?? ""}); items without a numeric estimate for
             it sort last.`)), G(e, t);
 			};
 			q(te, (e) => {
-				H(m) === "size" && e(ne);
+				H(m) === "size" && e(A);
 			});
-			var re = B(te, 2), ae = (e) => {
+			var ne = B(te, 2), ie = (e) => {
 				G(e, Ac());
 			};
-			q(re, (e) => {
-				H(ge) && e(ae);
+			q(ne, (e) => {
+				H(he) && e(ie);
 			});
-			var de = B(re, 4), pe = B(L(de), 2), me = L(pe), we = (e) => {
+			var ue = B(ne, 4), fe = B(L(ue), 2), pe = L(fe), Ce = (e) => {
 				var t = jc(), n = z(L(t), !0);
-				M(t), V(() => {
-					yi(t, `left:${H(he)}%`), K(n, o());
+				N(t), V(() => {
+					yi(t, `left:${H(me)}%`), K(n, o());
 				}), G(e, t);
 			};
-			q(me, (e) => {
-				H(he) !== null && e(we);
+			q(pe, (e) => {
+				H(me) !== null && e(Ce);
 			});
-			var Te = B(me, 2);
-			J(Te, 19, () => H(fe), (e) => `tick:${e}`, (e, t, n) => {
+			var we = B(pe, 2);
+			J(we, 19, () => H(de), (e) => `tick:${e}`, (e, t, n) => {
 				var r = Mc();
 				let i;
 				var a = z(r, !0);
 				V((e) => {
 					i = _i(r, 1, "axis-tick svelte-1pk7niq", null, i, {
 						first: H(n) === 0,
-						last: H(n) === H(fe).length - 1,
-						center: H(fe).length === 1
+						last: H(n) === H(de).length - 1,
+						center: H(de).length === 1
 					}), yi(r, e), K(a, H(t));
-				}, [() => `left:${A(H(t))}%`]), G(e, r);
-			}), J(B(Te, 2), 17, () => t.indexed.analysis.compactions, (e) => e.id, (e, t) => {
+				}, [() => `left:${j(H(t))}%`]), G(e, r);
+			}), J(B(we, 2), 17, () => t.indexed.analysis.compactions, (e) => e.id, (e, t) => {
 				var n = Nc();
-				V((e) => yi(n, e), [() => `left:${ye(H(t).beforeModelCall)}%`]), G(e, n);
-			}), M(pe), xe(2), M(de);
-			var Ne = B(de, 2), Fe = (e) => {
+				V((e) => yi(n, e), [() => `left:${ve(H(t).beforeModelCall)}%`]), G(e, n);
+			}), N(fe), be(2), N(ue);
+			var Me = B(ue, 2), Fe = (e) => {
 				G(e, Pc());
 			}, Ie = (e) => {
 				G(e, Fc());
 			}, Le = (e) => {
 				var r = Wc(), i = R(r);
-				J(i, 21, () => H(oe), (e) => e.id, (e, r) => {
-					let i = /* @__PURE__ */ P(() => be(H(r)));
+				J(i, 21, () => H(ae), (e) => e.id, (e, r) => {
+					let i = /* @__PURE__ */ P(() => ye(H(r)));
 					var o = Hc();
 					let s;
 					var c = L(o), l = L(c), u = B(l, 2), d = L(u);
 					let f;
 					var p = z(d, !0), m = z(B(d, 2));
-					M(u), M(c);
+					N(u), N(c);
 					var h = B(c, 2), g = L(h), _ = (e) => {
 						var t = Ic();
-						V(() => yi(t, `left:${H(he)}%`)), G(e, t);
+						V(() => yi(t, `left:${H(me)}%`)), G(e, t);
 					};
 					q(g, (e) => {
-						H(he) !== null && e(_);
+						H(me) !== null && e(_);
 					});
 					var v = B(g, 2);
 					J(v, 17, () => t.indexed.analysis.compactions, (e) => e.id, (e, t) => {
 						var n = Lc();
-						V((e) => yi(n, e), [() => `left:${ye(H(t).beforeModelCall)}%`]), G(e, n);
+						V((e) => yi(n, e), [() => `left:${ve(H(t).beforeModelCall)}%`]), G(e, n);
 					}), J(B(v, 2), 19, () => H(k)(H(r)), (e) => e.id, (e, o, s) => {
-						let c = /* @__PURE__ */ P(() => H(k)(H(r)).length > 1 ? `${Se(H(r))} version ${H(s) + 1}` : Se(H(r)));
+						let c = /* @__PURE__ */ P(() => H(k)(H(r)).length > 1 ? `${xe(H(r))} version ${H(s) + 1}` : xe(H(r)));
 						var l = Bc(), u = R(l);
 						J(u, 19, () => H(o).presence, (e, t) => `${H(o).id}:${t}`, (e, l, u) => {
 							let d = /* @__PURE__ */ P(() => H(u) === H(o).presence.length - 1 && H(k)(H(r))[H(s) + 1]?.firstModelCall === H(l).endCall + 1), f = /* @__PURE__ */ P(() => H(u) === 0 && H(s) > 0 && H(k)(H(r))[H(s) - 1]?.lastModelCall === H(l).startCall - 1);
@@ -4808,65 +4808,65 @@ function Jc(e, t) {
 									"replaces-before": H(f)
 								}), Y(p, "aria-label", `${H(c)}, calls ${H(l).startCall} through ${H(l).endCall}`), Y(p, "aria-pressed", a() === H(o).id), Y(p, "title", t), yi(p, n);
 							}, [
-								() => ke(H(o).id, H(l)),
-								() => `${H(c) === Se(H(r)) ? H(i) : H(c)}: calls ${H(l).startCall}–${H(l).endCall}`,
-								() => j(H(l), Ta(t.indexed, H(r).id, n()), H(f), H(d))
-							]), Or("pointerenter", p, (e) => t.onHoverItem(H(o).id, e)), U("pointermove", p, (e) => t.onHoverItem(H(o).id, e)), Or("pointerleave", p, () => t.onHoverItem(null)), U("click", p, (e) => ve(e, H(o).id, H(l))), G(e, p);
+								() => Oe(H(o).id, H(l)),
+								() => `${H(c) === xe(H(r)) ? H(i) : H(c)}: calls ${H(l).startCall}–${H(l).endCall}`,
+								() => M(H(l), Ta(t.indexed, H(r).id, n()), H(f), H(d))
+							]), Or("pointerenter", p, (e) => t.onHoverItem(H(o).id, e)), U("pointermove", p, (e) => t.onHoverItem(H(o).id, e)), Or("pointerleave", p, () => t.onHoverItem(null)), U("click", p, (e) => _e(e, H(o).id, H(l))), G(e, p);
 						});
 						var d = B(u, 2), f = (e) => {
 							var t = zc();
-							V((e) => yi(t, e), [() => `left:${ye(H(o).firstModelCall)}%`]), G(e, t);
+							V((e) => yi(t, e), [() => `left:${ve(H(o).firstModelCall)}%`]), G(e, t);
 						};
 						q(d, (e) => {
 							H(s) > 0 && e(f);
 						}), G(e, l);
-					}), M(h);
+					}), N(h);
 					var y = B(h, 2), b = L(y), x = B(b), S = (e) => {
 						var t = Vc(), n = z(t);
-						V((e) => K(n, `${e ?? ""} calls covered`), [() => qa(De(H(r)), Oe(H(r)))]), G(e, t);
-					}, C = /* @__PURE__ */ P(() => De(H(r)) < Oe(H(r)));
+						V((e) => K(n, `${e ?? ""} calls covered`), [() => qa(Ee(H(r)), De(H(r)))]), G(e, t);
+					}, ee = /* @__PURE__ */ P(() => Ee(H(r)) < De(H(r)));
 					q(x, (e) => {
-						H(C) && e(S);
-					}), M(y), M(o), V((e, t, n, a, u, h, g, _, v, x) => {
+						H(ee) && e(S);
+					}), N(y), N(o), V((e, t, n, a, u, h, g, _, v, x) => {
 						Y(o, "id", e), s = _i(o, 1, "row svelte-1pk7niq", null, s, { selected: t }), Y(o, "aria-label", n), Y(o, "data-lifespan-item-id", H(r).id), Y(c, "title", a), yi(l, u), f = _i(d, 1, "item-label svelte-1pk7niq", null, f, { "terminal-item": H(r).presence.length === 0 }), Y(d, "aria-label", h), K(p, H(i)), K(m, `${g ?? ""} · ${_ ?? ""}`), Y(y, "title", v), K(b, `${x ?? ""} `);
 					}, [
-						() => Me(H(r).id),
-						() => Ce(H(r), a()),
-						() => `${Se(H(r))}; ${Mo(H(r).kind)}; ${Ee(H(r))}`,
-						() => Se(H(r)),
+						() => je(H(r).id),
+						() => Se(H(r), a()),
+						() => `${xe(H(r))}; ${Mo(H(r).kind)}; ${Te(H(r))}`,
+						() => xe(H(r)),
 						() => `background:${Ta(t.indexed, H(r).id, n())}`,
-						() => `Select ${Se(H(r))}${H(r).presence.length === 0 ? "; no model-call presence" : ""}`,
+						() => `Select ${xe(H(r))}${H(r).presence.length === 0 ? "; no model-call presence" : ""}`,
 						() => Mo(H(r).kind),
-						() => Ee(H(r)),
-						() => `${sc(H(k)(H(r)))} calls; ${qa(De(H(r)), Oe(H(r)))} tokenized`,
+						() => Te(H(r)),
+						() => `${sc(H(k)(H(r)))} calls; ${qa(Ee(H(r)), De(H(r)))} tokenized`,
 						() => Ka(oc(H(k)(H(r))), "calculatedTokens")
 					]), U("click", d, () => t.onSelectItem(H(r).id)), G(e, o);
-				}), M(i);
+				}), N(i);
 				var o = B(i, 2), s = (e) => {
 					var t = Uc(), n = L(t), r = z(n), i = B(n, 2), a = z(i);
-					M(t), V((e, t, n) => {
+					N(t), V((e, t, n) => {
 						K(r, `Showing ${e ?? ""} of ${t ?? ""}`), K(a, `Show ${n ?? ""} more`);
 					}, [
-						() => Q(H(oe).length),
-						() => _e(H(ie).length),
-						() => Q(Math.min(50, H(se)))
+						() => Q(H(ae).length),
+						() => ge(H(re).length),
+						() => Q(Math.min(50, H(oe)))
 					]), U("click", i, Pe), G(e, t);
 				};
 				q(o, (e) => {
-					H(se) > 0 && e(s);
+					H(oe) > 0 && e(s);
 				}), G(e, r);
 			};
-			q(Ne, (e) => {
-				H(S).length === 0 ? e(Fe) : H(ie).length === 0 ? e(Ie, 1) : e(Le, -1);
-			}), M(r), V((e) => {
-				K(_, H(f) === "all" ? "Whole session" : `Present at call ${o()}`), Y(pe, "aria-label", e);
-			}, [() => Ae()]);
+			q(Me, (e) => {
+				H(S).length === 0 ? e(Fe) : H(re).length === 0 ? e(Ie, 1) : e(Le, -1);
+			}), N(r), V((e) => {
+				K(_, H(f) === "all" ? "Whole session" : `Present at call ${o()}`), Y(fe, "aria-label", e);
+			}, [() => ke()]);
 		}
 		G(e, r);
 	};
 	q(We, (e) => {
 		H(g) && e(Ge);
-	}), M(Ie), M(Fe), Ri(Fe, (e) => I(b, e), () => H(b)), V((e) => K(ze, `Context lifespans · ${e ?? ""}`), [() => _e(H(S).length)]), zi("open", "toggle", Ie, (e) => I(g, e), () => H(g)), G(e, Fe), Ve(), i();
+	}), N(Ie), N(Fe), Ri(Fe, (e) => I(b, e), () => H(b)), V((e) => K(ze, `Context lifespans · ${e ?? ""}`), [() => ge(H(S).length)]), zi("open", "toggle", Ie, (e) => I(g, e), () => H(g)), G(e, Fe), Ve(), i();
 }
 kr(["click", "pointermove"]);
 //#endregion
@@ -5658,7 +5658,7 @@ function bu(e, t) {
 	var n = vu(), r = L(n), i = (e) => {
 		var n = gu(), r = L(n);
 		let i;
-		M(n), V(() => i = yi(r, "", i, { width: `${t.value.share * 100}%` })), G(e, n);
+		N(n), V(() => i = yi(r, "", i, { width: `${t.value.share * 100}%` })), G(e, n);
 	}, a = (e) => {
 		G(e, _u());
 	};
@@ -5666,7 +5666,7 @@ function bu(e, t) {
 		t.value.share === null ? e(a, -1) : e(i);
 	});
 	var o = B(r, 2), s = z(o, !0);
-	M(n), V(() => {
+	N(n), V(() => {
 		Y(o, "id", t.descriptionId), K(s, t.value.detail);
 	}), G(e, n), Ve();
 }
@@ -5999,7 +5999,7 @@ function qu(e, t) {
 	};
 	q(f, (e) => {
 		t.turn.status && e(p);
-	}), M(d);
+	}), N(d);
 	var m = B(d, 2), h = (e) => {
 		var n = Hu(), r = z(n, !0);
 		V(() => K(r, t.turn.prompt)), G(e, n);
@@ -6016,7 +6016,7 @@ function qu(e, t) {
 				},
 				label: "What turn elapsed time measures",
 				children: (e, t) => {
-					xe();
+					be();
 					var n = zr();
 					V(() => K(n, H(c))), G(e, n);
 				},
@@ -6026,30 +6026,30 @@ function qu(e, t) {
 	};
 	q(y, (e) => {
 		t.turn.durationMs !== null && e(b);
-	}), M(v);
+	}), N(v);
 	var x = B(v, 2);
 	let S;
-	var C = z(x);
-	M(_);
-	var w = B(_, 2), ee = L(w), T = z(ee, !0), E = z(B(ee, 2), !0);
-	M(w);
-	var D = B(w, 2), O = z(B(L(D), 2), !0);
-	M(D), M(g);
+	var ee = z(x);
+	N(_);
+	var C = B(_, 2), w = L(C), T = z(w, !0), E = z(B(w, 2), !0);
+	N(C);
+	var D = B(C, 2), O = z(B(L(D), 2), !0);
+	N(D), N(g);
 	var k = B(g, 2), te = (e) => {
 		G(e, Uu());
 	};
 	q(k, (e) => {
 		t.turn.combinedCalls && e(te);
 	});
-	var ne = B(k, 2), re = L(ne), ie = z(re), ae = B(re, 2), oe = (e) => {
+	var A = B(k, 2), ne = L(A), re = z(ne), ie = B(ne, 2), ae = (e) => {
 		var t = Wu(), n = L(t);
 		let r;
-		M(t), V(() => r = yi(n, "", r, { left: `${H(o)}%` })), G(e, t);
+		N(t), V(() => r = yi(n, "", r, { left: `${H(o)}%` })), G(e, t);
 	};
-	q(ae, (e) => {
-		H(r) > 1 && e(oe);
-	}), M(ne), M(u), V((e) => {
-		S = _i(x, 1, "svelte-1nxhbxv", null, S, { duration: t.turn.durationMs !== null }), K(C, `${H(s) && t.turn.durationMs !== null ? "≈ " : ""}${e ?? ""}`), K(T, t.turn.combinedCalls ? "Call entries" : "Recorded model calls"), K(E, H(r)), K(O, H(i)), K(ie, `${t.turn.combinedCalls ? "Entry" : "Call"} ${H(a) ?? ""} of ${H(r) ?? ""} in this turn`);
+	q(ie, (e) => {
+		H(r) > 1 && e(ae);
+	}), N(A), N(u), V((e) => {
+		S = _i(x, 1, "svelte-1nxhbxv", null, S, { duration: t.turn.durationMs !== null }), K(ee, `${H(s) && t.turn.durationMs !== null ? "≈ " : ""}${e ?? ""}`), K(T, t.turn.combinedCalls ? "Call entries" : "Recorded model calls"), K(E, H(r)), K(O, H(i)), K(re, `${t.turn.combinedCalls ? "Entry" : "Call"} ${H(a) ?? ""} of ${H(r) ?? ""} in this turn`);
 	}, [() => zu(t.turn.durationMs)]), G(e, u), Ve();
 }
 //#endregion
@@ -6081,14 +6081,14 @@ function Hd(e, t) {
 			name: e,
 			...t
 		}));
-	})()), d = /* @__PURE__ */ P(() => t.call ? mu(t.call.usage) : []), f = /* @__PURE__ */ P(() => t.call?.tokenAnalysis.explanationCodes ?? []), p = /* @__PURE__ */ P(() => Fl(t.indexed.analysis)), h = /* @__PURE__ */ P(() => H(f).filter((e) => !H(p).has(e))), g = /* @__PURE__ */ P(() => t.indexed.analysis.turns?.find((e) => t.call && e.firstCall <= t.call.index && t.call.index <= e.lastCall)), _ = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" && t.call?.timing.startedAtMs == null), v = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" ? t.call?.timing.durationMs != null : !["claude-code", "codex"].includes(t.indexed.analysis.session.source)), y = /* @__PURE__ */ P(() => t.call?.economics.explanationCodes ?? []), b = /* @__PURE__ */ P(() => t.call !== null && t.call !== void 0 && t.call.stopReason !== "compaction-aggregate" && (t.call.stopReason === "compaction-call" || t.indexed.analysis.compactions.some((e) => e.details.summaryCall === t.call.index))), x = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), S = /* @__PURE__ */ P(() => t.call?.costAssessment ?? null), C = /* @__PURE__ */ P(() => H(S) ? au(H(S)) : null), w = /* @__PURE__ */ P(() => Ru(t.indexed.analysis.session.source, H(v))), ee = /* @__PURE__ */ P(() => H(S) ? ou(H(S), t.indexed.analysis.session.source) : null), T = /* @__PURE__ */ P(() => t.call?.tokenizationProfileId ? t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === t.call?.tokenizationProfileId) ?? null : null), E = /* @__PURE__ */ P(() => t.call ? t.indexed.analysis.modelCalls[t.indexed.analysis.modelCalls.findIndex((e) => e.index === t.call?.index) - 1] ?? null : null), D = /* @__PURE__ */ P(() => Pu(t.indexed, t.call?.addedItemIds ?? [], t.call, "added")), O = /* @__PURE__ */ P(() => Pu(t.indexed, t.call?.droppedItemIds ?? [], H(E), "dropped"));
+	})()), d = /* @__PURE__ */ P(() => t.call ? mu(t.call.usage) : []), f = /* @__PURE__ */ P(() => t.call?.tokenAnalysis.explanationCodes ?? []), p = /* @__PURE__ */ P(() => Fl(t.indexed.analysis)), h = /* @__PURE__ */ P(() => H(f).filter((e) => !H(p).has(e))), g = /* @__PURE__ */ P(() => t.indexed.analysis.turns?.find((e) => t.call && e.firstCall <= t.call.index && t.call.index <= e.lastCall)), _ = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" && t.call?.timing.startedAtMs == null), v = /* @__PURE__ */ P(() => t.indexed.analysis.session.source === "vscode-copilot" ? t.call?.timing.durationMs != null : !["claude-code", "codex"].includes(t.indexed.analysis.session.source)), y = /* @__PURE__ */ P(() => t.call?.economics.explanationCodes ?? []), b = /* @__PURE__ */ P(() => t.call !== null && t.call !== void 0 && t.call.stopReason !== "compaction-aggregate" && (t.call.stopReason === "compaction-call" || t.indexed.analysis.compactions.some((e) => e.details.summaryCall === t.call.index))), x = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), S = /* @__PURE__ */ P(() => t.call?.costAssessment ?? null), ee = /* @__PURE__ */ P(() => H(S) ? au(H(S)) : null), C = /* @__PURE__ */ P(() => Ru(t.indexed.analysis.session.source, H(v))), w = /* @__PURE__ */ P(() => H(S) ? ou(H(S), t.indexed.analysis.session.source) : null), T = /* @__PURE__ */ P(() => t.call?.tokenizationProfileId ? t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === t.call?.tokenizationProfileId) ?? null : null), E = /* @__PURE__ */ P(() => t.call ? t.indexed.analysis.modelCalls[t.indexed.analysis.modelCalls.findIndex((e) => e.index === t.call?.index) - 1] ?? null : null), D = /* @__PURE__ */ P(() => Pu(t.indexed, t.call?.addedItemIds ?? [], t.call, "added")), O = /* @__PURE__ */ P(() => Pu(t.indexed, t.call?.droppedItemIds ?? [], H(E), "dropped"));
 	function k(e) {
 		return Fo(t.indexed.itemById.get(e), e);
 	}
 	function te(e) {
 		return e === "anthropic-messages-cache-v1" || e === "github-copilot-messages-cache-v1" || e === "github-copilot-responses-cache-v1" ? "Fresh input" : e === "openai-completions-cache-v1" ? "Uncached input" : e === "openai-responses-cache-read-v1" || e === "openai-codex-responses-cache-read-v1" ? "Non-cache-read input (may include writes)" : "Input (raw normalized bucket)";
 	}
-	function ne() {
+	function A() {
 		if (!t.call) return "Unknown";
 		switch (t.call.economics.cacheWriteStatus) {
 			case "reported": return Z(t.call.usage.cacheWrite);
@@ -6097,49 +6097,49 @@ function Hd(e, t) {
 			default: return `Raw normalized value: ${Z(t.call.usage.cacheWrite)}`;
 		}
 	}
-	function re(e) {
+	function ne(e) {
 		return e === "anthropic-messages-cache-v1" || e === "github-copilot-messages-cache-v1" || e === "github-copilot-responses-cache-v1" ? "Fresh-input share" : e === "openai-completions-cache-v1" ? "Uncached-input share" : "Fresh / uncached input share";
 	}
-	function ie() {
+	function re() {
 		return t.call && t.call.economics.cacheWriteStatus === "unsupported" ? "Cache write (raw field)" : "Cache write";
 	}
-	function ae(e) {
+	function ie(e) {
 		return e === null ? t.call ? t.call.economics.usageCompleteness === "unsupported" ? "Unsupported policy" : t.call.economics.usageCompleteness === "missing" ? "Provider usage missing" : t.call.economics.usageCompleteness === "partial" ? "Provider usage incomplete" : t.call.economics.promptTokens === 0 ? "No prompt tokens" : "Unavailable" : "Unknown" : Ha(e);
 	}
+	function ae() {
+		return t.call ? t.call.economics.cacheWriteStatus === "notReported" ? "Not separately reported" : t.call.economics.cacheWriteStatus === "notRetainedByPi" ? Wl(t.indexed.analysis.session.source) ? "Not retained by Pi" : "Not retained by source" : t.call.economics.cacheWriteStatus === "unsupported" ? "Unsupported policy" : ie(t.call.economics.cacheWriteRatio) : "Unknown";
+	}
 	function oe() {
-		return t.call ? t.call.economics.cacheWriteStatus === "notReported" ? "Not separately reported" : t.call.economics.cacheWriteStatus === "notRetainedByPi" ? Wl(t.indexed.analysis.session.source) ? "Not retained by Pi" : "Not retained by source" : t.call.economics.cacheWriteStatus === "unsupported" ? "Unsupported policy" : ae(t.call.economics.cacheWriteRatio) : "Unknown";
+		return t.call ? t.call.economics.policyId === "openai-responses-cache-read-v1" || t.call.economics.policyId === "openai-codex-responses-cache-read-v1" ? "Unavailable; writes may be included in non-read input" : ie(t.call.economics.freshRatio) : "Unknown";
 	}
-	function se() {
-		return t.call ? t.call.economics.policyId === "openai-responses-cache-read-v1" || t.call.economics.policyId === "openai-codex-responses-cache-read-v1" ? "Unavailable; writes may be included in non-read input" : ae(t.call.economics.freshRatio) : "Unknown";
-	}
-	var ce = Br(), le = R(ce), ue = (e) => {
-		var p = Bd(), S = L(p), ce = L(S), le = L(ce), ue = z(le), de = B(le, 2), fe = z(de), pe = B(de, 2), me = (e) => {
+	var se = Br(), ce = R(se), le = (e) => {
+		var p = Bd(), S = L(p), se = L(S), ce = L(se), le = z(ce), ue = B(ce, 2), de = z(ue), fe = B(ue, 2), pe = (e) => {
 			G(e, Xu());
 		};
-		q(pe, (e) => {
-			t.call.retried && e(me);
-		}), M(ce), M(S);
-		var he = B(S, 2), ge = L(he), _e = B(L(ge), 2), A = L(_e), ve = B(A), j = (e) => {
+		q(fe, (e) => {
+			t.call.retried && e(pe);
+		}), N(se), N(S);
+		var me = B(S, 2), he = L(me), ge = B(L(he), 2), j = L(ge), _e = B(j), M = (e) => {
 			G(e, Zu());
-		}, ye = (e) => {
+		}, ve = (e) => {
 			G(e, Qu());
-		}, be = (e) => {
+		}, ye = (e) => {
 			G(e, $u());
 		};
-		q(ve, (e) => {
-			t.call.stopReason === "web-search-aggregate" ? e(j) : H(b) ? e(ye, 1) : t.call.stopReason === "compaction-aggregate" && e(be, 2);
-		}), M(_e), M(ge);
-		var Se = B(ge, 2);
-		J(Se, 17, () => H(d), ei, (e, t) => {
+		q(_e, (e) => {
+			t.call.stopReason === "web-search-aggregate" ? e(M) : H(b) ? e(ve, 1) : t.call.stopReason === "compaction-aggregate" && e(ye, 2);
+		}), N(ge), N(he);
+		var xe = B(he, 2);
+		J(xe, 17, () => H(d), ei, (e, t) => {
 			var n = ed(), r = L(n), i = z(r, !0), a = z(B(r, 2), !0);
-			M(n), V(() => {
+			N(n), V(() => {
 				K(i, H(t).label), K(a, H(t).value);
 			}), G(e, n);
 		});
-		var Ce = B(Se, 2), we = B(L(Ce), 2), Te = L(we, !0), Ee = B(Te);
+		var Se = B(xe, 2), Ce = B(L(Se), 2), we = L(Ce, !0), Te = B(we);
 		{
 			let e = /* @__PURE__ */ P(() => `${n}-cost`);
-			va(Ee, {
+			va(Te, {
 				get id() {
 					return H(e);
 				},
@@ -6154,44 +6154,44 @@ function Hd(e, t) {
 					});
 					var c = B(o, 2), l = (e) => {
 						var t = td(), n = z(t);
-						V(() => K(n, `Rate: ${H(C) ?? ""}.`)), G(e, t);
+						V(() => K(n, `Rate: ${H(ee) ?? ""}.`)), G(e, t);
 					};
 					q(c, (e) => {
-						H(C) && e(l);
+						H(ee) && e(l);
 					});
 					var u = B(c, 2), d = (e) => {
 						var t = td(), n = z(t, !0);
-						V(() => K(n, H(ee))), G(e, t);
+						V(() => K(n, H(w))), G(e, t);
 					};
 					q(u, (e) => {
-						H(ee) && e(d);
-					}), M(r), V((e) => K(a, e), [() => su(t.call.costAssessment, t.indexed.analysis.session.source)]), G(e, r);
+						H(w) && e(d);
+					}), N(r), V((e) => K(a, e), [() => su(t.call.costAssessment, t.indexed.analysis.session.source)]), G(e, r);
 				},
 				$$slots: { default: !0 }
 			});
 		}
-		var De = z(B(Ee), !0);
-		M(we), M(Ce);
-		var Oe = B(Ce, 2), ke = (e) => {
+		var Ee = z(B(Te), !0);
+		N(Ce), N(Se);
+		var De = B(Se, 2), Oe = (e) => {
 			var n = id(), r = B(L(n), 2), i = L(r, !0), a = B(i), o = (e) => {
 				var n = rd(), r = z(n);
 				V(() => K(r, `Audited policy: ${t.call.economics.usageCompleteness ?? ""}`)), G(e, n);
 			};
 			q(a, (e) => {
 				t.call.economics.usageCompleteness !== t.call.reportedUsageCompleteness && e(o);
-			}), M(r), M(n), V(() => K(i, t.call.usage.placeholder ? "Unavailable" : t.call.reportedUsageCompleteness)), G(e, n);
+			}), N(r), N(n), V(() => K(i, t.call.usage.placeholder ? "Unavailable" : t.call.reportedUsageCompleteness)), G(e, n);
 		};
-		q(Oe, (e) => {
-			(t.call.usage.placeholder || t.call.reportedUsageCompleteness !== "complete" || t.call.economics.usageCompleteness !== t.call.reportedUsageCompleteness) && e(ke);
+		q(De, (e) => {
+			(t.call.usage.placeholder || t.call.reportedUsageCompleteness !== "complete" || t.call.economics.usageCompleteness !== t.call.reportedUsageCompleteness) && e(Oe);
 		});
-		var Ae = B(Oe, 2), je = (e) => {
+		var ke = B(De, 2), Ae = (e) => {
 			var r = ad(), i = R(r), a = B(L(i), 2), o = z(a, !0);
-			M(i);
+			N(i);
 			var s = B(i, 2), c = B(L(s), 2), l = z(c, !0);
-			M(s), V((e, t) => {
-				Y(a, "title", H(w)), Y(a, "aria-describedby", `${n}-timing`), K(o, e), Y(c, "title", H(w)), Y(c, "aria-describedby", `${n}-timing`), K(l, t);
+			N(s), V((e, t) => {
+				Y(a, "title", H(C)), Y(a, "aria-describedby", `${n}-timing`), K(o, e), Y(c, "title", H(C)), Y(c, "aria-describedby", `${n}-timing`), K(l, t);
 			}, [() => zu(t.call.timing.durationMs), () => Bu(t.call.timing.effectiveOutputTokensPerSecond)]), G(e, r);
-		}, Me = (e) => {
+		}, je = (e) => {
 			var t = sd(), r = B(L(t), 2), i = L(r, !0), a = B(i);
 			{
 				let e = /* @__PURE__ */ P(() => `${n}-timing`);
@@ -6201,32 +6201,32 @@ function Hd(e, t) {
 					},
 					label: "Why timing is not recorded",
 					children: (e, t) => {
-						xe();
+						be();
 						var n = od(), r = R(n, !0), i = B(r), a = (e) => {
 							G(e, zr("The chat session file may still record token totals and tool activity."));
 						};
 						q(i, (e) => {
 							H(_) && e(a);
-						}), V(() => K(r, H(w))), G(e, n);
+						}), V(() => K(r, H(C))), G(e, n);
 					},
 					$$slots: { default: !0 }
 				});
 			}
-			M(r), M(t), V(() => K(i, H(_) ? "Trace unavailable" : "Not recorded")), G(e, t);
+			N(r), N(t), V(() => K(i, H(_) ? "Trace unavailable" : "Not recorded")), G(e, t);
 		};
-		q(Ae, (e) => {
-			H(v) ? e(je) : e(Me, -1);
-		}), M(he);
-		var Ne = B(he, 2), N = (e) => {
+		q(ke, (e) => {
+			H(v) ? e(Ae) : e(je, -1);
+		}), N(me);
+		var Me = B(me, 2), Ne = (e) => {
 			var t = cd(), r = z(t, !0);
 			V(() => {
-				Y(t, "id", `${n}-timing`), K(r, H(w));
+				Y(t, "id", `${n}-timing`), K(r, H(C));
 			}), G(e, t);
 		};
-		q(Ne, (e) => {
-			H(v) && e(N);
+		q(Me, (e) => {
+			H(v) && e(Ne);
 		});
-		var Pe = B(Ne, 2), Fe = (e) => {
+		var Pe = B(Me, 2), Fe = (e) => {
 			qu(e, {
 				get turn() {
 					return H(g);
@@ -6261,14 +6261,14 @@ function Hd(e, t) {
 							}
 						});
 					}
-					M(s), M(o), V((e, t, i) => {
+					N(s), N(o), V((e, t, i) => {
 						Y(s, "aria-label", e), Y(s, "aria-describedby", `${n}-added-${r}`), Y(s, "title", t), K(c, i);
 					}, [
 						() => `Select added item ${k(H(t))}`,
 						() => `${k(H(t))} — ${H(i).detail}`,
 						() => k(H(t))
 					]), U("click", s, () => a()(H(t))), G(e, o);
-				}), M(s), M(r), V((e) => K(o, `Added items (${e ?? ""})`), [() => Q(t.call.addedItemIds.length)]), G(e, r);
+				}), N(s), N(r), V((e) => K(o, `Added items (${e ?? ""})`), [() => Q(t.call.addedItemIds.length)]), G(e, r);
 			};
 			q(u, (e) => {
 				t.call.addedItemIds.length > 0 && e(d);
@@ -6282,7 +6282,7 @@ function Hd(e, t) {
 				};
 				q(c, (e) => {
 					H(E) ? e(l) : e(u, -1);
-				}), M(s);
+				}), N(s);
 				var d = B(s, 2);
 				J(d, 21, () => t.call.droppedItemIds, ei, (e, t, r) => {
 					let i = /* @__PURE__ */ P(() => H(O).get(H(t)));
@@ -6298,18 +6298,18 @@ function Hd(e, t) {
 							}
 						});
 					}
-					M(s), M(o), V((e, t, i) => {
+					N(s), N(o), V((e, t, i) => {
 						Y(s, "aria-label", e), Y(s, "aria-describedby", `${n}-dropped-${r}`), Y(s, "title", t), K(c, i);
 					}, [
 						() => `Select dropped item ${k(H(t))}`,
 						() => `${k(H(t))} — ${H(i).detail}`,
 						() => k(H(t))
 					]), U("click", s, () => a()(H(t))), G(e, o);
-				}), M(d), M(r), V((e) => K(o, `Dropped items (${e ?? ""})`), [() => Q(t.call.droppedItemIds.length)]), G(e, r);
+				}), N(d), N(r), V((e) => K(o, `Dropped items (${e ?? ""})`), [() => Q(t.call.droppedItemIds.length)]), G(e, r);
 			};
 			q(f, (e) => {
 				t.call.droppedItemIds.length > 0 && e(p);
-			}), M(c), M(i), di(i, (e, t) => Wi?.(e, t), () => ({
+			}), N(c), N(i), di(i, (e, t) => Wi?.(e, t), () => ({
 				state: r(),
 				key: "changes"
 			})), V((e, n, r) => {
@@ -6346,7 +6346,7 @@ function Hd(e, t) {
 				V(() => {
 					r = _i(n, 1, "tool-chip svelte-1d84xhe", null, r, { failed: H(t).failed }), K(i, `${H(t).name ?? ""}${H(t).count > 1 ? ` × ${H(t).count}` : ""}${H(t).failed ? " · failed" : ""}`);
 				}), G(e, n);
-			}), M(n), M(t), G(e, t);
+			}), N(n), N(t), G(e, t);
 		};
 		q(Ve, (e) => {
 			H(u).length > 0 && e(He);
@@ -6366,7 +6366,7 @@ function Hd(e, t) {
 				var n = /* @__PURE__ */ P(() => m(H(t), 2));
 				let r = () => H(n)[0], i = () => H(n)[1];
 				var a = ed(), o = L(a), s = z(o), c = z(B(o, 2), !0);
-				M(a), V((e) => {
+				N(a), V((e) => {
 					K(s, `${r() ?? ""} (raw placeholder)`), K(c, e);
 				}, [() => Z(i())]), G(e, a);
 			}), J(B(a, 2), 17, () => [
@@ -6379,10 +6379,10 @@ function Hd(e, t) {
 				var n = /* @__PURE__ */ P(() => m(H(t), 2));
 				let r = () => H(n)[0], i = () => H(n)[1];
 				var a = ed(), o = L(a), s = z(o), c = z(B(o, 2), !0);
-				M(a), V((e) => {
+				N(a), V((e) => {
 					K(s, `${r() ?? ""} cost (raw placeholder)`), K(c, e);
 				}, [() => Ba(i())]), G(e, a);
-			}), M(i), G(e, r);
+			}), N(i), G(e, r);
 		};
 		q(We, (e) => {
 			t.call.usage.placeholder && e(Ge);
@@ -6394,35 +6394,35 @@ function Hd(e, t) {
 			t.call.provider === "github-copilot" && e(qe);
 		});
 		var Je = B(Ke, 2), Ye = L(Je), Xe = L(Ye), Ze = z(Xe, !0), Qe = z(B(Xe, 2), !0);
-		M(Ye);
+		N(Ye);
 		var $e = B(Ye, 2), et = L($e), tt = z(et, !0), nt = z(B(et, 2), !0);
-		M($e);
+		N($e);
 		var rt = B($e, 2), it = L(rt), at = z(it, !0), ot = z(B(it, 2), !0);
-		M(rt);
+		N(rt);
 		var st = B(rt, 2), ct = z(B(L(st), 2), !0);
-		M(st);
+		N(st);
 		var lt = B(st, 2), ut = z(B(L(lt), 2), !0);
-		M(lt);
+		N(lt);
 		var dt = B(lt, 2), ft = L(dt), pt = z(ft, !0), mt = z(B(ft, 2), !0);
-		M(dt);
+		N(dt);
 		var ht = B(dt, 2), gt = (e) => {
 			var n = vd(), r = R(n), i = L(r), a = z(i), o = z(B(i, 2), !0);
-			M(r);
+			N(r);
 			var s = B(r, 2), c = L(s), l = z(c, !0), u = z(B(c, 2), !0);
-			M(s);
+			N(s);
 			var d = B(s, 2), f = z(B(L(d), 2), !0);
-			M(d);
+			N(d);
 			var p = B(d, 2), m = L(p), h = z(m), g = z(B(m, 2), !0);
-			M(p);
+			N(p);
 			var _ = B(p, 2), v = L(_), y = z(v), b = z(B(v, 2), !0);
-			M(_);
-			var S = B(_, 2), C = L(S), w = z(C), ee = z(B(C, 2), !0);
-			M(S);
+			N(_);
+			var S = B(_, 2), ee = L(S), C = z(ee), w = z(B(ee, 2), !0);
+			N(S);
 			var T = B(S, 2), E = L(T), D = z(E), O = z(B(E, 2), !0);
-			M(T);
-			var k = B(T, 2), te = L(k), ne = z(te, !0), re = z(B(te, 2), !0);
-			M(k), V((e, n, r, i, s, c, d) => {
-				K(a, `${H(x).label ?? ""} component completeness`), K(o, t.call.economics.costCompleteness), K(l, H(x).promptLabel), K(u, e), K(f, n), K(h, `${H(x).componentPrefix ?? ""} input cost`), K(g, r), K(y, `${H(x).componentPrefix ?? ""} output cost`), K(b, i), K(w, `${H(x).componentPrefix ?? ""} cache-read cost`), K(ee, s), K(D, `${H(x).componentPrefix ?? ""} cache-write cost`), K(O, c), K(ne, H(x).totalLabel), K(re, d);
+			N(T);
+			var k = B(T, 2), te = L(k), A = z(te, !0), ne = z(B(te, 2), !0);
+			N(k), V((e, n, r, i, s, c, d) => {
+				K(a, `${H(x).label ?? ""} component completeness`), K(o, t.call.economics.costCompleteness), K(l, H(x).promptLabel), K(u, e), K(f, n), K(h, `${H(x).componentPrefix ?? ""} input cost`), K(g, r), K(y, `${H(x).componentPrefix ?? ""} output cost`), K(b, i), K(C, `${H(x).componentPrefix ?? ""} cache-read cost`), K(w, s), K(D, `${H(x).componentPrefix ?? ""} cache-write cost`), K(O, c), K(A, H(x).totalLabel), K(ne, d);
 			}, [
 				() => Ba(t.call.economics.piPromptCost),
 				() => Z(t.call.reportedTotalTokens),
@@ -6440,7 +6440,7 @@ function Hd(e, t) {
 		].includes(t.indexed.analysis.session.source));
 		q(ht, (e) => {
 			H(_t) && e(gt);
-		}), M(Je);
+		}), N(Je);
 		var vt = B(Je, 2), yt = (e) => {
 			let n = /* @__PURE__ */ P(() => t.call.economics.cacheRatioDiscontinuity);
 			var r = yd(), i = L(r), a = z(i, !0), s = B(i, 2), c = L(s), l = B(c), u = (e) => {
@@ -6449,9 +6449,9 @@ function Hd(e, t) {
 			};
 			q(l, (e) => {
 				H(n).compactionBefore && e(u);
-			}), M(s);
+			}), N(s);
 			var d = B(s, 2), f = z(d);
-			M(r), V((e, t, r, i) => {
+			N(r), V((e, t, r, i) => {
 				K(a, e), K(c, `Adjacent-call change: ${t ?? ""} to
             ${r ?? ""} prompt tokens; change of
             ${i ?? ""} percentage points (${H(n).magnitude ?? ""}). Method:
@@ -6477,28 +6477,28 @@ function Hd(e, t) {
 					}), G(e, t);
 				}, s = (e) => {
 					var t = xd();
-					xe(), G(e, t);
+					be(), G(e, t);
 				};
 				q(a, (e) => {
 					H(r) ? e(o) : e(s, -1);
-				}), M(i), G(e, i);
-			}), M(r), G(e, n);
+				}), N(i), G(e, i);
+			}), N(r), G(e, n);
 		};
 		q(bt, (e) => {
 			H(y).length > 0 && e(xt);
-		}), M(Ue), di(Ue, (e, t) => Wi?.(e, t), () => ({
+		}), N(Ue), di(Ue, (e, t) => Wi?.(e, t), () => ({
 			state: r(),
 			key: "usage"
 		}));
 		var St = B(Ue, 2), Ct = B(L(St), 2), wt = L(Ct), Tt = z(B(L(wt), 2), !0);
-		M(wt);
+		N(wt);
 		var Et = B(wt, 2), Dt = (e) => {
 			var n = wd(), r = R(n), i = z(B(L(r), 2), !0);
-			M(r);
+			N(r);
 			var a = B(r, 2), o = z(B(L(a), 2), !0);
-			M(a);
+			N(a);
 			var s = B(a, 2), c = z(B(L(s), 2));
-			M(s), V((e, t, n, r) => {
+			N(s), V((e, t, n, r) => {
 				K(i, e), K(o, t), K(c, `${n ?? ""} (${r ?? ""})`);
 			}, [
 				() => Z(t.call.tokenAnalysis.knownFramingOverheadTokens),
@@ -6513,19 +6513,19 @@ function Hd(e, t) {
 			};
 			q(i, (e) => {
 				H(c).reported > 0 && e(a);
-			}), M(n), M(t), V((e) => K(r, `${e ?? ""} tokens `), [() => Z(H(c).reported - H(c).reconstructed)]), G(e, t);
+			}), N(n), N(t), V((e) => K(r, `${e ?? ""} tokens `), [() => Z(H(c).reported - H(c).reconstructed)]), G(e, t);
 		};
 		q(Et, (e) => {
 			t.call.tokenAnalysis.calculatedRequestTokens === null ? H(c) && e(Ot, 1) : e(Dt);
 		});
 		var kt = B(Et, 2), At = z(B(L(kt), 2), !0);
-		M(kt);
+		N(kt);
 		var jt = B(kt, 2), Mt = z(B(L(jt), 2), !0);
-		M(jt);
+		N(jt);
 		var Nt = B(jt, 2), Pt = z(B(L(Nt), 2), !0);
-		M(Nt);
+		N(Nt);
 		var Ft = B(Nt, 2), It = z(B(L(Ft), 2));
-		M(Ft), M(Ct);
+		N(Ft), N(Ct);
 		var Lt = B(Ct, 2), Rt = (e) => {
 			var t = Dd(), n = B(R(t), 2);
 			J(n, 20, () => H(h), (e) => e, (e, t) => {
@@ -6537,26 +6537,26 @@ function Hd(e, t) {
 					}), G(e, t);
 				}, o = (e) => {
 					var t = Ed();
-					xe(), G(e, t);
+					be(), G(e, t);
 				};
 				q(i, (e) => {
 					H(n) ? e(a) : e(o, -1);
-				}), M(r), G(e, r);
-			}), M(n), G(e, t);
+				}), N(r), G(e, r);
+			}), N(n), G(e, t);
 		};
 		q(Lt, (e) => {
 			H(h).length > 0 && e(Rt);
-		}), M(St), di(St, (e, t) => Wi?.(e, t), () => ({
+		}), N(St), di(St, (e, t) => Wi?.(e, t), () => ({
 			state: r(),
 			key: "diagnostics"
 		}));
 		var zt = B(St, 2), Bt = B(L(zt), 2), Vt = L(Bt), Ht = (e) => {
 			var n = Od(), r = R(n), i = z(B(L(r), 2), !0);
-			M(r);
+			N(r);
 			var a = B(r, 2), o = z(B(L(a), 2), !0);
-			M(a);
+			N(a);
 			var s = B(a, 2), c = z(B(L(s), 2), !0);
-			M(s), V((e, t, n) => {
+			N(s), V((e, t, n) => {
 				K(i, e), K(o, t), K(c, n);
 			}, [
 				() => Z(t.call.usage.cacheWrite1h),
@@ -6568,18 +6568,18 @@ function Hd(e, t) {
 			t.call.usage.placeholder || e(Ht);
 		});
 		var Ut = B(Vt, 2), Wt = z(B(L(Ut), 2), !0);
-		M(Ut);
+		N(Ut);
 		var Gt = B(Ut, 2), Kt = z(B(L(Gt), 2), !0);
-		M(Gt);
+		N(Gt);
 		var qt = B(Gt, 2), Jt = z(B(L(qt), 2), !0);
-		M(qt);
+		N(qt);
 		var F = B(qt, 2), Yt = z(B(L(F), 2), !0);
-		M(F);
+		N(F);
 		var I = B(F, 2), Xt = z(B(L(I), 2));
-		M(I);
+		N(I);
 		var Zt = B(I, 2), Qt = (e) => {
 			var n = kd(), r = z(B(L(n), 2), !0);
-			M(n), V(() => K(r, t.call.tokenAnalysis.status)), G(e, n);
+			N(n), V(() => K(r, t.call.tokenAnalysis.status)), G(e, n);
 		};
 		q(Zt, (e) => {
 			t.call.tokenAnalysis.status !== "unavailable" && e(Qt);
@@ -6600,11 +6600,11 @@ function Hd(e, t) {
 		};
 		q(tn, (e) => {
 			H(T) ? e(nn) : t.call.tokenizationProfileId ? e(rn, 1) : e(an, -1);
-		}), M(en), M($t);
+		}), N(en), N($t);
 		var on = B($t, 2), sn = z(B(L(on), 2));
-		M(on);
+		N(on);
 		var cn = B(on, 2), ln = z(B(L(cn), 2));
-		M(cn), M(Bt), M(zt), di(zt, (e, t) => Wi?.(e, t), () => ({
+		N(cn), N(Bt), N(zt), di(zt, (e, t) => Wi?.(e, t), () => ({
 			state: r(),
 			key: "estimator"
 		}));
@@ -6614,7 +6614,7 @@ function Hd(e, t) {
 				return t.call.sourceRecordId;
 			},
 			label: "source record ID"
-		}), M(pn), M(fn);
+		}), N(pn), N(fn);
 		var gn = B(fn, 2), _n = (e) => {
 			var n = jd(), r = B(L(n), 2), i = L(r), a = z(i, !0);
 			Xa(B(i, 2), {
@@ -6622,7 +6622,7 @@ function Hd(e, t) {
 					return t.call.tokenizationProfileId;
 				},
 				label: "tokenization profile ID"
-			}), M(r), M(n), V(() => K(a, t.call.tokenizationProfileId)), G(e, n);
+			}), N(r), N(n), V(() => K(a, t.call.tokenizationProfileId)), G(e, n);
 		};
 		q(gn, (e) => {
 			t.call.tokenizationProfileId && e(_n);
@@ -6634,25 +6634,25 @@ function Hd(e, t) {
 					return t.call.economics.policyId;
 				},
 				label: "economics policy ID"
-			}), M(r), M(n), V(() => K(a, t.call.economics.policyId)), G(e, n);
+			}), N(r), N(n), V(() => K(a, t.call.economics.policyId)), G(e, n);
 		};
 		q(vn, (e) => {
 			t.call.economics.policyId && e(yn);
-		}), M(dn);
+		}), N(dn);
 		var bn = B(dn, 2), xn = L(bn), Sn = z(B(L(xn), 2), !0);
-		M(xn);
+		N(xn);
 		var Cn = B(xn, 2), wn = (e) => {
 			var t = Nd(), n = R(t), r = z(B(L(n), 2));
-			M(n);
+			N(n);
 			var i = B(n, 2), a = B(L(i), 2), o = z(L(a), !0);
-			M(a), M(i), V((e, t) => {
+			N(a), N(i), V((e, t) => {
 				K(r, `${e ?? ""} removed ·
               ${t ?? ""} retained`), K(o, H(l).id);
 			}, [() => Q(H(l).sourceItemIds.length), () => Q(H(l).retainedItemIds.length)]), G(e, t);
 		};
 		q(Cn, (e) => {
 			H(l) && e(wn);
-		}), M(bn);
+		}), N(bn);
 		var Tn = B(bn, 2), En = (e) => {
 			var n = Id(), r = B(R(n), 2);
 			J(r, 21, () => t.call.toolCallsAfter, (e) => e.id, (e, t) => {
@@ -6673,10 +6673,10 @@ function Hd(e, t) {
 				};
 				q(s, (e) => {
 					H(t).failed && e(c);
-				}), M(n), V(() => {
+				}), N(n), V(() => {
 					K(r, `${H(t).name ?? ""} `), K(a, H(t).id);
 				}), G(e, n);
-			}), M(r), G(e, n);
+			}), N(r), G(e, n);
 		};
 		q(Tn, (e) => {
 			H(u).length > 0 && e(En);
@@ -6685,8 +6685,8 @@ function Hd(e, t) {
 			var t = Rd(), n = B(R(t), 2);
 			J(n, 20, () => H(f), (e) => e, (e, t) => {
 				var n = Ld(), r = z(L(n), !0);
-				M(n), V(() => K(r, t)), G(e, n);
-			}), M(n), G(e, t);
+				N(n), V(() => K(r, t)), G(e, n);
+			}), N(n), G(e, t);
 		};
 		q(Dn, (e) => {
 			H(f).length > 0 && e(On);
@@ -6695,18 +6695,18 @@ function Hd(e, t) {
 			var t = zd(), n = B(R(t), 2);
 			J(n, 20, () => H(y), (e) => e, (e, t) => {
 				var n = Ld(), r = z(L(n), !0);
-				M(n), V(() => K(r, t)), G(e, n);
-			}), M(n), G(e, t);
+				N(n), V(() => K(r, t)), G(e, n);
+			}), N(n), G(e, t);
 		};
 		q(kn, (e) => {
 			H(y).length > 0 && e(An);
-		}), M(un), di(un, (e, t) => Wi?.(e, t), () => ({
+		}), N(un), di(un, (e, t) => Wi?.(e, t), () => ({
 			state: r(),
 			key: "identifiers"
-		})), M(p), V((e, r, a, o, s, c, l, u, d, f, m, h, g, _, v, y, b, x, S, C, w, ee, T, E, D, O, k, te) => {
-			Y(p, "aria-label", `${i() ? "Pinned" : "Model"} call ${t.call.index}`), K(ue, `${i() ? "Pinned call" : "Call"}
-          ${t.call.index ?? ""}`), K(fe, `${t.call.provider ?? "Unknown provider" ?? ""} / ${t.call.model ?? "Unknown model" ?? ""}`), K(A, `${e ?? ""} `), Y(we, "aria-describedby", `${n}-cost`), K(Te, r), K(De, a), K(Ze, o), K(Qe, s), K(tt, t.call.economics.policyId ? "Cache read" : "Cache read (raw field)"), K(nt, c), K(at, l), K(ot, u), K(ct, d), K(ut, f), K(pt, m), K(mt, h), K(Tt, g), K(At, _), K(Mt, v), K(Pt, y), K(It, `${b ?? ""} /
-            ${x ?? ""} calls`), K(Wt, S), K(Kt, C), K(Jt, w), K(Yt, t.call.cumulativeReportedUsageCompleteness), K(Xt, `${ee ?? ""}
+		})), N(p), V((e, r, a, o, s, c, l, u, d, f, m, h, g, _, v, y, b, x, S, ee, C, w, T, E, D, O, k, te) => {
+			Y(p, "aria-label", `${i() ? "Pinned" : "Model"} call ${t.call.index}`), K(le, `${i() ? "Pinned call" : "Call"}
+          ${t.call.index ?? ""}`), K(de, `${t.call.provider ?? "Unknown provider" ?? ""} / ${t.call.model ?? "Unknown model" ?? ""}`), K(j, `${e ?? ""} `), Y(Ce, "aria-describedby", `${n}-cost`), K(we, r), K(Ee, a), K(Ze, o), K(Qe, s), K(tt, t.call.economics.policyId ? "Cache read" : "Cache read (raw field)"), K(nt, c), K(at, l), K(ot, u), K(ct, d), K(ut, f), K(pt, m), K(mt, h), K(Tt, g), K(At, _), K(Mt, v), K(Pt, y), K(It, `${b ?? ""} /
+            ${x ?? ""} calls`), K(Wt, S), K(Kt, ee), K(Jt, C), K(Yt, t.call.cumulativeReportedUsageCompleteness), K(Xt, `${w ?? ""}
             items complete · ${T ?? ""} partial
             · ${E ?? ""} unavailable`), K(sn, `${D ?? ""} calls`), K(ln, `${O ?? ""} /
             ${k ?? ""} /
@@ -6718,12 +6718,12 @@ function Hd(e, t) {
 			() => te(t.call.economics.policyId),
 			() => Z(t.call.usage.input),
 			() => Z(t.call.usage.cacheRead),
-			() => ie(),
-			() => ne(),
-			() => ae(t.call.economics.cacheReadRatio),
+			() => re(),
+			() => A(),
+			() => ie(t.call.economics.cacheReadRatio),
+			() => ae(),
+			() => ne(t.call.economics.policyId),
 			() => oe(),
-			() => re(t.call.economics.policyId),
-			() => se(),
 			() => Z(t.call.tokenAnalysis.calculatedVisibleTokens),
 			() => Yu(t.call.tokenAnalysis.addedTokens, Z, H(s)),
 			() => Yu(t.call.tokenAnalysis.retainedTokens, Z, H(s)),
@@ -6742,9 +6742,9 @@ function Hd(e, t) {
 			() => Q(t.call.tokenAnalysis.age.itemsAtLeast20CallsOld)
 		]), G(e, p);
 	};
-	q(le, (e) => {
-		t.call && e(ue);
-	}), G(e, ce), Ve();
+	q(ce, (e) => {
+		t.call && e(le);
+	}), G(e, se), Ve();
 }
 kr(["click"]);
 //#endregion
@@ -6787,7 +6787,7 @@ function ef(e, t) {
 		}), V(() => K(a, H(n))), G(e, r);
 	}, g = (e) => {
 		var n = Kd(), r = B(L(n));
-		M(n), V(() => K(r, ` ${t.preview.text ?? ""}`)), G(e, n);
+		N(n), V(() => K(r, ` ${t.preview.text ?? ""}`)), G(e, n);
 	}, _ = (e) => {
 		G(e, qd());
 	};
@@ -6810,12 +6810,12 @@ function ef(e, t) {
 	q(x, (e) => {
 		H(a) && H(s) !== null && !H(l) && e(S);
 	});
-	var C = B(x, 2), w = (e) => {
+	var ee = B(x, 2), C = (e) => {
 		var t = Zd(), n = z(t, !0);
 		V(() => {
 			Y(t, "aria-expanded", H(a)), K(n, H(a) ? "Show less" : "Show more");
 		}), U("click", t, () => H(a) ? u() : d()), G(e, t);
-	}, ee = (e) => {
+	}, w = (e) => {
 		var n = Zd(), r = z(n, !0);
 		V(() => {
 			Y(n, "aria-expanded", t.legacyExpanded), K(r, t.legacyExpanded ? "Show less" : "Show more");
@@ -6823,9 +6823,9 @@ function ef(e, t) {
 			t.onToggleLegacy?.apply(this, e);
 		}), G(e, n);
 	};
-	q(C, (e) => {
-		H(i) || H(a) ? e(w) : H(r) && e(ee, 1);
-	}), M(f), G(e, f), Ve();
+	q(ee, (e) => {
+		H(i) || H(a) ? e(C) : H(r) && e(w, 1);
+	}), N(f), G(e, f), Ve();
 }
 kr(["click"]);
 //#endregion
@@ -6950,62 +6950,62 @@ var ff = /* @__PURE__ */ W("<p class=\"presence-note svelte-bb734v\">This item h
 };
 function Qf(e, t) {
 	Be(t, !0), ui(e, Zf);
-	let n = X(t, "sections", 23, Ui), r = X(t, "onInspectCall", 3, () => {}), i = X(t, "callIndex", 3, null), a = X(t, "pinnedCallIndex", 3, null), o = X(t, "onSelectItem", 3, () => {}), s = X(t, "onRevealInRiver", 3, () => {}), c = X(t, "sessions", 19, () => []), l = /* @__PURE__ */ P(() => t.item ? tf(t.item) : null), u = /* @__PURE__ */ P(() => H(l) ? c().find((e) => e.id === H(l)) : void 0), d = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionBySourceId.get(t.item.id) ?? [] : []), f = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionBySummaryId.get(t.item.id) ?? null : null), p = /* @__PURE__ */ P(() => H(f) ? df(H(f), t.indexed.analysis.session.source, t.indexed.callByIndex) : null), h = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionsByRetainedId.get(t.item.id) ?? [] : []), g = /* @__PURE__ */ P(() => t.item ? (t.indexed.incomingLineage.get(t.item.id) ?? []).map((e) => e.from) : []), _ = /* @__PURE__ */ P(() => t.item ? (t.indexed.outgoingLineage.get(t.item.id) ?? []).map((e) => e.to) : []), v = /* @__PURE__ */ P(() => t.item ? t.indexed.versionByItemId.get(t.item.id) ?? null : null), y = /* @__PURE__ */ P(() => t.item && H(v) ? gc(t.indexed.itemById, t.indexed.versionByItemId, t.item.id) : []), b = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.length), x = /* @__PURE__ */ P(() => i() === null ? null : t.indexed.callByIndex.get(i()) ?? null), S = /* @__PURE__ */ P(() => a() === null ? null : t.indexed.callByIndex.get(a()) ?? null), C = /* @__PURE__ */ P(() => t.item !== null && H(S) !== null && !H(S).contextItemIds.includes(t.item.id)), w = /* @__PURE__ */ P(() => t.item?.presence.length ? t.indexed.callByIndex.get(t.item.presence[0].startCall) ?? null : null), ee = /* @__PURE__ */ P(() => t.item && t.item.presence.length > 0 ? t.indexed.callByIndex.get(t.item.lastModelCall) ?? null : null), T = /* @__PURE__ */ P(() => H(x) && H(x).contextItemIds.includes(t.item?.id ?? "") ? H(x) : a() === null ? H(ee) : null), E = /* @__PURE__ */ P(() => H(x) === null && H(T) !== null), D = /* @__PURE__ */ P(() => t.item && H(T) ? t.item.tokenEstimates.find((e) => e.profileId === H(T)?.tokenizationProfileId) : void 0), O = /* @__PURE__ */ P(() => H(D) ? t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === H(D).profileId) ?? null : null), k = /* @__PURE__ */ P(() => n().expandedPreview);
+	let n = X(t, "sections", 23, Ui), r = X(t, "onInspectCall", 3, () => {}), i = X(t, "callIndex", 3, null), a = X(t, "pinnedCallIndex", 3, null), o = X(t, "onSelectItem", 3, () => {}), s = X(t, "onRevealInRiver", 3, () => {}), c = X(t, "sessions", 19, () => []), l = /* @__PURE__ */ P(() => t.item ? tf(t.item) : null), u = /* @__PURE__ */ P(() => H(l) ? c().find((e) => e.id === H(l)) : void 0), d = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionBySourceId.get(t.item.id) ?? [] : []), f = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionBySummaryId.get(t.item.id) ?? null : null), p = /* @__PURE__ */ P(() => H(f) ? df(H(f), t.indexed.analysis.session.source, t.indexed.callByIndex) : null), h = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionsByRetainedId.get(t.item.id) ?? [] : []), g = /* @__PURE__ */ P(() => t.item ? (t.indexed.incomingLineage.get(t.item.id) ?? []).map((e) => e.from) : []), _ = /* @__PURE__ */ P(() => t.item ? (t.indexed.outgoingLineage.get(t.item.id) ?? []).map((e) => e.to) : []), v = /* @__PURE__ */ P(() => t.item ? t.indexed.versionByItemId.get(t.item.id) ?? null : null), y = /* @__PURE__ */ P(() => t.item && H(v) ? gc(t.indexed.itemById, t.indexed.versionByItemId, t.item.id) : []), b = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.length), x = /* @__PURE__ */ P(() => i() === null ? null : t.indexed.callByIndex.get(i()) ?? null), S = /* @__PURE__ */ P(() => a() === null ? null : t.indexed.callByIndex.get(a()) ?? null), ee = /* @__PURE__ */ P(() => t.item !== null && H(S) !== null && !H(S).contextItemIds.includes(t.item.id)), C = /* @__PURE__ */ P(() => t.item?.presence.length ? t.indexed.callByIndex.get(t.item.presence[0].startCall) ?? null : null), w = /* @__PURE__ */ P(() => t.item && t.item.presence.length > 0 ? t.indexed.callByIndex.get(t.item.lastModelCall) ?? null : null), T = /* @__PURE__ */ P(() => H(x) && H(x).contextItemIds.includes(t.item?.id ?? "") ? H(x) : a() === null ? H(w) : null), E = /* @__PURE__ */ P(() => H(x) === null && H(T) !== null), D = /* @__PURE__ */ P(() => t.item && H(T) ? t.item.tokenEstimates.find((e) => e.profileId === H(T)?.tokenizationProfileId) : void 0), O = /* @__PURE__ */ P(() => H(D) ? t.indexed.analysis.tokenAnalysis.profiles.find((e) => e.id === H(D).profileId) ?? null : null), k = /* @__PURE__ */ P(() => n().expandedPreview);
 	function te() {
 		I(k, !H(k)), n().expandedPreview = H(k);
 	}
-	let ne = /* @__PURE__ */ P(() => [...new Set(t.item?.tokenEstimates.flatMap((e) => e.noteCodes) ?? [])]);
-	function re(e) {
+	let A = /* @__PURE__ */ P(() => [...new Set(t.item?.tokenEstimates.flatMap((e) => e.noteCodes) ?? [])]);
+	function ne(e) {
 		return Fo(t.indexed.itemById.get(e), e);
 	}
-	function ie(e) {
+	function re(e) {
 		let n = t.indexed.callByIndex.get(e.firstModelCall)?.tokenizationProfileId ?? "";
 		return t.indexed.itemEstimateByProfile.get(e.id)?.get(n)?.tokens ?? null;
 	}
-	function ae(e, t) {
-		return `Version ${t} · ${oe(e)} · ${Z(ie(e))} tokens`;
+	function ie(e, t) {
+		return `Version ${t} · ${ae(e)} · ${Z(re(e))} tokens`;
 	}
-	function oe(e) {
+	function ae(e) {
 		return e.presence.map((e) => e.startCall === e.endCall ? `call ${e.startCall}` : `calls ${e.startCall}–${e.endCall}`).join(", ");
 	}
-	function se() {
+	function oe() {
 		return !t.item || t.item.presence.length === 0 ? "No model-call presence" : t.item.presence.map((e) => e.startCall === e.endCall ? `call ${e.startCall}` : `calls ${e.startCall}–${e.endCall}`).join(", ");
 	}
-	var ce = Xf(), le = L(ce), ue = (e) => {
-		var i = Jf(), c = R(i), x = L(c), ee = L(x), ie = z(ee), oe = z(B(ee, 2), !0);
-		M(x), M(c);
-		var ce = B(c, 2), le = (e) => {
+	var se = Xf(), ce = L(se), le = (e) => {
+		var i = Jf(), c = R(i), x = L(c), w = L(x), re = z(w), ae = z(B(w, 2), !0);
+		N(x), N(c);
+		var se = B(c, 2), ce = (e) => {
 			G(e, ff());
-		}, ue = (e) => {
+		}, le = (e) => {
 			var t = pf(), n = z(t);
 			V(() => K(n, `This item is not present at pinned call ${H(S).index ?? ""}. Its inspector remains selected.`)), G(e, t);
 		};
-		q(ce, (e) => {
-			t.item.presence.length === 0 ? e(le) : H(C) && H(S) && e(ue, 1);
+		q(se, (e) => {
+			t.item.presence.length === 0 ? e(ce) : H(ee) && H(S) && e(le, 1);
 		});
-		var de = B(ce, 2), fe = (e) => {
+		var ue = B(se, 2), de = (e) => {
 			var n = mf();
 			U("click", n, () => s()(t.item.id)), G(e, n);
 		};
-		q(de, (e) => {
-			t.item.presence.length > 0 && e(fe);
+		q(ue, (e) => {
+			t.item.presence.length > 0 && e(de);
 		});
-		var pe = B(de, 2), me = (e) => {
+		var fe = B(ue, 2), pe = (e) => {
 			var t = hf(), n = z(t);
-			V(() => K(n, `Inspect first included call · ${H(w).index ?? ""}`)), U("click", t, () => r()(H(w).index)), G(e, t);
+			V(() => K(n, `Inspect first included call · ${H(C).index ?? ""}`)), U("click", t, () => r()(H(C).index)), G(e, t);
 		};
-		q(pe, (e) => {
-			H(w) && H(w).index !== a() && e(me);
+		q(fe, (e) => {
+			H(C) && H(C).index !== a() && e(pe);
 		});
-		var he = B(pe, 2), ge = (e) => {
+		var me = B(fe, 2), he = (e) => {
 			var t = pf(), n = z(t);
 			V((e) => K(n, `Estimate: ${H(D).coverage ?? ""} · ${e ?? ""}`), [() => ha(H(D).method)]), G(e, t);
 		};
-		q(he, (e) => {
-			H(D) && (H(D).coverage !== "complete" || H(D).method === "characterHeuristic") && e(ge);
+		q(me, (e) => {
+			H(D) && (H(D).coverage !== "complete" || H(D).method === "characterHeuristic") && e(he);
 		});
-		var _e = B(he, 2);
-		$r(B(L(_e), 2), () => JSON.stringify([t.sessionId ?? t.indexed.analysis.session.id, t.item.id]), (e) => {
+		var ge = B(me, 2);
+		$r(B(L(ge), 2), () => JSON.stringify([t.sessionId ?? t.indexed.analysis.session.id, t.item.id]), (e) => {
 			{
 				let n = /* @__PURE__ */ P(() => t.sessionId ?? t.indexed.analysis.session.id);
 				ef(e, {
@@ -7027,42 +7027,42 @@ function Qf(e, t) {
 					onToggleLegacy: te
 				});
 			}
-		}), M(_e), di(_e, (e, t) => Wi?.(e, t), () => ({
+		}), N(ge), di(ge, (e, t) => Wi?.(e, t), () => ({
 			state: n(),
 			key: "preview"
 		}));
-		var A = B(_e, 2), ve = L(A), j = B(L(ve), 2), ye = L(j), be = (e) => {
+		var j = B(ge, 2), _e = L(j), M = B(L(_e), 2), ve = L(M), ye = (e) => {
 			G(e, zr("No model-call presence"));
-		}, Se = (e) => {
+		}, xe = (e) => {
 			var n = zr();
 			V((e, t, r, i) => K(n, `${e ?? ""} · present in ${t ?? ""} of ${r ?? ""} calls (${i ?? ""} ranges)`), [
-				() => se(),
+				() => oe(),
 				() => Z(nc(t.item)),
 				() => Z(H(b)),
 				() => Z(t.item.presence.length)
 			]), G(e, n);
 		};
-		q(ye, (e) => {
-			t.item.presence.length === 0 ? e(be) : e(Se, -1);
-		}), M(j), M(ve);
-		var Ce = B(ve, 2), we = L(Ce), Te = L(we), Ee = (e) => {
+		q(ve, (e) => {
+			t.item.presence.length === 0 ? e(ye) : e(xe, -1);
+		}), N(M), N(_e);
+		var Se = B(_e, 2), Ce = L(Se), we = L(Ce), Te = (e) => {
 			var t = zr();
 			V(() => K(t, a() === null ? H(E) ? "Tokens at last included call" : "Tokens at call" : "Tokens at pinned call")), G(e, t);
-		}, De = (e) => {
+		}, Ee = (e) => {
 			G(e, zr("Tokens at pinned call · unavailable"));
-		}, Oe = (e) => {
+		}, De = (e) => {
 			G(e, zr("Tokens at last included call · unavailable"));
 		};
-		q(Te, (e) => {
-			H(T) && H(D) ? e(Ee) : a() === null ? e(Oe, -1) : e(De, 1);
-		}), M(we);
-		var ke = B(we, 2), Ae = L(ke), je = B(Ae), Me = (e) => {
+		q(we, (e) => {
+			H(T) && H(D) ? e(Te) : a() === null ? e(De, -1) : e(Ee, 1);
+		}), N(Ce);
+		var Oe = B(Ce, 2), ke = L(Oe), Ae = B(ke), je = (e) => {
 			G(e, gf());
 		};
-		q(je, (e) => {
-			H(E) && e(Me);
-		}), M(ke), M(Ce);
-		var Ne = B(Ce, 2), N = L(Ne), Pe = B(L(N));
+		q(Ae, (e) => {
+			H(E) && e(je);
+		}), N(Oe), N(Se);
+		var Me = B(Se, 2), Ne = L(Me), Pe = B(L(Ne));
 		{
 			let e = /* @__PURE__ */ P(() => `item-exposure-note-${t.item.id}`);
 			va(Pe, {
@@ -7071,13 +7071,13 @@ function Qf(e, t) {
 				},
 				label: "About whole-session exposure",
 				children: (e, t) => {
-					xe(), G(e, zr("The item's estimated tokens added up over every call it appears in, in estimated\n            token-turns. It shows how much context the item took up across the session; it is not\n            usage or cost."));
+					be(), G(e, zr("The item's estimated tokens added up over every call it appears in, in estimated\n            token-turns. It shows how much context the item took up across the session; it is not\n            usage or cost."));
 				},
 				$$slots: { default: !0 }
 			});
 		}
-		M(N);
-		var Fe = B(N, 2), Ie = L(Fe), Le = B(Ie), Re = (e) => {
+		N(Ne);
+		var Fe = B(Ne, 2), Ie = L(Fe), Le = B(Ie), Re = (e) => {
 			var n = _f(), r = z(n);
 			V((e) => K(r, `Partial exposure · ${e ?? ""} calls covered`), [() => qa(t.item.tokenTurnsCoverage.coveredCalls, t.item.tokenTurnsCoverage.totalCalls)]), G(e, n);
 		};
@@ -7089,8 +7089,8 @@ function Qf(e, t) {
 		}, Ve = /* @__PURE__ */ P(() => t.item.tokenEstimates.some((e) => e.coverage !== "complete" || e.method === "characterHeuristic"));
 		q(ze, (e) => {
 			H(Ve) && e(Be);
-		}), M(Fe), M(Ne), M(A);
-		var He = B(A, 2), Ue = (e) => {
+		}), N(Fe), N(Me), N(j);
+		var He = B(j, 2), Ue = (e) => {
 			var t = bf(), n = B(R(t), 2), r = L(n), i = (e) => {
 				var t = yf(), n = B(R(t)), r = z(n, !0);
 				V((e) => {
@@ -7101,7 +7101,7 @@ function Qf(e, t) {
 			};
 			q(r, (e) => {
 				H(u) ? e(i) : e(a, -1);
-			}), M(n), G(e, t);
+			}), N(n), G(e, t);
 		};
 		q(He, (e) => {
 			H(l) && e(Ue);
@@ -7132,10 +7132,10 @@ function Qf(e, t) {
 				var s = B(a, 2);
 				J(s, 21, () => H(p).rows, (e) => e.label, (e, t) => {
 					var n = Sf(), r = L(n), i = z(r, !0), a = z(B(r, 2), !0);
-					M(n), V(() => {
+					N(n), V(() => {
 						K(i, H(t).label), K(a, H(t).value);
 					}), G(e, n);
-				}), M(s);
+				}), N(s);
 				var c = B(s, 2), l = (e) => {
 					let t = /* @__PURE__ */ P(() => H(p).summaryCall);
 					var n = hf(), i = z(n);
@@ -7158,10 +7158,10 @@ function Qf(e, t) {
 			J(r, 23, () => H(y), (e) => e.id, (e, n, r) => {
 				var i = Ef(), a = L(i), s = (e) => {
 					var t = Tf(), i = z(t);
-					V((e) => K(i, `${e ?? ""} · this version`), [() => ae(H(n), H(r) + 1)]), G(e, t);
+					V((e) => K(i, `${e ?? ""} · this version`), [() => ie(H(n), H(r) + 1)]), G(e, t);
 				}, c = (e) => {
 					var t = hf(), i = z(t, !0);
-					V((e) => K(i, e), [() => ae(H(n), H(r) + 1)]), U("click", t, () => o()(H(n).id)), G(e, t);
+					V((e) => K(i, e), [() => ie(H(n), H(r) + 1)]), U("click", t, () => o()(H(n).id)), G(e, t);
 				};
 				q(a, (e) => {
 					H(n).id === t.item.id ? e(s) : e(c, -1);
@@ -7172,8 +7172,8 @@ function Qf(e, t) {
 				};
 				q(l, (e) => {
 					H(r) > 0 && t.item.kind === "system" && e(u);
-				}), M(i), G(e, i);
-			}), M(r), G(e, n);
+				}), N(i), G(e, i);
+			}), N(r), G(e, n);
 		};
 		q(Ke, (e) => {
 			H(v) && e(qe);
@@ -7185,8 +7185,8 @@ function Qf(e, t) {
 					var n = Of(), r = z(n, !0);
 					V((e, t) => {
 						Y(n, "aria-label", e), K(r, t);
-					}, [() => `Select predecessor ${re(H(t))}`, () => re(H(t))]), U("click", n, () => o()(H(t))), G(e, n);
-				}), M(t), G(e, t);
+					}, [() => `Select predecessor ${ne(H(t))}`, () => ne(H(t))]), U("click", n, () => o()(H(t))), G(e, n);
+				}), N(t), G(e, t);
 			};
 			q(n, (e) => {
 				H(g).length > 0 && e(r);
@@ -7197,12 +7197,12 @@ function Qf(e, t) {
 					var n = Of(), r = z(n, !0);
 					V((e, t) => {
 						Y(n, "aria-label", e), K(r, t);
-					}, [() => `Select successor ${re(H(t))}`, () => re(H(t))]), U("click", n, () => o()(H(t))), G(e, n);
-				}), M(t), G(e, t);
+					}, [() => `Select successor ${ne(H(t))}`, () => ne(H(t))]), U("click", n, () => o()(H(t))), G(e, n);
+				}), N(t), G(e, t);
 			};
 			q(i, (e) => {
 				H(_).length > 0 && e(a);
-			}), M(t), G(e, t);
+			}), N(t), G(e, t);
 		};
 		q(Je, (e) => {
 			(H(g).length > 0 || H(_).length > 0) && e(Ye);
@@ -7225,40 +7225,40 @@ function Qf(e, t) {
 			H(T) && H(D) ? e(tt) : a() === null ? e(rt, -1) : e(nt, 1);
 		});
 		var it = B(et);
-		M($e), M(Qe);
+		N($e), N(Qe);
 		var at = B(Qe, 2), ot = z(B(L(at), 2));
-		M(at);
+		N(at);
 		var st = B(at, 2), ct = z(B(L(st), 2), !0);
-		M(st);
+		N(st);
 		var lt = B(st, 2), ut = (e) => {
 			var t = Pf(), n = R(t), r = z(B(L(n), 2), !0);
-			M(n);
+			N(n);
 			var i = B(n, 2), a = z(B(L(i), 2), !0);
-			M(i), V(() => {
+			N(i), V(() => {
 				K(r, H(D).method), K(a, H(D).coverage);
 			}), G(e, t);
 		};
 		q(lt, (e) => {
 			H(D) && e(ut);
-		}), M(Ze);
+		}), N(Ze);
 		var dt = B(Ze, 4), ft = (e) => {
 			G(e, Ff());
 		}, pt = (e) => {
 			var n = Lf();
 			J(n, 21, () => t.item.tokenEstimates, (e) => e.profileId, (e, t) => {
 				var n = If(), r = L(n), i = z(r, !0), a = B(r);
-				M(n), V((e) => {
+				N(n), V((e) => {
 					K(i, H(t).profileId), K(a, ` · ${e ?? ""} tokens ·
               ${H(t).method ?? ""} · ${H(t).coverage ?? ""}`);
 				}, [() => Z(H(t).tokens)]), G(e, n);
-			}), M(n), G(e, n);
+			}), N(n), G(e, n);
 		};
 		q(dt, (e) => {
 			t.item.tokenEstimates.length === 0 ? e(ft) : e(pt, -1);
 		});
 		var mt = B(dt, 2), ht = (e) => {
 			var t = Vf(), n = B(R(t), 2);
-			J(n, 20, () => H(ne), (e) => e, (e, t) => {
+			J(n, 20, () => H(A), (e) => e, (e, t) => {
 				let n = /* @__PURE__ */ P(() => zo(t));
 				var r = Bf(), i = L(r), a = (e) => {
 					var t = Rf(), r = R(t), i = z(r, !0), a = B(r);
@@ -7267,16 +7267,16 @@ function Qf(e, t) {
 					}), G(e, t);
 				}, o = (e) => {
 					var t = zf();
-					xe(), G(e, t);
+					be(), G(e, t);
 				};
 				q(i, (e) => {
 					H(n) ? e(a) : e(o, -1);
-				}), M(r), G(e, r);
-			}), M(n), G(e, t);
+				}), N(r), G(e, r);
+			}), N(n), G(e, t);
 		};
 		q(mt, (e) => {
-			H(ne).length > 0 && e(ht);
-		}), M(Xe), di(Xe, (e, t) => Wi?.(e, t), () => ({
+			H(A).length > 0 && e(ht);
+		}), N(Xe), di(Xe, (e, t) => Wi?.(e, t), () => ({
 			state: n(),
 			key: "diagnostics"
 		}));
@@ -7287,7 +7287,7 @@ function Qf(e, t) {
 					return H(D).profileId;
 				},
 				label: "estimate profile ID"
-			}), M(n), M(t), V(() => K(i, H(D).profileId)), G(e, t);
+			}), N(n), N(t), V(() => K(i, H(D).profileId)), G(e, t);
 		};
 		q(vt, (e) => {
 			H(D) && e(yt);
@@ -7298,7 +7298,7 @@ function Qf(e, t) {
 				return t.item.id;
 			},
 			label: "context ID"
-		}), M(xt), M(bt);
+		}), N(xt), N(bt);
 		var wt = B(bt, 2), Tt = (e) => {
 			var n = Uf(), r = B(L(n), 2), i = L(r), a = z(i, !0);
 			Xa(B(i, 2), {
@@ -7306,7 +7306,7 @@ function Qf(e, t) {
 					return t.item.sourceRecordId;
 				},
 				label: "source record ID"
-			}), M(r), M(n), V(() => K(a, t.item.sourceRecordId)), G(e, n);
+			}), N(r), N(n), V(() => K(a, t.item.sourceRecordId)), G(e, n);
 		};
 		q(wt, (e) => {
 			t.item.sourceRecordId && e(Tt);
@@ -7318,39 +7318,39 @@ function Qf(e, t) {
 					return t.item.sourceToolCallId;
 				},
 				label: "source tool-call ID"
-			}), M(r), M(n), V(() => K(a, t.item.sourceToolCallId)), G(e, n);
+			}), N(r), N(n), V(() => K(a, t.item.sourceToolCallId)), G(e, n);
 		};
 		q(Et, (e) => {
 			t.item.sourceToolCallId && e(Dt);
-		}), M(_t);
+		}), N(_t);
 		var Ot = B(_t, 2), kt = (e) => {
 			var n = Gf(), r = B(R(n), 2);
 			J(r, 21, () => Object.entries(t.item.metadata), ei, (e, t) => {
 				var n = /* @__PURE__ */ P(() => m(H(t), 2));
 				let r = () => H(n)[0], i = () => H(n)[1];
 				var a = If(), o = L(a), s = z(o, !0), c = B(o);
-				M(a), V(() => {
+				N(a), V(() => {
 					K(s, r()), K(c, `: ${i() ?? ""}`);
 				}), G(e, a);
-			}), M(r), G(e, n);
+			}), N(r), G(e, n);
 		}, At = /* @__PURE__ */ P(() => Object.keys(t.item.metadata).length > 0);
 		q(Ot, (e) => {
 			H(At) && e(kt);
 		});
 		var jt = B(Ot, 2), Mt = (e) => {
 			var t = qf(), n = B(R(t), 2);
-			J(n, 20, () => H(ne), (e) => e, (e, t) => {
+			J(n, 20, () => H(A), (e) => e, (e, t) => {
 				var n = Kf(), r = z(L(n), !0);
-				M(n), V(() => K(r, t)), G(e, n);
-			}), M(n), G(e, t);
+				N(n), V(() => K(r, t)), G(e, n);
+			}), N(n), G(e, t);
 		};
 		q(jt, (e) => {
-			H(ne).length > 0 && e(Mt);
-		}), M(gt), di(gt, (e, t) => Wi?.(e, t), () => ({
+			H(A).length > 0 && e(Mt);
+		}), N(gt), di(gt, (e, t) => Wi?.(e, t), () => ({
 			state: n(),
 			key: "identifiers"
 		})), V((e, n, r, i, a, o) => {
-			K(ie, `${e ?? ""}${H(v) ? ` · version ${H(v).number} of ${H(v).count}` : ""}`), K(oe, n), K(Ae, `${r ?? ""} `), K(Ie, `${i ?? ""} `), K(it, ` · ${H(D)?.coverage ?? "unavailable" ?? ""}`), K(ot, `${a ?? ""}
+			K(re, `${e ?? ""}${H(v) ? ` · version ${H(v).number} of ${H(v).count}` : ""}`), K(ae, n), K(ke, `${r ?? ""} `), K(Ie, `${i ?? ""} `), K(it, ` · ${H(D)?.coverage ?? "unavailable" ?? ""}`), K(ot, `${a ?? ""}
             calls covered`), K(ct, o), K(Ct, t.item.id);
 		}, [
 			() => Mo(t.item.kind),
@@ -7360,12 +7360,12 @@ function Qf(e, t) {
 			() => qa(t.item.tokenTurnsCoverage.coveredCalls, t.item.tokenTurnsCoverage.totalCalls),
 			() => Wa(t.item.displayWeight, "serializedBytes")
 		]), G(e, i);
-	}, de = (e) => {
+	}, ue = (e) => {
 		G(e, Yf());
 	};
-	q(le, (e) => {
-		t.item ? e(ue) : e(de, -1);
-	}), M(ce), G(e, ce), Ve();
+	q(ce, (e) => {
+		t.item ? e(le) : e(ue, -1);
+	}), N(se), G(e, se), Ve();
 }
 kr(["click"]);
 //#endregion
@@ -7382,7 +7382,7 @@ function op(e, t) {
 	}, o = (e) => {
 		var r = ip(), i = R(r), a = (e) => {
 			var n = ep(), r = L(n), i = B(L(r), 2);
-			M(r), Hd(B(r, 2), {
+			N(r), Hd(B(r, 2), {
 				get sections() {
 					return t.callSections;
 				},
@@ -7399,7 +7399,7 @@ function op(e, t) {
 				get onPinCall() {
 					return t.onPinCall;
 				}
-			}), M(n), U("click", i, function(...e) {
+			}), N(n), U("click", i, function(...e) {
 				t.onClosePinnedCall?.apply(this, e);
 			}), G(e, n);
 		};
@@ -7408,7 +7408,7 @@ function op(e, t) {
 		});
 		var o = B(i, 2), s = (e) => {
 			var r = tp(), i = L(r), a = B(L(i), 2);
-			M(i);
+			N(i);
 			var o = B(i, 2);
 			{
 				let e = /* @__PURE__ */ P(() => t.pinnedCallIndex ?? t.hoveredCallIndex);
@@ -7448,7 +7448,7 @@ function op(e, t) {
 					}
 				});
 			}
-			M(r), U("click", a, function(...e) {
+			N(r), U("click", a, function(...e) {
 				t.onCloseItem?.apply(this, e);
 			}), G(e, r);
 		};
@@ -7485,7 +7485,7 @@ function fp(e, t) {
 	let n = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionBySourceId.get(t.item.id) ?? [] : []), r = /* @__PURE__ */ P(() => t.item ? t.indexed.compactionBySummaryId.get(t.item.id) ?? null : null), i = /* @__PURE__ */ P(() => H(n).length > 0 ? `Removed at the compaction before call ${H(n).map((e) => e.beforeModelCall).join(", ")}` : H(r) ? `Replaces ${Q(H(r).sourceItemIds.length)} items removed at the compaction before call ${H(r).beforeModelCall}` : null);
 	var a = Br(), o = R(a), s = (e) => {
 		var n = up(), r = L(n), a = L(r), o = z(a, !0), s = z(B(a), !0);
-		M(r);
+		N(r);
 		var c = B(r, 2), l = (e) => {
 			var n = sp(), r = z(n, !0);
 			V(() => K(r, t.item.preview.text)), G(e, n);
@@ -7500,22 +7500,22 @@ function fp(e, t) {
 			t.item.preview?.truncated && e(d);
 		});
 		var f = B(u, 2), p = L(f), m = z(B(L(p), 2));
-		M(p);
+		N(p);
 		var h = B(p, 2), g = z(B(L(h), 2));
-		M(h);
+		N(h);
 		var _ = B(h, 2), v = z(B(L(_), 2), !0);
-		M(_);
+		N(_);
 		var y = B(_, 2), b = z(B(L(y), 2), !0);
-		M(y);
+		N(y);
 		var x = B(y, 2), S = z(B(L(x), 2), !0);
-		M(x), M(f);
-		var C = B(f, 2), w = (e) => {
+		N(x), N(f);
+		var ee = B(f, 2), C = (e) => {
 			var t = lp(), n = z(t, !0);
 			V(() => K(n, H(i))), G(e, t);
 		};
-		q(C, (e) => {
-			H(i) && e(w);
-		}), M(n), V((e, r, i, a, c, l, u) => {
+		q(ee, (e) => {
+			H(i) && e(C);
+		}), N(n), V((e, r, i, a, c, l, u) => {
 			Y(n, "aria-label", e), K(o, r), K(s, i), K(m, `Calls ${t.item.firstModelCall ?? ""}–${t.item.lastModelCall ?? ""}`), K(g, `${a ?? ""} calls · ${t.item.presence.length ?? ""} range${t.item.presence.length === 1 ? "" : "s"}`), K(v, c), K(b, l), K(S, u);
 		}, [
 			() => `Context item ${Fo(t.item)}`,
@@ -7543,63 +7543,63 @@ function Vp(e, t) {
 		e.displayName,
 		e.subagentType,
 		Xl(e.startedAt)
-	].filter(Boolean).join(" · "), u = /* @__PURE__ */ P(() => t.indexed.analysis), d = /* @__PURE__ */ P(() => H(u).session), f = /* @__PURE__ */ P(() => H(u).tokenAnalysis), p = /* @__PURE__ */ P(() => H(u).economics), m = /* @__PURE__ */ P(() => [...new Set(H(u).modelCalls.map((e) => e.provider).filter(Boolean))].join(", ") || "Unknown"), h = /* @__PURE__ */ P(() => [...new Set(H(u).modelCalls.filter((e) => !e.usage.placeholder).map((e) => e.model).filter(Boolean))].join(", ") || "Unknown"), g = /* @__PURE__ */ P(() => H(f).itemEstimateCoverage), _ = /* @__PURE__ */ P(() => Ll(t.indexed)), v = /* @__PURE__ */ P(() => El(H(u))), y = /* @__PURE__ */ P(() => Ul(H(p).costBasis, H(d).source)), b = /* @__PURE__ */ P(() => H(d).reconciliationComparableCalls > 0), x = /* @__PURE__ */ P(() => H(b) ? null : yl(t.indexed)), S = /* @__PURE__ */ P(() => H(d).costSummary), C = /* @__PURE__ */ P(() => lu(H(S))), w = /* @__PURE__ */ P(() => uu(H(S))), ee = /* @__PURE__ */ P(() => H(S).priceData), T = /* @__PURE__ */ P(() => H(d).reportedCostTotal === null ? null : hu(H(d).reportedCostCoverage)), E = /* @__PURE__ */ P(() => H(d).reportedPromptTokens === null ? null : hu(H(d).reportedUsageCoverage)), D = /* @__PURE__ */ P(() => H(d).harnessSessionCost !== null && !(H(d).source === "vscode-copilot" && H(d).reportedCostTotal !== null && Math.abs(H(d).reportedCostTotal - H(d).harnessSessionCost.totalUsd) < 1e-9));
+	].filter(Boolean).join(" · "), u = /* @__PURE__ */ P(() => t.indexed.analysis), d = /* @__PURE__ */ P(() => H(u).session), f = /* @__PURE__ */ P(() => H(u).tokenAnalysis), p = /* @__PURE__ */ P(() => H(u).economics), m = /* @__PURE__ */ P(() => [...new Set(H(u).modelCalls.map((e) => e.provider).filter(Boolean))].join(", ") || "Unknown"), h = /* @__PURE__ */ P(() => [...new Set(H(u).modelCalls.filter((e) => !e.usage.placeholder).map((e) => e.model).filter(Boolean))].join(", ") || "Unknown"), g = /* @__PURE__ */ P(() => H(f).itemEstimateCoverage), _ = /* @__PURE__ */ P(() => Ll(t.indexed)), v = /* @__PURE__ */ P(() => El(H(u))), y = /* @__PURE__ */ P(() => Ul(H(p).costBasis, H(d).source)), b = /* @__PURE__ */ P(() => H(d).reconciliationComparableCalls > 0), x = /* @__PURE__ */ P(() => H(b) ? null : yl(t.indexed)), S = /* @__PURE__ */ P(() => H(d).costSummary), ee = /* @__PURE__ */ P(() => lu(H(S))), C = /* @__PURE__ */ P(() => uu(H(S))), w = /* @__PURE__ */ P(() => H(S).priceData), T = /* @__PURE__ */ P(() => H(d).reportedCostTotal === null ? null : hu(H(d).reportedCostCoverage)), E = /* @__PURE__ */ P(() => H(d).reportedPromptTokens === null ? null : hu(H(d).reportedUsageCoverage)), D = /* @__PURE__ */ P(() => H(d).harnessSessionCost !== null && !(H(d).source === "vscode-copilot" && H(d).reportedCostTotal !== null && Math.abs(H(d).reportedCostTotal - H(d).harnessSessionCost.totalUsd) < 1e-9));
 	var O = zp(), k = L(O), te = (e) => {
 		var t = pp(), n = L(t), r = z(n), i = B(n, 2), a = z(i), o = B(i, 2), s = z(o, !0), c = z(B(o, 2), !0);
-		M(t), V((e, n, i) => {
-			Y(t, "title", H(C) ? `${H(C).label}: ${H(C).note}` : void 0), K(r, `${e ?? ""} calls`), K(a, `${n ?? ""} items`), K(s, i), K(c, H(C) ? H(C).value : "Cost unknown");
+		N(t), V((e, n, i) => {
+			Y(t, "title", H(ee) ? `${H(ee).label}: ${H(ee).note}` : void 0), K(r, `${e ?? ""} calls`), K(a, `${n ?? ""} items`), K(s, i), K(c, H(ee) ? H(ee).value : "Cost unknown");
 		}, [
 			() => Q(H(u).modelCalls.length),
 			() => Q(H(u).contextItems.length),
 			() => H(d).peakCalculatedVisibleTokens === null ? "Peak unknown" : `${Z(H(d).peakCalculatedVisibleTokens)} peak`
 		]), G(e, t);
-	}, ne = (e) => {
+	}, A = (e) => {
 		var t = vp(), n = L(t), r = z(B(L(n)), !0);
-		M(n);
+		N(n);
 		var i = B(n, 2), a = z(B(L(i)), !0);
-		M(i);
+		N(i);
 		var o = B(i, 2), s = z(B(L(o), 2), !0);
-		M(o);
+		N(o);
 		var c = B(o, 2), l = L(c), f = (e) => {
 			var t = gp(), n = R(t), r = L(n, !0);
 			va(B(r), {
 				id: "session-cost-note",
 				label: "How the cost is worked out",
 				children: (e, t) => {
-					xe();
+					be();
 					var n = mp(), r = R(n), i = B(r), a = L(i), o = B(a), s = (e) => {
 						var t = zr();
-						V((e) => K(t, `, with corrections from model-prices ${e ?? ""}`), [() => H(ee).amendmentsImportedFrom.slice(0, 7)]), G(e, t);
+						V((e) => K(t, `, with corrections from model-prices ${e ?? ""}`), [() => H(w).amendmentsImportedFrom.slice(0, 7)]), G(e, t);
 					};
 					q(o, (e) => {
-						H(ee).amendmentsImportedFrom && e(s);
-					}), xe(), M(i), V((e, t) => {
-						K(r, `${H(C).title ?? ""} `), K(a, `Prices from models.dev ${e ?? ""} (${t ?? ""})`);
-					}, [() => H(ee).modelsDevCommit.slice(0, 7), () => H(ee).modelsDevCommittedAt.slice(0, 10)]), G(e, n);
+						H(w).amendmentsImportedFrom && e(s);
+					}), be(), N(i), V((e, t) => {
+						K(r, `${H(ee).title ?? ""} `), K(a, `Prices from models.dev ${e ?? ""} (${t ?? ""})`);
+					}, [() => H(w).modelsDevCommit.slice(0, 7), () => H(w).modelsDevCommittedAt.slice(0, 10)]), G(e, n);
 				},
 				$$slots: { default: !0 }
-			}), M(n);
+			}), N(n);
 			var i = B(n, 2), a = z(i, !0), o = B(i, 2), s = z(o), c = B(o, 2), l = (e) => {
 				var t = hp(), n = z(t, !0);
-				V(() => K(n, H(C).split)), G(e, t);
+				V(() => K(n, H(ee).split)), G(e, t);
 			};
 			q(c, (e) => {
-				H(C).split && e(l);
+				H(ee).split && e(l);
 			}), V(() => {
-				K(r, H(C).label), K(a, H(C).value), K(s, `${H(C).note ?? ""}${H(w) ? ` · ${H(w)}` : ""}`);
+				K(r, H(ee).label), K(a, H(ee).value), K(s, `${H(ee).note ?? ""}${H(C) ? ` · ${H(C)}` : ""}`);
 			}), G(e, t);
 		}, p = (e) => {
 			var t = _p(), n = B(R(t), 4), r = (e) => {
 				var t = hp(), n = z(t, !0);
-				V(() => K(n, H(w))), G(e, t);
+				V(() => K(n, H(C))), G(e, t);
 			};
 			q(n, (e) => {
-				H(w) && e(r);
+				H(C) && e(r);
 			}), G(e, t);
 		};
 		q(l, (e) => {
-			H(C) ? e(f) : e(p, -1);
-		}), M(c), M(t), V((e, t, n) => {
+			H(ee) ? e(f) : e(p, -1);
+		}), N(c), N(t), V((e, t, n) => {
 			K(r, e), K(a, t), K(s, n);
 		}, [
 			() => Q(H(u).modelCalls.length),
@@ -7608,23 +7608,23 @@ function Vp(e, t) {
 		]), G(e, t);
 	};
 	q(k, (e) => {
-		i() ? e(te) : e(ne, -1);
+		i() ? e(te) : e(A, -1);
 	});
-	var re = B(k, 2), ie = (e) => {
+	var ne = B(k, 2), re = (e) => {
 		var t = yp();
 		let n;
 		var r = L(t), i = z(r, !0), a = z(B(r, 2), !0);
-		M(t), V(() => {
+		N(t), V(() => {
 			n = _i(t, 1, "trace-notice svelte-m8zdew", null, n, { unreadable: H(v).unreadable }), K(i, H(v).title), K(a, H(v).detail);
 		}), G(e, t);
 	};
-	q(re, (e) => {
-		H(v) && e(ie);
+	q(ne, (e) => {
+		H(v) && e(re);
 	});
-	var ae = B(re, 2), oe = L(ae), se = L(oe, !0), ce = B(se);
+	var ie = B(ne, 2), ae = L(ie), oe = L(ae, !0), se = B(oe);
 	{
 		let e = /* @__PURE__ */ P(() => `Why are estimates ${H(_).level}?`);
-		va(ce, {
+		va(se, {
 			id: "estimate-quality-note",
 			get label() {
 				return H(e);
@@ -7635,7 +7635,7 @@ function Vp(e, t) {
 					J(t, 20, () => H(_).reasons, (e) => e, (e, t) => {
 						var n = bp(), r = z(n, !0);
 						V(() => K(r, t)), G(e, n);
-					}), M(t), G(e, t);
+					}), N(t), G(e, t);
 				};
 				q(a, (e) => {
 					H(_).reasons.length > 0 && e(o);
@@ -7644,79 +7644,79 @@ function Vp(e, t) {
 			$$slots: { default: !0 }
 		});
 	}
-	M(oe);
-	var le = B(oe, 2), ue = B(L(le), 2), de = L(ue), fe = B(L(de), 2), pe = L(fe), me = L(pe);
-	va(B(L(me)), {
+	N(ae);
+	var ce = B(ae, 2), le = B(L(ce), 2), ue = L(le), de = B(L(ue), 2), fe = L(de), pe = L(fe);
+	va(B(L(pe)), {
 		id: "input-tokens-note",
 		label: "About input tokens",
 		children: (e, t) => {
-			xe(), G(e, zr("Input tokens summed over every call. Each call sends the whole context again, so\n                  most of these are cache reads."));
+			be(), G(e, zr("Input tokens summed over every call. Each call sends the whole context again, so\n                  most of these are cache reads."));
 		},
 		$$slots: { default: !0 }
-	}), M(me);
-	var he = B(me, 2), ge = L(he), _e = B(ge), A = (e) => {
+	}), N(pe);
+	var me = B(pe, 2), he = L(me), ge = B(he), j = (e) => {
 		var t = hp(), n = z(t, !0);
 		V(() => K(n, H(E))), G(e, t);
 	};
-	q(_e, (e) => {
-		H(E) && e(A);
-	}), M(he), M(pe);
-	var ve = B(pe, 2), j = z(B(L(ve), 2), !0);
-	M(ve);
-	var ye = B(ve, 2), be = B(L(ye), 2), Se = L(be), Ce = (e) => {
+	q(ge, (e) => {
+		H(E) && e(j);
+	}), N(me), N(fe);
+	var _e = B(fe, 2), M = z(B(L(_e), 2), !0);
+	N(_e);
+	var ve = B(_e, 2), ye = B(L(ve), 2), xe = L(ye), Se = (e) => {
 		var t = Cp();
 		va(B(R(t)), {
 			id: "reasoning-tokens-note",
 			label: "Why reasoning tokens are not recorded",
 			children: (e, t) => {
-				xe();
+				be();
 				var n = zr();
 				V((e) => K(n, `${e ?? ""} does not record reasoning tokens separately for these
                     calls. Any reasoning is included in the output tokens.`), [() => Zl(H(d).source)]), G(e, n);
 			},
 			$$slots: { default: !0 }
 		}), G(e, t);
-	}, we = (e) => {
+	}, Ce = (e) => {
 		var t = zr();
 		V((e) => K(t, e), [() => Z(H(d).reportedReasoningTokens)]), G(e, t);
 	};
-	q(Se, (e) => {
-		H(d).reportedReasoningTokens === null ? e(Ce) : e(we, -1);
-	}), M(be), M(ye);
-	var Te = B(ye, 2), Ee = L(Te);
-	va(B(L(Ee)), {
+	q(xe, (e) => {
+		H(d).reportedReasoningTokens === null ? e(Se) : e(Ce, -1);
+	}), N(ye), N(ve);
+	var we = B(ve, 2), Te = L(we);
+	va(B(L(Te)), {
 		id: "cache-read-share-note",
 		label: "About cache-read share",
 		children: (e, t) => {
-			xe();
+			be();
 			var n = zr();
 			V((e) => K(n, `The share of input tokens read from the provider's cache, over the ${e ?? ""} calls with complete usage.`), [() => qa(H(p).cacheReadEligibleCalls, H(u).modelCalls.length)]), G(e, n);
 		},
 		$$slots: { default: !0 }
-	}), M(Ee);
-	var De = z(B(Ee, 2), !0);
-	M(Te);
-	var Oe = B(Te, 2), ke = z(B(L(Oe), 2), !0);
-	M(Oe);
-	var Ae = B(Oe, 2), je = (e) => {
+	}), N(Te);
+	var Ee = z(B(Te, 2), !0);
+	N(we);
+	var De = B(we, 2), Oe = z(B(L(De), 2), !0);
+	N(De);
+	var ke = B(De, 2), Ae = (e) => {
 		var t = wp(), n = z(B(L(t), 2), !0);
-		M(t), V((e) => K(n, e), [() => H(S).billed.calls > 0 ? nu(H(S).billed, !0) : "None"]), G(e, t);
-	}, Me = /* @__PURE__ */ P(() => !["claude-code", "codex"].includes(H(d).source));
-	q(Ae, (e) => {
-		H(Me) && e(je);
+		N(t), V((e) => K(n, e), [() => H(S).billed.calls > 0 ? nu(H(S).billed, !0) : "None"]), G(e, t);
+	}, je = /* @__PURE__ */ P(() => !["claude-code", "codex"].includes(H(d).source));
+	q(ke, (e) => {
+		H(je) && e(Ae);
 	});
-	var Ne = B(Ae, 2), N = L(Ne), Pe = L(N);
+	var Me = B(ke, 2), Ne = L(Me), Pe = L(Ne);
 	va(B(Pe), {
 		id: "recorded-cost-note",
 		label: "About the recorded cost",
 		children: (e, t) => {
-			xe();
+			be();
 			var n = zr();
 			V(() => K(n, H(y).note)), G(e, n);
 		},
 		$$slots: { default: !0 }
-	}), M(N);
-	var Fe = B(N, 2), Ie = L(Fe), Le = (e) => {
+	}), N(Ne);
+	var Fe = B(Ne, 2), Ie = L(Fe), Le = (e) => {
 		G(e, zr("Not recorded"));
 	}, Re = (e) => {
 		var t = zr();
@@ -7731,10 +7731,10 @@ function Vp(e, t) {
 	};
 	q(ze, (e) => {
 		H(T) && e(He);
-	}), M(Fe), M(Ne);
-	var Ue = B(Ne, 2), We = (e) => {
+	}), N(Fe), N(Me);
+	var Ue = B(Me, 2), We = (e) => {
 		var t = Tp(), n = L(t), r = z(n), i = B(n, 2), a = L(i), o = z(B(a), !0);
-		M(i), M(t), V((e, t, n) => {
+		N(i), N(t), V((e, t, n) => {
 			K(r, `${e ?? ""}'s own total (USD)`), K(a, `${t ?? ""} `), K(o, n);
 		}, [
 			() => Zl(H(d).source),
@@ -7744,27 +7744,27 @@ function Vp(e, t) {
 	};
 	q(Ue, (e) => {
 		H(D) && H(d).harnessSessionCost && e(We);
-	}), M(fe), M(de);
-	var Ge = B(de, 2), Ke = B(L(Ge), 2), qe = L(Ke), Je = z(B(L(qe), 2));
-	M(qe);
+	}), N(de), N(ue);
+	var Ge = B(ue, 2), Ke = B(L(Ge), 2), qe = L(Ke), Je = z(B(L(qe), 2));
+	N(qe);
 	var Ye = B(qe, 2), Xe = z(B(L(Ye), 2), !0);
-	M(Ye);
+	N(Ye);
 	var Ze = B(Ye, 2), Qe = (e) => {
 		var t = Ep(), n = z(B(L(t), 2), !0);
-		M(t), V(() => K(n, H(d).title)), G(e, t);
+		N(t), V(() => K(n, H(d).title)), G(e, t);
 	};
 	q(Ze, (e) => {
 		H(d).title && e(Qe);
 	});
 	var $e = B(Ze, 2), et = z(B(L($e), 2), !0);
-	M($e), M(Ke), M(Ge), M(ue);
-	var tt = B(ue, 2), nt = B(L(tt), 2), rt = L(nt), it = z(B(L(rt), 2), !0);
-	M(rt);
+	N($e), N(Ke), N(Ge), N(le);
+	var tt = B(le, 2), nt = B(L(tt), 2), rt = L(nt), it = z(B(L(rt), 2), !0);
+	N(rt);
 	var at = B(rt, 2), ot = z(B(L(at), 2));
-	M(at);
+	N(at);
 	var st = B(at, 2), ct = (e) => {
 		var t = Dp(), n = L(t), r = z(n), i = z(B(n, 2));
-		M(t), V((e, t, n, a) => {
+		N(t), V((e, t, n, a) => {
 			K(r, `${H(y).label ?? ""} component coverage (complete / partial / missing / unsupported)`), K(i, `${e ?? ""} complete ·
                 ${t ?? ""} partial ·
                 ${n ?? ""} missing ·
@@ -7792,24 +7792,24 @@ function Vp(e, t) {
 	});
 	var pt = B(ut, 2), mt = (e) => {
 		var t = kp(), n = B(L(t), 2), r = z(L(n), !0);
-		M(n), M(t), V(() => K(r, H(f).fallbackReason)), G(e, t);
+		N(n), N(t), V(() => K(r, H(f).fallbackReason)), G(e, t);
 	};
 	q(pt, (e) => {
 		H(f).fallbackReason && e(mt);
 	});
 	var ht = B(pt, 2), gt = z(B(L(ht), 2));
-	M(ht);
+	N(ht);
 	var _t = B(ht, 2), vt = z(B(L(_t), 2), !0);
-	M(_t);
+	N(_t);
 	var yt = B(_t, 2), bt = z(B(L(yt), 2), !0);
-	M(yt);
+	N(yt);
 	var xt = B(yt, 2), St = (e) => {
 		var t = Ap(), n = R(t), r = z(B(L(n), 2));
-		M(n);
+		N(n);
 		var i = B(n, 2), a = z(B(L(i), 2));
-		M(i);
+		N(i);
 		var o = B(i, 2), s = z(B(L(o), 2), !0);
-		M(o), V((e, t, n, i, o) => {
+		N(o), V((e, t, n, i, o) => {
 			K(r, `${e ?? ""} /
                 ${t ?? ""}`), K(a, `${n ?? ""} /
                 ${i ?? ""}`), K(s, o);
@@ -7822,13 +7822,13 @@ function Vp(e, t) {
 		]), G(e, t);
 	}, Ct = (e) => {
 		var t = jp(), n = z(B(L(t), 2), !0);
-		M(t), V((e) => K(n, e), [() => Q(H(x).estimateAboveReportedCalls)]), G(e, t);
+		N(t), V((e) => K(n, e), [() => Q(H(x).estimateAboveReportedCalls)]), G(e, t);
 	};
 	q(xt, (e) => {
 		H(b) ? e(St) : H(x) && e(Ct, 1);
 	});
 	var wt = B(xt, 2), Tt = z(B(L(wt), 2), !0);
-	M(wt), M(nt);
+	N(wt), N(nt);
 	var Et = B(nt, 2), Dt = (e) => {
 		var t = Np(), n = B(R(t), 2);
 		J(n, 21, () => H(f).profiles, (e) => e.id, (e, t) => {
@@ -7838,17 +7838,17 @@ function Vp(e, t) {
 			};
 			q(i, (e) => {
 				H(t).api && e(a);
-			}), M(n), V(() => K(r, `${H(t).provider ?? ""} / ${H(t).model ?? ""} · ${H(t).method ?? ""} · ${H(t).tokenizerFamily ?? ""}
+			}), N(n), V(() => K(r, `${H(t).provider ?? ""} / ${H(t).model ?? ""} · ${H(t).method ?? ""} · ${H(t).tokenizerFamily ?? ""}
                 (v${H(t).version ?? ""})`)), G(e, n);
-		}), M(n), G(e, t);
+		}), N(n), G(e, t);
 	};
 	q(Et, (e) => {
 		H(f).profiles.length > 0 && e(Dt);
-	}), M(tt), M(le), M(ae);
-	var Ot = B(ae, 2), kt = (e) => {
+	}), N(tt), N(ce), N(ie);
+	var Ot = B(ie, 2), kt = (e) => {
 		var t = Rp(), r = L(t), i = (e) => {
 			var t = Pp(), r = B(L(t)), i = z(r, !0);
-			M(t), V((e) => {
+			N(t), V((e) => {
 				Y(r, "href", e), K(i, H(o).displayName);
 			}, [() => nf(H(o).id, n())]), G(e, t);
 		};
@@ -7857,7 +7857,7 @@ function Vp(e, t) {
 		});
 		var a = B(r, 2), u = (e) => {
 			var t = Fp(), n = B(L(t)), r = z(n, !0);
-			M(t), V((e) => {
+			N(t), V((e) => {
 				Y(n, "href", e), K(r, H(c).displayName);
 			}, [() => nf(H(c).id)]), G(e, t);
 		};
@@ -7868,20 +7868,20 @@ function Vp(e, t) {
 			var t = Lp(), n = L(t), r = z(n), i = B(n, 2);
 			J(i, 21, () => H(s), (e) => e.id, (e, t) => {
 				var n = Ip(), r = L(n), i = z(r, !0);
-				M(n), V((e, t) => {
+				N(n), V((e, t) => {
 					Y(r, "href", e), K(i, t);
 				}, [() => nf(H(t).id), () => l(H(t))]), G(e, n);
-			}), M(i), M(t), V((e) => K(r, `${e ?? ""}
+			}), N(i), N(t), V((e) => K(r, `${e ?? ""}
             ${H(s).length === 1 ? "child session" : "child sessions"}`), [() => Q(H(s).length)]), G(e, t);
 		};
 		q(d, (e) => {
 			H(s).length > 0 && e(f);
-		}), M(t), G(e, t);
+		}), N(t), G(e, t);
 	};
 	q(Ot, (e) => {
 		(H(o) || H(c) || H(s).length > 0) && e(kt);
-	}), M(O), V((e, t, n, r, i, a, o, s, c, l, u, f, p, g, v, y) => {
-		_i(oe, 1, `estimate-level ${H(_).level}`, "svelte-m8zdew"), K(se, H(_).label), K(ge, `${e ?? ""} `), K(j, t), K(De, n), K(ke, r), K(Pe, `Recorded by ${i ?? ""} (USD)`), K(Je, `${H(m) ?? ""} · recorded by ${a ?? ""}`), K(Xe, H(h)), K(et, H(d).workingDirectory ?? "Unknown"), K(it, H(d).reportedUsageCompleteness), K(ot, `${o ?? ""} complete ·
+	}), N(O), V((e, t, n, r, i, a, o, s, c, l, u, f, p, g, v, y) => {
+		_i(ae, 1, `estimate-level ${H(_).level}`, "svelte-m8zdew"), K(oe, H(_).label), K(he, `${e ?? ""} `), K(M, t), K(Ee, n), K(Oe, r), K(Pe, `Recorded by ${i ?? ""} (USD)`), K(Je, `${H(m) ?? ""} · recorded by ${a ?? ""}`), K(Xe, H(h)), K(et, H(d).workingDirectory ?? "Unknown"), K(it, H(d).reportedUsageCompleteness), K(ot, `${o ?? ""} complete ·
               ${s ?? ""} partial ·
               ${c ?? ""} missing ·
               ${l ?? ""} unsupported`), K(gt, `${u ?? ""} complete ·
@@ -7949,14 +7949,14 @@ function Gp(e, t) {
 	var g = z(m, !0);
 	Ri(m, (e) => I(a, e), () => H(a));
 	var _ = B(m, 2), v = L(_), y = B(L(v), 2);
-	Ri(y, (e) => I(s, e), () => H(s)), M(v);
+	Ri(y, (e) => I(s, e), () => H(s)), N(v);
 	var b = B(v, 6), x = (e) => {
 		var t = Hp();
-		xe(2), G(e, t);
+		be(2), G(e, t);
 	};
 	q(b, (e) => {
 		t.source === "pi" && e(x);
-	}), xe(4), M(_), Ri(_, (e) => I(o, e), () => H(o)), M(p), Ri(p, (e) => i = e, () => i), V(() => {
+	}), be(4), N(_), Ri(_, (e) => I(o, e), () => H(o)), N(p), Ri(p, (e) => i = e, () => i), V(() => {
 		h = _i(m, 1, "help-trigger svelte-1f7lrk7", null, h, { compact: r() }), Y(m, "aria-expanded", H(l)), K(g, r() ? "?" : "Chart help"), Y(_, "aria-hidden", !H(l)), Y(_, "hidden", !H(l)), yi(_, H(c));
 	}), U("click", m, f), U("click", y, () => d()), G(e, p), Ve();
 }
@@ -8274,7 +8274,7 @@ function jm(e, t) {
 		};
 		q(c, (e) => {
 			t.kind === "compaction" ? e(l) : t.kind === "targetChange" ? e(u, 1) : e(d, -1);
-		}), M(a), V(() => {
+		}), N(a), V(() => {
 			_i(a, 0, `event-glyph-svg event-glyph-svg-${t.kind} ${n() ?? ""}`, "svelte-1kmdkag"), Y(a, "transform", `translate(${o() ?? 0} ${s() ?? 0})`), Y(a, "aria-label", i());
 		}), G(e, a);
 	}, d = (e) => {
@@ -8296,7 +8296,7 @@ function jm(e, t) {
 		};
 		q(o, (e) => {
 			t.kind === "compaction" ? e(s) : t.kind === "targetChange" ? e(c, 1) : e(l, -1);
-		}), M(a), V(() => {
+		}), N(a), V(() => {
 			_i(a, 0, `event-glyph-svg event-glyph-svg-${t.kind} ${n() ?? ""}`, "svelte-1kmdkag"), Y(a, "width", r()), Y(a, "height", r()), Y(a, "viewBox", `0 0 ${r()} ${r()}`), Y(a, "aria-label", i()), Y(a, "aria-hidden", i() ? void 0 : "true"), Y(a, "role", i() ? "img" : void 0);
 		}), G(e, a);
 	};
@@ -8397,34 +8397,34 @@ function nh(e, t) {
 		right: 24,
 		bottom: 62,
 		left: 42
-	}, p = /* @__PURE__ */ P(() => t.mode === "cache" ? 180 : 108), m = /* @__PURE__ */ P(() => H(p) - f.top), h = /* @__PURE__ */ F(null), g = "", _ = "", v = /* @__PURE__ */ P(() => Gl(t.indexed.analysis.session.source)), y = /* @__PURE__ */ P(() => t.mode === "cache" ? ku(t.indexed.analysis) : null), b = /* @__PURE__ */ P(() => t.mode === "cost" ? Mu(t.indexed.analysis) : null), x = /* @__PURE__ */ P(() => new Map(H(y)?.points.map((e) => [e.callIndex, e]) ?? [])), S = /* @__PURE__ */ P(() => H(y)?.maximum ?? H(b)?.maximum ?? 0), C = /* @__PURE__ */ P(() => t.mode === "cost" ? H(S) > 0 ? H(S) : 1 : r() === "share" ? 100 : Math.max(1, H(S))), w = /* @__PURE__ */ P(() => new Map(t.columns.map((e) => [e.callIndex, e]))), ee = /* @__PURE__ */ P(() => de(t.indexed.analysis.compactions, t.columns, t.width)), T = /* @__PURE__ */ P(() => ue(t.indexed.analysis.compactions, t.columns, H(ee))), E = /* @__PURE__ */ P(() => fe(t.indexed.analysis.modelCalls, t.columns)), D = /* @__PURE__ */ P(() => new Map(H(E).map((e) => [e.callIndex, e]))), O = /* @__PURE__ */ P(() => t.columns.length < 2 ? 14 : t.columns.reduce((e, n, r) => r === 0 ? e : Math.min(e, n.x - t.columns[r - 1].x), Infinity)), k = /* @__PURE__ */ P(() => Math.max(1.5, Math.min(12, H(O) * .68))), te = /* @__PURE__ */ P(() => _m(t.mode === "cache" && r() === "share" ? 100 : H(S), 3, .25)), ne = /* @__PURE__ */ P(() => H(te).map((e) => ({
+	}, p = /* @__PURE__ */ P(() => t.mode === "cache" ? 180 : 108), m = /* @__PURE__ */ P(() => H(p) - f.top), h = /* @__PURE__ */ F(null), g = "", _ = "", v = /* @__PURE__ */ P(() => Gl(t.indexed.analysis.session.source)), y = /* @__PURE__ */ P(() => t.mode === "cache" ? ku(t.indexed.analysis) : null), b = /* @__PURE__ */ P(() => t.mode === "cost" ? Mu(t.indexed.analysis) : null), x = /* @__PURE__ */ P(() => new Map(H(y)?.points.map((e) => [e.callIndex, e]) ?? [])), S = /* @__PURE__ */ P(() => H(y)?.maximum ?? H(b)?.maximum ?? 0), ee = /* @__PURE__ */ P(() => t.mode === "cost" ? H(S) > 0 ? H(S) : 1 : r() === "share" ? 100 : Math.max(1, H(S))), C = /* @__PURE__ */ P(() => new Map(t.columns.map((e) => [e.callIndex, e]))), w = /* @__PURE__ */ P(() => ue(t.indexed.analysis.compactions, t.columns, t.width)), T = /* @__PURE__ */ P(() => le(t.indexed.analysis.compactions, t.columns, H(w))), E = /* @__PURE__ */ P(() => de(t.indexed.analysis.modelCalls, t.columns)), D = /* @__PURE__ */ P(() => new Map(H(E).map((e) => [e.callIndex, e]))), O = /* @__PURE__ */ P(() => t.columns.length < 2 ? 14 : t.columns.reduce((e, n, r) => r === 0 ? e : Math.min(e, n.x - t.columns[r - 1].x), Infinity)), k = /* @__PURE__ */ P(() => Math.max(1.5, Math.min(12, H(O) * .68))), te = /* @__PURE__ */ P(() => _m(t.mode === "cache" && r() === "share" ? 100 : H(S), 3, .25)), A = /* @__PURE__ */ P(() => H(te).map((e) => ({
 		value: e,
-		y: f.top + H(m) * (1 - e / H(C))
-	}))), re = /* @__PURE__ */ P(() => H(y) ? j(H(y), H(w), {
+		y: f.top + H(m) * (1 - e / H(ee))
+	}))), ne = /* @__PURE__ */ P(() => H(y) ? M(H(y), H(C), {
 		cacheView: r(),
-		domainMaximum: H(C),
+		domainMaximum: H(ee),
 		baseline: H(p),
 		innerHeight: H(m),
 		targetChangesByCall: H(D),
 		usageMappingLabel: H(v)
-	}) : []), ie = /* @__PURE__ */ P(() => H(b) ? ye(H(b), H(w), {
-		domainMaximum: H(C),
+	}) : []), re = /* @__PURE__ */ P(() => H(b) ? ve(H(b), H(C), {
+		domainMaximum: H(ee),
 		baseline: H(p),
 		innerHeight: H(m),
 		targetChangesByCall: H(D)
-	}) : []), ae = /* @__PURE__ */ P(() => pe(H(ee), H(E), H(y), H(w))), oe = /* @__PURE__ */ P(() => Rm(H(ae), {
+	}) : []), ie = /* @__PURE__ */ P(() => fe(H(w), H(E), H(y), H(C))), ae = /* @__PURE__ */ P(() => Rm(H(ie), {
 		chartWidth: t.width,
 		left: f.left,
 		right: f.right,
 		markerSize: 22,
 		collisionGap: 6
-	})), se = /* @__PURE__ */ P(() => H(oe).find((e) => e.id === H(h)) ?? null);
+	})), oe = /* @__PURE__ */ P(() => H(ae).find((e) => e.id === H(h)) ?? null);
 	Tn(() => {
-		if (H(se)) {
+		if (H(oe)) {
 			let e = JSON.stringify({
-				id: H(se).id,
-				x: H(se).x,
-				events: H(se).events.map((e) => ({
+				id: H(oe).id,
+				x: H(oe).x,
+				events: H(oe).events.map((e) => ({
 					id: e.id,
 					kind: e.kind,
 					callIndex: e.callIndex,
@@ -8437,10 +8437,10 @@ function nh(e, t) {
 			if (e === _) return;
 			_ = e;
 			let t = {
-				id: H(se).id,
-				events: H(se).events,
-				callIndices: [...new Set(H(se).events.map((e) => e.callIndex))].sort((e, t) => e - t),
-				anchorX: H(se).x,
+				id: H(oe).id,
+				events: H(oe).events,
+				callIndices: [...new Set(H(oe).events.map((e) => e.callIndex))].sort((e, t) => e - t),
+				anchorX: H(oe).x,
 				anchorY: H(d),
 				laneTop: H(l),
 				laneHeight: H(u)
@@ -8448,14 +8448,14 @@ function nh(e, t) {
 			yr(() => a()(t));
 		} else _ !== "" && (_ = "", yr(() => a()(null)));
 	});
-	let ce = /* @__PURE__ */ P(() => t.hoveredCallIndex ?? t.pinnedCallIndex), le = /* @__PURE__ */ P(() => H(ce) === null ? "" : ve(H(ce)));
+	let se = /* @__PURE__ */ P(() => t.hoveredCallIndex ?? t.pinnedCallIndex), ce = /* @__PURE__ */ P(() => H(se) === null ? "" : _e(H(se)));
 	Tn(() => {
-		if (H(le) === g) return;
-		g = H(le);
-		let e = H(le);
+		if (H(ce) === g) return;
+		g = H(ce);
+		let e = H(ce);
 		yr(() => i()(e));
 	});
-	function ue(e, t, n) {
+	function le(e, t, n) {
 		let r = new Map(t.map((e) => [e.callIndex, e.x])), i = new Map(n.map((e) => [e.callIndex, e.x]));
 		return e.flatMap((e) => {
 			let t = e.details.startedBeforeModelCall, n = i.get(e.beforeModelCall);
@@ -8471,7 +8471,7 @@ function nh(e, t) {
 			}];
 		});
 	}
-	function de(e, t, n) {
+	function ue(e, t, n) {
 		let r = new Map(t.map((e) => [e.callIndex, e.x])), i = t.slice(1).map((e, n) => e.x - t[n].x), a = i.length > 0 ? i.reduce((e, t) => Math.min(e, t), Infinity) : Math.max(0, n - f.left - f.right), o = Math.max(0, n - f.left - f.right);
 		return e.map((e) => {
 			let t = r.get(e.beforeModelCall), n = r.get(e.beforeModelCall - 1), i = t !== void 0 && n !== void 0 ? (n + t) / 2 : t === void 0 ? f.left + o : t - Math.min(a / 2, 16);
@@ -8482,7 +8482,7 @@ function nh(e, t) {
 			};
 		});
 	}
-	function fe(e, t) {
+	function de(e, t) {
 		let n = new Map(t.map((e) => [e.callIndex, e.x]));
 		return e.flatMap((t, r) => {
 			let i = e[r - 1], a = n.get(t.index);
@@ -8495,7 +8495,7 @@ function nh(e, t) {
 			}];
 		});
 	}
-	function pe(e, t, n, r) {
+	function fe(e, t, n, r) {
 		let i = [];
 		for (let t of e) i.push({
 			id: `compaction-${t.callIndex}`,
@@ -8525,53 +8525,53 @@ function nh(e, t) {
 		}
 		return i.sort((e, t) => e.x - t.x || e.id.localeCompare(t.id));
 	}
-	function me(e) {
+	function pe(e) {
 		return `${e.label} · call ${e.callIndex}`;
 	}
 	Cn(() => {
-		if (H(h) !== null && !H(oe).some((e) => e.id === H(h))) {
+		if (H(h) !== null && !H(ae).some((e) => e.id === H(h))) {
 			let e = H(h);
-			I(h, null), o.focusAfterUpdate(() => _e(e), () => H(h) === null);
+			I(h, null), o.focusAfterUpdate(() => ge(e), () => H(h) === null);
 		}
 	});
-	function he(e) {
+	function me(e) {
 		let t = e.id;
 		I(h, t, !0), o.focusAfterUpdate(() => Hi(n).getElementById(`${t}-close`), () => H(h) === t);
 	}
-	function ge(e = !0) {
+	function he(e = !0) {
 		let t = H(h);
-		I(h, null), o.cancel(), e && t && o.focusAfterUpdate(() => _e(t), () => H(h) === null);
+		I(h, null), o.cancel(), e && t && o.focusAfterUpdate(() => ge(t), () => H(h) === null);
 	}
-	function _e(e) {
+	function ge(e) {
 		return Hi(n).getElementById(e) ?? Hi(n).querySelector(".economics-track-header button");
 	}
-	function A(e, t) {
-		(e.key === "Enter" || e.key === " ") && (e.preventDefault(), he(t));
+	function j(e, t) {
+		(e.key === "Enter" || e.key === " ") && (e.preventDefault(), me(t));
 	}
-	function ve(e) {
+	function _e(e) {
 		let n = t.indexed.callByIndex.get(e);
 		if (!n) return "";
 		if (t.mode === "cache") {
 			let i = H(x).get(e);
 			if (!i || i.status !== "complete" && i.status !== "zero") return `Call ${e} · ${i?.note ?? "Cache data unavailable"}`;
-			let a = i.segments.map((e) => `${e.label} ${Q(e.value)}`).join(" · "), o = i.shareStatus === "complete" ? `${Te(i)} · ${H(v)} denominator of ${Q(i.shareDenominator ?? 0)} prompt tokens` : Te(i), s = n.economics.promptTokens, c = n.economics.cacheReadRatio, l = s === null || s <= 0 ? "cache-read share unavailable; prompt-token denominator is zero or unavailable" : c === null ? `cache-read share unavailable of ${Q(s)} prompt tokens` : `cache-read share ${Ua(c)} of ${Q(s)} prompt tokens`, u = n.costAssessment.amount === null ? "" : ` · ${$l(n.costAssessment, t.indexed.analysis.session.source)} cost ${tu(n.costAssessment)} USD`;
+			let a = i.segments.map((e) => `${e.label} ${Q(e.value)}`).join(" · "), o = i.shareStatus === "complete" ? `${we(i)} · ${H(v)} denominator of ${Q(i.shareDenominator ?? 0)} prompt tokens` : we(i), s = n.economics.promptTokens, c = n.economics.cacheReadRatio, l = s === null || s <= 0 ? "cache-read share unavailable; prompt-token denominator is zero or unavailable" : c === null ? `cache-read share unavailable of ${Q(s)} prompt tokens` : `cache-read share ${Ua(c)} of ${Q(s)} prompt tokens`, u = n.costAssessment.amount === null ? "" : ` · ${$l(n.costAssessment, t.indexed.analysis.session.source)} cost ${tu(n.costAssessment)} USD`;
 			return `Call ${e}${t.pinnedCallIndex === e && t.hoveredCallIndex !== e ? " · pinned" : ""} · ${a} · ${t.mode === "cache" && r() === "share" ? `${o} · ` : ""}${l}${u}`;
 		}
 		return n.costAssessment.amount === null ? `Call ${e} · cost unavailable` : `Call ${e} · ${$l(n.costAssessment, t.indexed.analysis.session.source)} cost ${tu(n.costAssessment)} USD`;
 	}
-	function j(e, t, n) {
+	function M(e, t, n) {
 		return e.points.flatMap((e) => {
 			let r = t.get(e.callIndex)?.x;
-			return r === void 0 ? [] : [be(e, r, n)];
+			return r === void 0 ? [] : [ye(e, r, n)];
 		});
 	}
-	function ye(e, t, n) {
+	function ve(e, t, n) {
 		return e.points.flatMap((e) => {
 			let r = t.get(e.callIndex)?.x;
-			return r === void 0 ? [] : [Se(e, r, n)];
+			return r === void 0 ? [] : [xe(e, r, n)];
 		});
 	}
-	function be(e, n, { cacheView: r, domainMaximum: i, baseline: a, innerHeight: o, targetChangesByCall: s, usageMappingLabel: c }) {
+	function ye(e, n, { cacheView: r, domainMaximum: i, baseline: a, innerHeight: o, targetChangesByCall: s, usageMappingLabel: c }) {
 		let l = a, u = (r === "share" ? e.shareSegments : e.segments).map((e) => {
 			let t = r === "share" && "percentage" in e ? e.percentage : e.value, n = t / i * o, a = l - n;
 			return l = a, {
@@ -8580,7 +8580,7 @@ function nh(e, t) {
 				y: a,
 				height: n
 			};
-		}), d = t.indexed.callByIndex.get(e.callIndex), f = e.segments.map((e) => `${e.label} ${Q(e.value)}`).join(" · "), p = Te(e), m = d ? Ha(d.economics.cacheReadRatio) : "Unknown", h = d?.economics.promptTokens === null || d?.economics.promptTokens === void 0 ? `${c} prompt-token denominator unavailable` : `${c} denominator of ${Q(d.economics.promptTokens)} prompt tokens`, g = e.discontinuity, _ = s.get(e.callIndex)?.label, v = _ ? ` · ${_}.` : "", y = g ? ` · ${Ou(g, e.callIndex)} (${(g.delta * 100).toFixed(1)} percentage points, ${g.magnitude})` : "", b = r === "share" ? ` · ${p} · ${h}` : "", x = e.status === "complete" || e.status === "zero";
+		}), d = t.indexed.callByIndex.get(e.callIndex), f = e.segments.map((e) => `${e.label} ${Q(e.value)}`).join(" · "), p = we(e), m = d ? Ha(d.economics.cacheReadRatio) : "Unknown", h = d?.economics.promptTokens === null || d?.economics.promptTokens === void 0 ? `${c} prompt-token denominator unavailable` : `${c} denominator of ${Q(d.economics.promptTokens)} prompt tokens`, g = e.discontinuity, _ = s.get(e.callIndex)?.label, v = _ ? ` · ${_}.` : "", y = g ? ` · ${Ou(g, e.callIndex)} (${(g.delta * 100).toFixed(1)} percentage points, ${g.magnitude})` : "", b = r === "share" ? ` · ${p} · ${h}` : "", x = e.status === "complete" || e.status === "zero";
 		return {
 			point: e,
 			x: n,
@@ -8589,11 +8589,11 @@ function nh(e, t) {
 			showsPin: x
 		};
 	}
-	function xe(e, t, n) {
+	function be(e, t, n) {
 		let r = e.point.callIndex;
 		return `Call ${r}${e.showsPin && t === r && n !== r ? " · pinned" : ""}${e.labelDetail}`;
 	}
-	function Se(e, n, { domainMaximum: r, baseline: i, innerHeight: a, targetChangesByCall: o }) {
+	function xe(e, n, { domainMaximum: r, baseline: i, innerHeight: a, targetChangesByCall: o }) {
 		let s = (e) => e === null ? i : i - e / r * a, c = s(e.total), l = e.high === null ? null : s(e.high), u = o.get(e.callIndex)?.label, d = u ? ` · ${u}.` : "", f = t.indexed.callByIndex.get(e.callIndex)?.costAssessment, p = e.kind === "recorded" ? ` · cost components ${e.componentStatus}` : "";
 		return {
 			point: e,
@@ -8603,19 +8603,19 @@ function nh(e, t) {
 			ariaLabel: (e.status === "known" || e.status === "zero") && f ? `Call ${e.callIndex} · ${$l(f, t.indexed.analysis.session.source)} cost ${tu(f)} USD${p}${d}` : e.status === "partial" ? `Call ${e.callIndex} · cost unavailable · some recorded cost components are present` : `Call ${e.callIndex} · cost unavailable`
 		};
 	}
-	function Ce(e) {
+	function Se(e) {
 		return r() === "share" ? `${e.toFixed(0)}%` : xm(e);
 	}
-	function we(e) {
+	function Ce(e) {
 		return za(e);
 	}
-	function Te(e) {
+	function we(e) {
 		return e.shareStatus === "complete" ? e.shareSegments.map((e) => `${e.label} ${Ua(e.percentage / 100)}`).join(" · ") : e.shareStatus === "zeroPrompt" ? "share undefined: zero prompt tokens" : "share unavailable: incomplete or unsupported usage";
 	}
-	function Ee(e) {
+	function Te(e) {
 		Hi(n).getElementById(`economics-call-${e}`)?.focus();
 	}
-	function De(e, n) {
+	function Ee(e, n) {
 		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault(), t.onPinCall(n);
 			return;
@@ -8628,23 +8628,23 @@ function nh(e, t) {
 		else return;
 		e.preventDefault();
 		let o = r[a];
-		o && (I(Oe, o.index), t.onHoverCall(o.index), Ee(o.index));
+		o && (I(De, o.index), t.onHoverCall(o.index), Te(o.index));
 	}
-	let Oe = /* @__PURE__ */ P(() => t.pinnedCallIndex ?? t.indexed.analysis.modelCalls[0]?.index ?? null);
-	var ke = { closeEventBreakdown: ge }, Ae = eh(), je = L(Ae), Me = B(L(je)), Ne = B(Me), N = B(Ne);
-	J(N, 17, () => H(ne), ei, (e, n) => {
+	let De = /* @__PURE__ */ P(() => t.pinnedCallIndex ?? t.indexed.analysis.modelCalls[0]?.index ?? null);
+	var Oe = { closeEventBreakdown: he }, ke = eh(), Ae = L(ke), je = B(L(Ae)), Me = B(je), Ne = B(Me);
+	J(Ne, 17, () => H(A), ei, (e, n) => {
 		var r = zm(), i = R(r), a = B(i), o = z(a, !0);
 		V((e) => {
 			Y(i, "x1", f.left), Y(i, "x2", t.width - f.right), Y(i, "y1", H(n).y), Y(i, "y2", H(n).y), Y(a, "x", f.left - 5), Y(a, "y", H(n).y + 3), K(o, e);
-		}, [() => t.mode === "cache" ? Ce(H(n).value) : we(H(n).value)]), G(e, r);
+		}, [() => t.mode === "cache" ? Se(H(n).value) : Ce(H(n).value)]), G(e, r);
 	});
-	var Pe = B(N), Fe = z(Pe), Ie = B(Pe), Le = L(Ie), Re = B(Le);
+	var Pe = B(Ne), Fe = z(Pe), Ie = B(Pe), Le = L(Ie), Re = B(Le);
 	J(Re, 17, () => H(T), (e) => e.callIndex, (e, t) => {
 		var n = Bm(), r = z(L(n), !0);
-		M(n), V(() => {
+		N(n), V(() => {
 			Y(n, "x1", H(t).startX), Y(n, "x2", H(t).endX), Y(n, "y1", H(d)), Y(n, "y2", H(d)), K(r, H(t).label);
 		}), G(e, n);
-	}), J(B(Re), 17, () => H(oe), (e) => e.id, (e, t) => {
+	}), J(B(Re), 17, () => H(ae), (e) => e.id, (e, t) => {
 		let n = /* @__PURE__ */ P(() => H(t).events[0]);
 		var r = Hm();
 		let i;
@@ -8681,19 +8681,19 @@ function nh(e, t) {
 		};
 		q(c, (e) => {
 			H(t).events.length === 1 ? e(f) : e(p, -1);
-		}), M(r), V((e, a) => {
+		}), N(r), V((e, a) => {
 			Y(r, "id", H(t).id), i = _i(r, 0, `track-event-trigger ${H(t).events.length === 1 ? "track-event-singleton" : "track-event-cluster"} track-${H(n)?.kind ?? "cluster"} ${H(n)?.kind === "compaction" ? "track-compaction-marker" : H(n)?.kind === "targetChange" ? "track-target-change" : H(n)?.kind === "ratioChange" ? "track-ratioChange ratio-change-marker" : ""}`, "svelte-18b1ucv", i, {
 				rise: H(n)?.direction === "rise",
 				large: H(n)?.magnitude === "large"
 			}), Y(r, "aria-label", e), K(o, `${H(t).compositionLabel ?? ""} at calls ${H(t).callRanges ?? ""} ·
             ${a ?? ""}`), Y(s, "x", H(t).x - H(t).hitWidth / 2), Y(s, "y", H(l) + 6), Y(s, "width", H(t).hitWidth), Y(s, "height", H(u) - 12);
-		}, [() => H(t).events.length === 1 ? `${me(H(n))}; activate for details` : `${H(t).compositionLabel} at calls ${H(t).callRanges}; activate for breakdown`, () => H(t).events.map((e) => me(e)).join("; ")]), U("click", r, (e) => {
-			e.stopPropagation(), he(H(t));
-		}), U("keydown", r, (e) => A(e, H(t))), G(e, r);
-	}), M(Ie);
+		}, [() => H(t).events.length === 1 ? `${pe(H(n))}; activate for details` : `${H(t).compositionLabel} at calls ${H(t).callRanges}; activate for breakdown`, () => H(t).events.map((e) => pe(e)).join("; ")]), U("click", r, (e) => {
+			e.stopPropagation(), me(H(t));
+		}), U("keydown", r, (e) => j(e, H(t))), G(e, r);
+	}), N(Ie);
 	var ze = B(Ie), He = (e) => {
 		var n = Br();
-		J(R(n), 17, () => H(re), (e) => e.point.callIndex, (e, n) => {
+		J(R(n), 17, () => H(ne), (e) => e.point.callIndex, (e, n) => {
 			var r = Ym();
 			let i;
 			var a = L(r), o = z(a, !0), s = B(a), c = (e) => {
@@ -8743,7 +8743,7 @@ function nh(e, t) {
 			};
 			q(g, (e) => {
 				t.hoveredCallIndex === H(n).point.callIndex && e(_);
-			}), M(r), V((e, a) => {
+			}), N(r), V((e, a) => {
 				Y(r, "id", `economics-call-${H(n).point.callIndex}`), i = _i(r, 0, "economics-mark cache-mark svelte-18b1ucv", null, i, {
 					partial: H(n).point.status === "partial",
 					missing: H(n).point.status === "missing",
@@ -8751,12 +8751,12 @@ function nh(e, t) {
 					zero: H(n).point.status === "zero",
 					pinned: t.pinnedCallIndex === H(n).point.callIndex,
 					hovered: t.hoveredCallIndex === H(n).point.callIndex
-				}), Y(r, "tabindex", H(Oe) === H(n).point.callIndex ? 0 : -1), Y(r, "aria-label", e), Y(r, "aria-current", t.pinnedCallIndex === H(n).point.callIndex ? "true" : void 0), K(o, a);
-			}, [() => xe(H(n), t.pinnedCallIndex, t.hoveredCallIndex), () => xe(H(n), t.pinnedCallIndex, t.hoveredCallIndex)]), Or("pointerenter", r, () => t.onHoverCall(H(n).point.callIndex)), Or("pointerleave", r, () => t.onHoverCall(null)), Or("focus", r, () => t.onHoverCall(H(n).point.callIndex)), U("keydown", r, (e) => De(e, H(n).point.callIndex)), U("click", r, (e) => t.onMarkClick(e, H(n).point.callIndex)), G(e, r);
+				}), Y(r, "tabindex", H(De) === H(n).point.callIndex ? 0 : -1), Y(r, "aria-label", e), Y(r, "aria-current", t.pinnedCallIndex === H(n).point.callIndex ? "true" : void 0), K(o, a);
+			}, [() => be(H(n), t.pinnedCallIndex, t.hoveredCallIndex), () => be(H(n), t.pinnedCallIndex, t.hoveredCallIndex)]), Or("pointerenter", r, () => t.onHoverCall(H(n).point.callIndex)), Or("pointerleave", r, () => t.onHoverCall(null)), Or("focus", r, () => t.onHoverCall(H(n).point.callIndex)), U("keydown", r, (e) => Ee(e, H(n).point.callIndex)), U("click", r, (e) => t.onMarkClick(e, H(n).point.callIndex)), G(e, r);
 		}), G(e, n);
 	}, Ue = (e) => {
 		var n = Br();
-		J(R(n), 17, () => H(ie), (e) => e.point.callIndex, (e, n) => {
+		J(R(n), 17, () => H(re), (e) => e.point.callIndex, (e, n) => {
 			var r = $m();
 			let i;
 			var a = L(r), o = z(a, !0), s = B(a), c = (e) => {
@@ -8811,7 +8811,7 @@ function nh(e, t) {
 			};
 			q(v, (e) => {
 				t.hoveredCallIndex === H(n).point.callIndex && e(y);
-			}), M(r), V(() => {
+			}), N(r), V(() => {
 				Y(r, "id", `economics-call-${H(n).point.callIndex}`), i = _i(r, 0, "economics-mark cost-mark svelte-18b1ucv", null, i, {
 					partial: H(n).point.status === "partial" || H(n).point.componentStatus === "partial",
 					missing: H(n).point.status === "missing",
@@ -8819,15 +8819,15 @@ function nh(e, t) {
 					"api-equivalent": H(n).point.kind === "apiEquivalent",
 					pinned: t.pinnedCallIndex === H(n).point.callIndex,
 					hovered: t.hoveredCallIndex === H(n).point.callIndex
-				}), Y(r, "tabindex", H(Oe) === H(n).point.callIndex ? 0 : -1), Y(r, "aria-label", H(n).ariaLabel), Y(r, "aria-current", t.pinnedCallIndex === H(n).point.callIndex ? "true" : void 0), K(o, H(n).ariaLabel);
-			}), Or("pointerenter", r, () => t.onHoverCall(H(n).point.callIndex)), Or("focus", r, () => t.onHoverCall(H(n).point.callIndex)), U("keydown", r, (e) => De(e, H(n).point.callIndex)), U("click", r, (e) => t.onMarkClick(e, H(n).point.callIndex)), G(e, r);
+				}), Y(r, "tabindex", H(De) === H(n).point.callIndex ? 0 : -1), Y(r, "aria-label", H(n).ariaLabel), Y(r, "aria-current", t.pinnedCallIndex === H(n).point.callIndex ? "true" : void 0), K(o, H(n).ariaLabel);
+			}), Or("pointerenter", r, () => t.onHoverCall(H(n).point.callIndex)), Or("focus", r, () => t.onHoverCall(H(n).point.callIndex)), U("keydown", r, (e) => Ee(e, H(n).point.callIndex)), U("click", r, (e) => t.onMarkClick(e, H(n).point.callIndex)), G(e, r);
 		}), G(e, n);
 	};
 	return q(ze, (e) => {
 		t.mode === "cache" ? e(He) : e(Ue, -1);
-	}), M(je), M(Ae), Ri(Ae, (e) => n = e, () => n), V((e, n) => {
-		yi(Ae, `width:${t.width}px`), Y(je, "viewBox", `0 0 ${t.width} ${H(s)}`), Y(je, "width", t.width), Y(je, "height", H(s)), Y(je, "aria-label", t.mode === "cache" ? "Cache usage track. One keyboard stop; use left and right arrows to inspect calls." : "Cost track. One keyboard stop; use left and right arrows to inspect calls."), Y(Me, "width", t.width), Y(Me, "height", H(s)), Y(Ne, "x", f.left), Y(Ne, "y", f.top), Y(Ne, "width", e), Y(Ne, "height", H(m)), Y(Fe, "x", f.left + 4), Y(Fe, "y", H(c) + 12), Y(Le, "x", f.left), Y(Le, "y", H(l)), Y(Le, "width", n), Y(Le, "height", H(u));
-	}, [() => Math.max(0, t.width - f.left - f.right), () => Math.max(0, t.width - f.left - f.right)]), Or("pointerleave", Ae, () => t.onHoverCall(null)), G(e, Ae), Ve(ke);
+	}), N(Ae), N(ke), Ri(ke, (e) => n = e, () => n), V((e, n) => {
+		yi(ke, `width:${t.width}px`), Y(Ae, "viewBox", `0 0 ${t.width} ${H(s)}`), Y(Ae, "width", t.width), Y(Ae, "height", H(s)), Y(Ae, "aria-label", t.mode === "cache" ? "Cache usage track. One keyboard stop; use left and right arrows to inspect calls." : "Cost track. One keyboard stop; use left and right arrows to inspect calls."), Y(je, "width", t.width), Y(je, "height", H(s)), Y(Me, "x", f.left), Y(Me, "y", f.top), Y(Me, "width", e), Y(Me, "height", H(m)), Y(Fe, "x", f.left + 4), Y(Fe, "y", H(c) + 12), Y(Le, "x", f.left), Y(Le, "y", H(l)), Y(Le, "width", n), Y(Le, "height", H(u));
+	}, [() => Math.max(0, t.width - f.left - f.right), () => Math.max(0, t.width - f.left - f.right)]), Or("pointerleave", ke, () => t.onHoverCall(null)), G(e, ke), Ve(Oe);
 }
 kr(["click", "keydown"]);
 //#endregion
@@ -8843,7 +8843,7 @@ function sh(e, t) {
 		e.key === "Escape" && (e.preventDefault(), e.stopPropagation(), t.onClose());
 	}
 	var o = ah(), s = L(o), c = L(s), l = z(c), u = B(c, 2);
-	M(s);
+	N(s);
 	var d = B(s, 2), f = B(d, 2);
 	J(f, 21, () => t.breakdown.events, (e) => e.id, (e, n) => {
 		var r = ih(), a = L(r), o = L(a);
@@ -8857,7 +8857,7 @@ function sh(e, t) {
 			size: 18
 		});
 		var s = B(o);
-		M(a);
+		N(a);
 		var c = B(a, 2), l = L(c), u = (e) => {
 			var t = rh();
 			U("click", t, () => i()(H(n).callIndex)), G(e, t);
@@ -8866,11 +8866,11 @@ function sh(e, t) {
 			H(n).kind === "compaction" && e(u);
 		});
 		var d = B(l, 2), f = z(d);
-		M(c), M(r), V(() => {
+		N(c), N(r), V(() => {
 			K(s, `${H(n).label ?? ""} · call
           ${H(n).callIndex ?? ""}`), K(f, `Inspect call ${H(n).callIndex ?? ""}`);
 		}), U("click", d, () => t.onInspect(H(n).callIndex)), G(e, r);
-	}), M(f), M(o), Ri(o, (e) => n(e), () => n()), V((e) => {
+	}), N(f), N(o), Ri(o, (e) => n(e), () => n()), V((e) => {
 		yi(o, r()), K(l, `${t.breakdown.events.length ?? ""}
       ${t.breakdown.events.length === 1 ? "event" : "events"} · calls ${e ?? ""}`), Y(u, "id", `${t.breakdown.id}-close`), d.disabled = !t.canZoomIn || t.breakdown.callIndices.length === 0;
 	}, [() => t.breakdown.callIndices.join(", ")]), U("keydown", o, a), U("click", u, function(...e) {
@@ -8912,12 +8912,12 @@ function fh(e, t) {
 	var u = uh();
 	let d;
 	var f = L(u), p = L(f), m = z(p), h = B(p, 2);
-	M(f);
+	N(f);
 	var g = B(f, 2), _ = z(g), v = B(g, 2);
 	J(v, 21, () => t.memberLabels, ei, (e, t, n, r) => {
 		var i = ch(), a = z(i, !0);
 		V(() => K(a, H(t))), G(e, i);
-	}), M(v);
+	}), N(v);
 	var y = B(v, 2), b = (e) => {
 		G(e, lh());
 	};
@@ -8925,7 +8925,7 @@ function fh(e, t) {
 		t.memberCount > 12 && e(b);
 	});
 	var x = B(y, 2);
-	M(u), Ri(u, (e) => n = e, () => n), V(() => {
+	N(u), Ri(u, (e) => n = e, () => n), V(() => {
 		Y(u, "aria-label", `Item type ${t.label} breakdown`), d = yi(u, "", d, {
 			left: `${H(s)}px`,
 			top: `${H(c)}px`
@@ -8978,17 +8978,17 @@ function Ah(e, t) {
 	Ri(o, (e) => i(e), () => i());
 	var s = B(o, 2), c = L(s), l = (e) => {
 		var n = vh(), r = L(n), i = B(L(r), 2), a = B(i, 2), o = B(a, 2);
-		Y(o, "aria-pressed", !1), M(r);
+		Y(o, "aria-pressed", !1), N(r);
 		var s = B(r, 2), c = (e) => {
 			var n = _h(), r = B(L(n), 2), i = B(r, 2);
 			va(B(i), {
 				id: "cache-share-note",
 				label: "About Share (%)",
 				children: (e, t) => {
-					xe(), G(e, zr("Shows cache reads, cache writes and fresh input as shares of each call's input\n              tokens. Calls with missing, partial or zero input are marked, not drawn as zero."));
+					be(), G(e, zr("Shows cache reads, cache writes and fresh input as shares of each call's input\n              tokens. Calls with missing, partial or zero input are marked, not drawn as zero."));
 				},
 				$$slots: { default: !0 }
-			}), M(n), V(() => {
+			}), N(n), V(() => {
 				Y(r, "aria-pressed", t.cacheView === "tokens"), Y(i, "aria-pressed", t.cacheView === "share");
 			}), U("click", r, () => t.onCacheViewChange("tokens")), U("click", i, () => t.onCacheViewChange("share")), G(e, n);
 		};
@@ -8996,7 +8996,7 @@ function Ah(e, t) {
 			t.mode === "cache" && e(c);
 		});
 		var l = z(B(s, 2), !0);
-		M(n), V(() => {
+		N(n), V(() => {
 			Y(i, "aria-pressed", t.mode === "cache"), Y(a, "aria-pressed", t.mode === "cost"), K(l, t.mode === "cache" ? t.cacheView === "share" ? "Cache share per call · share of each call's input · fixed 0–100% axis" : "Prompt tokens per call · session-wide scale" : t.mode === "cost" ? "Cost per call · USD · session-wide scale · recorded or estimated, not invoices" : "Economics off · details remain available in the inspector");
 		}), U("click", i, () => t.onModeChange("cache")), U("click", a, () => t.onModeChange("cost")), U("click", o, () => t.onModeChange("off")), G(e, n);
 	};
@@ -9008,12 +9008,12 @@ function Ah(e, t) {
 			var n = Sh(), r = R(n), i = B(L(r), 2);
 			J(i, 21, () => t.cachePresentation.categories, (e) => e.kind, (e, t) => {
 				var n = yh(), r = L(n), i = B(r);
-				M(n), V(() => {
+				N(n), V(() => {
 					_i(r, 1, `swatch ${H(t).kind}`, "svelte-1x8cxwu"), K(i, `${H(t).label ?? ""}${H(t).availability === "measuredZero" ? " · 0 in this session" : ""}`);
 				}), G(e, n);
 			}, (e) => {
 				G(e, bh());
-			}), M(i), M(r), J(B(r, 2), 17, () => t.cachePresentation.notes, ei, (e, t) => {
+			}), N(i), N(r), J(B(r, 2), 17, () => t.cachePresentation.notes, ei, (e, t) => {
 				var n = xh(), r = z(n, !0);
 				V(() => K(r, H(t))), G(e, n);
 			}), G(e, n);
@@ -9023,18 +9023,18 @@ function Ah(e, t) {
 			};
 			q(i, (e) => {
 				n() && e(a);
-			}), M(r), M(t), G(e, t);
+			}), N(r), N(t), G(e, t);
 		};
 		q(a, (e) => {
 			t.mode === "cache" ? e(o) : e(s, -1);
-		}), M(i);
+		}), N(i);
 		var c = B(i, 2), l = B(L(c), 2), u = B(L(l), 2), d = L(u), f = (e) => {
 			var t = Th();
 			jm(L(t), {
 				kind: "ratioChange",
 				direction: "rise",
 				size: 16
-			}), xe(), M(t), G(e, t);
+			}), be(), N(t), G(e, t);
 		};
 		q(d, (e) => {
 			t.mode === "cache" && e(f);
@@ -9043,12 +9043,12 @@ function Ah(e, t) {
 		jm(L(p), {
 			kind: "compaction",
 			size: 16
-		}), xe(), M(p);
+		}), be(), N(p);
 		var m = B(p, 2);
 		jm(L(m), {
 			kind: "targetChange",
 			size: 16
-		}), xe(), M(m), M(u), M(l);
+		}), be(), N(m), N(u), N(l);
 		var h = B(l, 4), g = (e) => {
 			var n = Eh(), r = z(n);
 			V(() => K(r, `Billed calls show the cost the harness recorded, or an estimate at the provider's rate
@@ -9058,11 +9058,11 @@ function Ah(e, t) {
 		};
 		q(h, (e) => {
 			t.mode === "cost" && e(g);
-		}), M(c), G(e, r);
+		}), N(c), G(e, r);
 	};
 	q(u, (e) => {
 		t.mode !== "off" && e(d);
-	}), M(s), M(a), Ri(a, (e) => r(e), () => r()), V(() => {
+	}), N(s), N(a), Ri(a, (e) => r(e), () => r()), V(() => {
 		Y(o, "aria-expanded", t.mode !== "off"), Y(s, "hidden", t.mode === "off");
 	}), U("pointerdown", a, (e) => e.stopPropagation()), U("click", a, (e) => e.stopPropagation()), U("click", o, () => t.onModeChange(t.mode === "off" ? t.lastMode : "off")), G(e, a), Ve();
 }
@@ -9774,15 +9774,15 @@ function h_(e) {
 		e = a_(e);
 		var u = e.fill, d = e.align, f = e.sign, p = e.symbol, m = e.zero, h = e.width, g = e.comma, _ = e.precision, v = e.trim, y = e.type;
 		y === "n" ? (g = !0, y = "g") : d_[y] || (_ === void 0 && (_ = 12), v = !0, y = "g"), (m || u === "0" && d === "=") && (m = !0, u = "0", d = "=");
-		var b = (l && l.prefix !== void 0 ? l.prefix : "") + (p === "$" ? n : p === "#" && /[boxX]/.test(y) ? "0" + y.toLowerCase() : ""), x = (p === "$" ? r : /[%p]/.test(y) ? o : "") + (l && l.suffix !== void 0 ? l.suffix : ""), S = d_[y], C = /[defgprs%]/.test(y);
+		var b = (l && l.prefix !== void 0 ? l.prefix : "") + (p === "$" ? n : p === "#" && /[boxX]/.test(y) ? "0" + y.toLowerCase() : ""), x = (p === "$" ? r : /[%p]/.test(y) ? o : "") + (l && l.suffix !== void 0 ? l.suffix : ""), S = d_[y], ee = /[defgprs%]/.test(y);
 		_ = _ === void 0 ? 6 : /[gprs]/.test(y) ? Math.max(1, Math.min(21, _)) : Math.max(0, Math.min(20, _));
-		function w(e) {
+		function C(e) {
 			var n = b, r = x, o, l, p;
 			if (y === "c") r = S(e) + r, e = "";
 			else {
 				e = +e;
-				var w = e < 0 || 1 / e < 0;
-				if (e = isNaN(e) ? c : S(Math.abs(e), _), v && (e = s_(e)), w && +e == 0 && f !== "+" && (w = !1), n = (w ? f === "(" ? f : s : f === "-" || f === "(" ? "" : f) + n, r = (y === "s" && !isNaN(e) && c_ !== void 0 ? m_[8 + c_ / 3] : "") + r + (w && f === "(" ? ")" : ""), C) {
+				var C = e < 0 || 1 / e < 0;
+				if (e = isNaN(e) ? c : S(Math.abs(e), _), v && (e = s_(e)), C && +e == 0 && f !== "+" && (C = !1), n = (C ? f === "(" ? f : s : f === "-" || f === "(" ? "" : f) + n, r = (y === "s" && !isNaN(e) && c_ !== void 0 ? m_[8 + c_ / 3] : "") + r + (C && f === "(" ? ")" : ""), ee) {
 					for (o = -1, l = e.length; ++o < l;) if (p = e.charCodeAt(o), 48 > p || p > 57) {
 						r = (p === 46 ? i + e.slice(o + 1) : e.slice(o)) + r, e = e.slice(0, o);
 						break;
@@ -9790,7 +9790,7 @@ function h_(e) {
 				}
 			}
 			g && !m && (e = t(e, Infinity));
-			var ee = n.length + e.length + r.length, T = ee < h ? Array(h - ee + 1).join(u) : "";
+			var w = n.length + e.length + r.length, T = w < h ? Array(h - w + 1).join(u) : "";
 			switch (g && m && (e = t(T + e, T.length ? h - r.length : Infinity), T = ""), d) {
 				case "<":
 					e = n + e + r + T;
@@ -9799,15 +9799,15 @@ function h_(e) {
 					e = n + T + e + r;
 					break;
 				case "^":
-					e = T.slice(0, ee = T.length >> 1) + n + e + r + T.slice(ee);
+					e = T.slice(0, w = T.length >> 1) + n + e + r + T.slice(w);
 					break;
 				default: e = T + n + e + r;
 			}
 			return a(e);
 		}
-		return w.toString = function() {
+		return C.toString = function() {
 			return e + "";
-		}, w;
+		}, C;
 	}
 	function u(e, t) {
 		var n = Math.max(-8, Math.min(8, Math.floor(t_(t) / 3))) * 3, r = 10 ** -n, i = l((e = a_(e), e.type = "f", e), { suffix: m_[8 + n / 3] });
@@ -10112,7 +10112,7 @@ function F_(e, t, n) {
 			linear: s
 		});
 	}
-	let C = c ? [] : r.compactions.flatMap((t) => {
+	let ee = c ? [] : r.compactions.flatMap((t) => {
 		let n = _.get(t.summaryItemId)?.get(t.beforeModelCall);
 		if (!n) return [];
 		let r = k_(n), i = y(t.beforeModelCall);
@@ -10142,7 +10142,7 @@ function F_(e, t, n) {
 		columns: u,
 		ribbons: x,
 		compactions: b,
-		lineageConnectors: C,
+		lineageConnectors: ee,
 		versionMarks: S,
 		innerWidth: a,
 		innerHeight: o,
@@ -10567,16 +10567,16 @@ function Fv(e, t) {
 	function S(e) {
 		_(e), v()(e);
 	}
-	function C(e) {
-		rn(e.river.verticalScale), H(oe) !== e.river.display && Vn(!1), I(oe, e.river.display, !0);
+	function ee(e) {
+		rn(e.river.verticalScale), H(ae) !== e.river.display && Vn(!1), I(ae, e.river.display, !0);
 		let t = e.economics.expanded ? e.economics.lastMode : "off";
-		if (t === "off" && H(ce) !== "off") {
-			let e = Hi(E).activeElement, t = e instanceof Node && (H(x)?.contains(e) || E?.querySelector(".economics-track-svg")?.contains(e) || H(A)?.contains(e));
-			Kn(!1), me.cancel(), I(le, ""), I(ue, null), I(_e, ""), t && H(b)?.focus();
+		if (t === "off" && H(se) !== "off") {
+			let e = Hi(E).activeElement, t = e instanceof Node && (H(x)?.contains(e) || E?.querySelector(".economics-track-svg")?.contains(e) || H(j)?.contains(e));
+			Kn(!1), pe.cancel(), I(ce, ""), I(le, null), I(ge, ""), t && H(b)?.focus();
 		}
-		I(se, e.economics.cacheView, !0), I(ce, t, !0);
+		I(oe, e.economics.cacheView, !0), I(se, t, !0);
 	}
-	function w(e) {
+	function C(e) {
 		S({
 			..._(),
 			river: {
@@ -10585,7 +10585,7 @@ function Fv(e, t) {
 			}
 		});
 	}
-	function ee(e) {
+	function w(e) {
 		S({
 			..._(),
 			river: {
@@ -10603,7 +10603,7 @@ function Fv(e, t) {
 			}
 		});
 	}
-	let E, D, O, k = /* @__PURE__ */ F(960), te = /* @__PURE__ */ F(!1), ne = /* @__PURE__ */ F(0), re = /* @__PURE__ */ F(0), ie = /* @__PURE__ */ F(0), ae = /* @__PURE__ */ F("session"), oe = /* @__PURE__ */ F("items"), se = /* @__PURE__ */ F("tokens"), ce = /* @__PURE__ */ F("off"), le = /* @__PURE__ */ F(""), ue = /* @__PURE__ */ F(null), de = /* @__PURE__ */ F(null), fe = null, pe = tm(), me = tm(), he = /* @__PURE__ */ F(null), ge, _e = /* @__PURE__ */ F(""), A = /* @__PURE__ */ F(null), ve = /* @__PURE__ */ F(null), j = /* @__PURE__ */ F(null), ye = /* @__PURE__ */ F(null), be = /* @__PURE__ */ F(null), Se = "", Ce = 960, we = null, Te = "", Ee = "", De = [], Oe = /* @__PURE__ */ F(null), ke = /* @__PURE__ */ F(null), Ae = V_(), je = null, Me = !1, Ne = !0, N = {
+	let E, D, O, k = /* @__PURE__ */ F(960), te = /* @__PURE__ */ F(!1), A = /* @__PURE__ */ F(0), ne = /* @__PURE__ */ F(0), re = /* @__PURE__ */ F(0), ie = /* @__PURE__ */ F("session"), ae = /* @__PURE__ */ F("items"), oe = /* @__PURE__ */ F("tokens"), se = /* @__PURE__ */ F("off"), ce = /* @__PURE__ */ F(""), le = /* @__PURE__ */ F(null), ue = /* @__PURE__ */ F(null), de = null, fe = tm(), pe = tm(), me = /* @__PURE__ */ F(null), he, ge = /* @__PURE__ */ F(""), j = /* @__PURE__ */ F(null), _e = /* @__PURE__ */ F(null), M = /* @__PURE__ */ F(null), ve = /* @__PURE__ */ F(null), ye = /* @__PURE__ */ F(null), xe = "", Se = 960, Ce = null, we = "", Te = "", Ee = [], De = /* @__PURE__ */ F(null), Oe = /* @__PURE__ */ F(null), ke = V_(), Ae = null, je = !1, Me = !0, Ne = {
 		top: 36,
 		right: 24,
 		bottom: 54,
@@ -10614,32 +10614,32 @@ function Fv(e, t) {
 		usesInterpolatedEdge: !1
 	};
 	function Ie() {
-		f() ? E && E.clientWidth > 0 && (I(k, E.clientWidth, !0), I(te, !0), nn()) : (pe.cancel(), me.cancel(), Nn(), t.onHoverCall(null), t.onHoverItem(null), H(ue) && Kn(!1));
+		f() ? E && E.clientWidth > 0 && (I(k, E.clientWidth, !0), I(te, !0), nn()) : (fe.cancel(), pe.cancel(), Nn(), t.onHoverCall(null), t.onHoverItem(null), H(le) && Kn(!1));
 	}
-	let Le = /* @__PURE__ */ F(null), Re = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), ze = /* @__PURE__ */ P(() => H(de) ? H(de).memberIds.slice(0, 12).map((e) => Fo(t.indexed.itemById.get(e), e)) : []), He = /* @__PURE__ */ P(() => JSON.stringify(t.indexed.analysis.modelCalls.map((e) => [e.index, e.sourceRecordId]))), Ue = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.length), We = /* @__PURE__ */ P(() => Math.max(1, H(k) - N.left - N.right)), Ge = /* @__PURE__ */ P(() => H(Ue) > 1 ? H(We) / (H(Ue) - 1) : 0), Ke = /* @__PURE__ */ P(() => Math.max(H(j) ?? H(Ge), H(Ge))), qe = /* @__PURE__ */ P(() => H(Ue) > 1 && H(j) !== null ? Math.max(H(k), N.left + N.right + (H(Ue) - 1) * H(j)) : Math.max(1, H(k))), Je = /* @__PURE__ */ P(() => N_(t.indexed, 960, N)), Ye = /* @__PURE__ */ P(() => vl(t.indexed, H(Je))), Xe = /* @__PURE__ */ P(() => bl(H(Je), H(Ye))), Ze = /* @__PURE__ */ P(() => Math.max(0, ...H(Xe).map((e) => e.totalDisplayWeight))), Qe = /* @__PURE__ */ P(() => I_(H(Xe), 960, H(qe), N)), $e = /* @__PURE__ */ P(() => Math.max(N.left, H(ne) - H(ie))), et = /* @__PURE__ */ P(() => Math.min(H(qe) - N.right, H(ne) - H(ie) + H(k))), tt = /* @__PURE__ */ P(() => Math.max(N.left, H(re) - H(ie))), nt = /* @__PURE__ */ P(() => Math.min(H(qe) - N.right, H(re) - H(ie) + H(k))), rt = /* @__PURE__ */ P(() => F_(t.indexed, {
+	let Le = /* @__PURE__ */ F(null), Re = /* @__PURE__ */ P(() => Ul(t.indexed.analysis.economics.costBasis, t.indexed.analysis.session.source)), ze = /* @__PURE__ */ P(() => H(ue) ? H(ue).memberIds.slice(0, 12).map((e) => Fo(t.indexed.itemById.get(e), e)) : []), He = /* @__PURE__ */ P(() => JSON.stringify(t.indexed.analysis.modelCalls.map((e) => [e.index, e.sourceRecordId]))), Ue = /* @__PURE__ */ P(() => t.indexed.analysis.modelCalls.length), We = /* @__PURE__ */ P(() => Math.max(1, H(k) - Ne.left - Ne.right)), Ge = /* @__PURE__ */ P(() => H(Ue) > 1 ? H(We) / (H(Ue) - 1) : 0), Ke = /* @__PURE__ */ P(() => Math.max(H(M) ?? H(Ge), H(Ge))), qe = /* @__PURE__ */ P(() => H(Ue) > 1 && H(M) !== null ? Math.max(H(k), Ne.left + Ne.right + (H(Ue) - 1) * H(M)) : Math.max(1, H(k))), Je = /* @__PURE__ */ P(() => N_(t.indexed, 960, Ne)), Ye = /* @__PURE__ */ P(() => vl(t.indexed, H(Je))), Xe = /* @__PURE__ */ P(() => bl(H(Je), H(Ye))), Ze = /* @__PURE__ */ P(() => Math.max(0, ...H(Xe).map((e) => e.totalDisplayWeight))), Qe = /* @__PURE__ */ P(() => I_(H(Xe), 960, H(qe), Ne)), $e = /* @__PURE__ */ P(() => Math.max(Ne.left, H(A) - H(re))), et = /* @__PURE__ */ P(() => Math.min(H(qe) - Ne.right, H(A) - H(re) + H(k))), tt = /* @__PURE__ */ P(() => Math.max(Ne.left, H(ne) - H(re))), nt = /* @__PURE__ */ P(() => Math.min(H(qe) - Ne.right, H(ne) - H(re) + H(k))), rt = /* @__PURE__ */ P(() => F_(t.indexed, {
 		width: 960,
 		height: 500,
-		margin: N,
+		margin: Ne,
 		minimumVisibleThickness: 1,
 		verticalDomainMax: H(Ye).size > 0 ? H(Ze) : void 0,
-		groupByKind: H(oe) === "itemTypes"
-	}, H(Je))), it = /* @__PURE__ */ P(() => L_(H(rt), 960, H(qe), N)), at = /* @__PURE__ */ P(() => H(it).layout), ct = /* @__PURE__ */ P(() => l() === null || !H(te) || !f() ? null : {
+		groupByKind: H(ae) === "itemTypes"
+	}, H(Je))), it = /* @__PURE__ */ P(() => L_(H(rt), 960, H(qe), Ne)), at = /* @__PURE__ */ P(() => H(it).layout), ct = /* @__PURE__ */ P(() => l() === null || !H(te) || !f() ? null : {
 		itemId: l(),
-		visible: cr(l(), H(oe), H(at).ribbons, {
+		visible: cr(l(), H(ae), H(at).ribbons, {
 			left: (H(tt) - H(it).offset) / (H(it).scale || 1),
 			right: (H(nt) - H(it).offset) / (H(it).scale || 1)
 		})
-	}), lt = /* @__PURE__ */ P(() => JSON.stringify(H(ct))), ut = /* @__PURE__ */ P(() => H(ae) === "visible" ? gm(H(Qe), H($e), H(et)) : Fe), dt = /* @__PURE__ */ P(() => Math.max(1, H(Ye).size > 0 ? H(Ze) : H(rt).maxTotalDisplayWeight)), ft = /* @__PURE__ */ P(() => H(ae) === "visible" ? H(dt) / Math.max(1, H(ut).maxWeight) : 1), pt = /* @__PURE__ */ P(() => (500 - N.bottom) * (1 - H(ft))), mt = /* @__PURE__ */ P(() => H(ft) === 1 ? H(it).transform : `${H(it).transform} matrix(1 0 0 ${H(ft)} 0 ${H(pt)})`), ht = /* @__PURE__ */ P(() => Au(t.indexed.analysis)), gt = /* @__PURE__ */ P(() => H(ae) === "visible" ? H(ut).maxWeight : H(Ze)), _t = /* @__PURE__ */ P(() => Math.max(1, H(gt))), vt = /* @__PURE__ */ P(() => xl(H(at).columns, H(Ye), {
+	}), lt = /* @__PURE__ */ P(() => JSON.stringify(H(ct))), ut = /* @__PURE__ */ P(() => H(ie) === "visible" ? gm(H(Qe), H($e), H(et)) : Fe), dt = /* @__PURE__ */ P(() => Math.max(1, H(Ye).size > 0 ? H(Ze) : H(rt).maxTotalDisplayWeight)), ft = /* @__PURE__ */ P(() => H(ie) === "visible" ? H(dt) / Math.max(1, H(ut).maxWeight) : 1), pt = /* @__PURE__ */ P(() => (500 - Ne.bottom) * (1 - H(ft))), mt = /* @__PURE__ */ P(() => H(ft) === 1 ? H(it).transform : `${H(it).transform} matrix(1 0 0 ${H(ft)} 0 ${H(pt)})`), ht = /* @__PURE__ */ P(() => Au(t.indexed.analysis)), gt = /* @__PURE__ */ P(() => H(ie) === "visible" ? H(ut).maxWeight : H(Ze)), _t = /* @__PURE__ */ P(() => Math.max(1, H(gt))), vt = /* @__PURE__ */ P(() => xl(H(at).columns, H(Ye), {
 		width: H(qe),
 		height: 500,
-		margin: N,
+		margin: Ne,
 		minimumVisibleThickness: 1
 	}, H(_t))), yt = /* @__PURE__ */ P(() => [...H(Ye).values()].some((e) => e.gap > 0)), bt = /* @__PURE__ */ P(() => H(Ye).get(s() ?? c() ?? -1)), xt = /* @__PURE__ */ P(() => _m(H(gt))), St = /* @__PURE__ */ P(() => H(xt).map((e, t) => ({
 		value: e,
 		position: t,
-		y: N.top + H(at).innerHeight * (1 - e / H(_t)),
+		y: Ne.top + H(at).innerHeight * (1 - e / H(_t)),
 		percent: Math.max(0, Math.min(100, 100 * (1 - e / H(_t))))
-	}))), Ct = /* @__PURE__ */ P(() => t.indexed.analysis.displayWeightUnit === "unavailable" ? "structural placeholder stack weight (token geometry unavailable)" : Ga(t.indexed.analysis.displayWeightUnit)), wt = /* @__PURE__ */ P(() => H(ae) === "session" ? `Session-wide scale in ${H(Ct)}. Ribbon heights remain comparable across the session.` : `${H(ut).visibleCallCount} visible call markers in ${H(Ct)}. Viewport edges are interpolated where needed; ribbon heights change as you pan or zoom.`), Tt = /* @__PURE__ */ P(() => `Vertical axis. ${H(wt)} Tick values: ${H(xt).map(xm).join(", ")}.`), Et = /* @__PURE__ */ P(() => new Map(H(at).columns.map((e) => [e.callIndex, e]))), Dt = /* @__PURE__ */ P(() => new Map(H(at).ribbons.filter((e) => e.groupKind === void 0).map((e) => [e.itemId, e]))), Ot = /* @__PURE__ */ P(() => u() === null ? null : H(Dt).get(u()) ?? null), kt = /* @__PURE__ */ P(() => l() === null ? null : H(Dt).get(l()) ?? null), At = /* @__PURE__ */ P(() => l() ?? u()), jt = /* @__PURE__ */ P(() => new Map(H(at).ribbons.map((e) => [e.key, e]))), Mt = /* @__PURE__ */ P(() => H(at).ribbons.reduce((e, t) => {
+	}))), Ct = /* @__PURE__ */ P(() => t.indexed.analysis.displayWeightUnit === "unavailable" ? "structural placeholder stack weight (token geometry unavailable)" : Ga(t.indexed.analysis.displayWeightUnit)), wt = /* @__PURE__ */ P(() => H(ie) === "session" ? `Session-wide scale in ${H(Ct)}. Ribbon heights remain comparable across the session.` : `${H(ut).visibleCallCount} visible call markers in ${H(Ct)}. Viewport edges are interpolated where needed; ribbon heights change as you pan or zoom.`), Tt = /* @__PURE__ */ P(() => `Vertical axis. ${H(wt)} Tick values: ${H(xt).map(xm).join(", ")}.`), Et = /* @__PURE__ */ P(() => new Map(H(at).columns.map((e) => [e.callIndex, e]))), Dt = /* @__PURE__ */ P(() => new Map(H(at).ribbons.filter((e) => e.groupKind === void 0).map((e) => [e.itemId, e]))), Ot = /* @__PURE__ */ P(() => u() === null ? null : H(Dt).get(u()) ?? null), kt = /* @__PURE__ */ P(() => l() === null ? null : H(Dt).get(l()) ?? null), At = /* @__PURE__ */ P(() => l() ?? u()), jt = /* @__PURE__ */ P(() => new Map(H(at).ribbons.map((e) => [e.key, e]))), Mt = /* @__PURE__ */ P(() => H(at).ribbons.reduce((e, t) => {
 		let n = e.get(t.itemId);
 		return n ? n.push(t) : e.set(t.itemId, [t]), e;
 	}, /* @__PURE__ */ new Map())), Nt = /* @__PURE__ */ P(() => H(Le) !== null && H(jt).has(H(Le)) ? H(Le) : H(kt)?.key ?? H(at).ribbons[0]?.key ?? null), Pt = /* @__PURE__ */ P(() => Ih(H(at).columns, 52, s())), Ft = /* @__PURE__ */ P(() => [...H(Pt)].map((e) => H(at).columns[e]?.callIndex)), It = /* @__PURE__ */ P(() => s() !== null && H(Ft).includes(s()) ? s() : H(Ft)[0] ?? null), Lt = /* @__PURE__ */ P(() => H(At) === null ? [] : H(at).lineageConnectors.map((e, t) => ({
@@ -10649,34 +10649,34 @@ function Fv(e, t) {
 		callIndex: e.callIndex,
 		x: e.x,
 		sourceRecordId: t.indexed.callByIndex.get(e.callIndex)?.sourceRecordId ?? null
-	}))), zt = /* @__PURE__ */ P(() => H(Rt).length < 2 ? Infinity : H(Rt).reduce((e, t, n) => n === 0 ? e : Math.min(e, t.x - H(Rt)[n - 1].x), Infinity)), Bt = /* @__PURE__ */ P(() => H(zt) < 52 ? Math.ceil(52 / Math.max(1, H(zt))) : 1), Vt = /* @__PURE__ */ P(() => Ih(H(at).columns, 52, null)), Ht = /* @__PURE__ */ P(() => H(Ge) > 0 ? Math.max(1, H(Ke) / H(Ge)) : 1), Ut = /* @__PURE__ */ P(() => H(j) === null || H(qe) <= H(k) + 1), Wt = /* @__PURE__ */ P(() => H(Ge) * Math.min(256, Math.max(1, H(Ue) - 1))), Gt = /* @__PURE__ */ P(() => H(Ue) > 1 && H(Ke) < H(Wt) - .5), Kt = /* @__PURE__ */ P(() => H(Ue) > 1 && !H(Ut) && H(Ht) > 1.01), qt = /* @__PURE__ */ P(() => H(ke) ? {
-		x: Math.min(bn(H(ke).startClientX), bn(H(ke).currentClientX)),
-		width: Math.abs(bn(H(ke).currentClientX) - bn(H(ke).startClientX))
+	}))), zt = /* @__PURE__ */ P(() => H(Rt).length < 2 ? Infinity : H(Rt).reduce((e, t, n) => n === 0 ? e : Math.min(e, t.x - H(Rt)[n - 1].x), Infinity)), Bt = /* @__PURE__ */ P(() => H(zt) < 52 ? Math.ceil(52 / Math.max(1, H(zt))) : 1), Vt = /* @__PURE__ */ P(() => Ih(H(at).columns, 52, null)), Ht = /* @__PURE__ */ P(() => H(Ge) > 0 ? Math.max(1, H(Ke) / H(Ge)) : 1), Ut = /* @__PURE__ */ P(() => H(M) === null || H(qe) <= H(k) + 1), Wt = /* @__PURE__ */ P(() => H(Ge) * Math.min(256, Math.max(1, H(Ue) - 1))), Gt = /* @__PURE__ */ P(() => H(Ue) > 1 && H(Ke) < H(Wt) - .5), Kt = /* @__PURE__ */ P(() => H(Ue) > 1 && !H(Ut) && H(Ht) > 1.01), qt = /* @__PURE__ */ P(() => H(Oe) ? {
+		x: Math.min(bn(H(Oe).startClientX), bn(H(Oe).currentClientX)),
+		width: Math.abs(bn(H(Oe).currentClientX) - bn(H(Oe).startClientX))
 	} : null);
 	Tn(() => {
 		let e = _();
-		e !== y && (y = e, yr(() => C(e)));
-	}), Tn(() => pe.observeIdentity(t.indexed)), Tn(() => me.observeIdentity(t.indexed)), Tn(() => {
-		if (H(lt) === Ee) return;
-		Ee = H(lt);
+		e !== y && (y = e, yr(() => ee(e)));
+	}), Tn(() => fe.observeIdentity(t.indexed)), Tn(() => pe.observeIdentity(t.indexed)), Tn(() => {
+		if (H(lt) === Te) return;
+		Te = H(lt);
 		let e = H(ct);
 		yr(() => h()(e));
 	}), Tn(() => {
-		Ne !== f() && (Ne = f(), yr(Ie));
+		Me !== f() && (Me = f(), yr(Ie));
 	}), Tn(() => {
-		H(He), H(k), H(j), H(ye), yr(Jt);
+		H(He), H(k), H(M), H(ve), yr(Jt);
 	}), Cn(() => {
-		d(), f(), H(qe), H(at), H(He), H(k), H(te), H(j), H(Oe), H(be), H(ue), H(A), yr(Yt);
+		d(), f(), H(qe), H(at), H(He), H(k), H(te), H(M), H(De), H(ye), H(le), H(j), yr(Yt);
 	});
 	function Jt() {
 		if (E) {
-			if (H(ye) && H(j) !== null && H(k) !== Ce) {
-				I(be, H(ye), !0);
+			if (H(ve) && H(M) !== null && H(k) !== Se) {
+				I(ye, H(ve), !0);
 				return;
 			}
-			if (!H(Oe) && H(j) !== null && (H(He) !== Se || H(k) !== Ce)) {
-				let e = H(k) === Ce ? ca(De, E.scrollLeft, Qt(), tn()) : Jp(De, E.scrollLeft + Ce / 2 - H(ie), H(k) / 2);
-				e && I(Oe, {
+			if (!H(De) && H(M) !== null && (H(He) !== xe || H(k) !== Se)) {
+				let e = H(k) === Se ? ca(Ee, E.scrollLeft, Qt(), tn()) : Jp(Ee, E.scrollLeft + Se / 2 - H(re), H(k) / 2);
+				e && I(De, {
 					kind: "anchor",
 					anchor: e
 				}, !0);
@@ -10685,19 +10685,19 @@ function Fv(e, t) {
 	}
 	function Yt() {
 		if (E) {
-			if (fe && !fe.isConnected && (fe = null), cn(), d() && d().id !== we && en() && (we = d().id, yn(d())), H(be)) {
-				let e = H(be);
-				if (I(be, null), H(ye) === e && H(j) !== null) {
+			if (de && !de.isConnected && (de = null), cn(), d() && d().id !== Ce && en() && (Ce = d().id, yn(d())), H(ye)) {
+				let e = H(ye);
+				if (I(ye, null), H(ve) === e && H(M) !== null) {
 					let t = un(e.startCallIndex, e.endCallIndex, Qt() / 2);
 					if (t) {
 						let e = Yp(t.intervalCount, H(We), H(Ue));
 						fn(Math.min(H(Wt), e), t.anchor);
-					} else I(ye, null);
+					} else I(ve, null);
 				}
 			}
-			if (nn(), Se = H(He), Ce = H(k), De = H(Rt), on(), H(ue) && H(A)) {
+			if (nn(), xe = H(He), Se = H(k), Ee = H(Rt), on(), H(le) && H(j)) {
 				let e = Gn();
-				e !== H(_e) && I(_e, e, !0);
+				e !== H(ge) && I(ge, e, !0);
 			}
 		}
 	}
@@ -10721,16 +10721,16 @@ function Fv(e, t) {
 			onPointerUp: jn,
 			onPointerCancel: Mn,
 			onKeyUp: (e) => {
-				e.code === "Space" && (Me = !1);
+				e.code === "Space" && (je = !1);
 			},
 			onBlur: () => {
-				Me = !1, Nn();
+				je = !1, Nn();
 			},
 			onResize: (e, t) => {
 				if (H(k) !== e) {
-					let t = Ae.pointers.length > 0;
-					Nn(), t && (Ae = {
-						...Ae,
+					let t = ke.pointers.length > 0;
+					Nn(), t && (ke = {
+						...ke,
 						suppressClick: !0
 					}), I(k, e, !0);
 				}
@@ -10738,7 +10738,7 @@ function Fv(e, t) {
 			}
 		});
 		return () => {
-			pe.dispose(), me.dispose(), Nn(), je !== null && window.clearTimeout(je), Xt !== null && cancelAnimationFrame(Xt), e();
+			fe.dispose(), pe.dispose(), Nn(), Ae !== null && window.clearTimeout(Ae), Xt !== null && cancelAnimationFrame(Xt), e();
 		};
 	});
 	function Qt() {
@@ -10757,15 +10757,15 @@ function Fv(e, t) {
 	}
 	function nn() {
 		if (!E) return;
-		H(re) !== E.scrollLeft && I(re, E.scrollLeft, !0);
+		H(ne) !== E.scrollLeft && I(ne, E.scrollLeft, !0);
 		let e = tn();
-		Math.abs(H(ie) - e) > .01 && I(ie, e, !0), H(ae) === "visible" && H(ne) !== E.scrollLeft && I(ne, E.scrollLeft, !0);
+		Math.abs(H(re) - e) > .01 && I(re, e, !0), H(ie) === "visible" && H(A) !== E.scrollLeft && I(A, E.scrollLeft, !0);
 	}
 	function rn(e) {
-		I(ae, e, !0), e === "visible" && E && (I(ne, E.scrollLeft, !0), I(ie, tn(), !0));
+		I(ie, e, !0), e === "visible" && E && (I(A, E.scrollLeft, !0), I(re, tn(), !0));
 	}
 	function an() {
-		let e = Qt(), t = $t(), n = H(te) || e > 0, r = H(ie), i = n ? oa(H(Rt), E.scrollLeft, e, r) : {
+		let e = Qt(), t = $t(), n = H(te) || e > 0, r = H(re), i = n ? oa(H(Rt), E.scrollLeft, e, r) : {
 			firstVisibleCallIndex: null,
 			lastVisibleCallIndex: null
 		};
@@ -10784,15 +10784,15 @@ function Fv(e, t) {
 	function on() {
 		if (!E) return;
 		let e = an(), t = JSON.stringify(e);
-		t !== Te && (Te = t, p()(e)), e.ready && we !== null && !H(Oe) && !H(be) && we !== o && (o = we, m()(we));
+		t !== we && (we = t, p()(e)), e.ready && Ce !== null && !H(De) && !H(ye) && Ce !== o && (o = Ce, m()(Ce));
 	}
 	function sn(e) {
 		E.scrollLeft = aa(e, $t(), Qt()), nn(), on();
 	}
 	function cn() {
-		if (!H(Oe)) return;
-		let e = H(Oe);
-		if (I(Oe, null), e === "fit") {
+		if (!H(De)) return;
+		let e = H(De);
+		if (I(De, null), e === "fit") {
 			E.scrollLeft = 0, nn();
 			return;
 		}
@@ -10806,19 +10806,19 @@ function Fv(e, t) {
 		return qp(H(Rt), e, t, n);
 	}
 	function dn(e) {
-		let t = Math.min(H(qe) - N.right, Math.max(N.left, bn(e))), n = E.getBoundingClientRect();
+		let t = Math.min(H(qe) - Ne.right, Math.max(Ne.left, bn(e))), n = E.getBoundingClientRect();
 		return Jp(H(Rt), t, e - n.left - E.clientLeft);
 	}
 	function fn(e, t = null) {
-		let n = H(j), r = Xp(H(j), e, H(Ge), H(Wt), t);
-		if (I(j, r.spacing, !0), r.adjustment && (I(Oe, r.adjustment, !0), H(j) === n && cn()), r.immediateAnchor) {
+		let n = H(M), r = Xp(H(M), e, H(Ge), H(Wt), t);
+		if (I(M, r.spacing, !0), r.adjustment && (I(De, r.adjustment, !0), H(M) === n && cn()), r.immediateAnchor) {
 			let e = la(r.immediateAnchor, H(Rt), Qt(), $t(), tn());
 			e !== null && sn(e);
 		}
 	}
 	function pn(e, t) {
 		if (H(Ue) < 2 || !Number.isFinite(t) || t <= 0) return;
-		I(ye, null);
+		I(ve, null);
 		let n = dn(e);
 		fn(Math.min(H(Wt), Math.max(H(Ge), H(Ke) * t)), n);
 	}
@@ -10826,9 +10826,9 @@ function Fv(e, t) {
 		pn(E.getBoundingClientRect().left + Qt() / 2, e === "in" ? Pe : 1 / Pe);
 	}
 	function hn(e, t = !1) {
-		if (t || I(ye, null), H(Ue) < 2) return;
+		if (t || I(ve, null), H(Ue) < 2) return;
 		let n = H(Ke);
-		if (H(j) === null) {
+		if (H(M) === null) {
 			let e = Math.min(15, H(Ue));
 			e > 1 && (n = H(We) / (e - 1));
 		}
@@ -10842,7 +10842,7 @@ function Fv(e, t) {
 	function _n(e, t) {
 		let n = un(e, t, Qt() / 2);
 		if (n) {
-			if (I(ye, {
+			if (I(ve, {
 				startCallIndex: e,
 				endCallIndex: t
 			}, !0), n.intervalCount === 0) {
@@ -10855,7 +10855,7 @@ function Fv(e, t) {
 	function vn(e, n) {
 		let r = t.indexed.itemById.get(e);
 		if (!r || r.presence.length === 0) return;
-		w("items"), I(oe, "items");
+		C("items"), I(ae, "items");
 		let i = H(nt) > H(tt) ? (H(tt) + H(nt)) / 2 : NaN, a = n === null ? NaN : H(Et).get(n)?.x ?? NaN, o = B_(r.presence, H(at).columns, Number.isFinite(i) ? i : a, s());
 		if (o === null) return;
 		let c = ln(o, Qt() / 2);
@@ -10869,7 +10869,7 @@ function Fv(e, t) {
 			return;
 		}
 		if (e.kind === "fit") {
-			I(ye, null), fn(null);
+			I(ve, null), fn(null);
 			return;
 		}
 		if (e.kind === "zoom-in" || e.kind === "zoom-out") {
@@ -10877,14 +10877,14 @@ function Fv(e, t) {
 			return;
 		}
 		if (e.kind === "latest") {
-			I(ye, null), sn(sa($t(), Qt()));
+			I(ve, null), sn(sa($t(), Qt()));
 			return;
 		}
 		if (e.kind === "ensure-call") {
 			let t = H(Rt).find((t) => t.callIndex === e.callIndex);
 			if (!t) return;
 			let n = ia(t.x + tn(), E.scrollLeft, Qt(), $t());
-			Math.abs(n - E.scrollLeft) > .5 && I(ye, null), sn(n);
+			Math.abs(n - E.scrollLeft) > .5 && I(ve, null), sn(n);
 			return;
 		}
 		if (e.kind === "range") {
@@ -10894,7 +10894,7 @@ function Fv(e, t) {
 		if (e.kind === "recent") {
 			let n = t.indexed.analysis.modelCalls, r = Math.max(2, Math.floor(H(We) / e.minCallSpacing) + 1);
 			if (n.length <= r) {
-				I(ye, null), fn(null);
+				I(ve, null), fn(null);
 				return;
 			}
 			_n(n[n.length - r].index, n[n.length - 1].index);
@@ -10907,20 +10907,20 @@ function Fv(e, t) {
 	}
 	function xn(e, t = !1) {
 		let n = bn(e);
-		if (t) n = Math.min(H(qe) - N.right, Math.max(N.left, n));
-		else if (n < N.left || n > H(qe) - N.right) return null;
+		if (t) n = Math.min(H(qe) - Ne.right, Math.max(Ne.left, n));
+		else if (n < Ne.left || n > H(qe) - Ne.right) return null;
 		return jh(n, H(at).columns);
 	}
 	function Sn(e) {
 		return xn(e.clientX);
 	}
 	function wn(e) {
-		let t = X_(Ae);
-		return Ae = t.state, t.suppressed ? (je !== null && window.clearTimeout(je), je = null, e.preventDefault(), e.stopPropagation(), !0) : !1;
+		let t = X_(ke);
+		return ke = t.state, t.suppressed ? (Ae !== null && window.clearTimeout(Ae), Ae = null, e.preventDefault(), e.stopPropagation(), !0) : !1;
 	}
 	function En() {
-		je !== null && window.clearTimeout(je), je = window.setTimeout(() => {
-			Ae = Z_(Ae), je = null;
+		Ae !== null && window.clearTimeout(Ae), Ae = window.setTimeout(() => {
+			ke = Z_(ke), Ae = null;
 		}, 0);
 	}
 	function Dn(e) {
@@ -10932,13 +10932,13 @@ function Fv(e, t) {
 				t.pointerIds.forEach((e) => em(E, e));
 				break;
 			case "clear-selection":
-				I(ke, null);
+				I(Oe, null);
 				break;
 			case "clear-requested-range":
-				I(ye, null);
+				I(ve, null);
 				break;
 			case "selection":
-				I(ke, {
+				I(Oe, {
 					startClientX: t.startX,
 					currentClientX: t.currentX
 				});
@@ -10965,34 +10965,34 @@ function Fv(e, t) {
 	}
 	function kn(e) {
 		if (!On(e)) return;
-		let t = Qp(e), n = W_(H_(Ae.pointers, t)), r = n ? dn(n.x) : null, i = G_(Ae, t, {
-			spaceHeld: Me,
+		let t = Qp(e), n = W_(H_(ke.pointers, t)), r = n ? dn(n.x) : null, i = G_(ke, t, {
+			spaceHeld: je,
 			scrollLeft: E.scrollLeft,
 			callSpacing: H(Ke),
 			pinchAnchor: r
 		});
-		Ae = i.state, i.effects.some((e) => e.kind === "prevent-default") && e.preventDefault(), Dn(i.effects);
+		ke = i.state, i.effects.some((e) => e.kind === "prevent-default") && e.preventDefault(), Dn(i.effects);
 	}
 	function An(e) {
-		if (!Ae.pointers.some((t) => t.pointerId === e.pointerId)) return;
-		let t = K_(Ae, Qp(e), { dragThreshold: 7 });
-		Ae = t.state, Dn(t.effects);
+		if (!ke.pointers.some((t) => t.pointerId === e.pointerId)) return;
+		let t = K_(ke, Qp(e), { dragThreshold: 7 });
+		ke = t.state, Dn(t.effects);
 	}
 	function jn(e) {
-		let t = W_(U_(Ae.pointers, e.pointerId)), n = t ? dn(t.x) : null, r = q_(Ae, e.pointerId, {
+		let t = W_(U_(ke.pointers, e.pointerId)), n = t ? dn(t.x) : null, r = q_(ke, e.pointerId, {
 			clientX: e.clientX,
 			callSpacing: H(Ke),
 			pinchAnchor: n
 		});
-		Ae = r.state, Dn(r.effects);
+		ke = r.state, Dn(r.effects);
 	}
 	function Mn(e) {
-		let t = J_(Ae, e.pointerId);
-		Ae = t.state, Dn(t.effects);
+		let t = J_(ke, e.pointerId);
+		ke = t.state, Dn(t.effects);
 	}
 	function Nn() {
-		let e = Y_(Ae);
-		Ae = e.state, Dn(e.effects), je !== null && window.clearTimeout(je), je = null;
+		let e = Y_(ke);
+		ke = e.state, Dn(e.effects), Ae !== null && window.clearTimeout(Ae), Ae = null;
 	}
 	function Pn(e) {
 		On(e) && t.onHoverCall(Sn(e));
@@ -11008,22 +11008,22 @@ function Fv(e, t) {
 		});
 	}
 	function In() {
-		return !f() || H(ce) === "off" ? !1 : H(ue) ? (Kn(), !0) : (Fn("off"), H(b)?.focus({ preventScroll: !0 }), !0);
+		return !f() || H(se) === "off" ? !1 : H(le) ? (Kn(), !0) : (Fn("off"), H(b)?.focus({ preventScroll: !0 }), !0);
 	}
 	function Ln(e) {
-		I(le, e, !0);
+		I(ce, e, !0);
 	}
 	function Rn(e) {
-		I(ue, e, !0), e === null && I(_e, "");
+		I(le, e, !0), e === null && I(ge, "");
 	}
 	function zn() {
-		let e = H(ue)?.callIndices ?? [];
+		let e = H(le)?.callIndices ?? [];
 		if (e.length === 0) return;
 		let t = Math.min(...e), n = Math.max(...e);
 		t === n ? hn(t) : _n(t, n);
 	}
 	function Bn(e, t, n, r = null, i) {
-		H(de) === null && (fe = r ?? (Hi(E).activeElement instanceof HTMLElement ? Hi(E).activeElement : null));
+		H(ue) === null && (de = r ?? (Hi(E).activeElement instanceof HTMLElement ? Hi(E).activeElement : null));
 		let a = r?.getBoundingClientRect(), o = {
 			kind: e,
 			memberIds: t,
@@ -11033,15 +11033,15 @@ function Fv(e, t) {
 				y: a ? (Math.max(8, a.top) + Math.min(window.innerHeight - 8, a.bottom)) / 2 : 8
 			}
 		};
-		I(de, o), pe.focusAfterUpdate(() => Hi(E).getElementById("group-breakdown-close"), () => H(de) !== null && f(), { preventScroll: !0 });
+		I(ue, o), fe.focusAfterUpdate(() => Hi(E).getElementById("group-breakdown-close"), () => H(ue) !== null && f(), { preventScroll: !0 });
 	}
 	function Vn(e = !0) {
-		let t = fe;
-		I(de, null), fe = null, pe.cancel(), e && t?.isConnected && pe.focusAfterUpdate(() => t, () => H(de) === null && f(), { preventScroll: !0 });
+		let t = de;
+		I(ue, null), de = null, fe.cancel(), e && t?.isConnected && fe.focusAfterUpdate(() => t, () => H(ue) === null && f(), { preventScroll: !0 });
 	}
 	function Hn(e, t, n, r) {
-		let i = xn(r.clientX, !0), a = ge.getBoundingClientRect(), o = r.clientX - a.left;
-		I(he, {
+		let i = xn(r.clientX, !0), a = he.getBoundingClientRect(), o = r.clientX - a.left;
+		I(me, {
 			kind: e,
 			total: i === null ? 0 : t?.get(i) ?? 0,
 			callIndex: i,
@@ -11052,23 +11052,23 @@ function Fv(e, t) {
 		});
 	}
 	function Un() {
-		w("items"), Vn(!1);
+		C("items"), Vn(!1);
 	}
 	function Wn() {
-		H(ue) && (I(_e, Gn(), !0), E && !hh(E, H(ue)) && Kn(!1));
+		H(le) && (I(ge, Gn(), !0), E && !hh(E, H(le)) && Kn(!1));
 	}
 	function Gn() {
-		return E ? gh(E, H(A), H(ue)) : "";
+		return E ? gh(E, H(j), H(le)) : "";
 	}
 	function Kn(e = !0) {
-		H(ve)?.closeEventBreakdown(e);
+		H(_e)?.closeEventBreakdown(e);
 	}
 	function qn(e) {
 		let n = t.indexed.analysis.compactions.find((t) => t.beforeModelCall === e);
 		n && (Kn(!1), t.onSelectItem(n.summaryItemId), t.indexed.callByIndex.has(e) && t.onPinCall(e));
 	}
 	function Jn(e) {
-		Kn(!1), t.onPinCall(e), me.focusAfterUpdate(() => Hi(E).getElementById(`economics-call-${e}`), () => f() && t.indexed.callByIndex.has(e));
+		Kn(!1), t.onPinCall(e), pe.focusAfterUpdate(() => Hi(E).getElementById(`economics-call-${e}`), () => f() && t.indexed.callByIndex.has(e));
 	}
 	function Yn(e, n) {
 		wn(e) || (e.stopPropagation(), t.onPinCall(n));
@@ -11106,7 +11106,7 @@ function Fv(e, t) {
 		(t.onEscape() !== !1 || g()) && (e.preventDefault(), e.stopPropagation());
 	}
 	function nr(e) {
-		e.key === "Escape" ? tr(e) : e.code === "Space" && (e.target === E || e.target === D) && (Me = !0, e.preventDefault());
+		e.key === "Escape" ? tr(e) : e.code === "Space" && (e.target === E || e.target === D) && (je = !0, e.preventDefault());
 	}
 	function rr(e, n) {
 		if (![
@@ -11143,9 +11143,9 @@ function Fv(e, t) {
 		return a ? r.some((t) => t.memberItemIds?.includes(e) && t.points.some((e) => z_(a.presence, e.callIndex) && e.x >= i.left && e.x <= i.right)) : !1;
 	}
 	var lr = { dismissEconomics: In }, ur = Nv(), dr = R(ur), fr = L(dr), pr = B(L(fr), 2), mr = B(pr, 2);
-	M(fr);
+	N(fr);
 	var hr = B(fr, 2), gr = B(L(hr), 2), _r = B(gr, 2);
-	M(hr), M(dr);
+	N(hr), N(dr);
 	var vr = B(dr, 2);
 	let br;
 	var xr = L(vr), Sr = L(xr);
@@ -11159,7 +11159,7 @@ function Fv(e, t) {
 				bottom: H(t).position === 0
 			}), i = yi(n, "", i, { top: `${H(t).percent}%` }), K(a, e);
 		}, [() => xm(H(t).value)]), G(e, n);
-	}), M(Sr);
+	}), N(Sr);
 	var Cr = B(Sr, 2), wr = L(Cr), Tr = z(wr), Er = B(wr, 2);
 	let Dr;
 	var kr = L(Er);
@@ -11174,8 +11174,8 @@ function Fv(e, t) {
 		}), J(B(s), 17, () => H(at).lineageConnectors, (e) => e.key, (e, t) => {
 			var n = rv();
 			V(() => Y(n, "d", H(t).mergePath)), G(e, n);
-		}), M(o), M(r), V(() => {
-			Y(n, "id", `${a}-input-hatch`), Y(r, "id", `${a}-input-mask`), Y(r, "x", N.left), Y(r, "y", N.top), Y(r, "width", H(at).innerWidth), Y(r, "height", H(at).innerHeight), Y(i, "x", N.left), Y(i, "y", N.top), Y(i, "width", H(at).innerWidth), Y(i, "height", H(at).innerHeight), Y(o, "transform", H(mt));
+		}), N(o), N(r), V(() => {
+			Y(n, "id", `${a}-input-hatch`), Y(r, "id", `${a}-input-mask`), Y(r, "x", Ne.left), Y(r, "y", Ne.top), Y(r, "width", H(at).innerWidth), Y(r, "height", H(at).innerHeight), Y(i, "x", Ne.left), Y(i, "y", Ne.top), Y(i, "width", H(at).innerWidth), Y(i, "height", H(at).innerHeight), Y(o, "transform", H(mt));
 		}), G(e, t);
 	};
 	q(jr, (e) => {
@@ -11184,17 +11184,17 @@ function Fv(e, t) {
 	var Nr = B(jr);
 	J(Nr, 19, () => H(at).lineageConnectors, (e) => e.key, (e, r, i) => {
 		var o = av(), s = L(o), c = B(s);
-		M(o), V((e, t) => {
+		N(o), V((e, t) => {
 			Y(o, "id", `${a}-${H(i)}`), Y(o, "x1", H(r).sourceX), Y(o, "y1", H(r).sourceY), Y(o, "x2", H(r).targetX), Y(o, "y2", H(r).sourceY), Y(s, "stop-color", e), Y(c, "stop-color", t);
 		}, [() => Ta(t.indexed, H(r).fromItemId, n()), () => Ta(t.indexed, H(r).toItemId, n())]), G(e, o);
 	});
 	var Pr = B(Nr);
-	M(Ar);
+	N(Ar);
 	var Fr = B(Ar), Ir = B(Fr);
 	J(Ir, 17, () => H(St), (e) => e.value, (e, t) => {
 		var n = ov();
 		V(() => {
-			Y(n, "x1", N.left), Y(n, "x2", H(qe) - N.right), Y(n, "y1", H(t).y), Y(n, "y2", H(t).y);
+			Y(n, "x1", Ne.left), Y(n, "x2", H(qe) - Ne.right), Y(n, "y1", H(t).y), Y(n, "y2", H(t).y);
 		}), G(e, n);
 	});
 	var W = B(Ir);
@@ -11202,7 +11202,7 @@ function Fv(e, t) {
 		var r = Br(), i = R(r), a = (e) => {
 			var n = sv();
 			V(() => {
-				Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", N.top), Y(n, "y2", 500 - N.bottom);
+				Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", Ne.top), Y(n, "y2", 500 - Ne.bottom);
 			}), G(e, n);
 		}, o = /* @__PURE__ */ P(() => H(Vt).has(H(n)));
 		q(i, (e) => {
@@ -11212,8 +11212,8 @@ function Fv(e, t) {
 	var Lr = B(W);
 	J(Lr, 17, () => H(at).compactions, (e) => e.compactionId, (e, t) => {
 		var n = cv(), r = L(n), i = z(r), a = B(r), o = B(a), s = z(o, !0);
-		M(n), V(() => {
-			Y(n, "aria-label", `Compaction before call ${H(t).beforeModelCall}`), K(i, `Compaction before call ${H(t).beforeModelCall ?? ""}`), Y(a, "x1", H(t).x), Y(a, "x2", H(t).x), Y(a, "y1", N.top - 8), Y(a, "y2", 500 - N.bottom), Y(o, "x", H(t).x + 5), Y(o, "y", N.top - 13), K(s, H(zt) < 64 ? "C" : "COMPACT");
+		N(n), V(() => {
+			Y(n, "aria-label", `Compaction before call ${H(t).beforeModelCall}`), K(i, `Compaction before call ${H(t).beforeModelCall ?? ""}`), Y(a, "x1", H(t).x), Y(a, "x2", H(t).x), Y(a, "y1", Ne.top - 8), Y(a, "y2", 500 - Ne.bottom), Y(o, "x", H(t).x + 5), Y(o, "y", Ne.top - 13), K(s, H(zt) < 64 ? "C" : "COMPACT");
 		}), G(e, n);
 	});
 	var Rr = B(Lr), Vr = L(Rr);
@@ -11234,7 +11234,7 @@ function Fv(e, t) {
 		};
 		q(p, (e) => {
 			H(i) || e(m);
-		}), M(f), M(s), V((e, n, p) => {
+		}), N(f), N(s), V((e, n, p) => {
 			c = _i(s, 0, "ribbon-group svelte-13ao2q1", null, c, {
 				"group-ribbon": H(i),
 				selected: !H(i) && l() === H(r).itemId,
@@ -11245,13 +11245,13 @@ function Fv(e, t) {
 			() => or(H(r)) ? H(a) : "none",
 			() => or(H(r)) ? 1.25 : 0
 		]), Or("pointerenter", f, (e) => H(i) ? Hn(H(r).groupKind, H(r).valueByCall, H(r).memberItemIds?.length ?? 0, e) : t.onHoverItem(H(r).itemId, e)), U("pointermove", f, (e) => H(i) ? Hn(H(r).groupKind, H(r).valueByCall, H(r).memberItemIds?.length ?? 0, e) : t.onHoverItem(H(r).itemId, e)), Or("pointerleave", f, () => {
-			H(i) ? I(he, null) : t.onHoverItem(null);
+			H(i) ? I(me, null) : t.onHoverItem(null);
 		}), U("mousedown", f, (e) => {
 			H(i) && e.preventDefault();
 		}), U("click", f, (e) => H(i) ? $n(e, H(r).groupKind, H(r).memberItemIds ?? []) : Zn(e, H(r).itemId)), Or("focus", f, () => I(Le, H(r).key, !0)), U("keydown", f, (e) => {
 			rr(e, H(r)) || (H(i) ? er(e, H(r).groupKind, H(r).memberItemIds ?? []) : ir(e, H(r).itemId));
 		}), G(e, s);
-	}), M(Rr);
+	}), N(Rr);
 	var Hr = B(Rr), Ur = (e) => {
 		var t = mv();
 		J(t, 21, () => H(vt), ei, (e, t) => {
@@ -11266,11 +11266,11 @@ function Fv(e, t) {
 			});
 			var o = B(r);
 			V(() => Y(o, "d", H(t).line)), G(e, n);
-		}), M(t), G(e, t);
+		}), N(t), G(e, t);
 	};
 	q(Hr, (e) => {
 		H(Ye).size > 0 && e(Ur);
-	}), M(kr), Ri(kr, (e) => D = e, () => D);
+	}), N(kr), Ri(kr, (e) => D = e, () => D);
 	var Wr = B(kr, 2);
 	Y(Wr, "height", 500);
 	var Gr = L(Wr);
@@ -11281,11 +11281,11 @@ function Fv(e, t) {
 			var a = L(r), o = B(a);
 			Y(o, "y", 483);
 			var c = z(o, !0);
-			M(r), V(() => {
+			N(r), V(() => {
 				i = _i(r, 0, "call-target svelte-13ao2q1", null, i, {
 					condensed: H(Bt) > 1,
 					pinned: s() === H(n).callIndex
-				}), Y(r, "data-call-index", H(n).callIndex), Y(r, "tabindex", H(n).callIndex === H(It) ? 0 : -1), Y(r, "aria-label", `Pin model call ${H(n).callIndex}`), Y(a, "x", H(n).x - 22), Y(a, "y", 500 - N.bottom + 5), Y(o, "x", H(n).x), K(c, H(n).callIndex);
+				}), Y(r, "data-call-index", H(n).callIndex), Y(r, "tabindex", H(n).callIndex === H(It) ? 0 : -1), Y(r, "aria-label", `Pin model call ${H(n).callIndex}`), Y(a, "x", H(n).x - 22), Y(a, "y", 500 - Ne.bottom + 5), Y(o, "x", H(n).x), K(c, H(n).callIndex);
 			}), U("keydown", r, (e) => ar(e, H(n).callIndex)), U("click", r, (e) => {
 				wn(e) || (e.stopPropagation(), t.onPinCall(H(n).callIndex));
 			}), G(e, r);
@@ -11331,11 +11331,11 @@ function Fv(e, t) {
 		V(() => {
 			Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", H(t).y0), Y(n, "y2", H(t).y1);
 		}), G(e, n);
-	}), M(Kr);
+	}), N(Kr);
 	var Qr = B(Kr), $r = (e) => {
 		var t = xv();
 		V(() => {
-			Y(t, "x", H(qt).x), Y(t, "y", N.top), Y(t, "width", H(qt).width), Y(t, "height", H(at).innerHeight);
+			Y(t, "x", H(qt).x), Y(t, "y", Ne.top), Y(t, "width", H(qt).width), Y(t, "height", H(at).innerHeight);
 		}), G(e, t);
 	};
 	q(Qr, (e) => {
@@ -11346,7 +11346,7 @@ function Fv(e, t) {
 		var n = Br(), r = R(n), i = (e) => {
 			var n = Sv();
 			V(() => {
-				Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", N.top), Y(n, "y2", 500 - N.bottom);
+				Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", Ne.top), Y(n, "y2", 500 - Ne.bottom);
 			}), G(e, n);
 		};
 		q(r, (e) => {
@@ -11361,7 +11361,7 @@ function Fv(e, t) {
 		var n = Br(), r = R(n), i = (e) => {
 			var n = Cv();
 			V(() => {
-				Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", N.top), Y(n, "y2", 500 - N.bottom);
+				Y(n, "x1", H(t).x), Y(n, "x2", H(t).x), Y(n, "y1", Ne.top), Y(n, "y2", 500 - Ne.bottom);
 			}), G(e, n);
 		};
 		q(r, (e) => {
@@ -11370,39 +11370,39 @@ function Fv(e, t) {
 	};
 	q(ri, (e) => {
 		s() !== null && e(ii);
-	}), M(Wr), M(Er), Ri(Er, (e) => O = e, () => O);
+	}), N(Wr), N(Er), Ri(Er, (e) => O = e, () => O);
 	var ai = B(Er, 2), oi = (e) => {
 		var t = wv();
 		let r, i;
 		var a = L(t), o = z(a, !0), s = B(a, 2), c = z(s), l = z(B(s, 2));
-		M(t), V((e, n, a, s) => {
-			r = _i(t, 1, "group-hover-card svelte-13ao2q1", null, r, { flip: H(he).flip }), i = yi(t, "", i, {
-				left: `${H(he).x}px`,
-				top: `${H(he).y}px`,
+		N(t), V((e, n, a, s) => {
+			r = _i(t, 1, "group-hover-card svelte-13ao2q1", null, r, { flip: H(me).flip }), i = yi(t, "", i, {
+				left: `${H(me).x}px`,
+				top: `${H(me).y}px`,
 				"--group-color": e
 			}), K(o, n), K(c, `${a ?? ""}
-            ${H(Ct) ?? ""} at call ${H(he).callIndex ?? "—" ?? ""}`), K(l, `${s ?? ""} items`);
+            ${H(Ct) ?? ""} at call ${H(me).callIndex ?? "—" ?? ""}`), K(l, `${s ?? ""} items`);
 		}, [
-			() => wa(H(he).kind, n()),
-			() => No(H(he).kind),
-			() => xm(H(he).total),
-			() => H(he).itemCount.toLocaleString()
+			() => wa(H(me).kind, n()),
+			() => No(H(me).kind),
+			() => xm(H(me).total),
+			() => H(me).itemCount.toLocaleString()
 		]), G(e, t);
 	};
 	q(ai, (e) => {
-		H(he) && e(oi);
+		H(me) && e(oi);
 	});
 	var si = B(ai, 2), ci = (e) => {
 		var t = Ev();
 		J(B(L(t), 2), 17, () => [...new Set(H(at).ribbons.map((e) => e.groupKind).filter(Boolean))], ei, (e, t) => {
 			var r = Tv(), i = L(r), a = B(i, 1, !0);
-			M(r), V((e, t) => {
+			N(r), V((e, t) => {
 				yi(i, e), K(a, t);
 			}, [() => `background:${wa(H(t), n())}`, () => No(H(t))]), G(e, r);
-		}), M(t), G(e, t);
+		}), N(t), G(e, t);
 	};
 	q(si, (e) => {
-		H(oe) === "itemTypes" && e(ci);
+		H(ae) === "itemTypes" && e(ci);
 	});
 	var li = B(si, 2), di = (e) => {
 		var t = jv(), n = B(L(t), 2), r = (e) => {
@@ -11411,10 +11411,10 @@ function Fv(e, t) {
 				id: "unreconciled-input-note",
 				label: "About unreconciled input",
 				children: (e, t) => {
-					xe(), G(e, zr("The reported input minus the content estimated in the River. It can include request\n                framing and estimation differences. It is not lost content, and it is not attributed\n                to cost."));
+					be(), G(e, zr("The reported input minus the content estimated in the River. It can include request\n                framing and estimation differences. It is not lost content, and it is not attributed\n                to cost."));
 				},
 				$$slots: { default: !0 }
-			}), M(t), G(e, t);
+			}), N(t), G(e, t);
 		};
 		q(n, (e) => {
 			H(yt) && e(r);
@@ -11430,7 +11430,7 @@ function Fv(e, t) {
 			};
 			q(r, (e) => {
 				H(bt).reconstructed > H(bt).reported ? e(i) : e(a, -1);
-			}), xe(), M(t), V((e, t) => K(n, `Call ${H(bt).callIndex ?? ""}: reconstructed ${e ?? ""} · reported ${t ?? ""} · `), [() => xm(H(bt).reconstructed), () => xm(H(bt).reported)]), G(e, t);
+			}), be(), N(t), V((e, t) => K(n, `Call ${H(bt).callIndex ?? ""}: reconstructed ${e ?? ""} · reported ${t ?? ""} · `), [() => xm(H(bt).reconstructed), () => xm(H(bt).reported)]), G(e, t);
 		}, o = (e) => {
 			var t = kv(), n = z(t);
 			V(() => K(n, `Call ${s() ?? c() ?? ""}: input comparison unavailable`)), G(e, t);
@@ -11439,7 +11439,7 @@ function Fv(e, t) {
 		};
 		q(i, (e) => {
 			H(bt) ? e(a) : s() !== null || c() !== null ? e(o, 1) : e(l, -1);
-		}), M(t), G(e, t);
+		}), N(t), G(e, t);
 	};
 	q(li, (e) => {
 		H(Ye).size > 0 && e(di);
@@ -11449,13 +11449,13 @@ function Fv(e, t) {
 		let e = /* @__PURE__ */ P(() => t.indexed.analysis.session.costSummary.apiEquivalent.calls > 0);
 		Ah(fi, {
 			get mode() {
-				return H(ce);
+				return H(se);
 			},
 			get lastMode() {
 				return _().economics.lastMode;
 			},
 			get cacheView() {
-				return H(se);
+				return H(oe);
 			},
 			get cachePresentation() {
 				return H(ht);
@@ -11494,10 +11494,10 @@ function Fv(e, t) {
 				return H(qe);
 			},
 			get mode() {
-				return H(ce);
+				return H(se);
 			},
 			get cacheView() {
-				return H(se);
+				return H(oe);
 			},
 			get pinnedCallIndex() {
 				return s();
@@ -11514,29 +11514,29 @@ function Fv(e, t) {
 			onMarkClick: Yn,
 			onReadoutChange: Ln,
 			onEventBreakdownChange: Rn
-		}), (e) => I(ve, e, !0), () => H(ve));
+		}), (e) => I(_e, e, !0), () => H(_e));
 	};
 	q(pi, (e) => {
-		H(ce) !== "off" && e(mi);
-	}), M(Cr), Ri(Cr, (e) => E = e, () => E), M(xr), Ri(xr, (e) => ge = e, () => ge);
+		H(se) !== "off" && e(mi);
+	}), N(Cr), Ri(Cr, (e) => E = e, () => E), N(xr), Ri(xr, (e) => he = e, () => he);
 	var hi = B(xr, 2), gi = (e) => {
 		{
-			let t = /* @__PURE__ */ P(() => No(H(de).kind));
+			let t = /* @__PURE__ */ P(() => No(H(ue).kind));
 			fh(e, {
 				get label() {
 					return H(t);
 				},
 				get anchor() {
-					return H(de).anchor;
+					return H(ue).anchor;
 				},
 				get memberLabels() {
 					return H(ze);
 				},
 				get memberCount() {
-					return H(de).memberIds.length;
+					return H(ue).memberIds.length;
 				},
 				get callIndex() {
-					return H(de).callIndex;
+					return H(ue).callIndex;
 				},
 				onClose: () => Vn(),
 				onShowItems: Un
@@ -11544,15 +11544,15 @@ function Fv(e, t) {
 		}
 	};
 	q(hi, (e) => {
-		H(de) && e(gi);
+		H(ue) && e(gi);
 	});
 	var vi = B(hi, 2), bi = (e) => {
 		sh(e, {
 			get breakdown() {
-				return H(ue);
+				return H(le);
 			},
 			get positionStyle() {
-				return H(_e);
+				return H(ge);
 			},
 			get canZoomIn() {
 				return H(Gt);
@@ -11562,31 +11562,31 @@ function Fv(e, t) {
 			onInspect: Jn,
 			onInspectCompaction: qn,
 			get element() {
-				return H(A);
+				return H(j);
 			},
 			set element(e) {
-				I(A, e, !0);
+				I(j, e, !0);
 			}
 		});
 	};
 	q(vi, (e) => {
-		H(ue) && e(bi);
+		H(le) && e(bi);
 	});
 	var xi = B(vi, 2), Si = (e) => {
 		var t = Mv(), n = z(t, !0);
-		V(() => K(n, H(le) || "Hover or focus a call for an exact readout.")), G(e, t);
+		V(() => K(n, H(ce) || "Hover or focus a call for an exact readout.")), G(e, t);
 	};
 	q(xi, (e) => {
-		H(ce) !== "off" && e(Si);
-	}), M(vr), V(() => {
-		Y(pr, "aria-pressed", H(ae) === "session"), Y(mr, "aria-pressed", H(ae) === "visible"), Y(gr, "aria-pressed", H(oe) === "items"), Y(_r, "aria-pressed", H(oe) === "itemTypes"), br = yi(vr, "", br, { "--plot-left": `${N.left}px` }), Y(Sr, "aria-label", H(Tt)), yi(Sr, `top:${N.top}px;height:${H(at).innerHeight}px`), K(Tr, `Context items flow horizontally through model calls. Tab reaches one context item and one
+		H(se) !== "off" && e(Si);
+	}), N(vr), V(() => {
+		Y(pr, "aria-pressed", H(ie) === "session"), Y(mr, "aria-pressed", H(ie) === "visible"), Y(gr, "aria-pressed", H(ae) === "items"), Y(_r, "aria-pressed", H(ae) === "itemTypes"), br = yi(vr, "", br, { "--plot-left": `${Ne.left}px` }), Y(Sr, "aria-label", H(Tt)), yi(Sr, `top:${Ne.top}px;height:${H(at).innerHeight}px`), K(Tr, `Context items flow horizontally through model calls. Tab reaches one context item and one
         call label; Up and Down arrows move between items in the stack, Home and End move to its
         bottom and top, Left and Right arrows move between calls, and Enter selects. Dashed vertical
         markers indicate compaction. In individual-item view, colour-blended connections show lossy
         summarization, not conserved tokens or source contributions to the summary. ${H(wt) ?? ""}.
         ${H(Ye).size > 0 ? "The dashed reported-input reference is recorded after each call. Hatched unreconciled input is its approximate excess over reconstructed content, not recovered items or cost attribution. Where a session does not record its system prompt or tools, an Unrecorded request context item is measured from the reported input at the first call and after each compaction or model change, so the hatching shows change since then. Scaling includes the reference. Missing comparisons break the line." : ""}
-        ${t.indexed.analysis.displayWeightUnit === "unavailable" ? "Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths." : ""}`), Dr = yi(Er, "", Dr, { width: `${H(qe)}px` }), Y(kr, "viewBox", `0 0 ${H(qe)} 500`), Y(kr, "width", H(qe)), Y(Pr, "patternTransform", `matrix(${1 / (H(it).scale || 1)} 0 0 ${1 / H(ft)} ${-H(it).offset / (H(it).scale || 1)} ${-H(pt) / H(ft)}) rotate(35)`), Y(Fr, "x", N.left), Y(Fr, "y", N.top), Y(Fr, "width", H(at).innerWidth), Y(Fr, "height", H(at).innerHeight), Y(Rr, "transform", H(mt)), Y(Wr, "viewBox", `0 0 ${H(qe)} 500`), Y(Wr, "width", H(qe)), Y(Kr, "transform", H(mt));
-	}), U("click", pr, () => ee("session")), U("click", mr, () => ee("visible")), U("click", gr, () => w("items")), U("click", _r, () => w("itemTypes")), U("pointerdown", Cr, kn), U("pointermove", Cr, Pn), Or("selectstart", Cr, (e) => e.preventDefault()), Or("pointerleave", Cr, () => {
+        ${t.indexed.analysis.displayWeightUnit === "unavailable" ? "Token geometry is unavailable; ribbon regions are structural placeholders, not measured token widths." : ""}`), Dr = yi(Er, "", Dr, { width: `${H(qe)}px` }), Y(kr, "viewBox", `0 0 ${H(qe)} 500`), Y(kr, "width", H(qe)), Y(Pr, "patternTransform", `matrix(${1 / (H(it).scale || 1)} 0 0 ${1 / H(ft)} ${-H(it).offset / (H(it).scale || 1)} ${-H(pt) / H(ft)}) rotate(35)`), Y(Fr, "x", Ne.left), Y(Fr, "y", Ne.top), Y(Fr, "width", H(at).innerWidth), Y(Fr, "height", H(at).innerHeight), Y(Rr, "transform", H(mt)), Y(Wr, "viewBox", `0 0 ${H(qe)} 500`), Y(Wr, "width", H(qe)), Y(Kr, "transform", H(mt));
+	}), U("click", pr, () => w("session")), U("click", mr, () => w("visible")), U("click", gr, () => C("items")), U("click", _r, () => C("itemTypes")), U("pointerdown", Cr, kn), U("pointermove", Cr, Pn), Or("selectstart", Cr, (e) => e.preventDefault()), Or("pointerleave", Cr, () => {
 		t.onHoverCall(null), t.onHoverItem(null);
 	}), U("keydown", Cr, nr), U("click", Cr, Xn), Or("pointerleave", Er, () => t.onHoverCall(null)), G(e, ur);
 	var Ci = Ve(lr);
@@ -11637,44 +11637,44 @@ function Qv(e, t) {
 	function _(e) {
 		return `${e > 0 ? "+" : e < 0 ? "−" : "±"}${Z(Math.abs(e))}`;
 	}
-	var v = Xv(), y = L(v), b = L(y), x = z(b, !0), S = B(b, 2), C = (e) => {
+	var v = Xv(), y = L(v), b = L(y), x = z(b, !0), S = B(b, 2), ee = (e) => {
 		var n = Iv(), r = R(n), i = z(r), o = B(r, 2);
 		V(() => K(i, `${t.call.provider ?? "Unknown provider" ?? ""} / ${t.call.model ?? "Unknown model" ?? ""}`)), U("click", o, function(...e) {
 			a()?.apply(this, e);
 		}), G(e, n);
 	};
 	q(S, (e) => {
-		t.call && e(C);
-	}), M(y);
-	var w = B(y, 2), ee = (e) => {
+		t.call && e(ee);
+	}), N(y);
+	var C = B(y, 2), w = (e) => {
 		var n = Lv(), r = z(n, !0);
 		V(() => K(r, t.indexed.analysis.modelCalls.length === 0 ? "No model calls yet." : "Select a call in the chart to see it here.")), G(e, n);
 	}, T = (e) => {
 		var n = Yv(), a = R(n), v = L(a), y = z(B(L(v), 2));
-		M(v);
-		var b = B(v, 2), x = B(L(b), 2), S = L(x), C = B(S), w = (e) => {
+		N(v);
+		var b = B(v, 2), x = B(L(b), 2), S = L(x), ee = B(S), C = (e) => {
 			var t = Rv(), n = z(t, !0);
 			V((e) => {
 				Y(t, "title", `Change since call ${H(s)?.index}`), K(n, e);
 			}, [() => _(H(c))]), G(e, t);
 		};
-		q(C, (e) => {
-			H(c) !== null && !t.call.usage.placeholder && e(w);
-		}), M(x), M(b);
-		var ee = B(b, 2), T = z(B(L(ee), 2), !0);
-		M(ee), M(a);
+		q(ee, (e) => {
+			H(c) !== null && !t.call.usage.placeholder && e(C);
+		}), N(x), N(b);
+		var w = B(b, 2), T = z(B(L(w), 2), !0);
+		N(w), N(a);
 		var E = B(a, 2);
 		let D;
-		var O = L(E), k = L(O), te = z(k), ne = B(k, 2), re = (e) => {
+		var O = L(E), k = L(O), te = z(k), A = B(k, 2), ne = (e) => {
 			G(e, zv());
-		}, ie = (e) => {
+		}, re = (e) => {
 			var n = Uv(), r = L(n);
 			J(r, 16, () => H(d).slice(0, 5), (e) => e, (e, t) => {
 				let n = /* @__PURE__ */ P(() => H(l).items.get(t));
 				var r = Bv(), a = B(L(r), 2), o = B(L(a), 1, !0);
-				M(a);
+				N(a);
 				var s = B(a, 2), c = z(s, !0);
-				M(r), V((e, t) => {
+				N(r), V((e, t) => {
 					K(o, e), Y(s, "title", H(n)?.partial ? "Partial or missing estimate" : void 0), K(c, t);
 				}, [() => h(t), () => H(n)?.tokens == null ? "Unknown" : Z(H(n).tokens)]), U("click", a, () => i()(t)), G(e, r);
 			});
@@ -11689,9 +11689,9 @@ function Qv(e, t) {
 			J(s, 16, () => H(f).slice(0, 5), (e) => e, (e, t) => {
 				let n = /* @__PURE__ */ P(() => H(u).items.get(t));
 				var r = Hv(), a = B(L(r), 2), o = B(L(a), 1, !0);
-				M(a);
+				N(a);
 				var s = B(a, 2), c = z(s, !0);
-				M(r), V((e, t) => {
+				N(r), V((e, t) => {
 					K(o, e), Y(s, "title", H(n)?.partial ? "Partial or missing estimate" : void 0), K(c, t);
 				}, [() => h(t), () => H(n)?.tokens == null ? "Unknown" : Z(H(n).tokens)]), U("click", a, () => i()(t)), G(e, r);
 			});
@@ -11701,28 +11701,28 @@ function Qv(e, t) {
 			};
 			q(c, (e) => {
 				t.call.droppedItemIds.length > 5 && e(p);
-			}), M(n), G(e, n);
+			}), N(n), G(e, n);
 		};
-		q(ne, (e) => {
-			t.call.addedItemIds.length === 0 && t.call.droppedItemIds.length === 0 ? e(re) : e(ie, -1);
-		}), M(O);
-		var ae = B(O, 2), oe = B(L(ae), 2), se = (e) => {
+		q(A, (e) => {
+			t.call.addedItemIds.length === 0 && t.call.droppedItemIds.length === 0 ? e(ne) : e(re, -1);
+		}), N(O);
+		var ie = B(O, 2), ae = B(L(ie), 2), oe = (e) => {
 			G(e, Wv());
-		}, ce = (e) => {
+		}, se = (e) => {
 			var t = Kv(), n = R(t);
 			J(n, 21, () => H(p), (e) => e.id, (e, t) => {
 				var n = Gv(), r = L(n), a = z(r, !0), o = z(B(r, 2));
-				M(n), V((e, n) => {
+				N(n), V((e, n) => {
 					K(a, H(t).label), K(o, `${e ?? ""}${n ?? ""}`);
 				}, [() => Z(H(t).tokens), () => H(t).share === null ? "" : ` · ${Ha(H(t).share)}`]), U("click", r, () => i()(H(t).id)), G(e, n);
-			}), M(n), U("click", B(n, 2), function(...e) {
+			}), N(n), U("click", B(n, 2), function(...e) {
 				o()?.apply(this, e);
 			}), G(e, t);
 		};
-		q(oe, (e) => {
-			H(p).length === 0 ? e(se) : e(ce, -1);
-		}), M(ae), M(E);
-		var le = B(E, 2), ue = (e) => {
+		q(ae, (e) => {
+			H(p).length === 0 ? e(oe) : e(se, -1);
+		}), N(ie), N(E);
+		var ce = B(E, 2), le = (e) => {
 			var t = Jv(), n = B(L(t), 2);
 			J(n, 21, () => H(m), (e) => e.name, (e, t) => {
 				var n = qv();
@@ -11731,10 +11731,10 @@ function Qv(e, t) {
 				V(() => {
 					r = _i(n, 1, "tool-chip svelte-182syzp", null, r, { failed: H(t).failed }), K(i, `${H(t).name ?? ""}${H(t).count > 1 ? ` × ${H(t).count}` : ""}${H(t).failed ? " · failed" : ""}`);
 				}), G(e, n);
-			}), M(n), M(t), G(e, t);
+			}), N(n), N(t), G(e, t);
 		};
-		q(le, (e) => {
-			H(m).length > 0 && e(ue);
+		q(ce, (e) => {
+			H(m).length > 0 && e(le);
 		}), V((e, n, i, a, o) => {
 			K(y, `${t.call.index ?? ""} of ${e ?? ""}`), K(S, `${n ?? ""} `), K(T, i), D = _i(E, 1, "lists svelte-182syzp", null, D, { "two-columns": r() }), K(te, `Context changes · ${a ?? ""} · ${o ?? ""}`);
 		}, [
@@ -11745,9 +11745,9 @@ function Qv(e, t) {
 			() => g(t.call.droppedItemIds.length, "dropped", H(u))
 		]), G(e, n);
 	};
-	q(w, (e) => {
-		t.call ? e(T, -1) : e(ee);
-	}), M(v), V(() => K(x, t.call ? n() ? "Latest call" : `Call ${t.call.index}` : "Latest call")), G(e, v), Ve();
+	q(C, (e) => {
+		t.call ? e(T, -1) : e(w);
+	}), N(v), V(() => K(x, t.call ? n() ? "Latest call" : `Call ${t.call.index}` : "Latest call")), G(e, v), Ve();
 }
 kr(["click"]);
 //#endregion
@@ -11802,16 +11802,16 @@ var ay = /* @__PURE__ */ W("<div class=\"summary-section svelte-okw1rh\"><!></di
 };
 function vy(e, t) {
 	Be(t, !0), ui(e, _y);
-	let n = X(t, "sessions", 19, () => []), r = X(t, "sessionReference", 3, null), i = X(t, "presentation", 31, () => en(Ki())), a = X(t, "viewState", 15, null), o = X(t, "riverSessionId", 15, null), s = X(t, "onPreferencesChange", 3, () => {}), c = X(t, "copyDisabled", 3, !1), l = X(t, "keyboardScope", 3, "window"), u = X(t, "onPin", 3, () => {}), d = X(t, "sections", 3, ey), f = X(t, "following", 3, !1), p = ny(yr(() => d())), m = iy(p), h = /* @__PURE__ */ P(() => f() && p.includes("call"));
-	function g(e) {
-		let t = m.get(e);
+	let n = X(t, "sessions", 19, () => []), r = X(t, "sessionReference", 3, null), i = X(t, "presentation", 31, () => en(Ki())), a = X(t, "viewState", 15, null), o = X(t, "riverSessionId", 15, null), s = X(t, "onPreferencesChange", 3, () => {}), c = X(t, "copyDisabled", 3, !1), l = X(t, "keyboardScope", 3, "window"), u = X(t, "onPin", 3, () => {}), d = X(t, "sections", 3, ey), f = X(t, "following", 3, !1), p = X(t, "density", 3, "standard"), m = ny(yr(() => d())), h = iy(m), g = /* @__PURE__ */ P(() => f() && m.includes("call"));
+	function _(e) {
+		let t = h.get(e);
 		return `--wide-column:${t.column};--wide-row:${t.row}`;
 	}
-	let _ = /* @__PURE__ */ P(() => r() ?? t.indexed.analysis.session.id), v = /* @__PURE__ */ F(Ui()), y = /* @__PURE__ */ F(Ui()), b = null, x = null, S = /* @__PURE__ */ F(0), C = /* @__PURE__ */ F(0), w = /* @__PURE__ */ F(null);
-	function ee(e) {
+	let v = /* @__PURE__ */ P(() => r() ?? t.indexed.analysis.session.id), y = /* @__PURE__ */ F(Ui()), b = /* @__PURE__ */ F(Ui()), x = null, S = null, ee = /* @__PURE__ */ F(0), C = /* @__PURE__ */ F(0), w = /* @__PURE__ */ F(null);
+	function T(e) {
 		i(e), s()(e);
 	}
-	let T = /* @__PURE__ */ F($i()), E, D = /* @__PURE__ */ F("river"), O = /* @__PURE__ */ F("cumulative"), k = /* @__PURE__ */ F(""), te = /* @__PURE__ */ F(null), ne = /* @__PURE__ */ F(null), re = 0, ie = 0, ae = /* @__PURE__ */ F(null), oe = 0, se = () => ({
+	let E = /* @__PURE__ */ F($i()), D, O = /* @__PURE__ */ F("river"), k = /* @__PURE__ */ F("cumulative"), te = /* @__PURE__ */ F(""), A = /* @__PURE__ */ F(null), ne = /* @__PURE__ */ F(null), re = 0, ie = 0, ae = /* @__PURE__ */ F(null), oe = 0, se = () => ({
 		ready: !1,
 		isFitAll: !0,
 		zoomFactor: 1,
@@ -11824,86 +11824,88 @@ function vy(e, t) {
 	}), ce = /* @__PURE__ */ F(se()), le = /* @__PURE__ */ F(null), ue = /* @__PURE__ */ F(null), de = /* @__PURE__ */ F(null), fe = /* @__PURE__ */ F(null), pe = /* @__PURE__ */ F(!1), me = /* @__PURE__ */ F(!1), he = /* @__PURE__ */ F(!1);
 	function ge(e) {
 		let t = e > 0 && (H(pe) ? e <= 540 : e <= 520);
-		t !== H(pe) && I(pe, t, !0), I(me, e > 0 && (H(me) ? e <= 480 : e <= 460), !0);
-		let n = e > 0 && (H(he) ? e <= 780 : e <= 760);
-		n !== H(he) && I(he, n, !0);
+		t !== H(pe) && I(pe, t, !0);
+		let n = p() === "compact" ? 510 : 540;
+		I(me, e > 0 && (H(me) ? e <= n + 20 : e <= n), !0);
+		let r = e > 0 && (H(he) ? e <= 780 : e <= 760);
+		r !== H(he) && I(he, r, !0);
 	}
-	function _e(e) {
+	function j(e) {
 		e !== o() && requestAnimationFrame(() => setTimeout(() => {
 			(r() ?? t.indexed.analysis.session.id) !== e || Ce || o(e);
 		}));
 	}
-	let A = /* @__PURE__ */ P(() => H(T).pinnedCallIndex === null ? null : t.indexed?.callByIndex.get(H(T).pinnedCallIndex) ?? null), ve = /* @__PURE__ */ P(() => H(T).selectedItemId ? t.indexed?.itemById.get(H(T).selectedItemId) ?? null : null), j = /* @__PURE__ */ P(() => H(ve) !== null && H(ve).presence.length > 0 && H(ue)?.itemId === H(ve).id && !H(ue).visible), ye = /* @__PURE__ */ P(() => H(T).hoveredItemId ? t.indexed?.itemById.get(H(T).hoveredItemId) ?? null : null), be = /* @__PURE__ */ P(() => t.indexed?.analysis.modelCalls.map((e) => e.index) ?? []), xe = /* @__PURE__ */ P(() => H(D) === "river" ? "Context River" : "Composition");
+	let _e = /* @__PURE__ */ P(() => H(E).pinnedCallIndex === null ? null : t.indexed?.callByIndex.get(H(E).pinnedCallIndex) ?? null), M = /* @__PURE__ */ P(() => H(E).selectedItemId ? t.indexed?.itemById.get(H(E).selectedItemId) ?? null : null), ve = /* @__PURE__ */ P(() => H(M) !== null && H(M).presence.length > 0 && H(ue)?.itemId === H(M).id && !H(ue).visible), ye = /* @__PURE__ */ P(() => H(E).hoveredItemId ? t.indexed?.itemById.get(H(E).hoveredItemId) ?? null : null), be = /* @__PURE__ */ P(() => t.indexed?.analysis.modelCalls.map((e) => e.index) ?? []), xe = /* @__PURE__ */ P(() => H(O) === "river" ? "Context River" : "Composition");
 	Tn(() => {
-		let e = t.indexed, n = H(_);
+		let e = t.indexed, n = H(v);
 		yr(() => {
-			let t = x;
+			let t = S;
 			if (t === e) {
-				_e(n);
+				j(n);
 				return;
 			}
 			if (t && t.analysis.session.id === e.analysis.session.id) {
-				let n = H(T).pinnedCallIndex;
-				I(T, na(H(T), t, e)), n !== null && H(T).pinnedCallIndex === null && H(O) === "cumulative" && I(k, "The pinned call is no longer available; cumulative scope now covers the whole session."), H(ae) && !e.itemById.has(H(ae).itemId) && I(ae, null), H(te)?.kind === "reveal-item" && (!e.itemById.has(H(te).itemId) || H(T).selectedItemId !== H(te).itemId ? I(te, null) : I(te, {
-					...H(te),
-					referenceCallIndex: H(T).pinnedCallIndex
+				let n = H(E).pinnedCallIndex;
+				I(E, na(H(E), t, e)), n !== null && H(E).pinnedCallIndex === null && H(k) === "cumulative" && I(te, "The pinned call is no longer available; cumulative scope now covers the whole session."), H(ae) && !e.itemById.has(H(ae).itemId) && I(ae, null), H(A)?.kind === "reveal-item" && (!e.itemById.has(H(A).itemId) || H(E).selectedItemId !== H(A).itemId ? I(A, null) : I(A, {
+					...H(A),
+					referenceCallIndex: H(E).pinnedCallIndex
 				}));
-			} else t && (I(T, $i()), I(v, Ui()), I(y, Ui()), I(D, "river"), I(O, "cumulative"), I(k, ""), I(te, null), I(ae, null), I(ue, null), Ae(), I(w, null), I(S, 0), I(C, 0));
-			x = e, _e(n);
+			} else t && (I(E, $i()), I(y, Ui()), I(b, Ui()), I(O, "river"), I(k, "cumulative"), I(te, ""), I(A, null), I(ae, null), I(ue, null), Ae(), I(w, null), I(ee, 0), I(C, 0));
+			S = e, j(n);
 		});
 	}), Tn(() => {
 		a({
 			linkedView: {
-				session: H(_),
-				view: H(D),
+				session: H(v),
+				view: H(O),
 				display: i().river.display,
-				scope: H(O),
-				pin: H(T).pinnedCallIndex,
-				item: H(T).selectedItemId,
+				scope: H(k),
+				pin: H(E).pinnedCallIndex,
+				item: H(E).selectedItemId,
 				range: H(w) ? H(w).range : da(H(ce), H(be))
 			},
 			navigationRevision: H(C),
-			riverReady: o() === H(_),
-			settled: H(D) === "composition" || H(be).length === 0 || H(ce).ready && (!H(te) || H(S) === H(te).id)
+			riverReady: o() === H(v),
+			settled: H(O) === "composition" || H(be).length === 0 || H(ce).ready && (!H(A) || H(ee) === H(A).id)
 		});
 	}), Tn(() => {
-		t.indexed?.analysis.modelCalls.length === 0 && (H(te) !== null || H(ce).ready || !H(ce).isFitAll || H(ce).totalCallCount !== 0) && (I(te, null), Ae());
+		t.indexed?.analysis.modelCalls.length === 0 && (H(A) !== null || H(ce).ready || !H(ce).isFitAll || H(ce).totalCallCount !== 0) && (I(A, null), Ae());
 	}), Tn(() => {
-		H(T), H(D), t.indexed, H(A), H(ve), o(), b = Hi(E).activeElement;
+		H(E), H(O), t.indexed, H(_e), H(M), o(), x = Hi(D).activeElement;
 	}), Cn(() => {
-		H(T), H(D), t.indexed, H(A), H(ve), o(), yr(Se);
+		H(E), H(O), t.indexed, H(_e), H(M), o(), yr(Se);
 	});
 	function Se() {
-		b && !b.isConnected && (Hi(E).activeElement === document.body || Hi(E).activeElement === null || !Hi(E).activeElement?.isConnected) && (Hi(E).getElementById("selected-item-summary") ?? Hi(E).getElementById("pinned-call-summary") ?? Hi(E).getElementById(H(D) === "river" ? "river-tab" : "composition-tab"))?.focus({ preventScroll: !0 });
+		x && !x.isConnected && (Hi(D).activeElement === document.body || Hi(D).activeElement === null || !Hi(D).activeElement?.isConnected) && (Hi(D).getElementById("selected-item-summary") ?? Hi(D).getElementById("pinned-call-summary") ?? Hi(D).getElementById(H(O) === "river" ? "river-tab" : "composition-tab"))?.focus({ preventScroll: !0 });
 	}
 	Cn(() => {
-		H(le), H(ye), H(de), yr(Ke);
+		H(le), H(ye), H(de), yr(qe);
 	});
 	let Ce = !1;
 	Bi(() => {
-		l() === "window" && window.addEventListener("keydown", Ze);
+		l() === "window" && window.addEventListener("keydown", Qe);
 		let e = typeof ResizeObserver > "u" ? null : new ResizeObserver(([e]) => {
 			let t = e.contentRect.width;
 			requestAnimationFrame(() => {
 				Ce || ge(t);
 			});
 		});
-		return e?.observe(E), () => {
-			Ce = !0, e?.disconnect(), l() === "window" && window.removeEventListener("keydown", Ze);
+		return e?.observe(D), () => {
+			Ce = !0, e?.disconnect(), l() === "window" && window.removeEventListener("keydown", Qe);
 		};
 	});
 	function we(e) {
-		return e.session !== H(_) || o() !== H(_) ? !1 : (I(T, {
+		return e.session !== H(v) || o() !== H(v) ? !1 : (I(E, {
 			...$i(),
 			selectedItemId: e.item,
 			pinnedCallIndex: e.pin
-		}), I(D, e.view, !0), i({
+		}), I(O, e.view, !0), i({
 			...i(),
 			river: {
 				...i().river,
 				display: e.display
 			}
-		}), I(O, e.scope, !0), I(k, ""), I(w, { range: e.range }), I(te, t.indexed.analysis.modelCalls.length ? e.range ? {
+		}), I(k, e.scope, !0), I(te, ""), I(w, { range: e.range }), I(A, t.indexed.analysis.modelCalls.length ? e.range ? {
 			id: ++re,
 			kind: "range",
 			startCallIndex: e.range[0],
@@ -11911,93 +11913,93 @@ function vy(e, t) {
 		} : {
 			id: ++re,
 			kind: "fit"
-		} : null), H(te) || I(w, null), !0);
+		} : null), H(A) || I(w, null), !0);
 	}
 	function Te() {
 		let e = H(be)[H(be).length - 1];
-		if (e !== void 0 && p.includes("call")) {
-			I(T, {
-				...H(T),
+		if (e !== void 0 && m.includes("call")) {
+			I(E, {
+				...H(E),
 				pinnedCallIndex: e
-			}), I(k, ""), I(C, H(C) + 1), I(te, {
+			}), I(te, ""), I(C, H(C) + 1), I(A, {
 				id: ++re,
 				kind: "recent",
 				minCallSpacing: 4
 			});
 			return;
 		}
-		He("latest");
+		Ue("latest");
 	}
 	function Ee() {
-		u()(), I(T, {
-			...H(T),
+		u()(), I(E, {
+			...H(E),
 			pinnedCallIndex: null
 		});
 	}
 	function De() {
 		gr().then(() => {
-			let e = Hi(E).getElementById("pinned-call-summary");
+			let e = Hi(D).getElementById("pinned-call-summary");
 			e?.scrollIntoView({ block: "start" }), e?.focus({ preventScroll: !0 });
 		});
 	}
 	function Oe() {
-		I(D, "composition"), I(O, "atCall"), gr().then(() => {
-			let e = Hi(E).getElementById("composition-tab");
+		I(O, "composition"), I(k, "atCall"), gr().then(() => {
+			let e = Hi(D).getElementById("composition-tab");
 			e?.scrollIntoView({ block: "start" }), e?.focus({ preventScroll: !0 });
 		});
 	}
 	function ke(e) {
-		I(S, e, !0), e === H(te)?.id && I(w, null);
+		I(ee, e, !0), e === H(A)?.id && I(w, null);
 	}
 	function Ae() {
 		I(ce, se());
 	}
 	function je(e) {
-		H(T).hoveredCallIndex !== e && I(T, {
-			...H(T),
+		H(E).hoveredCallIndex !== e && I(E, {
+			...H(E),
 			hoveredCallIndex: e
 		});
 	}
 	function Me(e) {
-		u()(), I(T, {
-			...H(T),
+		u()(), I(E, {
+			...H(E),
 			pinnedCallIndex: e
-		}), I(k, "");
+		}), I(te, "");
 	}
 	function Ne(e) {
-		I(O, e, !0);
-	}
-	function N(e) {
-		H(D) === "river" && I(ce, e);
+		I(k, e, !0);
 	}
 	function Pe(e) {
-		(e?.itemId !== H(ue)?.itemId || e?.visible !== H(ue)?.visible) && I(ue, e);
+		H(O) === "river" && I(ce, e);
 	}
 	function Fe(e) {
-		t.indexed?.itemById.has(e) && H(be).length !== 0 && (I(C, H(C) + 1), I(D, "river"), I(te, {
+		(e?.itemId !== H(ue)?.itemId || e?.visible !== H(ue)?.visible) && I(ue, e);
+	}
+	function Ie(e) {
+		t.indexed?.itemById.has(e) && H(be).length !== 0 && (I(C, H(C) + 1), I(O, "river"), I(A, {
 			id: ++re,
 			kind: "reveal-item",
 			itemId: e,
-			referenceCallIndex: H(T).pinnedCallIndex
+			referenceCallIndex: H(E).pinnedCallIndex
 		}));
 	}
-	function Ie(e) {
+	function Le(e) {
 		t.indexed?.itemById.has(e) && I(ae, {
 			requestId: ++oe,
 			itemId: e
 		});
 	}
-	function Le() {
-		let e = H(_), n = H(ve)?.id ?? null, r = ++ie;
+	function Re() {
+		let e = H(v), n = H(M)?.id ?? null, r = ++ie;
 		if (n === null) {
-			let e = Hi(E).getElementById("inspector");
+			let e = Hi(D).getElementById("inspector");
 			if (!e) return;
 			e.scrollIntoView({ block: "start" }), e.focus({ preventScroll: !0 });
 			return;
 		}
 		gr().then(() => {
-			if (r !== ie || e !== H(_) || H(T).selectedItemId !== n || !t.indexed?.itemById.has(n)) return;
-			let i = Hi(E).getElementById("inspector"), a = Hi(E).getElementById("selected-item-summary");
+			if (r !== ie || e !== H(v) || H(E).selectedItemId !== n || !t.indexed?.itemById.has(n)) return;
+			let i = Hi(D).getElementById("inspector"), a = Hi(D).getElementById("selected-item-summary");
 			if (i && a) {
 				if (getComputedStyle(i).overflowY !== "visible" && i.scrollHeight > i.clientHeight) {
 					let e = i.getBoundingClientRect(), t = a.getBoundingClientRect();
@@ -12006,55 +12008,55 @@ function vy(e, t) {
 			}
 		});
 	}
-	function Re(e) {
+	function ze(e) {
 		if (!t.indexed?.callByIndex.has(e)) return;
-		let n = H(_), r = t.indexed.callByIndex.get(e)?.sourceRecordId, i = H(T).selectedItemId, a = ++ie;
+		let n = H(v), r = t.indexed.callByIndex.get(e)?.sourceRecordId, i = H(E).selectedItemId, a = ++ie;
 		Me(e), gr().then(() => {
-			if (a !== ie || n !== H(_) || H(T).selectedItemId !== i || H(A)?.sourceRecordId !== r) return;
-			let e = Hi(E).getElementById("pinned-call-summary");
+			if (a !== ie || n !== H(v) || H(E).selectedItemId !== i || H(_e)?.sourceRecordId !== r) return;
+			let e = Hi(D).getElementById("pinned-call-summary");
 			e?.scrollIntoView({ block: "nearest" }), e?.focus({ preventScroll: !0 });
 		});
 	}
-	function ze() {
-		if (H(h)) {
-			qe(null);
+	function He() {
+		if (H(g)) {
+			Je(null);
 			return;
 		}
-		u()(), I(T, $i()), I(k, ""), I(te, null);
+		u()(), I(E, $i()), I(te, ""), I(A, null);
 	}
-	function He(e) {
-		(e === "fit" || e === "latest") && I(C, H(C) + 1), I(te, {
+	function Ue(e) {
+		(e === "fit" || e === "latest") && I(C, H(C) + 1), I(A, {
 			id: ++re,
 			kind: e
 		});
 	}
-	function Ue(e) {
-		Me(e), I(te, {
+	function We(e) {
+		Me(e), I(A, {
 			id: ++re,
 			kind: "ensure-call",
 			callIndex: e
 		});
 	}
-	function We(e) {
+	function Ge(e) {
 		let t;
 		if (e.key === "Home") t = "river";
 		else if (e.key === "End") t = "composition";
-		else if (e.key === "ArrowLeft" || e.key === "ArrowRight") t = H(D) === "river" ? "composition" : "river";
+		else if (e.key === "ArrowLeft" || e.key === "ArrowRight") t = H(O) === "river" ? "composition" : "river";
 		else return;
-		e.preventDefault(), I(D, t, !0);
+		e.preventDefault(), I(O, t, !0);
 		let n = t === "river" ? "river-tab" : "composition-tab";
-		Hi(E).getElementById(n)?.focus();
+		Hi(D).getElementById(n)?.focus();
 	}
-	function Ge(e, t) {
+	function Ke(e, t) {
 		e === null ? (I(le, null), I(fe, null)) : t && I(le, {
 			x: t.clientX,
 			y: t.clientY
-		}), H(T).hoveredItemId !== e && I(T, {
-			...H(T),
+		}), H(E).hoveredItemId !== e && I(E, {
+			...H(E),
 			hoveredItemId: e
 		});
 	}
-	function Ke() {
+	function qe() {
 		if (!H(de) || !H(le)) return;
 		let e = H(de).getBoundingClientRect();
 		if (e.width === 0 || e.height === 0) return;
@@ -12064,63 +12066,63 @@ function vy(e, t) {
 		};
 		(s.left !== H(fe)?.left || s.top !== H(fe)?.top) && I(fe, s);
 	}
-	function qe(e) {
-		H(te)?.kind === "reveal-item" && H(te).itemId !== e && I(te, null), H(ae) && H(ae).itemId !== e && I(ae, null), I(T, {
-			...H(T),
+	function Je(e) {
+		H(A)?.kind === "reveal-item" && H(A).itemId !== e && I(A, null), H(ae) && H(ae).itemId !== e && I(ae, null), I(E, {
+			...H(E),
 			selectedItemId: e
 		});
 	}
-	function Je(e, t) {
-		qe(e), t !== void 0 && Me(t);
+	function Ye(e, t) {
+		Je(e), t !== void 0 && Me(t);
 	}
-	function Ye(e) {
-		H(te)?.kind === "reveal-item" && I(te, null), u()(), I(T, {
-			...H(T),
+	function Xe(e) {
+		H(A)?.kind === "reveal-item" && I(A, null), u()(), I(E, {
+			...H(E),
 			pinnedCallIndex: e
 		});
 	}
-	function Xe() {
-		let e = Hi(E).activeElement?.closest("details[open]") ?? Hi(E).querySelector(".view-options[open]");
+	function Ze() {
+		let e = Hi(D).activeElement?.closest("details[open]") ?? Hi(D).querySelector(".view-options[open]");
 		if (e instanceof HTMLDetailsElement) return e.open = !1, e.querySelector("summary")?.focus(), !0;
 		if (H(ne)?.dismissEconomics()) return !0;
-		if (H(T).selectedItemId !== null || H(T).pinnedCallIndex !== null && !H(h)) {
-			let e = H(T).pinnedCallIndex;
-			return I(T, ea(H(T))), H(T).pinnedCallIndex !== e && u()(), H(te)?.kind === "reveal-item" && H(T).selectedItemId !== H(te).itemId && I(te, null), !0;
+		if (H(E).selectedItemId !== null || H(E).pinnedCallIndex !== null && !H(g)) {
+			let e = H(E).pinnedCallIndex;
+			return I(E, ea(H(E))), H(E).pinnedCallIndex !== e && u()(), H(A)?.kind === "reveal-item" && H(E).selectedItemId !== H(A).itemId && I(A, null), !0;
 		}
-		return !H(ce).isFitAll && (He("fit"), !0);
+		return !H(ce).isFitAll && (Ue("fit"), !0);
 	}
-	function Ze(e) {
+	function Qe(e) {
 		if (e.key === "Escape" && !e.defaultPrevented) {
-			(Xe() || l() === "window") && e.preventDefault();
+			(Ze() || l() === "window") && e.preventDefault();
 			return;
 		}
-		if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || H(D) !== "river") return;
+		if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || H(O) !== "river") return;
 		let n = e.key === "ArrowLeft" || e.key === "h" ? -1 : e.key === "ArrowRight" || e.key === "l" ? 1 : null;
 		if (n === null) return;
 		let r = e.target;
 		if (!(r instanceof Element)) return;
-		let i = l() === "window" && r === document.body && document.querySelectorAll("main").length === 1, a = t.keyboardOwner ?? E;
+		let i = l() === "window" && r === document.body && document.querySelectorAll("main").length === 1, a = t.keyboardOwner ?? D;
 		if (!i && !a?.contains(r) || (e.key === "h" || e.key === "l") && i || r.closest("input, textarea, select, [contenteditable]:not([contenteditable=\"false\"]), [role=\"tab\"], [role=\"slider\"], [role=\"spinbutton\"], [role=\"combobox\"], [role=\"listbox\"], [role=\"menu\"], [role=\"radio\"]")) return;
-		let o = l() === "root" ? r.closest("[data-call-index]")?.getAttribute("data-call-index") : null, s = ra(H(be), o ? Number(o) : H(T).pinnedCallIndex, H(ce), n);
-		e.preventDefault(), s !== null && (i && E.querySelector(".river-scroll")?.focus({ preventScroll: !0 }), Ue(s), l() === "root" && r.closest(".call-target") && gr().then(() => E.querySelector(`.call-target[aria-label="Pin model call ${s}"]`)?.focus({ preventScroll: !0 })));
+		let o = l() === "root" ? r.closest("[data-call-index]")?.getAttribute("data-call-index") : null, s = ra(H(be), o ? Number(o) : H(E).pinnedCallIndex, H(ce), n);
+		e.preventDefault(), s !== null && (i && D.querySelector(".river-scroll")?.focus({ preventScroll: !0 }), We(s), l() === "root" && r.closest(".call-target") && gr().then(() => D.querySelector(`.call-target[aria-label="Pin model call ${s}"]`)?.focus({ preventScroll: !0 })));
 	}
-	var Qe = {
+	var $e = {
 		restoreView: we,
 		followLatest: Te
-	}, $e = gy();
-	Or("resize", rn, Ke);
-	var et = L($e);
-	let tt;
-	return J(et, 20, () => p, (e) => e, (e, r) => {
+	}, et = gy();
+	Or("resize", rn, qe);
+	var tt = L(et);
+	let nt;
+	return J(tt, 20, () => m, (e) => e, (e, r) => {
 		var a = Br(), s = R(a), u = (e) => {
 			var i = ay();
-			$r(L(i), () => H(_), (e) => {
+			$r(L(i), () => H(v), (e) => {
 				Vp(e, {
 					get indexed() {
 						return t.indexed;
 					},
 					get sessionId() {
-						return H(_);
+						return H(v);
 					},
 					get sessions() {
 						return n();
@@ -12129,7 +12131,7 @@ function vy(e, t) {
 						return H(he);
 					}
 				});
-			}), M(i), V((e) => yi(i, e), [() => g(r)]), G(e, i);
+			}), N(i), V((e) => yi(i, e), [() => _(r)]), G(e, i);
 		}, d = (e) => {
 			var n = oy(), i = L(n);
 			{
@@ -12139,7 +12141,7 @@ function vy(e, t) {
 						return t.indexed;
 					},
 					get call() {
-						return H(A);
+						return H(_e);
 					},
 					get following() {
 						return f();
@@ -12148,17 +12150,17 @@ function vy(e, t) {
 						return H(e);
 					},
 					onSelectItem: (e) => {
-						qe(e), Le();
+						Je(e), Re();
 					},
 					onViewDetails: De,
 					onShowComposition: Oe
 				});
 			}
-			M(n), V((e) => yi(n, e), [() => g(r)]), G(e, n);
+			N(n), V((e) => yi(n, e), [() => _(r)]), G(e, n);
 		}, p = (e) => {
 			var n = py(), a = L(n), s = L(a), u = L(s), d = z(u, !0), f = B(u, 2), p = (e) => {
 				{
-					let n = /* @__PURE__ */ P(() => H(D) === "river");
+					let n = /* @__PURE__ */ P(() => H(O) === "river");
 					Gp(e, {
 						get isVisible() {
 							return H(n);
@@ -12173,9 +12175,9 @@ function vy(e, t) {
 				}
 			};
 			q(f, (e) => {
-				H(D) === "river" && e(p);
-			}), M(s);
-			var m = B(s, 2), v = L(m), y = (e) => {
+				H(O) === "river" && e(p);
+			}), N(s);
+			var m = B(s, 2), h = L(m), y = (e) => {
 				var n = sy(), r = z(n, !0);
 				V(() => {
 					n.disabled = c(), K(r, H(pe) ? "Copy link" : "Copy view link");
@@ -12183,18 +12185,18 @@ function vy(e, t) {
 					t.onCopyViewLink?.apply(this, e);
 				}), G(e, n);
 			};
-			q(v, (e) => {
+			q(h, (e) => {
 				t.onCopyViewLink && e(y);
 			});
-			var b = B(v, 2), x = z(b, !0), S = B(b, 2), C = z(S, !0);
-			M(m), M(a);
-			var w = B(a, 2), E = L(w), re = B(E, 2);
-			M(w);
-			var ie = B(w, 2), ae = L(ie), oe = (e) => {
+			var b = B(h, 2), x = z(b, !0), S = B(b, 2), ee = z(S, !0);
+			N(m), N(a);
+			var C = B(a, 2), w = L(C), D = B(w, 2);
+			N(C);
+			var re = B(C, 2), ie = L(re), ae = (e) => {
 				var n = dy(), r = R(n);
-				$r(r, () => H(_), (e) => {
+				$r(r, () => H(v), (e) => {
 					{
-						let t = /* @__PURE__ */ P(() => H(D) === "river");
+						let t = /* @__PURE__ */ P(() => H(O) === "river");
 						ec(e, {
 							get compact() {
 								return H(me);
@@ -12209,13 +12211,13 @@ function vy(e, t) {
 								return H(be);
 							},
 							get pinnedCallIndex() {
-								return H(T).pinnedCallIndex;
+								return H(E).pinnedCallIndex;
 							},
-							onSelectCall: Ue,
-							onLatest: () => He("latest"),
-							onFitAll: () => He("fit"),
-							onZoomIn: () => He("zoom-in"),
-							onZoomOut: () => He("zoom-out")
+							onSelectCall: We,
+							onLatest: () => Ue("latest"),
+							onFitAll: () => Ue("fit"),
+							onZoomIn: () => Ue("zoom-in"),
+							onZoomOut: () => Ue("zoom-out")
 						});
 					}
 				});
@@ -12223,9 +12225,9 @@ function vy(e, t) {
 					G(e, cy());
 				}, u = (e) => {
 					var n = Br();
-					$r(R(n), () => H(_), (e) => {
+					$r(R(n), () => H(v), (e) => {
 						{
-							let n = /* @__PURE__ */ P(() => H(D) === "river"), r = /* @__PURE__ */ P(() => l() === "window");
+							let n = /* @__PURE__ */ P(() => H(O) === "river"), r = /* @__PURE__ */ P(() => l() === "window");
 							Ri(Fv(e, {
 								get indexed() {
 									return t.indexed;
@@ -12233,34 +12235,34 @@ function vy(e, t) {
 								get preferences() {
 									return i();
 								},
-								onPreferencesChange: ee,
+								onPreferencesChange: T,
 								get pinnedCallIndex() {
-									return H(T).pinnedCallIndex;
+									return H(E).pinnedCallIndex;
 								},
 								get hoveredCallIndex() {
-									return H(T).hoveredCallIndex;
+									return H(E).hoveredCallIndex;
 								},
 								get selectedItemId() {
-									return H(T).selectedItemId;
+									return H(E).selectedItemId;
 								},
 								get hoveredItemId() {
-									return H(T).hoveredItemId;
+									return H(E).hoveredItemId;
 								},
 								get navigationCommand() {
-									return H(te);
+									return H(A);
 								},
 								get isVisible() {
 									return H(n);
 								},
-								onViewportChange: N,
+								onViewportChange: Pe,
 								onNavigationSettled: ke,
-								onSelectionVisibility: Pe,
+								onSelectionVisibility: Fe,
 								onHoverCall: je,
 								onPinCall: Me,
-								onHoverItem: Ge,
-								onSelectItem: qe,
-								onEmptyClick: Ye,
-								onEscape: Xe,
+								onHoverItem: Ke,
+								onSelectItem: Je,
+								onEmptyClick: Xe,
+								onEscape: Ze,
 								get consumeUnhandledEscape() {
 									return H(r);
 								}
@@ -12269,14 +12271,14 @@ function vy(e, t) {
 					}), G(e, n);
 				};
 				q(s, (e) => {
-					o() === H(_) ? e(u, -1) : e(c);
+					o() === H(v) ? e(u, -1) : e(c);
 				});
 				var d = B(s, 2), f = (e) => {
 					var t = ly(), n = B(L(t), 2), r = B(n, 2);
-					M(t), U("click", n, () => Fe(H(ve).id)), U("click", r, () => qe(null)), G(e, t);
+					N(t), U("click", n, () => Ie(H(M).id)), U("click", r, () => Je(null)), G(e, t);
 				};
 				q(d, (e) => {
-					H(j) && H(ve) && e(f);
+					H(ve) && H(M) && e(f);
 				});
 				var p = B(d, 2), m = (e) => {
 					var n = uy();
@@ -12287,58 +12289,58 @@ function vy(e, t) {
 						get indexed() {
 							return t.indexed;
 						}
-					}), M(n), Ri(n, (e) => I(de, e), () => H(de)), V(() => yi(n, `left:${H(fe)?.left ?? 12}px;top:${H(fe)?.top ?? 12}px`)), G(e, n);
+					}), N(n), Ri(n, (e) => I(de, e), () => H(de)), V(() => yi(n, `left:${H(fe)?.left ?? 12}px;top:${H(fe)?.top ?? 12}px`)), G(e, n);
 				};
 				q(p, (e) => {
-					H(ye) && H(T).selectedItemId !== H(T).hoveredItemId && e(m);
-				}), M(a), G(e, n);
-			}, se = (e) => {
+					H(ye) && H(E).selectedItemId !== H(E).hoveredItemId && e(m);
+				}), N(a), G(e, n);
+			}, oe = (e) => {
 				G(e, fy());
 			};
-			q(ae, (e) => {
-				t.indexed.analysis.modelCalls.length > 0 ? e(oe) : e(se, -1);
-			}), M(ie);
-			var le = B(ie, 2);
-			$r(L(le), () => H(_), (e) => {
+			q(ie, (e) => {
+				t.indexed.analysis.modelCalls.length > 0 ? e(ae) : e(oe, -1);
+			}), N(re);
+			var se = B(re, 2);
+			$r(L(se), () => H(v), (e) => {
 				{
-					let n = /* @__PURE__ */ P(() => H(D) === "composition");
+					let n = /* @__PURE__ */ P(() => H(O) === "composition");
 					Rs(e, {
 						get indexed() {
 							return t.indexed;
 						},
 						get pinnedCallIndex() {
-							return H(T).pinnedCallIndex;
+							return H(E).pinnedCallIndex;
 						},
 						get selectedItemId() {
-							return H(T).selectedItemId;
+							return H(E).selectedItemId;
 						},
 						get isVisible() {
 							return H(n);
 						},
 						get scope() {
-							return H(O);
+							return H(k);
 						},
 						get endpointNotice() {
-							return H(k);
+							return H(te);
 						},
 						onScopeChange: Ne,
 						onPinCall: Me,
 						onUnpinCall: Ee,
-						onSelectItem: qe,
-						onRevealInRiver: Fe,
-						onViewDetails: Le,
-						onFindInLifespans: Ie,
+						onSelectItem: Je,
+						onRevealInRiver: Ie,
+						onViewDetails: Re,
+						onFindInLifespans: Le,
 						get compact() {
 							return H(pe);
 						}
 					});
 				}
-			}), M(le), M(n), V((e) => {
-				yi(n, e), K(d, H(xe)), K(x, H(pe) ? "Details" : "View details"), Y(S, "aria-label", H(h) ? "Clear selected item" : "Clear selected item and pinned call"), Y(S, "title", H(h) ? "Clears the selected item. The latest call stays pinned while following." : "Clears the selected item and pinned call"), S.disabled = H(T).selectedItemId === null && (H(h) || H(T).pinnedCallIndex === null), K(C, H(pe) ? "Clear" : "Clear selection"), Y(E, "aria-selected", H(D) === "river"), Y(E, "tabindex", H(D) === "river" ? 0 : -1), Y(re, "aria-selected", H(D) === "composition"), Y(re, "tabindex", H(D) === "composition" ? 0 : -1), Y(ie, "hidden", H(D) !== "river"), Y(le, "hidden", H(D) !== "composition");
-			}, [() => g(r)]), U("click", b, (e) => {
-				e.preventDefault(), Le();
-			}), U("click", S, ze), U("click", E, () => I(D, "river")), U("keydown", E, We), U("click", re, () => I(D, "composition")), U("keydown", re, We), G(e, n);
-		}, b = (e) => {
+			}), N(se), N(n), V((e) => {
+				yi(n, e), K(d, H(xe)), K(x, H(pe) ? "Details" : "View details"), Y(S, "aria-label", H(g) ? "Clear selected item" : "Clear selected item and pinned call"), Y(S, "title", H(g) ? "Clears the selected item. The latest call stays pinned while following." : "Clears the selected item and pinned call"), S.disabled = H(E).selectedItemId === null && (H(g) || H(E).pinnedCallIndex === null), K(ee, H(pe) ? "Clear" : "Clear selection"), Y(w, "aria-selected", H(O) === "river"), Y(w, "tabindex", H(O) === "river" ? 0 : -1), Y(D, "aria-selected", H(O) === "composition"), Y(D, "tabindex", H(O) === "composition" ? 0 : -1), Y(re, "hidden", H(O) !== "river"), Y(se, "hidden", H(O) !== "composition");
+			}, [() => _(r)]), U("click", b, (e) => {
+				e.preventDefault(), Re();
+			}), U("click", S, He), U("click", w, () => I(O, "river")), U("keydown", w, Ge), U("click", D, () => I(O, "composition")), U("keydown", D, Ge), G(e, n);
+		}, m = (e) => {
 			var i = my();
 			let a;
 			var o = L(i);
@@ -12349,7 +12351,7 @@ function vy(e, t) {
 						return t.indexed;
 					},
 					get sessionId() {
-						return H(_);
+						return H(v);
 					},
 					get loadItemContent() {
 						return t.loadItemContent;
@@ -12358,55 +12360,55 @@ function vy(e, t) {
 						return n();
 					},
 					get pinnedCall() {
-						return H(A);
+						return H(_e);
 					},
 					get selectedItem() {
-						return H(ve);
+						return H(M);
 					},
 					get callSections() {
-						return H(y);
+						return H(b);
 					},
 					get itemSections() {
-						return H(v);
+						return H(y);
 					},
 					get pinnedCallIndex() {
-						return H(T).pinnedCallIndex;
+						return H(E).pinnedCallIndex;
 					},
 					get hoveredCallIndex() {
-						return H(T).hoveredCallIndex;
+						return H(E).hoveredCallIndex;
 					},
 					get hasCalls() {
 						return H(e);
 					},
 					onClosePinnedCall: Ee,
-					onCloseItem: () => qe(null),
-					onSelectItem: qe,
+					onCloseItem: () => Je(null),
+					onSelectItem: Je,
 					onPinCall: Me,
-					onInspectCall: Re,
-					onRevealInRiver: Fe
+					onInspectCall: ze,
+					onRevealInRiver: Ie
 				});
 			}
-			M(i), V((e, t) => {
+			N(i), V((e, t) => {
 				a = _i(i, 1, "inspector-column svelte-okw1rh", null, a, {
 					beside: e,
-					empty: !H(A) && !H(ve)
+					empty: !H(_e) && !H(M)
 				}), yi(i, t);
-			}, [() => m.get("details")?.column === "2", () => g(r)]), G(e, i);
+			}, [() => h.get("details")?.column === "2", () => _(r)]), G(e, i);
 		}, x = (e) => {
 			var n = hy();
-			$r(L(n), () => H(_), (e) => {
+			$r(L(n), () => H(v), (e) => {
 				Jc(e, {
 					get indexed() {
 						return t.indexed;
 					},
 					get selectedItemId() {
-						return H(T).selectedItemId;
+						return H(E).selectedItemId;
 					},
 					get pinnedCallIndex() {
-						return H(T).pinnedCallIndex;
+						return H(E).pinnedCallIndex;
 					},
-					onSelectItem: Je,
-					onHoverItem: Ge,
+					onSelectItem: Ye,
+					onHoverItem: Ke,
 					get findRequest() {
 						return H(ae);
 					},
@@ -12414,14 +12416,14 @@ function vy(e, t) {
 						return H(pe);
 					}
 				});
-			}), M(n), V((e) => yi(n, e), [() => g(r)]), G(e, n);
+			}), N(n), V((e) => yi(n, e), [() => _(r)]), G(e, n);
 		};
 		q(s, (e) => {
-			r === "summary" ? e(u) : r === "call" ? e(d, 1) : r === "chart" ? e(p, 2) : r === "details" ? e(b, 3) : r === "lifespans" && e(x, 4);
+			r === "summary" ? e(u) : r === "call" ? e(d, 1) : r === "chart" ? e(p, 2) : r === "details" ? e(m, 3) : r === "lifespans" && e(x, 4);
 		}), G(e, a);
-	}), M(et), M($e), Ri($e, (e) => E = e, () => E), V(() => tt = _i(et, 1, "exploration-grid svelte-okw1rh", null, tt, { occupied: H(ve) !== null || H(A) !== null })), U("keydown", $e, function(...e) {
-		(l() === "root" ? Ze : void 0)?.apply(this, e);
-	}), G(e, $e), Ve(Qe);
+	}), N(tt), N(et), Ri(et, (e) => D = e, () => D), V(() => nt = _i(tt, 1, "exploration-grid svelte-okw1rh", null, nt, { occupied: H(M) !== null || H(_e) !== null })), U("keydown", et, function(...e) {
+		(l() === "root" ? Qe : void 0)?.apply(this, e);
+	}), G(e, et), Ve($e);
 }
 kr(["keydown", "click"]);
 //#endregion
@@ -12829,18 +12831,18 @@ function Ky(e) {
 		for (let e of t.sourceItemIds) Gy(b, e, t);
 		for (let e of t.retainedItemIds) Gy(x, e, t);
 	}
-	let S = /* @__PURE__ */ new Map(), C = /* @__PURE__ */ new Map();
+	let S = /* @__PURE__ */ new Map(), ee = /* @__PURE__ */ new Map();
 	for (let t of e.lineage) {
 		if (!n.has(t.from) || !n.has(t.to)) throw new $(`Lineage references missing item ${t.from} → ${t.to}`);
 		if (t.kind !== "frameworkCompaction") throw new $(`Unsupported lineage kind ${String(t.kind)}`);
-		Gy(S, t.from, t), Gy(C, t.to, t);
+		Gy(S, t.from, t), Gy(ee, t.to, t);
 	}
 	return {
 		analysis: e,
 		itemById: n,
 		callByIndex: r,
 		outgoingLineage: S,
-		incomingLineage: C,
+		incomingLineage: ee,
 		compactionById: _,
 		compactionBySummaryId: v,
 		compactionsBySummaryId: y,
@@ -13007,65 +13009,65 @@ var tb = /* @__PURE__ */ W("<span aria-hidden=\"true\"></span> <span class=\"sr-
 };
 function sb(e, t) {
 	Be(t, !0), ui(e, ob);
-	let n = () => ot(o, "$controller", r), [r, i] = st(), a = X(t, "defaultVerticalScale", 3, "session"), o = eb((e, n) => yr(() => t.loadAnalysis(e, n))), s = /* @__PURE__ */ F(yr(() => {
+	let n = () => ot(s, "$controller", r), [r, i] = st(), a = X(t, "defaultVerticalScale", 3, "session"), o = X(t, "density", 3, "standard"), s = eb((e, n) => yr(() => t.loadAnalysis(e, n))), c = /* @__PURE__ */ F(yr(() => {
 		let e = Ki();
 		return e.river.verticalScale = a(), Xi(void 0, t.preferencesKey, e);
-	})), c = /* @__PURE__ */ F(!0), l = /* @__PURE__ */ P(() => n().loading ? "Updating…" : "Live"), u = 0, d = 0, f = /* @__PURE__ */ F(void 0), p = !1;
-	function m(e) {
+	})), l = /* @__PURE__ */ F(!0), u = /* @__PURE__ */ P(() => n().loading ? "Updating…" : "Live"), d = 0, f = 0, p = /* @__PURE__ */ F(void 0), m = !1;
+	function h(e) {
 		Zi(e, void 0, t.preferencesKey);
 	}
-	function h() {
-		I(c, !1), d += 1;
-	}
 	function g() {
-		I(c, !0), H(f)?.followLatest();
+		I(l, !1), f += 1;
+	}
+	function _() {
+		I(l, !0), H(p)?.followLatest();
 	}
 	Cn(() => {
 		let e = n().revision;
-		if (e !== u && (u = e, n().kind === "selection" && I(c, !0), H(c))) {
-			let e = ++d;
+		if (e !== d && (d = e, n().kind === "selection" && I(l, !0), H(l))) {
+			let e = ++f;
 			gr().then(() => {
-				!p && H(c) && e === d && H(f)?.followLatest();
+				!m && H(l) && e === f && H(p)?.followLatest();
 			});
 		}
-	}), Bi(() => (o.refresh(), () => {
-		p = !0, o.dispose();
+	}), Bi(() => (s.refresh(), () => {
+		m = !0, s.dispose();
 	}));
-	function _() {
-		o.refresh();
+	function v() {
+		s.refresh();
 	}
-	var v = { refresh: _ }, y = ab(), b = L(y), x = L(b), S = B(x, 2), C = L(S), w = (e) => {
+	var y = { refresh: v }, b = ab(), x = L(b), S = L(x), ee = B(S, 2), C = L(ee), w = (e) => {
 		G(e, zr("Update failed"));
-	}, ee = (e) => {
+	}, T = (e) => {
 		var t = tb(), r = R(t);
 		let i;
 		var a = z(B(r, 2), !0);
 		V(() => {
-			i = _i(r, 1, "status-dot svelte-11525tj", null, i, { updating: n().loading }), Y(r, "title", H(l)), K(a, H(l));
+			i = _i(r, 1, "status-dot svelte-11525tj", null, i, { updating: n().loading }), Y(r, "title", H(u)), K(a, H(u));
 		}), G(e, t);
 	};
 	q(C, (e) => {
-		n().error ? e(w) : (n().loading || H(c) && n().indexed) && e(ee, 1);
-	}), M(S);
-	var T = B(S, 2), E = (e) => {
+		n().error ? e(w) : (n().loading || H(l) && n().indexed) && e(T, 1);
+	}), N(ee);
+	var E = B(ee, 2), D = (e) => {
 		var t = nb();
-		U("click", t, () => o.refresh()), G(e, t);
+		U("click", t, () => s.refresh()), G(e, t);
 	};
-	q(T, (e) => {
-		n().error && e(E);
-	}), M(b);
-	var D = B(b, 2), O = (e) => {
+	q(E, (e) => {
+		n().error && e(D);
+	}), N(x);
+	var O = B(x, 2), k = (e) => {
 		var t = rb(), r = L(t, !0), i = B(r), a = (e) => {
 			G(e, zr("Showing the previous analysis."));
 		};
 		q(i, (e) => {
 			n().indexed && e(a);
-		}), M(t), V(() => K(r, n().error)), G(e, t);
+		}), N(t), V(() => K(r, n().error)), G(e, t);
 	};
-	q(D, (e) => {
-		n().error && e(O);
+	q(O, (e) => {
+		n().error && e(k);
 	});
-	var k = B(D, 2), te = (e) => {
+	var te = B(O, 2), A = (e) => {
 		Ri(vy(e, {
 			get indexed() {
 				return n().indexed;
@@ -13074,30 +13076,33 @@ function sb(e, t) {
 				return t.loadItemContent;
 			},
 			keyboardScope: "root",
-			onPreferencesChange: m,
-			onPin: h,
+			onPreferencesChange: h,
+			onPin: g,
 			get sections() {
 				return t.sections;
 			},
 			get following() {
-				return H(c);
+				return H(l);
+			},
+			get density() {
+				return o();
 			},
 			get presentation() {
-				return H(s);
+				return H(c);
 			},
 			set presentation(e) {
-				I(s, e);
+				I(c, e);
 			}
-		}), (e) => I(f, e, !0), () => H(f));
+		}), (e) => I(p, e, !0), () => H(p));
 	}, ne = (e) => {
 		G(e, ib());
 	};
-	q(k, (e) => {
-		n().indexed ? e(te) : n().loading && e(ne, 1);
-	}), M(y), V(() => {
-		Y(x, "aria-pressed", H(c)), Y(x, "title", H(c) ? "Following new calls. Select to stop following." : "Select to follow new calls.");
-	}), U("click", x, () => H(c) ? h() : g()), G(e, y);
-	var re = Ve(v);
+	q(te, (e) => {
+		n().indexed ? e(A) : n().loading && e(ne, 1);
+	}), N(b), V(() => {
+		Y(S, "aria-pressed", H(l)), Y(S, "title", H(l) ? "Following new calls. Select to stop following." : "Select to follow new calls.");
+	}), U("click", S, () => H(l) ? g() : _()), G(e, b);
+	var re = Ve(y);
 	return i(), re;
 }
 kr(["click"]);
@@ -13146,7 +13151,8 @@ function mb(e) {
 				loadItemContent: e.loadItemContent,
 				preferencesKey: e.preferencesKey,
 				sections: e.sections,
-				defaultVerticalScale: e.defaultVerticalScale
+				defaultVerticalScale: e.defaultVerticalScale,
+				density: e.density
 			}
 		});
 	} catch (e) {

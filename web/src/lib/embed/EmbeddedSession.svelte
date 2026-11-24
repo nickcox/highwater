@@ -17,12 +17,14 @@
     preferencesKey,
     sections,
     defaultVerticalScale = 'session',
+    density = 'standard',
   }: {
     loadAnalysis: AnalysisLoader;
     loadItemContent?: ItemContentLoader;
     preferencesKey: string;
     sections?: readonly SectionId[];
     defaultVerticalScale?: 'session' | 'visible';
+    density?: 'standard' | 'compact';
   } = $props();
   // The loader and storage namespace belong to this mount and do not change during its lifetime.
   const controller = createAnalysisController((signal, etag) =>
@@ -122,6 +124,7 @@
       onPin={pin}
       {sections}
       {following}
+      {density}
     />
   {:else if $controller.loading}
     <p>Analysing session…</p>
