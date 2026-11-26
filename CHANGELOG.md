@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.7 – 2026-11-26
+
 - The Call inspector shows a **Turn** section for Claude Code sessions run through the Agent SDK, as in BB, which do not record their turns. As for Pi, Highwater groups the calls between user messages and estimates each turn's elapsed time from its timestamps.
 
 ## 0.5.6 – 2026-11-24
