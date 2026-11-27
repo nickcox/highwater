@@ -12,6 +12,7 @@ Transcripts are under `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects
 - A subagent is `<project>/<session UUID>/subagents/agent-<agent ID>.jsonl`, with `agent-<agent ID>.meta.json` beside it holding `agentType`, `description` and `toolUseId` (the parent's tool call that started it). A subagent is listed as a child session of its parent, labelled with its type; its context is not merged into the parent's. The parent's Agent tool result names the subagent in `toolUseResult.agentId`, so that result links to the subagent's session (the item's `childSession` metadata).
 - A transcript with no assistant record, such as a session closed before its first prompt was sent, has nothing to chart and is not listed until its first response is recorded.
 - The title is the latest `custom-title`, otherwise the latest `ai-title`. References are `claude-code-…`, a hash of the session ID (plus the agent ID for a subagent). The same session ID under two roots is rejected as ambiguous.
+- A session's date in the picker and reports is the timestamp of its last record with both a top-level string `uuid` and a top-level string `timestamp`. Claude Code appends state records such as `mode` and `permission-mode` to old transcripts without timestamps. The file's modification time is used only when there is no such record or its timestamp is invalid.
 - The catalogue reads each transcript's listing fields again only when its size or modification time changes.
 
 ## Format

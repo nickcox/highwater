@@ -168,6 +168,71 @@ fn discovery_can_be_cancelled_and_a_missing_root_reads_as_empty() {
         .is_empty());
 }
 
+fn activity_listing(bytes: &[u8]) -> super::discovery::Listing {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = fs::canonicalize(directory.path()).expect("root");
+    let project = root.join("-project");
+    fs::create_dir(&project).expect("project");
+    fs::write(project.join("session.jsonl"), bytes).expect("transcript");
+    read_listing(&find_files(&root, None).expect("discovery")[0]).expect("listing")
+}
+
+#[test]
+fn last_activity_ignores_trailing_state_and_nested_timestamps() {
+    let transcript = concat!(
+        "{\"uuid\":\"first\",\"timestamp\":\"2026-10-19T10:00:00Z\"}\n",
+        "{\"uuid\":\"last\",\"timestamp\":\"2026-11-08T10:00:00Z\"}\n",
+        "{\"type\":\"last-prompt\",\"lastPrompt\":\"hello\"}\n",
+        "{\"type\":\"ai-title\",\"aiTitle\":\"Title\"}\n",
+        "{\"type\":\"mode\",\"mode\":\"normal\"}\n",
+        "{\"type\":\"permission-mode\",\"permissionMode\":\"auto\"}\n",
+        "{\"type\":\"atis-latch\",\"atis\":\"\"}\n",
+        "{\"type\":\"queue-operation\",\"timestamp\":\"2026-11-28T08:33:00Z\"}\n",
+        "{\"type\":\"file-history-snapshot\",\"uuid\":\"snapshot\",\"snapshot\":{\"timestamp\":\"2026-11-28T08:33:00Z\"}}\n"
+    );
+    let listing = activity_listing(transcript.as_bytes());
+    assert_eq!(listing.started_at.as_deref(), Some("2026-10-19T10:00:00Z"));
+    assert_eq!(
+        listing.last_activity_at.as_deref(),
+        Some("2026-11-08T10:00:00Z")
+    );
+}
+
+#[test]
+fn last_activity_skips_an_unfinished_last_line_and_invalid_utf8() {
+    let mut transcript = b"{\"uuid\":\"last\",\"timestamp\":\"2026-11-08T10:00:00Z\"}\n".to_vec();
+    transcript.extend_from_slice(b"\xff\n{\"uuid\":\"unfinished\",\"timestamp\":\"later\"");
+    assert_eq!(
+        activity_listing(&transcript).last_activity_at.as_deref(),
+        Some("2026-11-08T10:00:00Z")
+    );
+}
+
+#[test]
+fn last_activity_reads_a_record_across_multiple_chunks() {
+    let record = serde_json::json!({
+        "uuid": "last", "timestamp": "2026-11-08T10:00:00Z",
+        "content": "x".repeat(super::discovery::ACTIVITY_CHUNK_BYTES * 3)
+    });
+    for suffix in ["", "\n", "\n{\"type\":\"mode\"}\n"] {
+        let transcript =
+            format!("{{\"uuid\":\"first\",\"timestamp\":\"earlier\"}}\n{record}{suffix}");
+        assert_eq!(
+            activity_listing(transcript.as_bytes())
+                .last_activity_at
+                .as_deref(),
+            Some("2026-11-08T10:00:00Z")
+        );
+    }
+}
+
+#[test]
+fn last_activity_is_absent_without_conversation_records() {
+    for transcript in ["", "\n", "{\"timestamp\":\"2026-11-08T10:00:00Z\"}\n{\"uuid\":12,\"timestamp\":\"later\"}\n{\"uuid\":\"id\",\"timestamp\":12}"] {
+        assert_eq!(activity_listing(transcript.as_bytes()).last_activity_at, None);
+    }
+}
+
 #[test]
 fn listing_cache_reads_a_transcript_again_only_after_it_changes() {
     let directory = tempfile::tempdir().expect("temporary directory");

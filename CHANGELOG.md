@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Claude Code sessions are dated by their last conversation record, not the transcript file's modification time. Claude Code adds records to old transcripts, which moved sessions not used for weeks to the top of the session picker and into `highwater report --last`.
+
 ## 0.5.7 – 2026-11-26
 
 - The Call inspector shows a **Turn** section for Claude Code sessions run through the Agent SDK, as in BB, which do not record their turns. As for Pi, Highwater groups the calls between user messages and estimates each turn's elapsed time from its timestamps.

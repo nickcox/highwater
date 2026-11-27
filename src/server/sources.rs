@@ -395,7 +395,11 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
             .as_deref()
             .and_then(|timestamp| timestamp.parse::<DateTime<Utc>>().ok()),
         byte_size: Some(file.stamp.byte_size),
-        modified_at: file.modified.map(DateTime::<Utc>::from),
+        modified_at: listing
+            .last_activity_at
+            .as_deref()
+            .and_then(|timestamp| timestamp.parse::<DateTime<Utc>>().ok())
+            .or_else(|| file.modified.map(DateTime::<Utc>::from)),
         modified_nanos: file.stamp.modified_nanos,
         harness: Harness::ClaudeCode,
         parent_reference: session_id

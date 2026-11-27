@@ -6,7 +6,7 @@ use crate::discovery::{DiscoveryError, FileStamp, ListedFile};
 use serde_json::Value;
 use std::{
     fs::{self, DirEntry},
-    io::{self, BufRead, BufReader, Read},
+    io::{self, BufRead, BufReader, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
     time::SystemTime,
@@ -14,6 +14,8 @@ use std::{
 
 /// Subagent metadata files are a few hundred bytes; anything larger is not one.
 const MAX_METADATA_BYTES: u64 = 64 * 1024;
+
+pub(super) const ACTIVITY_CHUNK_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TranscriptFile {
@@ -37,6 +39,8 @@ pub(crate) struct Listing {
     pub working_directory: Option<String>,
     /// The first conversation record's timestamp, as written.
     pub started_at: Option<String>,
+    /// The last conversation record's timestamp, as written.
+    pub last_activity_at: Option<String>,
     pub subagent: Option<SubagentMetadata>,
     /// Whether any assistant record appears. A transcript without one, such as a session
     /// closed before its first prompt was sent, has nothing to chart.
@@ -224,6 +228,7 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
             }
         }
     }
+    listing.last_activity_at = last_activity(&file.path)?;
     listing.title = custom_title.or(generated_title);
     if file.kind == FileKind::Subagent {
         if listing.agent_id.is_none() {
@@ -238,6 +243,41 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
         listing.subagent = Some(read_subagent_metadata(&metadata_path(&file.path)));
     }
     Ok(listing)
+}
+
+/// Read backwards, retaining at most one complete line and a fixed-size chunk.
+fn last_activity(path: &Path) -> io::Result<Option<String>> {
+    let mut file = fs::File::open(path)?;
+    let mut position = file.seek(SeekFrom::End(0))?;
+    let mut chunk = [0; ACTIVITY_CHUNK_BYTES];
+    // Store the partial line backwards so long records need no repeated copying.
+    let mut line = Vec::new();
+    while position > 0 {
+        let length = position.min(ACTIVITY_CHUNK_BYTES as u64) as usize;
+        position -= length as u64;
+        file.seek(SeekFrom::Start(position))?;
+        file.read_exact(&mut chunk[..length])?;
+        for byte in chunk[..length].iter().rev() {
+            if *byte == b'\n' {
+                line.reverse();
+                if let Some(timestamp) = activity_timestamp(&line) {
+                    return Ok(Some(timestamp));
+                }
+                line.clear();
+            } else {
+                line.push(*byte);
+            }
+        }
+    }
+    line.reverse();
+    Ok(activity_timestamp(&line))
+}
+
+fn activity_timestamp(line: &[u8]) -> Option<String> {
+    let text = std::str::from_utf8(line).ok()?;
+    let value: Value = serde_json::from_str(text).ok()?;
+    value.get("uuid")?.as_str()?;
+    value.get("timestamp")?.as_str().map(str::to_owned)
 }
 
 fn string_field(line: &str, key: &str) -> Option<String> {

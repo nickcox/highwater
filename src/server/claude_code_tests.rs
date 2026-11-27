@@ -117,6 +117,80 @@ fn catalogue_entries_match_the_expected_listings() {
 }
 
 #[test]
+fn catalogue_dates_and_sorts_by_last_conversation_activity() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = fs::canonicalize(directory.path()).expect("root");
+    let project = root.join("-project");
+    fs::create_dir(&project).expect("project");
+    let modified = "2026-11-28T08:33:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .expect("date");
+    for (name, timestamp) in [
+        ("older", "2026-10-19T10:00:00Z"),
+        ("newer", "2026-11-08T10:00:00Z"),
+    ] {
+        let path = project.join(format!("{name}.jsonl"));
+        fs::write(&path, format!("{{\"type\":\"assistant\",\"sessionId\":\"{name}\",\"uuid\":\"id\",\"timestamp\":\"{timestamp}\"}}\n{{\"type\":\"mode\",\"mode\":\"normal\"}}\n")).expect("write");
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("open")
+            .set_modified(modified.into())
+            .expect("mtime");
+    }
+    let entries = scan(&claude_only(vec![root]));
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].file_name, "newer.jsonl");
+    assert_eq!(entries[1].file_name, "older.jsonl");
+    for (entry, timestamp) in entries
+        .iter()
+        .zip(["2026-11-08T10:00:00Z", "2026-10-19T10:00:00Z"])
+    {
+        assert_eq!(entry.modified_at, Some(timestamp.parse().expect("date")));
+        assert_eq!(
+            entry.modified_nanos,
+            crate::discovery::FileStamp::of(
+                &fs::metadata(transcript_path(entry)).expect("metadata")
+            )
+            .modified_nanos
+        );
+    }
+}
+
+#[test]
+fn catalogue_falls_back_to_mtime_without_a_usable_activity_timestamp() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = fs::canonicalize(directory.path()).expect("root");
+    let project = root.join("-project");
+    fs::create_dir(&project).expect("project");
+    let modified = "2026-11-28T08:33:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .expect("date");
+    for (name, fields) in [
+        ("missing", ""),
+        ("invalid", ",\"uuid\":\"last\",\"timestamp\":\"invalid\""),
+    ] {
+        let path = project.join(format!("{name}.jsonl"));
+        fs::write(
+            &path,
+            format!("{{\"type\":\"assistant\",\"sessionId\":\"{name}\"{fields}}}\n"),
+        )
+        .expect("write");
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("open")
+            .set_modified(modified.into())
+            .expect("mtime");
+    }
+    let entries = scan(&claude_only(vec![root]));
+    assert_eq!(entries.len(), 2);
+    assert!(entries
+        .iter()
+        .all(|entry| entry.modified_at == Some(modified)));
+}
+
+#[test]
 fn catalogue_json_has_no_local_paths() {
     let entries = scan(&claude_only(vec![fixture_root()]));
     let json = serde_json::to_value(entry_for(&entries, "-synthetic-project/simple.jsonl"))
