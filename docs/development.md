@@ -25,7 +25,7 @@ rustup toolchain install 1.88.0 --profile minimal --component rustfmt --componen
 RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
 
-`--full` includes the standard checks, so there is no need to run both before merging. Each `[check]` line reports the elapsed time for one step.
+`--full` includes the standard checks, so there is no need to run both before merging. After the embed check, the Rust checks run in parallel with the Python and frontend checks. Steps within each group run in order. Both groups must pass before the contract check starts. With `--skip-rust-checks`, only the Python and frontend group runs at this stage. Each `[check]` line reports elapsed time for one step; times from overlapping groups do not add up to the total run time.
 
 The checks install npm dependencies with `scripts/npm-install.sh`, which runs `npm ci` in CI and `npm install` locally, so an unchanged folder is not reinstalled. They build the frontend with `scripts/build-web.sh`, which replaces only the `web/dist/` files whose contents changed, so an unchanged frontend does not make Cargo rebuild the release binary.
 

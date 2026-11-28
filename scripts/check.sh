@@ -20,15 +20,35 @@ step() {
 }
 step scripts/npm-install.sh web
 step scripts/check-embed.sh
-if [[ "$RUST_CHECKS" == 1 ]]; then
+rust_checks() {
   step cargo fmt --check
   step cargo clippy --all-targets --locked -- -D warnings
   step cargo test --all-targets --locked
+}
+frontend_checks() {
+  step python3 -m unittest discover -s scripts/tests
+  step npm --prefix web run format:check
+  step npm --prefix web run check
+  step npm --prefix web run test
+}
+if [[ "$RUST_CHECKS" == 1 ]]; then
+  # Keep the frontend output live and print Rust output together, without interleaving it.
+  mkdir -p target
+  rust_log=$(mktemp target/check-rust.XXXXXX)
+  trap 'rm -f "$rust_log"' EXIT
+  rust_checks >"$rust_log" 2>&1 &
+  rust_pid=$!
+  frontend_checks &
+  frontend_pid=$!
+  # Wait for both even on failure. Each group still stops at its first failed step.
+  frontend_status=0; wait "$frontend_pid" || frontend_status=$?
+  rust_status=0; wait "$rust_pid" || rust_status=$?
+  cat "$rust_log"
+  if (( rust_status != 0 )); then exit "$rust_status"; fi
+  if (( frontend_status != 0 )); then exit "$frontend_status"; fi
+else
+  frontend_checks
 fi
-step python3 -m unittest discover -s scripts/tests
-step npm --prefix web run format:check
-step npm --prefix web run check
-step npm --prefix web run test
 step scripts/check-contract.sh
 # rust-embed must see the current frontend before the final release build.
 step scripts/build-web.sh
