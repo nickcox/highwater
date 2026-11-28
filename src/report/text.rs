@@ -56,6 +56,13 @@ pub(super) fn write(out: &mut impl Write, report: &Report) -> io::Result<()> {
     Ok(())
 }
 
+fn json_usd(value: &serde_json::Value) -> String {
+    value
+        .as_f64()
+        .map(usd)
+        .unwrap_or_else(|| "unknown cost".into())
+}
+
 fn write_session(out: &mut impl Write, session: &SessionReport) -> io::Result<()> {
     let date = session
         .updated_at
@@ -116,6 +123,43 @@ fn write_session(out: &mut impl Write, session: &SessionReport) -> io::Result<()
         });
     }
     writeln!(out, "  {}", facts.join(" · "))?;
+    let input = &session.cost_by_input;
+    writeln!(out, "  Input cost: uncached {} · reads {} · writes {} · output {} · median/max uncached {}/{} tokens",
+        json_usd(&input["uncached"]["usd"]), json_usd(&input["cacheRead"]["usd"]), json_usd(&input["cacheWrite"]["usd"]), json_usd(&input["output"]["usd"]), input["medianUncached"], input["largestUncached"])?;
+    let bands: Vec<_> = session
+        .cost_by_context_size
+        .iter()
+        .filter(|b| b.calls > 0)
+        .map(|b| {
+            format!(
+                "{}: {} calls {}",
+                b.prompt,
+                b.calls,
+                b.usd.map(usd).unwrap_or_else(|| "unknown cost".into())
+            )
+        })
+        .collect();
+    writeln!(
+        out,
+        "  Context: {} · cache rewrites: {} ({} after expiry), {}",
+        bands.join(" · "),
+        session.cache_rewrites.calls,
+        session.cache_rewrites.after_expiry,
+        session
+            .cache_rewrites
+            .usd
+            .map(usd)
+            .unwrap_or_else(|| "unknown cost".into())
+    )?;
+    if let Some(item) = session.largest_items.first() {
+        writeln!(
+            out,
+            "  Largest item: {} · {} · {}",
+            item["id"].as_str().unwrap_or(""),
+            item["label"].as_str().unwrap_or(""),
+            json_usd(&item["usd"])
+        )?;
+    }
     let kinds: Vec<String> = session
         .context_by_kind
         .iter()

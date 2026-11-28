@@ -110,3 +110,36 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 This pattern is planned, with the data Highwater already has: what child sessions cost compared with what they return.
 
 Polling and failed tool calls are not findings of their own. On the sessions they were measured on, both cost little: polling was mostly done inside one command that waits, and most failures were commands that exit with a code other than 0 as part of normal work, such as tests and searches with no matches. Failed runs are counted in `tools[].failed`, `commandFamilies[].failed` and the `failed` fact of `repeatedCommand` and `repeatedResultInContext`.
+
+## Input and context costs
+
+Each session adds `costByInput`: `uncached`, `cacheRead`, `cacheWrite` and
+`output`, each with `tokens` and `usd`, plus `medianUncached` and
+`largestUncached` per call (whole tokens; an even median rounds down). Missing counters are not zero. Recorded component
+costs are used when all four are available (Pi, OpenCode and Copilot). Otherwise the
+same dated prices as item costs determine the shares, including prompt tiers,
+and those shares are fitted to the call's known total. A call with only a
+total cost needs prices and usage to allocate it; without those its allocation
+is unknown. A call without a recorded cost uses dated prices where available.
+Null means no known values; sums with missing calls are partial. Ranges use
+the low estimate, as item costs do.
+
+`costByContextSize` gives `prompt`, `calls` and `usd` for reported prompts
+below 50K, 50–100K, 100–200K, 200–400K and at least 400K. Calls without a
+reported prompt are excluded. `cacheRewrites` gives `calls`, `usd`,
+`afterExpiry` and up to five `largest` writes (`call`, `tokens`, `usd`,
+`breakSeconds`). It excludes the first call and compaction calls, requires a prompt
+of at least 20,000 tokens and a write of at least half the prompt. Breaks use
+previous end to current start, falling back to current end; missing timing
+is not counted as expiry. Expiry is one hour if any call wrote one-hour
+entries, five minutes otherwise. Its cost is the whole call, not a cache-miss
+penalty. These two fields also have report-wide totals; report-wide rewrites
+do not repeat the largest entries.
+
+`largestItems` contains up to ten items ranked by existing estimated item
+cost: full `id` for `highwater show`, `kind`, `label`, `tokens`, `calls`
+present, `firstCall` and `usd`. These are estimates over all calls where the
+item was present, not additional charges.
+
+New dollar figures use four decimal places, as other report costs do.
+Largest-item labels are limited to 80 characters; IDs are not shortened.

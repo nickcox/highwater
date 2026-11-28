@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Copilot reports use recorded token-detail charges for input cost components, including compactions. New report costs and cache-rewrite breaks use compact precision; text costs are formatted as dollars.
+- Reports add input costs, context-size costs, cache rewrites and the ten most expensive items with full IDs.
 - Report schema version 2 adds `turns` for all requests and counts only requests the user started in `userTurns` and carried context age. Recorded turns keep messages sent during a request together; harness notifications and injected context are not user turns.
 - `highwater show` includes the producing tool's name and arguments, selects lines with `--lines` or `--grep` and `--around`, and gives a character `--offset` to continue cut output. Missing item IDs now point to the report's findings and `largestItems` when available.
 - A Claude Code session copied from another, such as a bb fork, counts only its own calls. The copied history is context for its first call, as for Pi and Codex forks, and the session shows **Forked from** its source. Reports no longer count copied calls more than once.

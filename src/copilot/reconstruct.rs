@@ -901,10 +901,41 @@ fn reported_usage(usage: &Value, api: Option<&str>) -> ReportedUsage {
         cache_write_1h: None,
         reasoning: count(usage, "reasoningTokens"),
         total_tokens: None,
-        cost: ReportedCost {
-            total: nano_aiu_usd(usage.pointer("/copilotUsage/totalNanoAiu")),
-            ..ReportedCost::default()
-        },
+        cost: reported_cost(usage),
+    }
+}
+
+/// Token detail rates are in nano-AIU per batch, not dollars per token.
+fn reported_cost(usage: &Value) -> ReportedCost {
+    let component = |kind: &str| -> Option<f64> {
+        let details = usage.pointer("/copilotUsage/tokenDetails")?.as_array()?;
+        let mut total = 0.0;
+        for detail in details
+            .iter()
+            .filter(|d| d.get("tokenType").and_then(Value::as_str) == Some(kind))
+        {
+            let tokens = detail.get("tokenCount")?.as_f64()?;
+            let rate = detail.get("costPerBatch")?.as_f64()?;
+            let batch = detail.get("batchSize")?.as_f64()?;
+            if !tokens.is_finite()
+                || tokens < 0.0
+                || !rate.is_finite()
+                || rate < 0.0
+                || !batch.is_finite()
+                || batch <= 0.0
+            {
+                return None;
+            }
+            total += tokens * rate / batch;
+        }
+        nano_aiu_usd(Some(&Value::from(total)))
+    };
+    ReportedCost {
+        input: component("input"),
+        cache_read: component("cache_read"),
+        cache_write: component("cache_write"),
+        output: component("output"),
+        total: nano_aiu_usd(usage.pointer("/copilotUsage/totalNanoAiu")),
     }
 }
 

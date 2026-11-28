@@ -203,6 +203,10 @@ pub(super) fn session_report(
                 .filter(|model| model != "<synthetic>"),
         ),
         calls,
+        cost_by_input: super::figures::input(analysis, normalized, &prices),
+        cost_by_context_size: super::figures::bands(analysis),
+        cache_rewrites: super::figures::rewrites(analysis),
+        largest_items: super::figures::items(analysis, &costs),
         average_context_tokens,
         tokens,
         cost: SessionCost {

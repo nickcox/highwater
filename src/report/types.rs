@@ -14,6 +14,8 @@ pub(crate) struct Report {
     pub scope: Scope,
     pub thresholds: Thresholds,
     pub sessions: Vec<SessionReport>,
+    pub cost_by_context_size: Vec<ContextBand>,
+    pub cache_rewrites: RewriteTotal,
     /// Shell commands by family, over all the sessions.
     pub command_families: Vec<FamilyTotal>,
     /// Patterns that repeat in several sessions.
@@ -117,6 +119,10 @@ pub(crate) struct SessionReport {
     pub calls: usize,
     pub tokens: TokenTotals,
     pub cost: SessionCost,
+    pub cost_by_input: serde_json::Value,
+    pub cost_by_context_size: Vec<ContextBand>,
+    pub cache_rewrites: RewriteTotal,
+    pub largest_items: Vec<serde_json::Value>,
     pub reconstruction: Reconstruction,
     pub peak_context_tokens: Option<u64>,
     /// Average over calls with a complete recorded prompt total, including zero.
@@ -409,4 +415,23 @@ pub(crate) struct CompactionCalls {
     /// The low end of their cost, when any has one.
     #[serde(serialize_with = "usd")]
     pub usd: Option<f64>,
+}
+
+#[derive(Debug, Default, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ContextBand {
+    pub prompt: &'static str,
+    pub calls: usize,
+    #[serde(serialize_with = "usd")]
+    pub usd: Option<f64>,
+}
+#[derive(Debug, Default, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RewriteTotal {
+    pub calls: usize,
+    #[serde(serialize_with = "usd")]
+    pub usd: Option<f64>,
+    pub after_expiry: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub largest: Vec<serde_json::Value>,
 }

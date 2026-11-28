@@ -30,6 +30,8 @@ If the report lists no sessions, say so and suggest `--all` or `--dir`.
 
 ## 3. Read the report
 
+- `costByInput` separates uncached input, cache reads, cache writes and output, with median and largest uncached input per call. `costByContextSize` groups calls and costs by reported prompt size. `cacheRewrites` counts large cache writes, including those after expiry. The latter two also have report-wide totals. `largestItems` lists the ten most expensive items with full IDs for `highwater show`.
+
 - **Costs are estimates** in US dollars at API rates. For calls covered by a subscription they are what the API would have charged, not what the user paid. Use them to rank, and say they are estimates.
 - **Token-turns** are tokens multiplied by the number of calls they were sent with. A 10,000-token file read that stays in context for 100 calls is 1,000,000 token-turns, even though it was read once. Most of a long session's cost is input sent again on every call, mostly read from the cache.
 - An item's `estimatedCost` is what that item cost over every call it was sent with. It is the most that removing the item could save, not the expected saving.

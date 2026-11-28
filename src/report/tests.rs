@@ -1280,6 +1280,8 @@ fn report_of(session: super::types::SessionReport) -> super::types::Report {
         scope: super::types::Scope::sessions(),
         thresholds: Thresholds::default(),
         command_families: Vec::new(),
+        cost_by_context_size: Vec::new(),
+        cache_rewrites: Default::default(),
         sessions: vec![session],
         across_sessions: Vec::new(),
         skipped: Vec::new(),
@@ -1462,4 +1464,81 @@ fn show_includes_recorded_tool_arguments() {
         }
     }
     assert!(checked > 0);
+}
+
+#[test]
+fn report_input_components_and_context_boundaries() {
+    use crate::domain::{ReportedCost, ReportedUsage};
+    let report = report_with_usage(&[
+        ReportedUsage {
+            input: Some(20_000),
+            cache_read: Some(0),
+            cache_write: Some(30_000),
+            output: Some(100),
+            cost: ReportedCost {
+                input: Some(1.0),
+                cache_read: Some(0.0),
+                cache_write: Some(2.0),
+                output: Some(0.5),
+                total: Some(3.5),
+            },
+            ..Default::default()
+        },
+        ReportedUsage {
+            input: Some(10_000),
+            cache_read: Some(0),
+            cache_write: Some(90_000),
+            output: Some(0),
+            ..Default::default()
+        },
+    ]);
+    assert_eq!(report.cost_by_input["uncached"]["tokens"], 30_000);
+    assert!(report.cost_by_input["uncached"]["usd"].as_f64().unwrap() >= 1.0);
+    assert_eq!(report.cost_by_input["medianUncached"], 15_000);
+    assert_eq!(report.cost_by_input["largestUncached"], 20_000);
+    assert_eq!(report.cost_by_context_size[1].calls, 1);
+    assert_eq!(report.cost_by_context_size[2].calls, 1);
+    assert_eq!(report.cache_rewrites.calls, 1);
+    assert_eq!(report.cache_rewrites.largest[0]["call"], 2);
+    assert_eq!(report.cache_rewrites.largest[0]["tokens"], 90_000);
+    assert!(report.cache_rewrites.largest[0]
+        .get("breakSeconds")
+        .is_some());
+    assert!(report.cache_rewrites.largest[0].get("breakMs").is_none());
+    let totals = super::figures::sum_bands(std::slice::from_ref(&report));
+    assert_eq!(totals[2].calls, 1);
+    assert_eq!(
+        super::figures::sum_rewrites(std::slice::from_ref(&report)).calls,
+        1
+    );
+    for item in &report.largest_items {
+        assert!(item["label"].as_str().unwrap().chars().count() <= 80);
+        assert!(item["id"].as_str().is_some_and(|id| !id.is_empty()));
+    }
+}
+
+#[test]
+fn cache_rewrite_expiry_and_compaction_exclusion() {
+    let sessions = fixture_sessions();
+    let (_, mut analysis) = sessions
+        .iter()
+        .find_map(|session| {
+            let pair = analyse(&session.source_locator(), CONFIG).ok()?;
+            (pair.1.model_calls.len() >= 2).then_some(pair)
+        })
+        .unwrap();
+    analysis.model_calls.truncate(2);
+    analysis.compactions.clear();
+    analysis.model_calls[0].timing.recorded_at_ms = Some(0);
+    let call = &mut analysis.model_calls[1];
+    call.stop_reason = None;
+    call.reported_prompt_tokens = Some(20_000);
+    call.usage.cache_write = Some(10_000);
+    call.usage.cache_write_1h = Some(1);
+    call.timing.started_at_ms = Some(3_600_000);
+    assert_eq!(super::figures::rewrites(&analysis).after_expiry, 0);
+    analysis.model_calls[1].timing.started_at_ms = Some(3_600_001);
+    assert_eq!(super::figures::rewrites(&analysis).after_expiry, 1);
+    analysis.model_calls[1].stop_reason = Some("compaction-call".into());
+    assert_eq!(super::figures::rewrites(&analysis).calls, 0);
 }

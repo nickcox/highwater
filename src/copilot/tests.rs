@@ -144,6 +144,10 @@ fn usage_records_give_each_call_its_usage_cost_target_and_timing() {
     assert_eq!(usage.cache_write, Some(1000));
     assert_eq!(usage.output, Some(20));
     assert_eq!(usage.cost.total, Some(0.1));
+    assert!((usage.cost.input.unwrap() - 0.1 * 200.0 / 1220.0).abs() < 1e-12);
+    assert_eq!(usage.cost.cache_read, Some(0.0));
+    assert!((usage.cost.cache_write.unwrap() - 0.1 * 1000.0 / 1220.0).abs() < 1e-12);
+    assert!((usage.cost.output.unwrap() - 0.1 * 20.0 / 1220.0).abs() < 1e-12);
     assert_eq!(first.target.provider.as_deref(), Some("github-copilot"));
     assert_eq!(first.target.model.as_deref(), Some("gpt-6.2-astra"));
     assert_eq!(first.target.api.as_deref(), Some("openai-responses"));
@@ -287,6 +291,11 @@ fn a_compaction_records_its_details_and_its_own_call() {
     assert_eq!(call.reported_usage.input, Some(150));
     assert_eq!(call.reported_usage.cache_read, Some(1450));
     assert_eq!(call.reported_usage.cost.total, Some(0.3));
+    let cost = &call.reported_usage.cost;
+    assert!((cost.input.unwrap() - 0.3 * 150.0 / 1690.0).abs() < 1e-12);
+    assert!((cost.cache_read.unwrap() - 0.3 * 1450.0 / 1690.0).abs() < 1e-12);
+    assert_eq!(cost.cache_write, Some(0.0));
+    assert!((cost.output.unwrap() - 0.3 * 90.0 / 1690.0).abs() < 1e-12);
     assert_eq!(call.target.model.as_deref(), Some("gpt-6.2-astra"));
     assert_eq!(call.target.api.as_deref(), Some("openai-responses"));
     let end = call.timestamps.recorded_at_ms.expect("recorded");

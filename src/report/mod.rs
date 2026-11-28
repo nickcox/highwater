@@ -2,6 +2,7 @@
 //! agent skill (or a person) to suggest ways to use fewer. See docs/report.md.
 
 mod build;
+mod figures;
 mod findings;
 mod repository;
 mod skill;
@@ -163,6 +164,8 @@ pub(crate) fn run(args: ReportArgs) -> Result<(), Error> {
         scope,
         thresholds,
         command_families,
+        cost_by_context_size: figures::sum_bands(&reports),
+        cache_rewrites: figures::sum_rewrites(&reports),
         sessions: reports,
         across_sessions,
         skipped,

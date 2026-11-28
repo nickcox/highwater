@@ -24,12 +24,21 @@ def event(ts, type_, data, **extra):
     return json.dumps(record, ensure_ascii=False, separators=(",", ":"))
 
 
+def copilot_usage(input_tokens, cache_read, cache_write, output, nano):
+    counts = [("input", input_tokens - cache_read - cache_write),
+              ("cache_read", cache_read), ("cache_write", cache_write), ("output", output)]
+    rate = nano * 1_000_000 / (input_tokens + output)
+    return {"totalNanoAiu": nano, "tokenDetails": [
+        {"tokenType": kind, "tokenCount": count, "batchSize": 1_000_000, "costPerBatch": rate}
+        for kind, count in counts]}
+
+
 def usage(ts, call_id, input_tokens, cache_read, cache_write, output, reasoning=0, model="gpt-6.2-astra", endpoint="/responses", nano=10_000_000_000, **extra):
     u = {"model": model, "responseModel": model, "provider": {"id": "copilot", "kind": "copilot", "label": "GitHub Copilot"},
          "inputTokens": input_tokens, "outputTokens": output, "cacheReadTokens": cache_read, "cacheWriteTokens": cache_write,
          "reasoningTokens": reasoning, "cost": 1.0, "duration": 2000, "initiator": "agent", "interactionType": "conversation-agent",
          "apiEndpoint": endpoint, "apiCallId": call_id, "toolTokenCount": 900, "availableToolCount": 4, "finishReason": "stop",
-         "copilotUsage": {"totalNanoAiu": nano}}
+         "copilotUsage": copilot_usage(input_tokens, cache_read, cache_write, output, nano)}
     return event(ts, "session.usage_record", {"usage": u}, **extra)
 
 
@@ -111,7 +120,7 @@ app = [
           "summarizerProgress": {"durationMs": 6000},
           "compactionTokensUsed": {"requestCount": 1, "model": "gpt-6.2-astra", "inputTokens": 1600, "outputTokens": 90,
                                    "cacheReadTokens": 1450, "cacheWriteTokens": 0, "duration": 5000,
-                                   "copilotUsage": {"totalNanoAiu": 30000000000}},
+                                   "copilotUsage": copilot_usage(1600, 1450, 0, 90, 30000000000)},
           "summaryContent": "The user asked for the files; there are two."}),
     event("2026-11-01T00:01:10.003Z", "assistant.turn_start", {"turnId": "0"}),
     usage("2026-11-01T00:01:12.000Z", "api-4", 1400, 0, 1400, 15, model="claude-sonnet-5.5", endpoint="/v1/messages"),
