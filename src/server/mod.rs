@@ -319,9 +319,7 @@ fn configured_sources(args: SourceArgs) -> Result<sources::SourceSet, AppError> 
 pub(crate) fn discover_sessions(
     args: SourceArgs,
 ) -> Result<Vec<SessionFile>, Box<dyn std::error::Error>> {
-    let sources = configured_sources(args)?;
-    let scanner = sources::MixedScanner::new(&sources, Arc::default());
-    Ok(scanner.scan(Arc::new(AtomicBool::new(false)))?)
+    discover_harness_sources(args, None)
 }
 
 /// Restrict discovery to the harness named by a session reference.
@@ -329,7 +327,6 @@ pub(crate) fn discover_session_sources(
     args: SourceArgs,
     reference: &str,
 ) -> Result<Vec<SessionFile>, Box<dyn std::error::Error>> {
-    let mut sources = configured_sources(args)?;
     let harness = [
         "vscode-copilot",
         "claude-code",
@@ -340,6 +337,40 @@ pub(crate) fn discover_session_sources(
     ]
     .into_iter()
     .find(|name| reference.starts_with(&format!("{name}-")));
+    discover_harness_sources(args, harness)
+}
+
+/// Read only the requested harness, or all configured sources.
+pub(crate) fn discover_harness_sources(
+    mut args: SourceArgs,
+    harness: Option<&str>,
+) -> Result<Vec<SessionFile>, Box<dyn std::error::Error>> {
+    if let Some(name) = harness {
+        if !Harness::ALL.iter().any(|harness| harness.as_str() == name) {
+            return Err(format!("unknown harness {name}; expected pi, opencode, claude-code, codex, copilot or vscode-copilot").into());
+        }
+    }
+    if let Some(harness) = harness {
+        if harness != "pi" {
+            args.session_root.clear();
+        }
+        if harness != "opencode" {
+            args.opencode_db.clear();
+        }
+        if harness != "claude-code" {
+            args.claude_root.clear();
+        }
+        if harness != "vscode-copilot" {
+            args.vscode_user_dir.clear();
+        }
+        if harness != "codex" {
+            args.codex_home.clear();
+        }
+        if harness != "copilot" {
+            args.copilot_home.clear();
+        }
+    }
+    let mut sources = configured_sources(args)?;
     if let Some(harness) = harness {
         if harness != "pi" {
             sources.pi_roots.clear();

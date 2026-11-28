@@ -4,6 +4,7 @@
 mod build;
 mod figures;
 mod findings;
+mod list;
 mod repository;
 mod shared;
 mod skill;
@@ -20,7 +21,7 @@ use crate::{
     analysis::{analyze, AnalysisConfig},
     api::Analysis,
     domain::NormalizedSession,
-    server::{discover_sessions, SessionFile, SourceArgs, TokenizationArg},
+    server::{SessionFile, SourceArgs, TokenizationArg},
     source::{self, SessionLocator},
 };
 use chrono::{DateTime, NaiveDate, Utc};
@@ -43,10 +44,7 @@ const FAMILY_LIMIT: usize = 12;
 const REPORT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Args, Debug)]
-pub(crate) struct ReportArgs {
-    /// Sessions to report on, by reference (the `session=` value of a view link). When
-    /// given, the scope options are ignored.
-    sessions: Vec<String>,
+pub(crate) struct ScopeArgs {
     /// Report on sessions from every directory.
     #[arg(long, conflicts_with = "dir")]
     all: bool,
@@ -55,16 +53,25 @@ pub(crate) struct ReportArgs {
     /// directory.
     #[arg(long)]
     dir: Option<PathBuf>,
-    /// How many of the most recently updated sessions to report on. Child sessions of those
-    /// sessions are included and not counted. Sessions that made no calls are skipped.
-    #[arg(long, default_value_t = 10)]
-    last: usize,
     /// Only sessions updated on or after this date (YYYY-MM-DD, UTC).
     #[arg(long)]
     since: Option<NaiveDate>,
     /// Only sessions from this harness: pi, opencode, claude-code, codex, copilot or vscode-copilot.
     #[arg(long)]
     harness: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct ReportArgs {
+    /// Sessions to report on, by reference (the `session=` value of a view link). When
+    /// given, the scope options are ignored.
+    sessions: Vec<String>,
+    #[command(flatten)]
+    scope: ScopeArgs,
+    /// How many of the most recently updated sessions to report on. Child sessions of those
+    /// sessions are included and not counted. Sessions that made no calls are skipped.
+    #[arg(long, default_value_t = 10)]
+    last: usize,
     /// Write the report as JSON, for an agent to read, instead of text.
     #[arg(long)]
     json: bool,
@@ -112,10 +119,15 @@ pub(crate) fn run(args: ReportArgs) -> Result<(), Error> {
     };
     let sessions = if args.sessions.len() == 1 {
         crate::server::discover_session_sources(args.sources.clone(), &args.sessions[0])?
+    } else if args.sessions.is_empty() && args.scope.harness.is_some() {
+        crate::server::discover_harness_sources(
+            args.sources.clone(),
+            args.scope.harness.as_deref(),
+        )?
     } else {
-        discover_sessions(args.sources.clone())?
+        crate::server::discover_sessions(args.sources.clone())?
     };
-    let (scope, groups) = select(&sessions, &args)?;
+    let (scope, groups) = select(&sessions, &args.scope, &args.sessions, args.last)?;
     let thresholds = Thresholds::default();
     let analysed = analyse_groups(&groups, scope.last, config);
     let mut reports = Vec::new();
@@ -231,11 +243,13 @@ fn analyse_groups<'a>(
 /// sessions after it. Sessions named on the command line are one group each.
 fn select<'a>(
     sessions: &'a [SessionFile],
-    args: &ReportArgs,
+    args: &ScopeArgs,
+    references: &[String],
+    last: usize,
 ) -> Result<(Scope, Vec<Vec<&'a SessionFile>>), Error> {
-    if !args.sessions.is_empty() {
+    if !references.is_empty() {
         let mut selected = Vec::new();
-        for reference in &args.sessions {
+        for reference in references {
             let session = sessions
                 .iter()
                 .find(|session| &session.id == reference)
@@ -299,7 +313,7 @@ fn select<'a>(
         repository: matcher
             .and_then(|matcher| matcher.repository)
             .map(|repository| repository.display().to_string()),
-        last: Some(args.last),
+        last: Some(last),
         since: args.since.map(|date| date.to_string()),
         harness: args.harness.clone(),
     };

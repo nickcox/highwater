@@ -26,7 +26,7 @@ const CONFIG: AnalysisConfig = AnalysisConfig {
 };
 
 /// The Claude Code and Codex fixtures. An explicit, empty Pi root turns off the defaults.
-fn fixture_sessions() -> Vec<SessionFile> {
+pub(super) fn fixture_sessions() -> Vec<SessionFile> {
     let empty = tempfile::tempdir().expect("temporary folder");
     discover_sessions(SourceArgs {
         session_root: vec![empty.path().to_path_buf()],
@@ -42,11 +42,13 @@ fn fixture_sessions() -> Vec<SessionFile> {
 fn args(dir: Option<&str>) -> ReportArgs {
     ReportArgs {
         sessions: Vec::new(),
-        all: dir.is_none(),
-        dir: dir.map(PathBuf::from),
+        scope: super::ScopeArgs {
+            all: dir.is_none(),
+            dir: dir.map(PathBuf::from),
+            since: None,
+            harness: None,
+        },
         last: 100,
-        since: None,
-        harness: None,
         json: true,
         tokenization: TokenizationArg::Heuristic,
         limit: 10,
@@ -254,14 +256,14 @@ fn worktrees_of_a_repository_share_its_git_folder() {
 #[test]
 fn a_directory_scope_keeps_its_sessions_and_their_children() {
     let sessions = fixture_sessions();
-    let (_, all) = select(&sessions, &args(None)).expect("all sessions");
+    let (_, all) = select(&sessions, &args(None).scope, &[], 100).expect("all sessions");
     assert_eq!(
         all.concat().len(),
         sessions.len(),
         "every session, each child once"
     );
-    let (scope, groups) =
-        select(&sessions, &args(Some("/synthetic/project"))).expect("one directory");
+    let (scope, groups) = select(&sessions, &args(Some("/synthetic/project")).scope, &[], 100)
+        .expect("one directory");
     let selected = groups.concat();
     assert_eq!(scope.kind, "directory");
     assert!(!selected.is_empty());
@@ -279,7 +281,8 @@ fn a_directory_scope_keeps_its_sessions_and_their_children() {
                 .is_some_and(|dir| dir.starts_with("/synthetic/project"))),
         }
     }
-    let (_, none) = select(&sessions, &args(Some("/no/such/project"))).expect("no sessions");
+    let (_, none) =
+        select(&sessions, &args(Some("/no/such/project")).scope, &[], 100).expect("no sessions");
     assert!(none.is_empty());
 }
 
@@ -1098,7 +1101,7 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
 
     let mut scope = args(None);
     scope.last = 1;
-    let (_, groups) = select(&sessions, &scope).expect("all sessions");
+    let (_, groups) = select(&sessions, &scope.scope, &[], scope.last).expect("all sessions");
     let latest: Vec<&str> = analyse_groups(&groups, Some(1), CONFIG)
         .iter()
         .map(|(session, _)| session.id.as_str())

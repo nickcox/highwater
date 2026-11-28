@@ -11,6 +11,8 @@ pub(crate) struct SessionArgs {
 
 #[derive(Subcommand, Debug)]
 enum SessionCommand {
+    /// Find sessions by scope and catalogue text.
+    List(super::list::ListArgs),
     /// List turns, their costs, tool activity and prompt starts.
     Turns(TurnsArgs),
     /// Print a context item's text, with optional line or pattern selection.
@@ -122,6 +124,7 @@ pub(super) fn rows(
 
 pub(crate) fn session(args: SessionArgs) -> Result<(), Error> {
     match args.command {
+        SessionCommand::List(args) => super::list::run(args),
         SessionCommand::Show(args) => show(args),
         SessionCommand::Turns(args) => turns(args),
     }
