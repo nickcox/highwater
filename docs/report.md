@@ -6,6 +6,7 @@
 
 ```bash
 highwater report [SESSION...] [--all | --dir PATH] [--last N] [--since YYYY-MM-DD] [--harness NAME] [--json] [--limit N]
+highwater session list [--all | --dir DIR] [--harness H] [--since YYYY-MM-DD] [--search TEXT] [--last N] [--children] [--json]
 highwater session turns SESSION [--sort order|cost|calls] [--limit N] [--offset N] [--json]
 highwater session show SESSION ITEM_ID [--max-tokens N] [--offset N]
 highwater session show SESSION ITEM_ID --lines A..B
@@ -14,7 +15,7 @@ highwater skill print
 highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [--force]
 ```
 
-`report`, `session turns` and `session show` take the same source options as `highwater serve` (`--claude-root`, `--codex-home` and so on), and `report` also takes `--tokenization`; see the [README](../README.md#run). The options go after the command, as in `highwater report --codex-home <dir>`.
+`report`, `session list`, `session turns` and `session show` take the same source options as `highwater serve` (`--claude-root`, `--codex-home` and so on), and `report` also takes `--tokenization`; see the [README](../README.md#run). The options go after the command, as in `highwater report --codex-home <dir>`.
 
 **Scope.** Without session references, `report` covers the `--last` (default 10) most recently updated sessions run in the current directory's git repository: the directory itself, anywhere inside it, and the repository's other worktrees. A directory outside a repository matches itself and the directories inside it. `--dir` names another directory, and `--all` takes sessions from every directory. Child sessions of the chosen sessions are included and are not counted in `--last`. Sessions that made no model calls, such as a fork that was never used, are left out and the next session takes their place; a session named on the command line is always included. The repository is found by reading `.git` files and folders, without running git; a session whose directory no longer exists matches only by path.
 
@@ -30,6 +31,8 @@ highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [-
 | `--agent claude-code` | `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`) | `<repository>/.claude/skills` |
 
 `<repository>` is the top folder of the current git working tree, or the current folder when it is not in one. `--dir PATH` installs into `PATH` instead. The skill only works where Highwater is installed, so a project's copy is useful only to collaborators who have it. A different file already installed is kept unless `--force` is given, since it may have been edited.
+
+**Session list.** `highwater session list` lists the 20 most recently updated top-level sessions in the report scope, without opening them. Use `--search TEXT` to match every word, ignoring case, against titles, directories, prompts, branches and references. Search runs before `--last N`; a matching child includes its parent. `--children` includes child rows, and `--json` gives catalogue fields and the number of remaining top-level sessions. Text times use local time; JSON times use UTC. `--harness` reads only that harness’s sources. Use `report` for costs and call counts.
 
 **Session turns.** `highwater session turns SESSION` lists one row per report turn. Use `--sort order|cost|calls` (default `order`), `--limit N` (default 30), `--offset N` and `--json`. Like `report`, it accepts `--tokenization`.
 

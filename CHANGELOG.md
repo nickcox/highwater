@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `highwater session list` finds sessions by scope and catalogue text, with references, child counts and JSON output, without analysing them.
+- `--harness` reads only the named harness’s sessions, making `report --harness` faster. Unknown harness names now produce an error.
+
 - The token-efficiency skill reads the report's new totals first, then uses `highwater session turns` and `highwater session show` to look at a session more closely, and gives the report's current size per session.
 - `highwater session turns` lists report turns with costs, breaks, prompt sizes and tool activity, with sorting and pagination. `show` moves to `highwater session show`, keeping the old spelling as a hidden alias. Session commands search only the referenced harness's folders.
 - Reports add turn, call and cost totals by starter and each session's three most expensive turns.

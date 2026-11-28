@@ -21,7 +21,7 @@ By default this covers the 10 most recently updated sessions run in the current 
 
 - **A general review** ("where do my sessions spend tokens?"): the default. Patterns repeated across sessions only show up here. Use `--last 20` or more only when the user asks for a wider look; allow roughly 4,000 tokens per session (16 KB of JSON for one measured session; sizes vary).
 - **A particular session**, named by a reference such as `claude-code-51475cc186e8` or by a Highwater view link (its `session=` value): `highwater report --json <reference>`.
-- **The session the user just finished:** `highwater report --json --last 2`, and look at the second session. The first is the one you are running in.
+- **The session the user just finished:** `highwater session list --json --last 2`, and look at the second session. The first is the one you are running in. Then use `highwater report --json <reference>` to analyse it. Use `highwater session list --search TEXT` to find a session the user describes.
 - Other options: `--all` (every directory), `--dir PATH` (another project), `--since YYYY-MM-DD`, `--harness claude-code|codex|opencode|pi|vscode-copilot`.
 
 The most recently updated session is nearly always the one you are running in. It is unfinished and includes your own work on this request, so leave it out of your conclusions unless the user asked about it.

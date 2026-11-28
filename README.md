@@ -64,7 +64,7 @@ Highwater rejects requests addressed to any name other than `127.0.0.1` or `loca
 
 ## Token reports
 
-`highwater report` lists where recent sessions in the current repository spent tokens: the large tool results that stayed in context longest, and the commands run again and again. `--json` gives the same report for an agent to read, and `highwater skill install` installs a skill that has Codex, Claude Code or another agent read it and suggest changes, such as narrower commands, a new skill or script, or shorter instructions. See [Token reports](docs/report.md).
+`highwater session list` finds recent sessions by reference, with `--search` for catalogue text. `highwater report` lists where recent sessions in the current repository spent tokens: the large tool results that stayed in context longest, and the commands run again and again. `--json` gives the same report for an agent to read, and `highwater skill install` installs a skill that has Codex, Claude Code or another agent read it and suggest changes, such as narrower commands, a new skill or script, or shorter instructions. See [Token reports](docs/report.md).
 
 ## How accurate it is
 
@@ -74,7 +74,7 @@ Session files record how many input tokens each call used, and some record its c
 
 - [User guide](docs/user-guide.md): the River, Composition, lifespans, view links and the cache and cost track.
 - [Data semantics](docs/data-semantics.md): tokenization, cost, the analysis API, and what each number means.
-- [Token reports](docs/report.md): `highwater report`, `show` and the `token-efficiency` skill.
+- [Token reports](docs/report.md): `highwater report`, `session list`, `session turns`, `session show` and the `token-efficiency` skill.
 - Sources: [Pi](docs/sources/pi.md), [OpenCode](docs/sources/opencode.md), [Claude Code](docs/sources/claude-code.md), [Codex](docs/sources/codex.md), [Copilot app and CLI](docs/sources/copilot.md) and [VS Code Copilot Chat](docs/sources/vscode-copilot.md).
 - [Architecture](docs/architecture.md) and [development](docs/development.md): how it is built, and how to change and check it.
 
