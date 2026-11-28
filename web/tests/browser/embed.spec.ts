@@ -180,7 +180,7 @@ test('Follow latest moves to the newest calls after a replacement and can be res
     (analysis) => window.highwaterHarness.replace(analysis),
     toWireAnalysis(long),
   );
-  const last = long.modelCalls.at(-1)!.index;
+  const last = long.modelCalls[long.modelCalls.length - 1].index;
   const live = app.getByTitle('Live', { exact: true });
   await expect(live).toBeVisible();
   await expect(app.getByRole('status').filter({ hasText: 'Live' })).toHaveCount(1);
@@ -226,13 +226,14 @@ test('the panel order shows the latest call first and follows new calls until an
   expect(order).toEqual(['summary-section', 'call-section', 'panel', 'inspector-column', 'panel']);
   const heading = app.locator('#call-overview-heading');
   const follow = app.getByRole('button', { name: 'Follow latest' });
-  const first = testAnalysis().modelCalls.at(-1)!.index;
+  const initialCalls = testAnalysis().modelCalls;
+  const first = initialCalls[initialCalls.length - 1].index;
   await expect(heading).toHaveText('Latest call');
   await expect(app.locator('#pinned-call-summary')).toHaveText(`Pinned call ${first}`);
   await expect(follow).toHaveAttribute('aria-pressed', 'true');
 
   const long = sessionScenario('longSession');
-  const last = long.modelCalls.at(-1)!.index;
+  const last = long.modelCalls[long.modelCalls.length - 1].index;
   await page.evaluate(
     (analysis) => window.highwaterHarness.replace(analysis),
     toWireAnalysis(long),

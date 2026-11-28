@@ -249,7 +249,7 @@ function denseEconomicsScenario(): ReturnType<typeof testAnalysis> {
     totalCalls: itemCount,
   };
   analysis.tokenAnalysis.totalCalculatedTokenTurns = analysis.contextItems.reduce(
-    (total, item) => total + item.tokenTurns,
+    (total, item) => total + (item.tokenTurns ?? 0),
     0,
   );
   analysis.tokenAnalysis.totalTokenTurnsCoverage = analysis.tokenAnalysis.itemEstimateCoverage;
@@ -674,7 +674,7 @@ test('Composition group headings stay clipped inside narrow adjacent groups', as
       const text = group.querySelector('text');
       const clipPath = text?.getAttribute('clip-path')?.match(/#([^)]*)/)?.[1];
       const clipRect = clipPath
-        ? svg.querySelector(`#${CSS.escape(clipPath)} rect`)?.getBBox()
+        ? svg.querySelector<SVGRectElement>(`#${CSS.escape(clipPath)} rect`)?.getBBox()
         : null;
       return {
         label: group.getAttribute('aria-label'),
@@ -2128,7 +2128,7 @@ test('chart help opens within a narrow touch viewport without moving navigation'
   });
   const touchPage = await context.newPage();
   try {
-    await mockApi(touchPage, sessionScenario());
+    await mockApi(touchPage);
     await touchPage.goto('/');
     await assertLoaded(touchPage);
 
