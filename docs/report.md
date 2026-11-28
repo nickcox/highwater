@@ -6,7 +6,9 @@
 
 ```bash
 highwater report [SESSION...] [--all | --dir PATH] [--last N] [--since YYYY-MM-DD] [--harness NAME] [--json] [--limit N]
-highwater show SESSION ITEM_ID [--max-tokens N]
+highwater show SESSION ITEM_ID [--max-tokens N] [--offset N]
+highwater show SESSION ITEM_ID --lines A..B
+highwater show SESSION ITEM_ID --grep PATTERN [--around N]
 highwater skill print
 highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [--force]
 ```
@@ -17,7 +19,7 @@ highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [-
 
 **Speed.** A release build reports on 10 sessions in about two seconds, most of it spent finding the sessions. A debug build, such as `cargo run`, is about 15 times slower.
 
-**Show.** `show` prints the item's label and its text as Highwater counts it, cut at about `--max-tokens` tokens (default 4,000, at four characters a token). Items measured from reported usage, such as the Unrecorded request context, have no text.
+**Show.** `show` prints the item's label and its text as Highwater counts it, cut at about `--max-tokens` tokens (default 4,000, at four characters a token). Tool results include the producing tool's name and arguments (cut to 500 characters) before the result, when recorded. `--lines A..B` selects a one-based inclusive line range; `--grep PATTERN` selects lines matching a regular expression, with `--around N` lines either side. Selected lines show their original line numbers, followed by `:` for range lines and grep matches, or a space for grep context lines. A `--` line separates non-adjacent groups. Overlapping matches include each line only once. Grep output ends with the number of matching lines out of the item's total lines, or an explicit no-match message; this summary is printed even when output is cut. These two selectors cannot be combined. The token limit still applies to the selected text, including line numbers and group separators. `--offset N` skips characters in that formatted text, not bytes; the cut message gives the next offset to use with the other options unchanged. Items measured from reported usage, such as the Unrecorded request context, have no text.
 
 **Skill.** `skill install` writes `token-efficiency/SKILL.md` into a skills folder:
 

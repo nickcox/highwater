@@ -64,6 +64,8 @@ Before recommending a change, look at what the agent actually ran and got back, 
 highwater show <session ref> '<item ID>' --max-tokens 1500
 ```
 
+For a large result, use `--lines A..B` (one-based, inclusive) or `--grep PATTERN --around N` to select relevant lines. Selected lines show their original line numbers, so a grep match can be followed with a line range. Grep also reports how many lines matched out of the item's total, or says that none matched. If output is cut, repeat the command with the `--offset N` given in the cut message, keeping the other options unchanged. Tool results include the producing tool's name and up to 500 characters of its arguments when recorded.
+
 Quote the item ID in single quotes. Check, for example, whether a large result was mostly noise (progress output, a whole file when a few lines were needed), or whether it was needed (the file being edited).
 
 ## 5. Work out the suggestions

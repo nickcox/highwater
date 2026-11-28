@@ -83,6 +83,18 @@ pub(crate) struct ShowArgs {
     /// Stop after about this many tokens (four characters each).
     #[arg(long, default_value_t = 4000)]
     max_tokens: usize,
+    /// One-based inclusive line range, for example 10..20.
+    #[arg(long, conflicts_with = "grep", value_parser = parse_lines)]
+    lines: Option<(usize, usize)>,
+    /// Regular expression to match against each line.
+    #[arg(long)]
+    grep: Option<String>,
+    /// Lines of context on either side of each match.
+    #[arg(long, requires = "grep", default_value_t = 0)]
+    around: usize,
+    /// Skip this many characters of the selected text.
+    #[arg(long, default_value_t = 0)]
+    offset: usize,
     #[command(flatten)]
     sources: SourceArgs,
 }
@@ -380,31 +392,20 @@ pub(crate) fn show(args: ShowArgs) -> Result<(), Error> {
                     args.item
                 )
             } else {
-                format!("the session has no item {}", args.item)
+                format!("the session has no item {}; find item IDs in the report's findings (and largestItems when available)", args.item)
             }
         })?;
-    let text = crate::analysis::item_text(&item.payload);
-    let limit = args.max_tokens.saturating_mul(4);
-    let total = text.chars().count();
     let mut out = std::io::stdout().lock();
     writeln!(out, "{} ({})", item.label, item.kind.as_str())?;
-    if let Some(tool_call) = &item.source_tool_call_id {
-        writeln!(out, "Tool call: {tool_call}")?;
+    if let Some(id) = &item.source_tool_call_id {
+        writeln!(out, "Tool call: {id}")?;
+        if let Some(call) = tool_call_text(&loaded.normalized, id) {
+            writeln!(out, "{call}")?;
+        }
     }
     writeln!(out)?;
-    if total > limit {
-        let shown: String = text.chars().take(limit).collect();
-        writeln!(out, "{shown}")?;
-        writeln!(
-            out,
-            "\n[Cut at about {} tokens: {} of {} characters shown]",
-            args.max_tokens,
-            crate::domain::grouped(limit as u64),
-            crate::domain::grouped(total as u64)
-        )?;
-    } else {
-        writeln!(out, "{text}")?;
-    }
+    let text = crate::analysis::item_text(&item.payload);
+    write_selection(&mut out, &text, &args)?;
     Ok(())
 }
 
@@ -415,4 +416,108 @@ fn distinct<T: Ord + Clone>(values: impl IntoIterator<Item = T>) -> Vec<T> {
         .into_iter()
         .filter(|value| seen.insert(value.clone()))
         .collect()
+}
+
+fn parse_lines(value: &str) -> Result<(usize, usize), String> {
+    let invalid = || "expected a one-based inclusive range A..B".to_string();
+    let (a, b) = value.split_once("..").ok_or_else(invalid)?;
+    let a = a.parse::<usize>().map_err(|_| invalid())?;
+    let b = b.parse::<usize>().map_err(|_| invalid())?;
+    if a == 0 || b < a {
+        return Err(invalid());
+    }
+    Ok((a, b))
+}
+
+fn tool_call_text(session: &NormalizedSession, id: &str) -> Option<String> {
+    use crate::domain::{AssistantContentBlock, TokenizationPayload};
+    session.context_items.iter().find_map(|item| {
+        let TokenizationPayload::AssistantMessage { blocks, .. } = &item.payload else {
+            return None;
+        };
+        blocks.iter().find_map(|block| match block {
+            AssistantContentBlock::ToolCall {
+                id: call_id,
+                name,
+                arguments,
+            } if call_id == id => {
+                let shown: String = arguments.chars().take(500).collect();
+                let suffix = if arguments.chars().count() > 500 {
+                    "…"
+                } else {
+                    ""
+                };
+                Some(format!("{name} {shown}{suffix}"))
+            }
+            _ => None,
+        })
+    })
+}
+
+fn write_selection(out: &mut impl Write, text: &str, args: &ShowArgs) -> Result<(), Error> {
+    let selected;
+    let mut match_summary = None;
+    let text = if args.lines.is_some() || args.grep.is_some() {
+        let lines: Vec<_> = text.lines().collect();
+        let mut include = vec![false; lines.len()];
+        let mut matches = vec![false; lines.len()];
+        if let Some((a, b)) = args.lines {
+            let start = a.saturating_sub(1).min(lines.len());
+            include[start..b.min(lines.len())].fill(true);
+        } else if let Some(pattern) = &args.grep {
+            let regex = regex::Regex::new(pattern)?;
+            for (index, line) in lines.iter().enumerate() {
+                if regex.is_match(line) {
+                    matches[index] = true;
+                    let start = index.saturating_sub(args.around);
+                    let end = index
+                        .saturating_add(args.around)
+                        .saturating_add(1)
+                        .min(lines.len());
+                    include[start..end].fill(true);
+                }
+            }
+            let count = matches.iter().filter(|matched| **matched).count();
+            match_summary = Some(if count == 0 {
+                format!("[No matching lines out of {}]", lines.len())
+            } else {
+                format!("[{count} matching lines of {}]", lines.len())
+            });
+        }
+        let mut rendered = Vec::new();
+        let mut previous = None;
+        for (index, line) in lines.iter().enumerate() {
+            if !include[index] {
+                continue;
+            }
+            if previous.is_some_and(|last| index > last + 1) {
+                rendered.push("--".to_string());
+            }
+            let separator = if args.grep.is_some() && !matches[index] {
+                ' '
+            } else {
+                ':'
+            };
+            rendered.push(format!("{:>4}{separator} {line}", index + 1));
+            previous = Some(index);
+        }
+        selected = rendered.join("\n");
+        selected.as_str()
+    } else {
+        text
+    };
+    let total = text.chars().count();
+    let limit = args.max_tokens.saturating_mul(4);
+    let shown: String = text.chars().skip(args.offset).take(limit).collect();
+    if !shown.is_empty() || match_summary.is_none() {
+        writeln!(out, "{shown}")?;
+    }
+    if let Some(summary) = match_summary {
+        writeln!(out, "{summary}")?;
+    }
+    let next = args.offset.saturating_add(shown.chars().count());
+    if next < total {
+        writeln!(out, "\n[Cut at about {} tokens: {} of {} characters; continue with --offset {} (keep the other options unchanged)]", args.max_tokens, next, total, next)?;
+    }
+    Ok(())
 }

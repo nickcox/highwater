@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `highwater show` includes the producing tool's name and arguments, selects lines with `--lines` or `--grep` and `--around`, and gives a character `--offset` to continue cut output. Missing item IDs now point to the report's findings and `largestItems` when available.
 - A Claude Code session copied from another, such as a bb fork, counts only its own calls. The copied history is context for its first call, as for Pi and Codex forks, and the session shows **Forked from** its source. Reports no longer count copied calls more than once.
 - A Codex guardian review no longer shows the review request Codex wrote as its first prompt.
 - A Claude Code session started with a skill command, as T3 Code and Claude Code record it, shows the command as its first prompt, such as `/review-source-refresh-pr`.

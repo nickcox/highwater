@@ -1325,3 +1325,83 @@ fn a_session_report_counts_the_compactions_own_calls_and_their_cost() {
     let json = serde_json::to_value(&report).expect("JSON");
     assert_eq!(json["compactionCalls"]["calls"], 1);
 }
+
+#[test]
+fn show_selects_lines_matches_and_character_pages() {
+    use clap::Parser;
+    #[derive(Parser)]
+    struct Cli {
+        #[command(flatten)]
+        args: super::ShowArgs,
+    }
+    let render = |options: &[&str], text: &str| {
+        let cli = Cli::try_parse_from(
+            ["show", "session", "item"]
+                .into_iter()
+                .chain(options.iter().copied()),
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        super::write_selection(&mut out, text, &cli.args).unwrap();
+        String::from_utf8(out).unwrap()
+    };
+    assert_eq!(
+        render(&["--lines", "2..3"], "one\ntwo\nthree\nfour"),
+        "   2: two\n   3: three\n"
+    );
+    assert_eq!(
+        render(
+            &["--grep", "two|three", "--around", "1"],
+            "one\ntwo\nthree\nfour\nfive"
+        ),
+        "   1  one\n   2: two\n   3: three\n   4  four\n[2 matching lines of 5]\n"
+    );
+    assert_eq!(
+        render(&["--grep", "absent"], "one"),
+        "[No matching lines out of 1]\n"
+    );
+    assert_eq!(
+        render(&["--grep", "one|four"], "one\ntwo\nthree\nfour"),
+        "   1: one\n--\n   4: four\n[2 matching lines of 4]\n"
+    );
+    assert_eq!(
+        render(&["--grep", "x"], ""),
+        "[No matching lines out of 0]\n"
+    );
+    let page = render(&["--grep", "two", "--max-tokens", "1"], "one\ntwo\nthree");
+    assert!(page.contains("[1 matching lines of 3]"));
+    assert!(page.contains("continue with --offset 4"));
+    assert_eq!(
+        render(&["--lines", "2..2", "--offset", "4"], "one\ntwo"),
+        ": two\n"
+    );
+    assert_eq!(
+        render(&["--offset", "2", "--max-tokens", "1"], "é猫abcd"),
+        "abcd\n"
+    );
+    assert!(render(&["--max-tokens", "1"], "é猫abcd").contains("continue with --offset 4"));
+    assert_eq!(render(&["--offset", "100"], "short"), "\n");
+    for range in ["0..1", "3..2", "1", "a..b"] {
+        assert!(Cli::try_parse_from(["show", "s", "i", "--lines", range]).is_err());
+    }
+    assert!(Cli::try_parse_from(["show", "s", "i", "--lines", "1..2", "--grep", "x"]).is_err());
+    assert!(Cli::try_parse_from(["show", "s", "i", "--around", "1"]).is_err());
+}
+
+#[test]
+fn show_includes_recorded_tool_arguments() {
+    let sessions = fixture_sessions();
+    let mut checked = 0;
+    for session in sessions {
+        let loaded = crate::source::load(&session.source_locator(), None).unwrap();
+        for item in &loaded.normalized.context_items {
+            if let Some(id) = &item.source_tool_call_id {
+                if let Some(text) = super::tool_call_text(&loaded.normalized, id) {
+                    assert!(!text.is_empty());
+                    checked += 1;
+                }
+            }
+        }
+    }
+    assert!(checked > 0);
+}
