@@ -185,7 +185,15 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
             break;
         }
     }
-    listing.first_prompt = listing.first_prompt.or(fallback_prompt);
+    // Codex writes a guardian review's request itself, so it has no typed prompt.
+    let guardian = listing
+        .child
+        .as_ref()
+        .is_some_and(|child| child.kind.as_deref() == Some("guardian"));
+    listing.first_prompt = listing
+        .first_prompt
+        .or(fallback_prompt)
+        .filter(|_| !guardian);
     Ok(listing)
 }
 

@@ -86,6 +86,17 @@ fn listings_read_session_meta_from_plain_and_compressed_files() {
 }
 
 #[test]
+fn a_guardian_review_has_no_first_prompt() {
+    // Its user record is the review request Codex wrote, not a typed prompt.
+    assert_eq!(
+        read_listing(&file_for("003"))
+            .expect("guardian")
+            .first_prompt,
+        None
+    );
+}
+
+#[test]
 fn guardian_reviews_and_spawned_subagents_name_their_parent() {
     assert_eq!(
         read_listing(&file_for("003")).expect("guardian").child,

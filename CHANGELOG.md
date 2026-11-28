@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A Codex guardian review no longer shows the review request Codex wrote as its first prompt.
 - A Claude Code session started with a skill command, as T3 Code and Claude Code record it, shows the command as its first prompt, such as `/review-source-refresh-pr`.
 - `highwater serve`, `report` and `show` find Pi sessions in Pi's configured session folder (`PI_CODING_AGENT_SESSION_DIR` or `sessionDir` in Pi's settings) and the sessions bb runs through Pi, as well as `~/.pi/agent/sessions`. `--session-root` can be given more than once.
 - Sessions are chosen with one **Session** button, which opens a table of sessions. The table sorts by any column, filters by harness, project, last change and cost, and its search matches each word separately against the title, project, working directory, first prompt and session ID. Each row shows the session's first prompt under its title. With child sessions hidden, a session's cost includes its child sessions' costs unless its harness's total already includes them. Only the sort order and the **Child sessions** setting are remembered between visits.
