@@ -403,7 +403,16 @@ class ImportTest(unittest.TestCase):
                     modes = { thinking = { output = 4.0 } }
                     source = "https://api-docs.deepseek.com/quick_start/pricing"
                     """,
-                "data/research_corrections.toml": "",
+                "data/research_corrections.toml": """
+                    [[correction]]
+                    provider = "google"
+                    model = "gemini-4-carbon"
+                    valid_from = "2026-12-01T00:00:00Z"
+                    input = 4.0
+                    output = 20.0
+                    replaces = {}
+                    source = "https://ai.google.dev/gemini-api/docs/pricing#gemini-4-carbon"
+                    """,
                 "data/observed.json": json.dumps({"providers": {"alibaba": {"qwen-mt-flash": [
                     {"rates": {"input": 0.16, "output": 0.49}, "valid_from": "2026-01-16T07:29:01Z",
                      "source": "https://web.archive.org/web/20260116072901/https://example.com"},
@@ -416,7 +425,9 @@ class ImportTest(unittest.TestCase):
             output.write_text(prices.write_amendments(amendments, "header"))
             loaded = prices.load_amendments(output)
 
-        sol, deepseek, first, second = loaded
+        sol, deepseek, unlisted, first, second = loaded
+        self.assertTrue(unlisted.until_listed)
+        self.assertIsNone(unlisted.replaces)
         self.assertEqual((sol.provider, sol.model, sol.basis, sol.file),
                          ("openai", "gpt-5.6-sol", "documented", "corrections.toml"))
         self.assertEqual(sol.rates["tiers"], [{"above": 272000, "input": 8.0, "output": 30.0,

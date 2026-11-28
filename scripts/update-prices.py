@@ -428,6 +428,9 @@ def convert_model_prices(repo: Path) -> tuple[list[dict[str, Any]], str]:
         if item.get("replaces"):
             result["replaces"] = {name: float(value) for name, value in item["replaces"].items()
                                   if name in RATE_FIELDS}
+        elif item.get("replaces") == {}:
+            # An empty replaces table covers a model until models.dev prices it.
+            result["until_listed"] = True
         result.update(rates)
         tiers = [{"above": tier["above"], **{name: float(tier[name]) for name in RATE_FIELDS
                                             if _number(tier.get(name)) is not None}}

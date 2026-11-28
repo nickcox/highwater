@@ -13,7 +13,7 @@ The cost a harness records is often missing or misleading on its own:
 - **Pi records an API-equivalent cost for subscriptions without saying so**, because it prices its `openai-codex` (ChatGPT plan) provider at OpenAI's API rates.
 - **Claude Code records no cost per call**, and a recorded $0 cannot be told apart from a free call using the call record alone.
 
-So each call is classified by its billing mode first (`billing-modes.toml`), then given a recorded, free, estimated, API-equivalent or unknown cost. Billed and API-equivalent totals are never added together. The table keeps every models.dev provider, because OpenCode can record any of them, which makes it about 2.9 MB uncompressed (330 KB with gzip). Prices are updated by hand. Time-of-day pricing is not modelled; no supported harness's sessions use a provider that has it.
+So each call is classified by its billing mode first (`billing-modes.toml`), then given a recorded, free, estimated, API-equivalent or unknown cost. Billed and API-equivalent totals are never added together. The table keeps every models.dev provider, because OpenCode can record any of them, which makes it about 4 MB uncompressed (424 KB with gzip). Prices are updated by hand. Time-of-day pricing is not modelled; no supported harness's sessions use a provider that has it.
 
 ## Files
 
@@ -47,7 +47,7 @@ So each call is classified by its billing mode first (`billing-modes.toml`), the
 
 `build --check` fails if `prices.json` does not match its inputs.
 
-Last updated on 11 October 2026 from models.dev `e7a4d2717c96` and model-prices `7aa78836a2b6`.
+Last updated on 28 November 2026 from models.dev `fabb3f5de3d6` and model-prices `dd82c7704edb`.
 
 ## Amendment format
 
@@ -72,7 +72,7 @@ note = "Why this amendment exists."  # optional
 An amendment without `valid_until` needs one of:
 
 - `replaces = { input = 5.0, output = 30.0 }`: the models.dev rates it corrects. It stops applying as soon as models.dev records different rates, so a later fix or price change in models.dev ends it without an edit here.
-- `until_listed = true`: it applies until models.dev first lists the model. This is used for prices read from a provider's page before models.dev added the model.
+- `until_listed = true`: it applies until models.dev first lists the model. This is used for prices read from a provider's page before models.dev added the model, including model-prices corrections with an empty `replaces` table.
 
 When several amendments cover the same time, `manual.toml` wins, then model-prices' `corrections.toml`, `research_corrections.toml` and `observed.json`, in that order. An amendment for a model that models.dev does not list adds that model. Amendments apply to one exact provider and model ID; a models.dev alias (a symlinked file) follows its target's prices and amendments until the alias has a price of its own.
 
