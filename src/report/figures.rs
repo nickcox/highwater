@@ -11,7 +11,7 @@ fn add(total: &mut Option<f64>, value: Option<f64>) {
         *total = Some(total.unwrap_or(0.0) + value);
     }
 }
-fn rounded(value: Option<f64>) -> Option<f64> {
+pub(super) fn rounded(value: Option<f64>) -> Option<f64> {
     value.map(|v| (v * 10_000.0).round() / 10_000.0)
 }
 fn empty_bands() -> Vec<ContextBand> {

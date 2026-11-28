@@ -261,6 +261,7 @@ pub(crate) struct InputPrice {
     pub input: f64,
     pub cache_read: f64,
     pub cache_write: f64,
+    pub cache_write_1h: f64,
     /// The call's whole input at these rates, from its reported usage, with long-prompt
     /// tiers applied.
     pub prompt_cost: Option<f64>,
@@ -307,6 +308,12 @@ pub(crate) fn input_price(table: &PriceTable, call: CallToPrice<'_>) -> Option<I
         input: per_token(rates.input),
         cache_read: per_token(rates.cache_read.unwrap_or(rates.input)),
         cache_write: per_token(rates.cache_write.unwrap_or(rates.input)),
+        // The same one-hour multiplier used by calculate::cost.
+        cache_write_1h: per_token(if rates.cache_write.is_some() {
+            rates.input * 2.0
+        } else {
+            rates.input
+        }),
         prompt_cost,
         output_cost,
     })

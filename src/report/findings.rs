@@ -138,6 +138,7 @@ fn cache_misses(
         shortfall: u64,
         cause: &'static str,
         pause_ms: Option<i64>,
+        usd: Option<f64>,
     }
     let mut misses = Vec::new();
     let mut cost = FindingCost::default();
@@ -170,11 +171,14 @@ fn cache_misses(
             Some(_) => "unexplained",
         };
         // A provider without a cache write rate charges the input rate instead.
-        let usd = prices
-            .get(position + 1)
-            .copied()
-            .flatten()
-            .map(|price| shortfall as f64 * (price.cache_write - price.cache_read).max(0.0));
+        let usd = prices.get(position + 1).copied().flatten().map(|price| {
+            let write = if call.usage.cache_write_1h.unwrap_or(0) > 0 {
+                price.cache_write_1h
+            } else {
+                price.cache_write
+            };
+            shortfall as f64 * (write - price.cache_read).max(0.0)
+        });
         cost.add(FindingCost {
             usd,
             token_turns: shortfall,
@@ -184,6 +188,7 @@ fn cache_misses(
             shortfall,
             cause,
             pause_ms,
+            usd: call.cost_assessment.amount,
         });
     }
     if misses.is_empty() {
@@ -228,6 +233,15 @@ fn cache_misses(
         facts: BTreeMap::from([
             ("providers", json!(providers)),
             ("misses", json!(misses.len())),
+            (
+                "usd",
+                json!(super::figures::rounded(
+                    misses
+                        .iter()
+                        .filter_map(|miss| miss.usd)
+                        .reduce(|a, b| a + b)
+                )),
+            ),
             ("afterPause", json!(after_pause)),
             ("unexplained", json!(unexplained)),
             ("unknownTiming", json!(unknown)),
@@ -240,6 +254,7 @@ fn cache_misses(
                     .take(CALL_LIMIT)
                     .map(|miss| json!({
                         "call": miss.call,
+                        "usd": super::figures::rounded(miss.usd),
                         "shortfallTokens": miss.shortfall,
                         "cause": miss.cause,
                         "pauseSeconds": miss.pause_ms.map(|pause| pause / 1000),

@@ -753,6 +753,52 @@ fn cache_misses_are_classed_by_the_pause_before_them() {
     assert_eq!(listed(&finding)["cause"], "afterPause");
     assert_eq!(listed(&finding)["shortfallTokens"], 100_000);
 
+    // Whole-call costs use the same names and four-decimal precision as cache rewrites.
+    {
+        let mut analysis = analysis.clone();
+        analysis.model_calls.truncate(first + 3);
+        analysis.model_calls[first + 1].cost_assessment.amount = Some(2.123456);
+        let price = crate::pricing::InputPrice {
+            input: 0.000003,
+            cache_read: 0.0000003,
+            cache_write: 0.00000375,
+            cache_write_1h: 0.000006,
+            prompt_cost: None,
+            output_cost: None,
+        };
+        let priced = |analysis: &crate::api::Analysis, price| {
+            let prices = vec![Some(price); analysis.model_calls.len()];
+            super::findings::cache_misses_for_test(analysis, &prices, &thresholds).unwrap()
+        };
+        // Isolate this miss from other fixture calls.
+        for call in &mut analysis.model_calls[..first] {
+            call.retried = true;
+        }
+        let short = priced(&analysis, price);
+        assert!((short.estimated_cost.usd.unwrap() - 0.345).abs() < 1e-9);
+        assert_eq!(listed(&short)["usd"], 2.1235);
+        assert_eq!(short.facts["usd"], 2.1235);
+        analysis.model_calls[first + 1].usage.cache_write_1h = Some(1);
+        let long = priced(&analysis, price);
+        assert!((long.estimated_cost.usd.unwrap() - 0.57).abs() < 1e-9);
+        // A session with one-hour writes does not change another call's write rate.
+        analysis.model_calls[first + 1].usage.cache_write_1h = Some(0);
+        analysis.model_calls[first].usage.cache_write_1h = Some(1);
+        assert_eq!(
+            priced(&analysis, price).estimated_cost.usd,
+            short.estimated_cost.usd
+        );
+        let fallback = crate::pricing::InputPrice {
+            cache_write: price.input,
+            cache_write_1h: price.input,
+            ..price
+        };
+        analysis.model_calls[first + 1].usage.cache_write_1h = Some(1);
+        assert!((priced(&analysis, fallback).estimated_cost.usd.unwrap() - 0.27).abs() < 1e-9);
+        analysis.model_calls[first].usage.cache_write_1h = None;
+        analysis.model_calls[first + 1].usage.cache_write_1h = None;
+    }
+
     // Within the cache lifetime, the same miss has no explanation.
     analysis.model_calls[first + 1].timing.recorded_at_ms = Some(60_000);
     let finding = super::findings::cache_misses_for_test(&analysis, &prices, &thresholds)
