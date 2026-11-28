@@ -151,6 +151,34 @@ fn write_session(out: &mut impl Write, session: &SessionReport) -> io::Result<()
             .map(usd)
             .unwrap_or_else(|| "unknown cost".into())
     )?;
+    let starters: Vec<_> = session
+        .turns_by_starter
+        .iter()
+        .map(|(starter, total)| {
+            format!(
+                "{starter}: {} turns, {} calls, {}",
+                total.turns,
+                total.calls,
+                total.usd.map(usd).unwrap_or_else(|| "unknown cost".into())
+            )
+        })
+        .collect();
+    writeln!(out, "  Turns by starter: {}", starters.join(" · "))?;
+    let expensive: Vec<_> = session
+        .expensive_turns
+        .iter()
+        .map(|turn| {
+            format!(
+                "t{} (calls {}–{}, {}, {})",
+                turn["turn"],
+                turn["firstCall"],
+                turn["lastCall"],
+                json_usd(&turn["usd"]),
+                turn["starter"].as_str().unwrap_or("")
+            )
+        })
+        .collect();
+    writeln!(out, "  Expensive turns: {}", expensive.join(" · "))?;
     if let Some(item) = session.largest_items.first() {
         writeln!(
             out,

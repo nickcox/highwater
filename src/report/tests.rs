@@ -1328,6 +1328,7 @@ fn report_of(session: super::types::SessionReport) -> super::types::Report {
         command_families: Vec::new(),
         cost_by_context_size: Vec::new(),
         cache_rewrites: Default::default(),
+        turns_by_starter: Default::default(),
         sessions: vec![session],
         across_sessions: Vec::new(),
         skipped: Vec::new(),
@@ -1587,4 +1588,88 @@ fn cache_rewrite_expiry_and_compaction_exclusion() {
     assert_eq!(super::figures::rewrites(&analysis).after_expiry, 1);
     analysis.model_calls[1].stop_reason = Some("compaction-call".into());
     assert_eq!(super::figures::rewrites(&analysis).calls, 0);
+}
+
+#[test]
+fn turn_figures_rank_sum_and_preserve_unknowns() {
+    let sessions = fixture_sessions();
+    let (_, mut analysis) = sessions
+        .iter()
+        .find_map(|session| {
+            let pair = analyse(&session.source_locator(), CONFIG).ok()?;
+            (pair.1.model_calls.len() >= 4).then_some(pair)
+        })
+        .unwrap();
+    analysis.model_calls.truncate(4);
+    analysis.turns.clear();
+    analysis.context_items.clear();
+    for (i, call) in analysis.model_calls.iter_mut().enumerate() {
+        call.stop_reason = Some("compaction-call".into());
+        call.cost_assessment.amount = [Some(1.123456), None, Some(3.0), Some(3.0)][i];
+        call.reported_prompt_tokens = Some(100 + i as u64);
+        call.timing.recorded_at_ms = Some(i as i64 * 2500);
+        call.timing.started_at_ms = None;
+        analysis.turns.push(crate::domain::RecordedTurn {
+            first_call: i + 1,
+            last_call: i + 1,
+            starter: None,
+            prompt: None,
+            duration_ms: None,
+            duration_estimated: false,
+            status: None,
+            combined_calls: false,
+        });
+    }
+    let (totals, expensive) = super::figures::turns(&analysis);
+    assert_eq!(totals["compaction"].turns, 4);
+    assert_eq!(totals["compaction"].calls, 4);
+    assert!((totals["compaction"].usd.unwrap() - 7.123456).abs() < 1e-9);
+    assert_eq!(expensive.len(), 3);
+    assert_eq!(expensive[0]["turn"], 3);
+    assert_eq!(expensive[1]["turn"], 4);
+    assert_eq!(expensive[0]["breakSeconds"], 2);
+    assert_eq!(expensive[0]["firstPromptTokens"], 102);
+    assert!(expensive[0]["prompt"].is_null());
+    assert!(expensive[2]["breakSeconds"].is_null());
+    assert_eq!(expensive[2]["usd"], 1.1235);
+    analysis.model_calls.clear();
+    assert!(super::figures::turns(&analysis).0.is_empty());
+}
+
+#[test]
+fn starter_totals_sum_sessions_before_rounding() {
+    let mut first = report_with_usage(&[]);
+    let mut second = report_with_usage(&[]);
+    first.turns_by_starter = std::collections::BTreeMap::from([
+        (
+            "user".into(),
+            super::types::StarterTotal {
+                turns: 2,
+                calls: 3,
+                usd: Some(1.00004),
+            },
+        ),
+        (
+            "heartbeat".into(),
+            super::types::StarterTotal {
+                turns: 1,
+                calls: 1,
+                usd: None,
+            },
+        ),
+    ]);
+    second.turns_by_starter = std::collections::BTreeMap::from([(
+        "user".into(),
+        super::types::StarterTotal {
+            turns: 1,
+            calls: 4,
+            usd: Some(2.00004),
+        },
+    )]);
+    let totals = super::figures::sum_turns(&[first, second]);
+    let json = serde_json::to_value(totals).unwrap();
+    assert_eq!(json["user"]["turns"], 3);
+    assert_eq!(json["user"]["calls"], 7);
+    assert_eq!(json["user"]["usd"], 3.0001);
+    assert!(json["heartbeat"]["usd"].is_null());
 }

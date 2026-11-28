@@ -1,5 +1,14 @@
 //! The report's JSON shape. See docs/report.md.
 
+#[derive(Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StarterTotal {
+    pub turns: usize,
+    pub calls: usize,
+    #[serde(serialize_with = "usd")]
+    pub usd: Option<f64>,
+}
+
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -16,6 +25,7 @@ pub(crate) struct Report {
     pub sessions: Vec<SessionReport>,
     pub cost_by_context_size: Vec<ContextBand>,
     pub cache_rewrites: RewriteTotal,
+    pub turns_by_starter: BTreeMap<String, StarterTotal>,
     /// Shell commands by family, over all the sessions.
     pub command_families: Vec<FamilyTotal>,
     /// Patterns that repeat in several sessions.
@@ -123,6 +133,8 @@ pub(crate) struct SessionReport {
     pub cost_by_context_size: Vec<ContextBand>,
     pub cache_rewrites: RewriteTotal,
     pub largest_items: Vec<serde_json::Value>,
+    pub turns_by_starter: BTreeMap<String, StarterTotal>,
+    pub expensive_turns: Vec<Value>,
     pub reconstruction: Reconstruction,
     pub peak_context_tokens: Option<u64>,
     /// Average over calls with a complete recorded prompt total, including zero.

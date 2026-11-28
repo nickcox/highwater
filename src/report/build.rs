@@ -54,8 +54,6 @@ pub(super) struct ReportTurn<'a> {
     pub first_call: usize,
     pub last_call: usize,
     pub starter: &'a str,
-    // Retained for the turn summaries and command added in later steps.
-    #[allow(dead_code)]
     pub prompt: Option<&'a str>,
     #[allow(dead_code)]
     pub recorded: Option<&'a crate::domain::RecordedTurn>,
@@ -186,7 +184,10 @@ pub(super) fn session_report(
         thresholds,
         limit,
     );
+    let (turns_by_starter, expensive_turns) = super::figures::turns(analysis);
     SessionReport {
+        turns_by_starter,
+        expensive_turns,
         reference: session.id.clone(),
         harness: session.harness.as_str().into(),
         title: session.display_name.clone(),

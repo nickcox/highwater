@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reports add turn, call and cost totals by starter and each session's three most expensive turns.
 - Cache-miss estimates use the one-hour write rate for calls that wrote one-hour entries. Findings also give whole-call costs for missed calls and their total.
 - Copilot reports use recorded token-detail charges for input cost components, including compactions. New report costs and cache-rewrite breaks use compact precision; text costs are formatted as dollars.
 - Reports add input costs, context-size costs, cache rewrites and the ten most expensive items with full IDs.

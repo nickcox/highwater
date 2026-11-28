@@ -199,3 +199,60 @@ pub(super) fn items(analysis: &Analysis, costs: &[ItemCost]) -> Vec<Value> {
     });
     items.into_iter().take(10).map(|(item,cost)| json!({"id": item.id, "kind": item.kind, "label": item.label.chars().take(80).collect::<String>(), "tokens": cost.tokens, "calls": cost.present_calls, "firstCall": cost.first_call, "usd": rounded(cost.cost.usd)})).collect()
 }
+
+/// Turn costs use whole-call costs; missing costs do not contribute to the sum.
+pub(super) fn turns(
+    analysis: &Analysis,
+) -> (
+    std::collections::BTreeMap<String, super::types::StarterTotal>,
+    Vec<Value>,
+) {
+    let mut totals = std::collections::BTreeMap::<String, super::types::StarterTotal>::new();
+    let mut expensive = Vec::new();
+    for (index, turn) in super::build::report_turns(analysis).iter().enumerate() {
+        let calls = &analysis.model_calls[turn.first_call - 1..turn.last_call];
+        let mut cost = None;
+        for call in calls {
+            add(&mut cost, call.cost_assessment.amount);
+        }
+        let total = totals.entry(turn.starter.into()).or_default();
+        total.turns += 1;
+        total.calls += calls.len();
+        add(&mut total.usd, cost);
+        let first = &calls[0];
+        let pause = turn
+            .first_call
+            .checked_sub(2)
+            .and_then(|i| analysis.model_calls[i].timing.recorded_at_ms)
+            .zip(first.timing.started_at_ms.or(first.timing.recorded_at_ms))
+            .map(|(end, start)| (start - end) / 1000);
+        expensive.push((cost, json!({"turn": index + 1, "firstCall": turn.first_call, "lastCall": turn.last_call,
+            "usd": rounded(cost), "breakSeconds": pause, "firstPromptTokens": first.reported_prompt_tokens,
+            "lastPromptTokens": calls.last().unwrap().reported_prompt_tokens, "starter": turn.starter,
+            "prompt": turn.prompt.map(|p| p.chars().take(80).collect::<String>())})));
+    }
+    expensive.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    (
+        totals,
+        expensive
+            .into_iter()
+            .take(3)
+            .map(|(_, value)| value)
+            .collect(),
+    )
+}
+
+pub(super) fn sum_turns(
+    sessions: &[SessionReport],
+) -> std::collections::BTreeMap<String, super::types::StarterTotal> {
+    let mut result = std::collections::BTreeMap::<String, super::types::StarterTotal>::new();
+    for session in sessions {
+        for (starter, total) in &session.turns_by_starter {
+            let sum = result.entry(starter.clone()).or_default();
+            sum.turns += total.turns;
+            sum.calls += total.calls;
+            add(&mut sum.usd, total.usd);
+        }
+    }
+    result
+}

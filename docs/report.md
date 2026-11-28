@@ -105,12 +105,6 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 
 **Same command.** Each session reader identifies its harness's shell and file-reading tools. For a shell tool, the key is the command, without a leading `cd <dir> &&` or `cd <dir>;`. For a file-reading tool, the key is the path it read, whatever part of the file. For any other tool, the key is its arguments as JSON with keys sorted and null fields left out, or the trimmed arguments if they are not JSON. Paths inside the session's git working tree are written relative to its top folder, and a read tool's relative path relative to it too, so the same file in two worktrees of a repository counts as one file. When the working directory is not in a working tree, or no longer exists, it stands in for the top folder.
 
-## Not yet included
-
-This pattern is planned, with the data Highwater already has: what child sessions cost compared with what they return.
-
-Polling and failed tool calls are not findings of their own. On the sessions they were measured on, both cost little: polling was mostly done inside one command that waits, and most failures were commands that exit with a code other than 0 as part of normal work, such as tests and searches with no matches. Failed runs are counted in `tools[].failed`, `commandFamilies[].failed` and the `failed` fact of `repeatedCommand` and `repeatedResultInContext`.
-
 ## Input and context costs
 
 Each session adds `costByInput`: `uncached`, `cacheRead`, `cacheWrite` and
@@ -143,3 +137,15 @@ item was present, not additional charges.
 
 New dollar figures use four decimal places, as other report costs do.
 Largest-item labels are limited to 80 characters; IDs are not shortened.
+
+### Turn figures
+
+Each session's `turnsByStarter` groups turns by starter (`user`, `taskNotification`, `heartbeat`, `compaction`, `guardianReview`, `injectedContext` and other recorded starters), with `turns`, `calls` and `usd`. The report-level `turnsByStarter` sums these over sessions in scope.
+
+`expensiveTurns` lists up to three turns ranked by their whole-call cost, with ties in turn order: `turn`, `firstCall`, `lastCall`, `usd`, `breakSeconds`, `firstPromptTokens`, `lastPromptTokens`, `starter` and `prompt`. Prompt token counts are the reported totals at the first and last call; `prompt` is the first 80 characters of a user prompt, or null for other starters. Breaks use the same timing and whole seconds as `cacheRewrites`; the first turn has no preceding break. Missing figures are null. Costs sum known call costs before rounding to four decimal places, as in the other per-call figures. Text output briefly lists starter totals and the most expensive turn ranges.
+
+## Not yet included
+
+This pattern is planned, with the data Highwater already has: what child sessions cost compared with what they return.
+
+Polling and failed tool calls are not findings of their own. On the sessions they were measured on, both cost little: polling was mostly done inside one command that waits, and most failures were commands that exit with a code other than 0 as part of normal work, such as tests and searches with no matches. Failed runs are counted in `tools[].failed`, `commandFamilies[].failed` and the `failed` fact of `repeatedCommand` and `repeatedResultInContext`.

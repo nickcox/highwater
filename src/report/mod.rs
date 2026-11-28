@@ -166,6 +166,7 @@ pub(crate) fn run(args: ReportArgs) -> Result<(), Error> {
         command_families,
         cost_by_context_size: figures::sum_bands(&reports),
         cache_rewrites: figures::sum_rewrites(&reports),
+        turns_by_starter: figures::sum_turns(&reports),
         sessions: reports,
         across_sessions,
         skipped,
