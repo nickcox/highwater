@@ -514,6 +514,64 @@ fn large_results_are_reported_when_the_command_or_search_did_not_limit_them() {
 }
 
 #[test]
+fn messages_inside_a_recorded_turn_do_not_split_it() {
+    let session = fixture_sessions()
+        .into_iter()
+        .find(|session| {
+            analyse(&session.source_locator(), CONFIG).is_ok_and(|(_, a)| a.model_calls.len() >= 3)
+        })
+        .unwrap();
+    let (_, mut analysis) = analyse(&session.source_locator(), CONFIG).unwrap();
+    analysis.turns = vec![crate::domain::RecordedTurn {
+        starter: None,
+        first_call: 1,
+        last_call: analysis.model_calls.len(),
+        prompt: Some("request".into()),
+        duration_ms: Some(123),
+        duration_estimated: false,
+        status: None,
+        combined_calls: false,
+    }];
+    let turns = super::build::report_turns(&analysis);
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].recorded.unwrap().duration_ms, Some(123));
+    assert_eq!(turns[0].prompt, Some("request"));
+}
+
+#[test]
+fn turns_cover_every_call_and_harness_messages_do_not_count_as_user_turns() {
+    for session in fixture_sessions() {
+        let (_, mut analysis) = analyse(&session.source_locator(), CONFIG).unwrap();
+        let turns = super::build::report_turns(&analysis);
+        let calls: Vec<_> = turns
+            .iter()
+            .flat_map(|turn| turn.first_call..=turn.last_call)
+            .collect();
+        assert_eq!(calls, (1..=analysis.model_calls.len()).collect::<Vec<_>>());
+        for item in &mut analysis.context_items {
+            if item.kind == "userMessage" {
+                item.metadata.insert("sentBy".into(), "harness".into());
+                item.metadata
+                    .insert("turnStarter".into(), "taskNotification".into());
+            }
+        }
+        assert!(user_turns(&analysis).iter().all(|count| *count == 0));
+        analysis.turns.clear();
+        for item in &mut analysis.context_items {
+            if item.kind == "userMessage" && !super::build::inherited(item) {
+                if let Some(range) = item.presence.first_mut() {
+                    range.start_call = 1;
+                }
+            }
+        }
+        // Multiple messages at one call cannot create multiple turns. Calls from
+        // unfinished requests remain covered even without a recorded turn.
+        let turns = super::build::report_turns(&analysis);
+        assert_eq!(turns.len(), usize::from(!analysis.model_calls.is_empty()));
+    }
+}
+
+#[test]
 fn carried_context_is_conversation_from_three_or_more_user_turns_earlier() {
     for session in fixture_sessions() {
         let (normalized, analysis) =
@@ -1252,7 +1310,7 @@ fn report_complete_usage_and_text_average_have_explicit_coverage() {
     let calls = report.calls;
     let report = report_of(report);
     let json = serde_json::to_value(&report).expect("JSON");
-    assert_eq!(json["schemaVersion"], 1);
+    assert_eq!(json["schemaVersion"], 2);
     let text = report_text(&report);
     assert!(
         text.contains(&format!(

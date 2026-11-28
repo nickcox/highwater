@@ -337,33 +337,44 @@ pub(crate) fn reconstruct(
 
 fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {
     let mut parts = Vec::new();
+    let mut user_written = false;
+    let mut starter = "injectedContext";
     for part in &message.parts {
         match text(&part.data, "type")? {
             "text" => {
                 if part.data.get("ignored").and_then(Value::as_bool) != Some(true) {
+                    user_written |=
+                        part.data.get("synthetic").and_then(Value::as_bool) != Some(true);
                     parts.push(ContentPart::Text(text(&part.data, "text")?.to_owned()));
                 }
             }
-            "file" => match text(&part.data, "mime")? {
-                "text/plain" | "application/x-directory" => {}
-                mime => match embedded_image(mime, &part.data) {
-                    Some(image) => parts.push(image),
-                    None => {
-                        // Do not resolve live files/URLs as historical attachments.
-                        parts.push(ContentPart::Unsupported);
-                        state.limitations.insert(Limitation::UnsupportedContent);
-                    }
-                },
-            },
+            "file" => {
+                user_written = true;
+                match text(&part.data, "mime")? {
+                    "text/plain" | "application/x-directory" => {}
+                    mime => match embedded_image(mime, &part.data) {
+                        Some(image) => parts.push(image),
+                        None => {
+                            // Do not resolve live files/URLs as historical attachments.
+                            parts.push(ContentPart::Unsupported);
+                            state.limitations.insert(Limitation::UnsupportedContent);
+                        }
+                    },
+                }
+            }
             "compaction" => {
+                starter = "compaction";
                 if part.data.get("tail_start_id").is_some() {
                     return Err(ReplayError::UnsupportedHistory);
                 }
                 parts.push(ContentPart::Text("What did we do so far?".into()));
             }
-            "subtask" => parts.push(ContentPart::Text(
-                "The following tool was executed by the user".into(),
-            )),
+            "subtask" => {
+                user_written = true;
+                parts.push(ContentPart::Text(
+                    "The following tool was executed by the user".into(),
+                ));
+            }
             // Known structural parts are omitted by the legacy serializer.
             "agent" | "snapshot" | "patch" | "retry" | "step-start" | "step-finish" => {}
             _ => {
@@ -381,6 +392,11 @@ fn user(state: &mut State, message: &MessageRecord) -> Result<(), ReplayError> {
             TokenizationPayload::UserMessage(MessageContent { parts }),
             None,
         );
+        if !user_written {
+            let metadata = &mut state.session.context_items[index].metadata;
+            metadata.insert("sentBy".into(), "harness".into());
+            metadata.insert("turnStarter".into(), starter.into());
+        }
         state.admit(index);
     }
     Ok(())

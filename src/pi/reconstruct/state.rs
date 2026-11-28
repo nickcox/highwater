@@ -116,6 +116,7 @@ impl ReconstructionState {
             .and_then(|duration| u64::try_from(duration).ok())
             .and_then(turn_duration_ms);
         self.turns.push(RecordedTurn {
+            starter: None,
             first_call: turn.first_call,
             last_call: last.index,
             prompt: turn.prompt,

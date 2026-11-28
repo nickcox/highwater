@@ -48,19 +48,109 @@ pub(super) fn inherited(item: &ContextItem) -> bool {
     item.metadata.get("inherited").map(String::as_str) == Some("true")
 }
 
-/// The user turn each call belongs to, by position (call `n` at `n - 1`): the number of
-/// user messages added at or before it, not counting those a fork copied from its parent.
-pub(super) fn user_turns(analysis: &Analysis) -> Vec<usize> {
-    let mut starts: Vec<usize> = analysis
+/// A report turn, with inclusive call bounds and the source's timing and status.
+#[derive(Debug)]
+pub(super) struct ReportTurn<'a> {
+    pub first_call: usize,
+    pub last_call: usize,
+    pub starter: &'a str,
+    // Retained for the turn summaries and command added in later steps.
+    #[allow(dead_code)]
+    pub prompt: Option<&'a str>,
+    #[allow(dead_code)]
+    pub recorded: Option<&'a crate::domain::RecordedTurn>,
+}
+
+/// Combine recorded requests and new messages without splitting a recorded request.
+pub(super) fn report_turns(analysis: &Analysis) -> Vec<ReportTurn<'_>> {
+    let messages: Vec<_> = analysis
         .context_items
         .iter()
         .filter(|item| item.kind == "userMessage" && !inherited(item))
-        .filter_map(|item| item.presence.first().map(|range| range.start_call))
+        .filter_map(|item| Some((item.presence.first()?.start_call, item)))
         .collect();
-    starts.sort_unstable();
-    (1..=analysis.model_calls.len())
-        .map(|call| starts.partition_point(|start| *start <= call))
+    let mut starts = std::collections::BTreeSet::new();
+    if !analysis.model_calls.is_empty() {
+        starts.insert(1);
+    }
+    for turn in &analysis.turns {
+        starts.insert(turn.first_call);
+    }
+    for (call, _) in &messages {
+        if !analysis
+            .turns
+            .iter()
+            .any(|turn| turn.first_call < *call && *call <= turn.last_call)
+        {
+            starts.insert(*call);
+        }
+    }
+    let starts: Vec<_> = starts
+        .into_iter()
+        .filter(|call| *call > 0 && *call <= analysis.model_calls.len())
+        .collect();
+    starts
+        .iter()
+        .enumerate()
+        .map(|(index, &first_call)| {
+            let recorded = analysis
+                .turns
+                .iter()
+                .find(|turn| turn.first_call == first_call);
+            let at_start: Vec<_> = messages
+                .iter()
+                .filter(|(call, _)| *call == first_call)
+                .map(|(_, item)| *item)
+                .collect();
+            let compaction = analysis.model_calls[first_call - 1].stop_reason.as_deref()
+                == Some("compaction-call");
+            let user = at_start.iter().rev().find(|item| {
+                !compaction && item.metadata.get("sentBy").map(String::as_str) != Some("harness")
+            });
+            let starter = if compaction {
+                "compaction"
+            } else if user.is_some() {
+                "user"
+            } else {
+                at_start
+                    .iter()
+                    .find_map(|item| item.metadata.get("turnStarter").map(String::as_str))
+                    .or_else(|| recorded.and_then(|turn| turn.starter.as_deref()))
+                    .unwrap_or("harness")
+            };
+            ReportTurn {
+                first_call,
+                last_call: starts
+                    .get(index + 1)
+                    .map_or(analysis.model_calls.len(), |next| next - 1),
+                starter,
+                prompt: if user.is_some() {
+                    recorded
+                        .and_then(|turn| turn.prompt.as_deref())
+                        .or_else(|| {
+                            user.map(|item| {
+                                item.label.strip_prefix("User · ").unwrap_or(&item.label)
+                            })
+                        })
+                } else {
+                    None
+                },
+                recorded,
+            }
+        })
         .collect()
+}
+
+/// Cumulative user-turn count at each call, also used for carried context age.
+pub(super) fn user_turns(analysis: &Analysis) -> Vec<usize> {
+    let turns = report_turns(analysis);
+    let mut result = vec![0; analysis.model_calls.len()];
+    let mut count = 0;
+    for turn in turns {
+        count += usize::from(turn.starter == "user");
+        result[turn.first_call - 1..turn.last_call].fill(count);
+    }
+    result
 }
 
 pub(super) fn session_report(
@@ -132,6 +222,7 @@ pub(super) fn session_report(
         compactions: analysis.compactions.len(),
         compaction_calls: compaction_calls(analysis),
         user_turns: turns,
+        turns: report_turns(analysis).len(),
         carried_context: carried,
         context_by_kind: context_by_kind(analysis, &costs),
         tools: tool_totals(analysis, &costs, &runs),

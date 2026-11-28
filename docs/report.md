@@ -40,7 +40,7 @@ Costs are in US dollars at the rates the viewer uses: the provider's rate for pe
 
 ## JSON
 
-The JSON is one object, written without spaces. `schemaVersion` changes when a field is removed or changes meaning.
+The JSON is one object, written without spaces. `schemaVersion` changes when a field is removed or changes meaning. Version 2 counts requests rather than user messages: `turns` counts all requests and `userTurns` counts only those started by the user. Version 1 counted user messages, including harness messages, in `userTurns`.
 
 Token totals are subtotals over calls that recorded each value. `null` means no value was recorded, or the sum exceeded the safe JSON integer range; zero means a recorded zero. Each field has coverage counts under `tokens.coverage`: `recordedCalls`, `failedAttemptCalls` and `missingCalls`. These counts add up to the session's call count. Failed-attempt placeholder counters are not measurements.
 
@@ -61,7 +61,7 @@ Each session has:
 | Field | What it holds |
 | --- | --- |
 | `ref`, `harness`, `title`, `workingDirectory`, `parent`, `childSessions`, `startedAt`, `updatedAt` | What the session is. `ref` is the reference used in view links and by `show`. |
-| `models`, `calls`, `userTurns`, `compactions`, `averageContextTokens`, `peakContextTokens` | Its size. `userTurns` counts user messages; the average covers calls with complete recorded prompt totals only. |
+| `models`, `calls`, `turns`, `userTurns`, `compactions`, `averageContextTokens`, `peakContextTokens` | Its size. `turns` counts all turns and `userTurns` counts turns the user started; the average covers calls with complete recorded prompt totals only. |
 | `compactionCalls` | The calls that wrote compaction summaries, where the harness records them: `calls` and `usd`, the low end of their cost. They are also counted in `calls` and `cost`. Text output gives their cost beside the number of compactions. |
 | `tokens` | Recorded subtotals: `prompt` (total input), `freshInput` (neither read from nor written to the cache), `cacheRead`, `cacheWrite`, `output` (including reasoning exactly once when known) and `reasoning`. Each has matching counts under `coverage`. |
 | `cost` | `billed` and `apiEquivalent` ranges (`low`, `high`), as the viewer's session summary gives them, and `unknownCalls`. |

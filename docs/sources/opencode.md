@@ -16,6 +16,8 @@ Databases are opened read-only, never migrated or opened with a writable fallbac
 
 ## Reading sessions
 
+Modern `synthetic` and `skill` messages remain user-message items with `sentBy: harness` and `turnStarter: injectedContext`. They do not start user turns. In legacy records, text parts marked `synthetic` and the generated compaction request are also harness-written; a message containing user-written text or files still starts a user turn.
+
 - **Layouts.** Highwater reads the legacy `session`, `message` and `part` tables and the modern `session_v2` and `session_message` tables, including databases with only the modern ones. Modern records are read in their own `seq` order. When a database has both layouts, each session is read from one of them, never a mix of the two. The experimental context and input tables are not supported.
 - **Duplicate sessions.** When both layouts hold the same session, a legacy row that is strictly newer wins; otherwise the modern one does. If the modern session has no messages, the legacy one is used only when their timestamps are equal and it has messages. A newer, empty modern session never brings back older legacy content. This is a rule based on recency, not proof of which version OpenCode last wrote.
 - **Legacy sessions.** A tool part holds both the call and its result. When OpenCode prunes an old tool result, calls before and after the pruning see different versions of it. A compaction is a `compaction` part on a user message, whose `auto` flag is its trigger, followed by the summary message, whose call is the compaction's own call; it keeps only the summary (rule `summaryOnly`).

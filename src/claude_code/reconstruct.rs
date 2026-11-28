@@ -271,6 +271,7 @@ impl PendingTurn {
             last_call: end,
             prompt: self.prompt,
             duration_ms: Some(duration_ms),
+            starter: None,
             duration_estimated: false,
             status: None,
             combined_calls: false,
@@ -298,6 +299,7 @@ impl PendingTurn {
             last_call: end,
             prompt: self.prompt,
             duration_ms,
+            starter: None,
             duration_estimated: true,
             status: Some(status),
             combined_calls: false,
@@ -674,6 +676,13 @@ impl State<'_> {
             let ending: HashSet<usize> = self.turn_thinking.drain(..).collect();
             self.active.retain(|item| !ending.contains(item));
         }
+        let mut metadata = BTreeMap::new();
+        if kind == ContextItemKind::UserMessage {
+            if let Some(starter) = harness_starter(first_line.as_deref().unwrap_or("")) {
+                metadata.insert("sentBy".into(), "harness".into());
+                metadata.insert("turnStarter".into(), starter.into());
+            }
+        }
         let id = format!("claude-code:{key}:{uuid}");
         let item = NormalizedContextItem {
             id: id.clone(),
@@ -681,7 +690,7 @@ impl State<'_> {
             label,
             source_record_id: Some(uuid.to_owned()),
             source_tool_call_id: None,
-            metadata: BTreeMap::new(),
+            metadata,
             serialized_size_bytes: record.source_bytes,
             payload,
             presence: Vec::new(),
@@ -1149,6 +1158,42 @@ fn tagged_label(first_line: Option<&str>, prefix: &str) -> String {
         }
     }
     format!("{prefix} · {line}")
+}
+
+#[test]
+fn identifies_harness_messages_but_not_slash_commands() {
+    assert_eq!(
+        harness_starter("<task-notification>done"),
+        Some("taskNotification")
+    );
+    assert_eq!(
+        harness_starter("[Request interrupted by user for tool use]"),
+        Some("interruption")
+    );
+    assert_eq!(
+        harness_starter("<local-command-stderr>error"),
+        Some("commandOutput")
+    );
+    assert_eq!(
+        harness_starter("<command-name>/review</command-name>"),
+        None
+    );
+}
+
+fn harness_starter(line: &str) -> Option<&'static str> {
+    for (prefix, starter) in [
+        ("<task-notification>", "taskNotification"),
+        ("<local-command-stdout>", "commandOutput"),
+        ("<local-command-stderr>", "commandOutput"),
+        ("<local-command-caveat>", "commandCaveat"),
+        ("<system-reminder>", "systemReminder"),
+        ("[Request interrupted by user", "interruption"),
+    ] {
+        if line.starts_with(prefix) {
+            return Some(starter);
+        }
+    }
+    None
 }
 
 pub(crate) fn assistant_label(payload: &TokenizationPayload) -> String {

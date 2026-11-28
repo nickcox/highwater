@@ -125,8 +125,10 @@ pub(crate) struct SessionReport {
     pub compactions: usize,
     /// The compactions' own calls, where the harness records them.
     pub compaction_calls: CompactionCalls,
-    /// User messages: each starts a turn.
+    /// Turns started by the user, excluding harness-written messages.
     pub user_turns: usize,
+    /// All turns, including those started by the harness.
+    pub turns: usize,
     pub carried_context: CarriedContext,
     pub context_by_kind: Vec<KindTotal>,
     pub tools: Vec<ToolTotal>,

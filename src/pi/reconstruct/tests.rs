@@ -267,7 +267,7 @@ fn normalized_fixture_parity() {
     }
     assert_eq!(
         digest.finalize().to_hex().as_str(),
-        "72655594a0dff6e6efb836001d40e2674857bf8b00376a28244755c63adaf20e"
+        "faa4e754f3f56ca6e1a75b2b3abf6551179372f0c88d3744e349d3ac224ac6d1"
     );
 }
 

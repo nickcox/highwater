@@ -431,6 +431,7 @@ impl<'t> State<'t> {
             None
         };
         self.turns.push(RecordedTurn {
+            starter: None,
             first_call: first_call + 1,
             last_call: self.calls.len(),
             prompt: first_nonempty_line(message),

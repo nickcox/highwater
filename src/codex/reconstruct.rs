@@ -36,6 +36,7 @@ struct TurnStart {
 #[derive(Default)]
 struct State {
     pending_turn: Option<TurnStart>,
+    guardian: bool,
     turns: Vec<RecordedTurn>,
     thread_id: Option<String>,
     working_directory: Option<String>,
@@ -194,7 +195,20 @@ impl State {
         if first_call == self.calls.len() {
             return;
         }
+        let starter = if prompt.is_none() {
+            Some(
+                if self.calls[first_call].stop_reason.as_deref() == Some("compaction-call") {
+                    "compaction"
+                } else {
+                    "heartbeat"
+                }
+                .into(),
+            )
+        } else {
+            None
+        };
         self.turns.push(RecordedTurn {
+            starter,
             first_call: first_call + 1,
             last_call: self.calls.len(),
             prompt,
@@ -240,6 +254,10 @@ impl State {
     }
 
     fn apply_meta(&mut self, meta: &Value) {
+        self.guardian = meta
+            .pointer("/source/subagent/other")
+            .and_then(Value::as_str)
+            == Some("guardian");
         if self.version.is_some() {
             return;
         }
@@ -709,7 +727,13 @@ impl State {
                         TokenizationPayload::UserMessage(content),
                     ),
                 };
-                Some(item(id, kind, label, payload, bytes))
+                let mut item = item(id, kind, label, payload, bytes);
+                if self.guardian && item.kind == ContextItemKind::UserMessage {
+                    item.metadata.insert("sentBy".into(), "harness".into());
+                    item.metadata
+                        .insert("turnStarter".into(), "guardianReview".into());
+                }
+                Some(item)
             }
             "function_call_output" | "custom_tool_call_output" | "tool_search_output" => {
                 let call_id = text(payload, "call_id").unwrap_or_default();

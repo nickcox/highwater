@@ -44,6 +44,8 @@ The rules are in `src/claude_code/branch.rs`, kept in one module so that a later
 
 ## Calls and context
 
+Task notifications, local command stdout and stderr, command caveats, system reminders and interruption notices remain user-message items, but have `sentBy: harness` and a `turnStarter` describing their source. Slash commands remain user-written messages.
+
 - **Calls.** One model call per distinct `message.id` on the branch. Its records are merged in file order into one assistant item with several blocks, and its usage is taken from the last record (where records disagree, only `output_tokens` differs and the last is highest). A response's records can be interleaved with its own tool results and with a user message typed while it was being written; the assistant item is placed at the response's first record, and the records between join the next call's context.
 - **Failed attempts.** `<synthetic>` records marked `isApiErrorMessage` are failed attempts with placeholder usage. Their text is an error shown in the terminal, not model output, so it is not context.
 

@@ -136,6 +136,11 @@ fn admit_text(
             TokenizationPayload::UserMessage(MessageContent::text(value)),
             None,
         );
+        if matches!(message.native_kind.as_deref(), Some("synthetic" | "skill")) {
+            let metadata = &mut state.session.context_items[index].metadata;
+            metadata.insert("sentBy".into(), "harness".into());
+            metadata.insert("turnStarter".into(), "injectedContext".into());
+        }
         state.admit(index);
     }
     Ok(())

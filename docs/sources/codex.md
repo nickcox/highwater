@@ -29,6 +29,8 @@ Each line is one JSON record, `{timestamp, type, payload}`. Records are split on
 
 ## Reading sessions
 
+Recorded turns without a prompt identify their starter as `compaction` when the first call is a compaction call, otherwise `heartbeat`. Guardian review requests are harness-written user-message items (`sentBy: harness`, `turnStarter: guardianReview`), not user turns. Other known harness context is already represented as custom messages rather than user messages.
+
 - **Calls.** A call starts at a response's first output item (reasoning, an assistant message or a tool call), with the items in context at that point. Its usage comes from the next `token_count` event, which Codex writes after the response's tool outputs. An output item after a tool output, with no `token_count` between them, starts a new call without usage. A `token_count` with no input or output, such as the one written after each compaction, is not a call.
 - **Usage.** `last_token_usage` is the call's own usage. OpenAI counts cached input inside `input_tokens` and reasoning inside `output_tokens`, so input is `input_tokens` less `cached_input_tokens` and `cache_write_input_tokens`. The model comes from the latest `turn_context`; the provider is `openai` and the API `openai-responses`.
 - **Cost.** No cost is recorded. Codex signs in with a ChatGPT plan or an API key, and the file does not say which, so `billing-modes.toml` treats Codex's `openai` calls as a subscription and shows API-equivalent cost, which is also what an API key pays. `codex-auto-review`, the model of guardian reviews, has no public price.

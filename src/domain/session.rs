@@ -112,6 +112,9 @@ impl NormalizedSession {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RecordedTurn {
+    /// Harness event that started a request without a user message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub starter: Option<String>,
     pub first_call: usize,
     pub last_call: usize,
     pub prompt: Option<String>,

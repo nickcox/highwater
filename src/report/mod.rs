@@ -36,7 +36,7 @@ use types::{Report, Scope, Skipped, Thresholds};
 const FAMILY_LIMIT: usize = 12;
 
 /// Bumped when a field is removed or changes meaning.
-const REPORT_SCHEMA_VERSION: u32 = 1;
+const REPORT_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Args, Debug)]
 pub(crate) struct ReportArgs {
