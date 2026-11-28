@@ -31,6 +31,7 @@ pub(crate) struct TranscriptFile {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
     pub first_prompt: Option<String>,
+    pub fork_parent: Option<String>,
     pub session_id: Option<String>,
     pub agent_id: Option<String>,
     /// The latest custom title, otherwise the latest generated title.
@@ -183,7 +184,19 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
         let Ok(line) = std::str::from_utf8(&raw) else {
             continue;
         };
-        if !listing.has_responses && line.contains("\"type\":\"assistant\"") {
+        let inherited = line.contains("\"forkedFrom\"")
+            && (listing.fork_parent.is_some()
+                || serde_json::from_str::<Value>(line)
+                    .ok()
+                    .is_some_and(|value| {
+                        if let Some(parent) = value["forkedFrom"]["sessionId"].as_str() {
+                            listing.fork_parent.get_or_insert_with(|| parent.to_owned());
+                            true
+                        } else {
+                            false
+                        }
+                    }));
+        if !inherited && !listing.has_responses && line.contains("\"type\":\"assistant\"") {
             listing.has_responses = true;
         }
         if line.contains("\"type\":\"custom-title\"") {
@@ -198,7 +211,7 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
             }
             continue;
         }
-        if listing.first_prompt.is_none() && line.contains("\"type\":\"user\"") {
+        if !inherited && listing.first_prompt.is_none() && line.contains("\"type\":\"user\"") {
             if let Ok(value) = serde_json::from_str::<Value>(line) {
                 let content = &value["message"]["content"];
                 let text = content.as_str().map(str::to_owned).unwrap_or_else(|| {

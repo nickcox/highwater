@@ -455,7 +455,11 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
         parent_reference: session_id
             .filter(|_| subagent)
             .map(|session_id| claude_code_reference(session_id, None)),
-        forked_from_reference: None,
+        forked_from_reference: listing
+            .fork_parent
+            .as_deref()
+            .filter(|_| !subagent)
+            .map(|session_id| claude_code_reference(session_id, None)),
         subagent_type: listing
             .subagent
             .as_ref()
@@ -473,6 +477,7 @@ struct ClaudeCodeSource {
     root: PathBuf,
     listings: ListingCache,
     last_good: Vec<SessionFile>,
+    history_redirects: HashMap<String, String>,
 }
 
 impl ClaudeCodeSource {
@@ -480,19 +485,26 @@ impl ClaudeCodeSource {
         let files = discovery::find_files(&self.root, Some(cancelled))?;
         self.listings.retain(&files);
         let mut entries = Vec::with_capacity(files.len());
+        let mut history_redirects = HashMap::new();
         for file in files {
             if cancelled.load(Ordering::Acquire) {
                 return Err(DiscoveryError::Cancelled);
             }
-            // A transcript with no responses has nothing to show, so it is not offered.
-            if let Some(listing) = self
-                .listings
-                .listing(&file, discovery::read_listing)?
-                .filter(|listing| listing.has_responses)
-            {
+            if let Some(listing) = self.listings.listing(&file, discovery::read_listing)? {
+                // Copies without calls can still connect a fork to its source.
+                if !listing.has_responses {
+                    if let (Some(id), Some(parent)) = (&listing.session_id, &listing.fork_parent) {
+                        history_redirects.insert(
+                            claude_code_reference(id, None),
+                            claude_code_reference(parent, None),
+                        );
+                    }
+                    continue;
+                }
                 entries.push(claude_code_entry(file, listing));
             }
         }
+        self.history_redirects = history_redirects;
         Ok(entries)
     }
 }
@@ -743,6 +755,7 @@ impl MixedScanner {
                         root: root.clone(),
                         listings: ListingCache::default(),
                         last_good: Vec::new(),
+                        history_redirects: HashMap::new(),
                     })
                     .collect(),
                 vscode_copilot: sources
@@ -949,6 +962,35 @@ impl MixedScanner {
                     })
                     .cloned(),
             );
+        }
+        let claude_ids: HashSet<_> = entries
+            .iter()
+            .filter(|entry| entry.harness == Harness::ClaudeCode)
+            .map(|entry| entry.id.clone())
+            .collect();
+        let redirects: HashMap<&str, &str> = state
+            .claude_code
+            .iter()
+            .flat_map(|source| &source.history_redirects)
+            .map(|(id, parent)| (id.as_str(), parent.as_str()))
+            .collect();
+        for entry in entries
+            .iter_mut()
+            .filter(|entry| entry.harness == Harness::ClaudeCode)
+        {
+            if let Some(parent) = entry.forked_from_reference.as_deref() {
+                let mut seen = HashSet::from([entry.id.as_str()]);
+                let mut current = Some(parent);
+                entry.forked_from_reference = loop {
+                    let Some(id) = current.filter(|id| seen.insert(*id)) else {
+                        break None;
+                    };
+                    if claude_ids.contains(id) {
+                        break Some(id.to_owned());
+                    }
+                    current = redirects.get(id).copied();
+                };
+            }
         }
         // Repeated user data folders can find the same session twice.
         let mut vscode_paths = HashSet::new();

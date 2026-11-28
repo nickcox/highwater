@@ -1067,3 +1067,31 @@ fn listing_first_prompt_is_a_skill_command_as_typed() {
     );
     assert_eq!(listing.first_prompt.as_deref(), Some("Review the project"));
 }
+
+#[test]
+fn copied_history_is_context_even_without_the_source_file() {
+    let path = Path::new("fixtures/claude-code/copied.jsonl");
+    let loaded = super::load(path, FileKind::Main).unwrap();
+    assert_eq!(loaded.session.model_calls.len(), 1);
+    let inherited: Vec<_> = loaded
+        .session
+        .context_items
+        .iter()
+        .filter(|item| item.metadata.get("inherited").map(String::as_str) == Some("true"))
+        .collect();
+    assert_eq!(inherited.len(), 2);
+    for item in inherited {
+        assert!(loaded.session.model_calls[0]
+            .context_item_ids
+            .contains(&item.id));
+    }
+    assert_eq!(loaded.session.turns.len(), 1);
+    let records =
+        super::records::parse(std::io::BufReader::new(fs::File::open(path).unwrap())).unwrap();
+    let copied = &records[..2];
+    let branch = super::branch::select(copied).unwrap();
+    let empty =
+        super::reconstruct::reconstruct(copied, &branch.indexes, "unused-copy".into()).unwrap();
+    assert!(empty.session.model_calls.is_empty());
+    assert!(empty.session.turns.is_empty());
+}

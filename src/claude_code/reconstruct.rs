@@ -163,6 +163,20 @@ pub(super) fn reconstruct(
         let record = &records[index];
         let first_call = state.calls.len();
         let first_item = state.items.len();
+        if record.value.get("forkedFrom").is_some() {
+            if record.kind() == "assistant" {
+                state.apply_inherited_assistant(record);
+            } else {
+                state.apply(record)?;
+            }
+            // A copied boundary shapes context but is not this session's compaction.
+            state.compactions.clear();
+            state.next_compaction = None;
+            for item in &mut state.items[first_item..] {
+                item.metadata.insert("inherited".into(), "true".into());
+            }
+            continue;
+        }
         state.apply(record)?;
         if let Some(user) = state.items[first_item..]
             .iter()
@@ -327,6 +341,49 @@ impl State<'_> {
         self.items.push(item);
         self.active.push(index);
         index
+    }
+
+    // Copied responses provide context, not calls or tool runs of this session.
+    fn apply_inherited_assistant(&mut self, record: &Record) {
+        if record.flag("isApiErrorMessage") {
+            return;
+        }
+        let Some(message_id) = record.message_id() else {
+            return;
+        };
+        let id = format!("claude-code:assistant:{message_id}");
+        let blocks: Vec<_> = record
+            .blocks()
+            .iter()
+            .map(|block| self.assistant_block(block))
+            .collect();
+        if let Some(&index) = self.item_indexes.get(&id) {
+            for block in blocks {
+                self.push_assistant_block(index, block, record.source_bytes);
+            }
+            return;
+        }
+        self.insert(NormalizedContextItem {
+            id,
+            kind: ContextItemKind::AssistantMessage,
+            label: String::new(),
+            source_record_id: record.uuid().map(str::to_owned),
+            source_tool_call_id: None,
+            metadata: BTreeMap::from([("inherited".into(), "true".into())]),
+            serialized_size_bytes: record.source_bytes,
+            payload: TokenizationPayload::AssistantMessage {
+                blocks,
+                source_provider: Some("anthropic".into()),
+                source_model: record
+                    .message()
+                    .and_then(|m| m.get("model"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                source_api: Some("anthropic-messages".into()),
+                thinking_reported: false,
+            },
+            presence: Vec::new(),
+        });
     }
 
     fn apply_assistant(&mut self, record: &Record) -> Result<(), SourceError> {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A Claude Code session copied from another, such as a bb fork, counts only its own calls. The copied history is context for its first call, as for Pi and Codex forks, and the session shows **Forked from** its source. Reports no longer count copied calls more than once.
 - A Codex guardian review no longer shows the review request Codex wrote as its first prompt.
 - A Claude Code session started with a skill command, as T3 Code and Claude Code record it, shows the command as its first prompt, such as `/review-source-refresh-pr`.
 - `highwater serve`, `report` and `show` find Pi sessions in Pi's configured session folder (`PI_CODING_AGENT_SESSION_DIR` or `sessionDir` in Pi's settings) and the sessions bb runs through Pi, as well as `~/.pi/agent/sessions`. `--session-root` can be given more than once.

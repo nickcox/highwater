@@ -59,6 +59,57 @@ fn expected_results() -> Vec<Value> {
 }
 
 #[test]
+fn forks_link_past_copies_without_calls_and_are_not_children() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(directory.path()).unwrap();
+    let project = root.join("-project");
+    fs::create_dir(&project).unwrap();
+    let fixture = fs::read_to_string("fixtures/claude-code/copied.jsonl").unwrap();
+    let rows: Vec<Value> = fixture
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for (id, parent, count) in [
+        ("source", None, 4),
+        ("bridge", Some("source"), 2),
+        ("fork", Some("bridge"), 4),
+        ("orphan", Some("missing"), 4),
+    ] {
+        let text: String = rows[..count]
+            .iter()
+            .enumerate()
+            .map(|(index, row)| {
+                let mut row = row.clone();
+                row["sessionId"] = id.into();
+                row.as_object_mut().unwrap().remove("forkedFrom");
+                if index < 2 {
+                    if let Some(parent) = parent {
+                        row["forkedFrom"] =
+                            serde_json::json!({"sessionId": parent, "messageUuid": row["uuid"]});
+                    }
+                }
+                format!("{}\n", row)
+            })
+            .collect();
+        fs::write(project.join(format!("{id}.jsonl")), text).unwrap();
+    }
+    let entries = scan(&claude_only(vec![root]));
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().all(|entry| entry.parent_reference.is_none()));
+    let find = |name: &str| {
+        entries
+            .iter()
+            .find(|entry| entry.file_name == format!("{name}.jsonl"))
+            .unwrap()
+    };
+    assert_eq!(
+        find("fork").forked_from_reference.as_deref(),
+        Some(find("source").id.as_str())
+    );
+    assert_eq!(find("orphan").forked_from_reference, None);
+}
+
+#[test]
 fn catalogue_entries_match_the_expected_listings() {
     let entries = scan(&claude_only(vec![fixture_root()]));
     assert_eq!(entries.len(), 18);

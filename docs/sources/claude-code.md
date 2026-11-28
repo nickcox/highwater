@@ -93,3 +93,9 @@ Transcripts use the same size and modification-time fingerprint as Pi files, and
 A synthetic 16.8 MB transcript (701 calls, 2,798 context items, one compaction) took about 0.5 s for a cold release-build analysis, 4 ms for a cached one and under 1 ms for a `304`, with about 126 MiB peak sampled server memory (`python3 scripts/benchmark-claude-code.py`).
 
 The catalogue takes the first non-meta user text, excluding compaction summaries, tool results and tag-wrapped harness records. A skill run as a command is recorded as a `<command-name>` record followed by a meta record starting "Base directory for this skill:"; its prompt is the command as typed, such as `/review-source-refresh-pr` followed by any `<command-args>`. Built-in commands such as `/clear` are left out.
+
+## Forks
+
+Copied records carry `forkedFrom: { sessionId, messageUuid }`. Highwater uses these records as context with `inherited` metadata, not as the fork's calls, turns, tool runs or findings. Copied compactions shape that context but are not the fork's compactions. The source session is shown as **Forked from**, not as a parent: only subagents are child sessions. Copies without calls are not listed, but their source links let a later fork link to the nearest ancestor with a chart. If no ancestor has a chart, no link is shown. The copied records are sufficient to reconstruct the context without reading the source.
+
+The observed bb copies include this marker on copied conversation records, including copies of copies. Without the marker Highwater does not infer copying from matching content or IDs.
