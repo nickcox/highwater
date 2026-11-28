@@ -6,6 +6,8 @@ import {
   matches,
   browserEntries,
   rowCost,
+  rowCalls,
+  models,
   activeFilters,
   clearFilters,
   projects,
@@ -20,6 +22,11 @@ const session = (id: string, overrides: Partial<SessionListItem> = {}): SessionL
   modifiedAt: '2026-01-02T00:00:00Z',
   byteSize: 10,
   ...overrides,
+});
+const calls = (count: number, peakInput: number | null, ...models: [string, number][]) => ({
+  count,
+  peakInput,
+  models: models.map(([model, calls]) => ({ model, calls })),
 });
 const total = (usd: number) => ({ usd, kind: 'sum' as const, partial: false, sinceMs: null });
 describe('session browser', () => {
@@ -144,4 +151,56 @@ it('restores only sort and child sessions from older values containing filters',
     cost: 'over20',
   };
   expect(restore(JSON.stringify(old))).toEqual({ ...defaults(), sort, includeChildren: true });
+});
+
+it("adds descendants' calls to a parent row only with child sessions hidden", () => {
+  const parent = session('p', { calls: calls(10, 5000, ['opus', 9], ['haiku', 1]) });
+  const child = session('c', {
+    parentReference: 'p',
+    calls: calls(4, 9000, ['haiku', 4]),
+  });
+  const grandchild = session('g', { parentReference: 'c', calls: undefined });
+  const all = [parent, child, grandchild];
+  expect(rowCalls(parent, all, true)).toEqual({ calls: parent.calls, callsNote: '' });
+  expect(rowCalls(parent, all, false)).toEqual({
+    calls: calls(14, 9000, ['opus', 9], ['haiku', 5]),
+    callsNote: 'Includes 2 child sessions; 1 without call figures',
+  });
+  const pending = session('q', { calls: undefined });
+  const unavailable = session('u', { parentReference: 'q', calls: null });
+  expect(rowCalls(pending, [pending, unavailable], false).calls).toBeUndefined();
+  expect(
+    rowCalls(
+      session('n', { calls: null }),
+      [session('n', { calls: null }), { ...unavailable, parentReference: 'n' }],
+      false,
+    ).calls,
+  ).toBeNull();
+});
+
+it('filters by any model a row used, sorts by its main model and searches model names', () => {
+  const parent = session('p', { calls: calls(3, 10, ['opus', 3]) });
+  const child = session('c', { parentReference: 'p', calls: calls(2, 20, ['haiku', 2]) });
+  const other = session('o', { calls: calls(5, 30, ['haiku', 5]) });
+  const big = session('b', { calls: calls(9, 40, ['haiku', 8], ['opus', 1]) });
+  const none = session('n');
+  const all = [parent, child, other, big, none];
+  expect(models(all)).toEqual([
+    { model: 'haiku', count: 3 },
+    { model: 'opus', count: 2 },
+  ]);
+  const ids = (state: Partial<ReturnType<typeof defaults>>) =>
+    browserEntries(all, { ...defaults(), ...state }).map((e) => e.session.id);
+  expect(ids({ model: 'haiku' })).toEqual(['b', 'o', 'p']);
+  expect(ids({ model: 'haiku', includeChildren: true })).toEqual(['b', 'o', 'p', 'c']);
+  expect(ids({ model: 'missing' })).toHaveLength(4);
+  expect(ids({ search: 'OPUS' })).toEqual(['b', 'p']);
+  expect(ids({ sort: { key: 'model', direction: 'asc' } })).toEqual(['o', 'b', 'p', 'n']);
+  expect(ids({ sort: { key: 'calls', direction: 'desc' } })).toEqual(['b', 'o', 'p', 'n']);
+  expect(ids({ sort: { key: 'peak', direction: 'desc' } })).toEqual(['b', 'o', 'p', 'n']);
+  expect(activeFilters({ ...defaults(), model: 'opus' })).toBe(1);
+  expect(clearFilters({ ...defaults(), model: 'opus' }).model).toBeNull();
+  expect(
+    restore(JSON.stringify({ version: 1, sort: { key: 'peak', direction: 'asc' } })).sort.key,
+  ).toBe('peak');
 });

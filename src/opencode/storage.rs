@@ -550,7 +550,11 @@ pub(crate) fn discover(
 }
 
 /// Sum recorded charges without replaying messages or reading tool output.
-pub(crate) fn session_total(path: &Path, native_id: &str) -> Result<Option<f64>, StorageError> {
+/// The session table's cost and call figures, without replaying the session.
+pub(crate) fn session_totals(
+    path: &Path,
+    native_id: &str,
+) -> Result<(Option<f64>, crate::session_totals::SessionCalls), StorageError> {
     let mut connection = open(path, None)?;
     let tx = connection.transaction()?;
     let layout = validate_layout(&tx)?;
@@ -558,22 +562,59 @@ pub(crate) fn session_total(path: &Path, native_id: &str) -> Result<Option<f64>,
     let mut statement = tx.prepare(&selected)?;
     let mut rows = statement.query([native_id])?;
     let selected = generation(rows.next()?.ok_or(StorageError::NotFound)?)?;
-    let costs = match selected {
-        Generation::Legacy => "SELECT json_extract(p.data, '$.cost') AS cost
+    let (costs, calls) = match selected {
+        Generation::Legacy => (
+            "SELECT json_extract(p.data, '$.cost') AS cost
             FROM message m JOIN part p ON p.message_id = m.id
             WHERE m.session_id = ?1 AND json_extract(m.data, '$.role') = 'assistant'
                 AND json_extract(p.data, '$.type') = 'step-finish'
             GROUP BY m.id HAVING count(*) = 1",
-        Generation::Modern => "SELECT json_extract(data, '$.cost') AS cost
+            // Every assistant message is one call in the replay.
+            "SELECT json_extract(data, '$.modelID') AS model, data
+            FROM message WHERE session_id = ?1 AND json_extract(data, '$.role') = 'assistant'",
+        ),
+        Generation::Modern => (
+            "SELECT json_extract(data, '$.cost') AS cost
             FROM session_message WHERE session_id = ?1 AND
                 ((type = 'assistant' AND json_type(data, '$.time.completed') = 'integer') OR
                  (type = 'compaction' AND json_extract(data, '$.status') IN ('completed', 'failed')))",
+            // The replay adds a call for every assistant, and for a compaction with recorded usage.
+            "SELECT json_extract(data, '$.model.id') AS model, data
+            FROM session_message WHERE session_id = ?1 AND (type = 'assistant' OR
+                (type = 'compaction' AND (json_type(data, '$.tokens') IS NOT NULL
+                    OR json_type(data, '$.cost') IS NOT NULL)))",
+        ),
     };
-    Ok(tx.query_row(
+    let usd = tx.query_row(
         &format!("SELECT sum(cost) FROM ({costs}) WHERE typeof(cost) IN ('integer', 'real') AND cost >= 0"),
         [native_id],
         |row| row.get::<_, Option<f64>>(0),
-    )?.filter(|total| total.is_finite()))
+    )?.filter(|total| total.is_finite());
+    let integer = |pointer: &str| {
+        format!("CASE WHEN json_type(data, '{pointer}') = 'integer' THEN json_extract(data, '{pointer}') END")
+    };
+    let mut statement = tx.prepare(&format!(
+        "SELECT CASE WHEN typeof(model) = 'text' THEN model END, {}, {}, {} FROM ({calls})",
+        integer("$.tokens.input"),
+        integer("$.tokens.cache.read"),
+        integer("$.tokens.cache.write"),
+    ))?;
+    let rows = statement
+        .query_map([native_id], |row| {
+            // The input is complete only when all three counters are recorded, as in the analysis.
+            let input = [row.get::<_, Option<i64>>(1)?, row.get(2)?, row.get(3)?]
+                .into_iter()
+                .try_fold(0_u64, |sum, count| {
+                    sum.checked_add(u64::try_from(count?).ok()?)
+                        .filter(|sum| *sum <= MAX_SAFE_JSON_INTEGER)
+                });
+            Ok((row.get::<_, Option<String>>(0)?, input))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let calls = crate::session_totals::SessionCalls::from_calls(
+        rows.iter().map(|(model, input)| (model.as_deref(), *input)),
+    );
+    Ok((usd, calls))
 }
 
 /// Materializes just one session in a read transaction, released before analysis.

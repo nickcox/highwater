@@ -203,6 +203,7 @@ async fn a_session_is_analysed_with_a_coverage_notice_and_checkpoint_total() {
             "usd": 1.25, "kind": "recorded", "partial": false, "sinceMs": null,
         })
     );
+    let listed_calls = json["sessions"][0]["calls"].clone();
     assert!(!catalog.install(scan(&files)).unwrap());
     assert_eq!(decode(list().await.unwrap()).await, json);
     let analysis = app
@@ -234,6 +235,16 @@ async fn a_session_is_analysed_with_a_coverage_notice_and_checkpoint_total() {
     assert!(codes.contains("subagentCallsNotShown"));
     let calls = json["modelCalls"].as_array().expect("calls");
     assert_eq!(calls.len(), 5);
+    // The session table counts the calls the summary counts.
+    assert_eq!(listed_calls["count"], 5);
+    assert_eq!(
+        listed_calls["peakInput"],
+        calls
+            .iter()
+            .filter_map(|call| call["reportedPromptTokens"].as_u64())
+            .max()
+            .map_or(Value::Null, Value::from)
+    );
     assert_eq!(calls[3]["stopReason"], "compaction-call");
     assert_eq!(calls[0]["timing"]["basis"], "copilot-usage-duration");
     assert_eq!(calls[0]["timing"]["durationMs"], 2000);

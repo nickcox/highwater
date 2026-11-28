@@ -4,8 +4,10 @@
     activeFilters,
     printableKey,
     browserEntries,
+    callsTooltip,
     clearFilters,
     costNote,
+    models,
     projects,
     projectOf,
     tooltip,
@@ -13,7 +15,7 @@
     type SessionBrowserState,
   } from '../session-browser';
   import { formatSessionTime, harnessName } from '../session-label';
-  import { formatSessionCost } from '../context-river/format';
+  import { formatInteger, formatMetric, formatSessionCost } from '../context-river/format';
   let {
     sessions,
     browserState = $bindable(),
@@ -47,7 +49,7 @@
           ? browserState.sort.direction === 'asc'
             ? 'desc'
             : 'asc'
-          : ['title', 'project', 'harness'].includes(key)
+          : ['title', 'project', 'harness', 'model'].includes(key)
             ? 'asc'
             : 'desc',
     };
@@ -87,14 +89,21 @@
           : Math.max(0, Math.min(entries.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
     table.querySelectorAll('tbody tr')[index]?.scrollIntoView?.({ block: 'nearest' });
   }
+  // `hide` is the widest view without the column; see the user guide's session table.
   const columns = [
-    { key: 'title', label: 'Title' },
-    { key: 'project', label: 'Project' },
-    { key: 'harness', label: 'Harness' },
-    { key: 'changed', label: 'Last changed' },
-    { key: 'duration', label: 'Duration' },
-    { key: 'cost', label: 'Cost' },
+    { key: 'title', label: 'Title', hide: null },
+    { key: 'project', label: 'Project', hide: 'medium' },
+    { key: 'harness', label: 'Harness', hide: 'wide' },
+    { key: 'model', label: 'Model', hide: 'narrow' },
+    { key: 'changed', label: 'Last changed', hide: null },
+    { key: 'duration', label: 'Duration', hide: 'wide' },
+    { key: 'calls', label: 'Calls', hide: 'medium' },
+    { key: 'peak', label: 'Peak input', hide: 'wide' },
+    { key: 'cost', label: 'Cost', hide: null },
   ] as const;
+  const hiddenBelow = (key: (typeof columns)[number]['key']) =>
+    columns.find((c) => c.key === key)!.hide;
+  const numeric = ['calls', 'peak', 'cost'];
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_no_noninteractive_element_interactions -->
@@ -122,7 +131,7 @@
         bind:this={searchInput}
         bind:value={browserState.search}
         aria-label="Search sessions"
-        placeholder="Search title, project, prompt or ID"
+        placeholder="Search title, project, model, prompt or ID"
         onkeydown={(event) => {
           if (event.key === 'ArrowDown' && !event.isComposing && entries.length) {
             event.preventDefault();
@@ -147,6 +156,13 @@
       >Project<select aria-label="Project" bind:value={browserState.project}
         ><option value={null}>All projects</option>{#each projects(sessions) as p}<option
             value={p.project}>{p.project} ({p.count})</option
+          >{/each}</select
+      ></label
+    >
+    <label
+      >Model<select aria-label="Model" bind:value={browserState.model}
+        ><option value={null}>All models</option>{#each models(sessions) as m}<option
+            value={m.model}>{m.model} ({m.count})</option
           >{/each}</select
       ></label
     >
@@ -188,7 +204,8 @@
       <thead
         ><tr
           >{#each columns.filter((c) => c.key !== 'harness' || browserState.harness === 'all') as c}<th
-              class:extra={['project', 'harness', 'duration'].includes(c.key)}
+              class={[`column-${c.key}`, c.hide && `hide-${c.hide}`]}
+              class:number={numeric.includes(c.key)}
               aria-sort={browserState.sort.key === c.key
                 ? browserState.sort.direction === 'asc'
                   ? 'ascending'
@@ -205,7 +222,7 @@
         ></thead
       >
       <tbody
-        >{#each entries as { session, depth, total, note }, i (session.id)}
+        >{#each entries as { session, depth, total, note, calls, callsNote }, i (session.id)}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
           <tr
             id={`${id}-row-${i}`}
@@ -216,6 +233,7 @@
             aria-label={[
               session.displayName,
               projectOf(session),
+              calls?.models[0]?.model,
               formatSessionTime(session.modifiedAt),
               total ? formatSessionCost(total.usd) : total === null ? 'Cost unknown' : '',
             ]
@@ -235,12 +253,36 @@
                     session.parentReference}</small
                 >{/if}</td
             >
-            <td class="extra">{projectOf(session) ?? ''}</td>{#if browserState.harness === 'all'}<td
-                class="extra">{harnessName(session)}</td
-              >{/if}<td>{formatSessionTime(session.modifiedAt) ?? ''}</td><td class="extra"
-              >{formatDuration(session)}</td
+            <td class="hide-{hiddenBelow('project')}">{projectOf(session) ?? ''}</td
+            >{#if browserState.harness === 'all'}<td class="hide-{hiddenBelow('harness')}"
+                >{harnessName(session)}</td
+              >{/if}<td class="hide-{hiddenBelow('model')}" title={callsTooltip(calls, callsNote)}
+              >{#if calls?.models.length}<span class="models"
+                  ><span class="model">{calls.models[0].model}</span
+                  >{#if calls.models.length > 1}<span class="more">+{calls.models.length - 1}</span
+                    >{/if}</span
+                >{/if}</td
+            ><td>{formatSessionTime(session.modifiedAt) ?? ''}</td><td
+              class="hide-{hiddenBelow('duration')}">{formatDuration(session)}</td
+            ><td
+              class="number hide-{hiddenBelow('calls')}"
+              title={callsNote || (calls === null ? 'No call figures available' : undefined)}
+              >{calls ? formatInteger(calls.count) : ''}</td
+            ><td
+              class="number hide-{hiddenBelow('peak')}"
+              title={calls
+                ? [
+                    calls.peakInput === null
+                      ? 'No call recorded its whole input'
+                      : `Largest recorded input of one call: ${formatInteger(calls.peakInput)} tokens`,
+                    callsNote,
+                  ]
+                    .filter(Boolean)
+                    .join('; ')
+                : undefined}>{calls?.peakInput != null ? formatMetric(calls.peakInput) : ''}</td
             >
             <td
+              class="number"
               title={[total ? costNote(session, total) : 'No cost total available', note]
                 .filter(Boolean)
                 .join('; ')}
@@ -343,11 +385,51 @@
     text-align: left;
   }
   th:first-child {
-    width: 32%;
+    width: 28%;
+  }
+  .column-harness {
+    width: 110px;
+  }
+  .column-changed {
+    width: 150px;
+  }
+  .column-duration,
+  .column-calls {
+    width: 72px;
+  }
+  .column-peak {
+    width: 90px;
+  }
+  .column-cost {
+    width: 130px;
   }
   th button {
     border: 0;
     text-align: left;
+  }
+  .number {
+    text-align: right;
+  }
+  th.number button {
+    text-align: right;
+  }
+  td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .models {
+    display: flex;
+    gap: 4px;
+  }
+  .model {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .more {
+    flex: none;
+    color: var(--secondary);
   }
   td {
     padding: 8px;
@@ -379,17 +461,30 @@
   .narrow-project {
     display: none;
   }
+  @container highwater (max-width:1200px) {
+    .hide-wide {
+      display: none;
+    }
+  }
+  @container highwater (max-width:850px) {
+    .hide-medium {
+      display: none;
+    }
+    .narrow-project {
+      display: inline;
+    }
+    th:first-child {
+      width: 40%;
+    }
+  }
   @container highwater (max-width:540px) {
     .search-field {
       flex-basis: 100%;
       min-width: 0;
       width: 100%;
     }
-    .extra {
+    .hide-narrow {
       display: none;
-    }
-    .narrow-project {
-      display: inline;
     }
     th:first-child {
       width: 45%;

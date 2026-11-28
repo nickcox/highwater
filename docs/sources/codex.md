@@ -59,3 +59,5 @@ With the system prompt recorded, most of each call's input is in the file. Over 
 - **Linking a spawned subagent to its tool call.** The parent's `spawn_agent` call is not yet linked to the child session it started; child sessions are linked to their parent thread only.
 
 The catalogue prefers the first user-message event before the first usage record, with a user response-item fallback using the reader’s harness-context rules; compressed files use the same reader. A guardian review has no first prompt, because Codex writes its review request itself.
+
+The session table's estimated cost and its **Model**, **Calls** and **Peak input** come from the same full load of each file, in the background.

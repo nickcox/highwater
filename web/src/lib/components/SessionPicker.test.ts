@@ -139,7 +139,16 @@ it('orders the filter controls with a hidden search label first', async () => {
         : (control.querySelector('select')?.getAttribute('aria-label') ??
           control.textContent?.trim()),
     ),
-  ).toEqual(['Search', 'Harness', 'Project', 'Changed', 'Cost', 'Child sessions', 'Clear filters']);
+  ).toEqual([
+    'Search',
+    'Harness',
+    'Project',
+    'Model',
+    'Changed',
+    'Cost',
+    'Child sessions',
+    'Clear filters',
+  ]);
   expect(filters.querySelector('.search-field .visually-hidden')).toHaveTextContent('Search');
 });
 

@@ -1,5 +1,5 @@
 use super::{
-    totals::{SessionTotal, TotalKey},
+    totals::{SessionTotals, TotalKey},
     AppError, Harness, SessionFile,
 };
 use chrono::{DateTime, Utc};
@@ -25,8 +25,8 @@ pub(super) struct CatalogSnapshot {
     pub(super) revision: u64,
     pub(super) sessions: Arc<[SessionFile]>,
     pub(super) total_keys: Arc<HashSet<TotalKey>>,
-    /// An entry with no total means the worker checked this stamp and found no figure.
-    pub(super) totals: Arc<HashMap<TotalKey, Option<SessionTotal>>>,
+    /// An entry means the worker checked this stamp; its missing figures were not found.
+    pub(super) totals: Arc<HashMap<TotalKey, SessionTotals>>,
 }
 
 #[derive(Debug)]
@@ -79,7 +79,7 @@ impl SessionCatalog {
 
     pub(super) fn install_totals(
         &self,
-        mut totals: Vec<(TotalKey, Option<SessionTotal>)>,
+        mut totals: Vec<(TotalKey, SessionTotals)>,
     ) -> Result<Option<u64>, AppError> {
         if totals.is_empty() {
             return Ok(None);

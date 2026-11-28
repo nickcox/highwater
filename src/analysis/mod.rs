@@ -25,7 +25,8 @@ mod validate;
 use crate::{api::*, domain::*, pricing};
 use diagnostics::{diagnostic_strings, ChartFallbackReason, ChartUnit, DiagnosticCode};
 use metrics::{calculate_age, calculate_transition, TokenMap, TransitionMetrics};
-use reconciliation::{reconciliation_status, reported_prompt_tokens, UsageCompleteness};
+pub(crate) use reconciliation::reported_prompt_tokens;
+use reconciliation::{reconciliation_status, UsageCompleteness};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

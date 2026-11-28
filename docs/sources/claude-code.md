@@ -14,6 +14,7 @@ Transcripts are under `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects
 - The title is the latest `custom-title`, otherwise the latest `ai-title`. References are `claude-code-…`, a hash of the session ID (plus the agent ID for a subagent). The same session ID under two roots is rejected as ambiguous.
 - A session's date in the picker and reports is the timestamp of its last record with both a top-level string `uuid` and a top-level string `timestamp`. Claude Code appends state records such as `mode` and `permission-mode` to old transcripts without timestamps. The file's modification time is used only when there is no such record or its timestamp is invalid.
 - The catalogue reads each transcript's listing fields again only when its size or modification time changes.
+- The session table's **Model**, **Calls** and **Peak input** come from loading each transcript in full in the background, so they cover the calls on the active branch. Its cost is still the latest `cost-state` record, read from the end of the file.
 
 ## Format
 

@@ -24,6 +24,14 @@ export interface SessionListItem {
     newerUsage?: boolean;
     throughMs?: number;
   } | null;
+  /** The calls the session summary counts. Absent before a lookup; null if not available. */
+  calls?: {
+    count: number;
+    /** The largest recorded input of one call. */
+    peakInput: number | null;
+    /** Most calls first. */
+    models: { model: string; calls: number }[];
+  } | null;
 }
 
 export type LiveAvailability = 'active' | 'degraded';

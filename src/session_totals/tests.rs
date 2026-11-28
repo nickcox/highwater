@@ -152,8 +152,9 @@ fn opencode_sums_one_copy_in_legacy_and_modern_layouts() {
     let db = file("");
     let writer = rusqlite::Connection::open(db.path()).unwrap();
     let total = |id| {
-        crate::opencode::storage::session_total(db.path(), id)
+        crate::opencode::storage::session_totals(db.path(), id)
             .unwrap()
+            .0
             .unwrap()
     };
     writer
@@ -174,13 +175,84 @@ fn opencode_sums_one_copy_in_legacy_and_modern_layouts() {
 }
 
 #[test]
+fn opencode_counts_the_calls_the_replay_counts() {
+    let db = file("");
+    let writer = rusqlite::Connection::open(db.path()).unwrap();
+    for script in [
+        include_str!("../../fixtures/opencode/legacy-schema.sql"),
+        include_str!("../../fixtures/opencode/simple.sql"),
+        include_str!("../../fixtures/opencode/modern-schema.sql"),
+        include_str!("../../fixtures/opencode/modern.sql"),
+        // A compaction with recorded usage is a call; one without is not.
+        "INSERT INTO session_message VALUES ('msg_usage_compaction', 'ses_modern', 'compaction', 7, 70, 75,
+            '{\"status\":\"failed\",\"reason\":\"auto\",\"time\":{\"created\":70},\"cost\":0.01,\"tokens\":{\"input\":900,\"output\":1,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}');",
+    ] {
+        writer.execute_batch(script).unwrap();
+    }
+    for id in ["ses_synthetic", "ses_modern"] {
+        let (_, calls) = crate::opencode::storage::session_totals(db.path(), id).unwrap();
+        let replayed = crate::source::load(
+            &crate::source::SessionLocator::OpenCode {
+                database: db.path().into(),
+                native_id: id.into(),
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            calls,
+            SessionCalls::of(&replayed.normalized.model_calls),
+            "{id}"
+        );
+    }
+    let (_, modern) = crate::opencode::storage::session_totals(db.path(), "ses_modern").unwrap();
+    assert_eq!(modern.count, 4);
+    assert_eq!(modern.peak_input, Some(900));
+    assert_eq!(
+        modern.models,
+        [ModelCalls {
+            model: "gpt-4.1".into(),
+            calls: 3
+        }]
+    );
+}
+
+#[test]
+fn call_figures_leave_out_placeholder_models_and_incomplete_inputs() {
+    let calls = SessionCalls::from_calls([
+        (Some("small"), Some(10)),
+        (Some("<synthetic>"), None),
+        (Some("large"), Some(300)),
+        (Some("small"), None),
+        (None, Some(20)),
+        (Some("large"), Some(200)),
+        (Some("other"), Some(5)),
+    ]);
+    assert_eq!(calls.count, 7);
+    assert_eq!(calls.peak_input, Some(300));
+    assert_eq!(
+        calls
+            .models
+            .iter()
+            .map(|model| (model.model.as_str(), model.calls))
+            .collect::<Vec<_>>(),
+        [("large", 2), ("small", 2), ("other", 1)]
+    );
+    assert_eq!(
+        serde_json::to_value(SessionCalls::from_calls([(Some("m"), None)])).unwrap(),
+        serde_json::json!({"count": 1, "peakInput": null, "models": [{"model": "m", "calls": 1}]})
+    );
+}
+
+#[test]
 fn codex_estimate_uses_the_recorded_model_rates() {
     let path = Path::new(concat!(
         "../../fixtures/codex/home/sessions/2026/10/01/",
         "rollout-2026-10-01T10-00-00-01a10000-0000-7000-8000-000000000001.jsonl"
     ));
     let path = Path::new(file!()).parent().unwrap().join(path);
-    let (usd, partial) = codex_total(&path).expect("priced calls");
+    let loaded = crate::codex::load(&path).unwrap();
+    let (usd, partial) = codex_total(&loaded.session).expect("priced calls");
     assert!(usd > 0.0);
     assert!(!partial);
 }

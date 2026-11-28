@@ -65,3 +65,5 @@ Pruning sets `state.time.compacted` on a tool part without deleting its stored o
 `python3 scripts/benchmark-opencode.py --full` and `node scripts/accept-opencode-readonly.mjs` check performance and real databases; see [development](../development.md).
 
 The catalogue reads the first user message’s text parts (legacy) or inline text (modern) in its listing transaction.
+
+The session table's **Model**, **Calls** and **Peak input** come from a query beside its cost query, without replaying the session. It selects the records the replay turns into calls: every assistant message, and in modern sessions every compaction with recorded tokens or cost. The model is `modelID` (legacy) or `model.id` (modern), and the input is `tokens.input` plus `tokens.cache.read` and `tokens.cache.write`.

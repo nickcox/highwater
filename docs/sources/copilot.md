@@ -65,3 +65,5 @@ With the system prompt and the skills' text recorded, almost all of each call's 
 - **Image results from tools.** `binaryResultsForLlm` is not counted (`unsupportedContent`).
 
 The catalogue takes the first main-agent user-message event’s content.
+
+The session table's **Model**, **Calls** and **Peak input** come from loading each session file in full in the background.

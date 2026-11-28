@@ -49,6 +49,8 @@ struct ListedSession<'a> {
     session: &'a SessionFile,
     #[serde(skip_serializing_if = "Option::is_none")]
     total: Option<&'a Option<super::totals::SessionTotal>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    calls: Option<&'a Option<crate::session_totals::SessionCalls>>,
 }
 
 /// Preserve existing exact/comma-separated matching, without broadening ETag semantics.
@@ -91,10 +93,14 @@ fn list_response(
         sessions: snapshot
             .sessions
             .iter()
-            .map(|session| ListedSession {
-                session,
-                total: super::totals::TotalKey::of(session)
-                    .and_then(|key| snapshot.totals.get(&key)),
+            .map(|session| {
+                let totals =
+                    super::totals::TotalKey::of(session).and_then(|key| snapshot.totals.get(&key));
+                ListedSession {
+                    session,
+                    total: totals.map(|totals| &totals.cost),
+                    calls: totals.map(|totals| &totals.calls),
+                }
             })
             .collect(),
     })

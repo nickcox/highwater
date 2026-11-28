@@ -1,15 +1,28 @@
 import type { SessionListItem as Session } from './api/client';
 import { sessionTree, withAncestors } from './session-links';
 import { formatSessionTime, sessionDetailLine } from './session-label';
+import { formatInteger } from './context-river/format';
 export interface SessionBrowserState {
   harness: 'all' | NonNullable<Session['harness']>;
   includeChildren: boolean;
   search: string;
   project: string | null;
+  model: string | null;
   changed: 'any' | 'today' | '7d' | '30d' | '90d';
   cost: 'any' | 'over1' | 'over5' | 'over20' | 'unknown';
   sort: {
-    key: 'title' | 'project' | 'harness' | 'changed' | 'started' | 'duration' | 'cost' | 'size';
+    key:
+      | 'title'
+      | 'project'
+      | 'harness'
+      | 'model'
+      | 'changed'
+      | 'started'
+      | 'duration'
+      | 'calls'
+      | 'peak'
+      | 'cost'
+      | 'size';
     direction: 'asc' | 'desc';
   };
 }
@@ -20,6 +33,7 @@ export function defaults(): SessionBrowserState {
     includeChildren: false,
     search: '',
     project: null,
+    model: null,
     changed: 'any',
     cost: 'any',
     sort: { key: 'changed', direction: 'desc' },
@@ -34,9 +48,19 @@ export function restore(raw: string | null): SessionBrowserState {
     // Older saved values may contain filters. They apply only during a visit.
     if (typeof value.includeChildren === 'boolean') state.includeChildren = value.includeChildren;
     if (
-      ['title', 'project', 'harness', 'changed', 'started', 'duration', 'cost', 'size'].includes(
-        value.sort?.key,
-      ) &&
+      [
+        'title',
+        'project',
+        'harness',
+        'model',
+        'changed',
+        'started',
+        'duration',
+        'calls',
+        'peak',
+        'cost',
+        'size',
+      ].includes(value.sort?.key) &&
       ['asc', 'desc'].includes(value.sort?.direction)
     )
       state.sort = value.sort;
@@ -62,8 +86,16 @@ export function harnessOf(s: Session): NonNullable<Session['harness']> {
     'pi'
   );
 }
-export function matches(s: Session, text: string): boolean {
-  const fields = [s.displayName, projectOf(s), s.workingDirectory, s.firstPrompt, s.id, s.fileName]
+export function matches(s: Session, text: string, models: string[] = []): boolean {
+  const fields = [
+    s.displayName,
+    projectOf(s),
+    s.workingDirectory,
+    s.firstPrompt,
+    s.id,
+    s.fileName,
+    ...models,
+  ]
     .join(' ')
     .toLocaleLowerCase();
   return text
@@ -76,13 +108,22 @@ export function activeFilters(s: SessionBrowserState): number {
   return (
     Number(!!s.search.trim()) +
     Number(!!s.project) +
+    Number(!!s.model) +
     Number(s.changed !== 'any') +
     Number(s.cost !== 'any') +
     Number(s.harness !== 'all')
   );
 }
 export function clearFilters(s: SessionBrowserState): SessionBrowserState {
-  return { ...s, harness: 'all', search: '', project: null, changed: 'any', cost: 'any' };
+  return {
+    ...s,
+    harness: 'all',
+    search: '',
+    project: null,
+    model: null,
+    changed: 'any',
+    cost: 'any',
+  };
 }
 export function projects(sessions: Session[]) {
   const groups = new Map<string, { project: string; count: number; changed: number }>();
@@ -98,11 +139,16 @@ export function projects(sessions: Session[]) {
     (a, b) => b.changed - a.changed || a.project.localeCompare(b.project),
   );
 }
-export function rowCost(
-  s: Session,
-  sessions: Session[],
-  includeChildren: boolean,
-): { total: Session['total']; note: string } {
+/** Each model with the number of sessions that used it, most sessions first. */
+export function models(sessions: Session[]) {
+  const counts = new Map<string, number>();
+  for (const s of sessions)
+    for (const { model } of s.calls?.models ?? []) counts.set(model, (counts.get(model) ?? 0) + 1);
+  return [...counts]
+    .map(([model, count]) => ({ model, count }))
+    .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model));
+}
+function descendantsOf(s: Session, sessions: Session[]): Session[] {
   const descendants: Session[] = [];
   const seen = new Set([s.id]);
   function visit(id: string) {
@@ -114,6 +160,53 @@ export function rowCost(
     }
   }
   visit(s.id);
+  return descendants;
+}
+/** With child sessions hidden, a row's calls include its descendants' calls. */
+export function rowCalls(
+  s: Session,
+  sessions: Session[],
+  includeChildren: boolean,
+): { calls: Session['calls']; callsNote: string } {
+  const descendants = includeChildren ? [] : descendantsOf(s, sessions);
+  if (!descendants.length) return { calls: s.calls, callsNote: '' };
+  const parts = [s, ...descendants];
+  const known = parts.flatMap((p) => (p.calls ? [p.calls] : []));
+  if (!known.length)
+    return { calls: parts.every((p) => p.calls === null) ? null : undefined, callsNote: '' };
+  const byModel = new Map<string, number>();
+  for (const { model, calls } of known.flatMap((c) => c.models))
+    byModel.set(model, (byModel.get(model) ?? 0) + calls);
+  const peaks = known.flatMap((c) => (c.peakInput === null ? [] : [c.peakInput]));
+  const missing = parts.length - known.length;
+  return {
+    calls: {
+      count: known.reduce((sum, c) => sum + c.count, 0),
+      peakInput: peaks.length ? Math.max(...peaks) : null,
+      models: [...byModel]
+        .map(([model, calls]) => ({ model, calls }))
+        .sort((a, b) => b.calls - a.calls || a.model.localeCompare(b.model)),
+    },
+    callsNote: `Includes ${descendants.length} child ${descendants.length === 1 ? 'session' : 'sessions'}${missing ? `; ${missing} without call figures` : ''}`,
+  };
+}
+export function callsTooltip(calls: Session['calls'], note: string): string {
+  if (!calls) return calls === null ? 'No call figures available' : '';
+  return [
+    ...calls.models.map(
+      (m) => `${m.model}: ${formatInteger(m.calls)} ${m.calls === 1 ? 'call' : 'calls'}`,
+    ),
+    note,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+export function rowCost(
+  s: Session,
+  sessions: Session[],
+  includeChildren: boolean,
+): { total: Session['total']; note: string } {
+  const descendants = descendantsOf(s, sessions);
   if (includeChildren || s.total?.includesChildren)
     return {
       total: s.total,
@@ -158,6 +251,8 @@ export function formatDuration(s: Session): string {
 }
 export function browserEntries(sessions: Session[], state: SessionBrowserState, now = new Date()) {
   const costs = new Map(sessions.map((s) => [s.id, rowCost(s, sessions, state.includeChildren)]));
+  const calls = new Map(sessions.map((s) => [s.id, rowCalls(s, sessions, state.includeChildren)]));
+  const modelsOf = (s: Session) => calls.get(s.id)?.calls?.models.map((m) => m.model) ?? [];
   const value = (s: Session): string | number | null => {
     switch (state.sort.key) {
       case 'title':
@@ -166,6 +261,12 @@ export function browserEntries(sessions: Session[], state: SessionBrowserState, 
         return projectOf(s);
       case 'harness':
         return harnessOf(s);
+      case 'model':
+        return modelsOf(s)[0] ?? null;
+      case 'calls':
+        return calls.get(s.id)?.calls?.count ?? null;
+      case 'peak':
+        return calls.get(s.id)?.calls?.peakInput ?? null;
       case 'cost':
         return costs.get(s.id)?.total?.usd ?? null;
       case 'size':
@@ -187,7 +288,11 @@ export function browserEntries(sessions: Session[], state: SessionBrowserState, 
       av === null || bv === null
         ? 0
         : typeof av === 'string'
-          ? av.localeCompare(String(bv))
+          ? av.localeCompare(String(bv)) ||
+            // Sessions on the same model are ordered by their number of calls.
+            (state.sort.key === 'model'
+              ? (calls.get(a.id)?.calls?.count ?? 0) - (calls.get(b.id)?.calls?.count ?? 0)
+              : 0)
           : av - Number(bv);
     return (
       compare * (state.sort.direction === 'asc' ? 1 : -1) ||
@@ -211,19 +316,21 @@ export function browserEntries(sessions: Session[], state: SessionBrowserState, 
   const project = projects(sessions).some((p) => p.project === state.project)
     ? state.project
     : null;
+  const model = models(sessions).some((m) => m.model === state.model) ? state.model : null;
   return withAncestors(entries, (s) => {
     const total = costs.get(s.id)?.total;
     return (
       (state.harness === 'all' || harnessOf(s) === state.harness) &&
       (!project || projectOf(s) === project) &&
+      (!model || modelsOf(s).includes(model)) &&
       (state.changed === 'any' || Date.parse(s.modifiedAt ?? '') >= since) &&
       (state.cost === 'any' ||
         (state.cost === 'unknown'
           ? total === null
           : !!total && total.usd > Number(state.cost.slice(4)))) &&
-      matches(s, state.search)
+      matches(s, state.search, modelsOf(s))
     );
-  }).map((e) => ({ ...e, ...costs.get(e.session.id)! }));
+  }).map((e) => ({ ...e, ...costs.get(e.session.id)!, ...calls.get(e.session.id)! }));
 }
 
 export function costNote(session: Session, total: NonNullable<Session['total']>): string {

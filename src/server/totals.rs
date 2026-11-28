@@ -1,22 +1,28 @@
-//! Reads picker costs off the request path and publishes them in catalogue batches.
+//! Reads the session table's costs and call figures off the request path and publishes them
+//! in catalogue batches.
 
 use super::{LiveState, SessionCatalog, SessionFile};
 use crate::{
     discovery::FileStamp,
-    session_totals::{claude_code_total, codex_total, copilot_total, pi_total},
+    session_totals::{claude_code_total, codex_total, copilot_total, pi_total, SessionCalls},
     source::SessionLocator,
 };
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
 
 const BATCH: Duration = Duration::from_millis(250);
 const QUIET: Duration = Duration::from_secs(2);
+/// Sessions read at once. Each holds one loaded session in memory while it is read.
+const MAX_READERS: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +37,13 @@ pub(super) struct SessionTotal {
     newer_usage: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     through_ms: Option<i64>,
+}
+
+/// What the worker found for one stamp. A missing figure means none is available.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct SessionTotals {
+    pub(super) cost: Option<SessionTotal>,
+    pub(super) calls: Option<SessionCalls>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -56,18 +69,22 @@ impl TotalKey {
         })
     }
 
-    /// The outer option is absent when the file no longer matches the catalogue stamp.
-    fn read(&self) -> Option<Option<SessionTotal>> {
+    /// Absent when the file no longer matches the catalogue stamp.
+    fn read(&self) -> Option<SessionTotals> {
         use SessionLocator::*;
         let path = match &self.locator {
             OpenCode {
                 database,
                 native_id,
             } => {
-                let usd = crate::opencode::storage::session_total(database, native_id)
-                    .ok()
-                    .flatten();
-                return Some(usd.map(SessionTotal::sum));
+                let read = crate::opencode::storage::session_totals(database, native_id).ok();
+                return Some(SessionTotals {
+                    cost: read
+                        .as_ref()
+                        .and_then(|(usd, _)| *usd)
+                        .map(SessionTotal::sum),
+                    calls: read.map(|(_, calls)| calls),
+                });
             }
             PiFile(path)
             | ClaudeCodeFile { path, .. }
@@ -84,22 +101,31 @@ impl TotalKey {
         if !matches() {
             return None;
         }
-        let total = match &self.locator {
+        // The calls the session summary counts, so a full load of every file.
+        let loaded = crate::source::load(&self.locator, None).ok();
+        let calls = loaded
+            .as_ref()
+            .map(|loaded| SessionCalls::of(&loaded.normalized.model_calls));
+        let cost = match &self.locator {
             OpenCode { .. } => unreachable!(),
+            // Pi's cost includes calls on branches the loaded session leaves out.
             PiFile(_) => pi_total(path).ok().flatten().map(SessionTotal::sum),
             VsCodeCopilotFile { .. } => crate::vscode_copilot::session_total(path)
                 .ok()
                 .flatten()
                 .map(SessionTotal::sum),
-            CodexFile { .. } => codex_total(path).map(|(usd, partial)| SessionTotal {
-                includes_children: false,
-                usd,
-                kind: "estimated",
-                partial,
-                since_ms: None,
-                newer_usage: false,
-                through_ms: None,
-            }),
+            CodexFile { .. } => loaded
+                .as_ref()
+                .and_then(|loaded| codex_total(&loaded.normalized))
+                .map(|(usd, partial)| SessionTotal {
+                    includes_children: false,
+                    usd,
+                    kind: "estimated",
+                    partial,
+                    since_ms: None,
+                    newer_usage: false,
+                    through_ms: None,
+                }),
             ClaudeCodeFile { .. } | CopilotFile { .. } => {
                 let cost = if matches!(self.locator, ClaudeCodeFile { .. }) {
                     claude_code_total(path)
@@ -127,7 +153,7 @@ impl TotalKey {
                 })
             }
         };
-        matches().then_some(total)
+        matches().then_some(SessionTotals { cost, calls })
     }
 }
 
@@ -150,7 +176,7 @@ pub(super) async fn run(
     live: watch::Sender<LiveState>,
     mut shutdown: watch::Receiver<bool>,
 ) {
-    // Include missing totals in the cache so a log with no checkpoint is read only once per stamp.
+    // Include missing figures in the cache so a log with no checkpoint is read only once per stamp.
     let mut checked = HashMap::<SessionLocator, TotalKey>::new();
     loop {
         if *shutdown.borrow() {
@@ -179,7 +205,7 @@ pub(super) async fn run(
                     continue;
                 }
             }
-            jobs.push(key);
+            jobs.push((session.modified_at, key));
         }
         if jobs.is_empty() {
             tokio::select! {
@@ -191,27 +217,36 @@ pub(super) async fn run(
             }
             continue;
         }
-        // Publish the inexpensive totals before processing transcripts that need a full read.
-        jobs.sort_by_key(|key| {
-            matches!(
-                key.locator,
-                SessionLocator::PiFile(_)
-                    | SessionLocator::CodexFile { .. }
-                    | SessionLocator::VsCodeCopilotFile { .. }
-            )
-        });
+        // The table lists the most recently changed sessions first, so they are read first.
+        jobs.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+        let jobs: Vec<_> = jobs.into_iter().map(|(_, key)| key).collect();
         let stop = shutdown.clone();
         let Ok(batch) = tokio::task::spawn_blocking(move || {
             let started = Instant::now();
-            let mut batch = Vec::new();
-            for key in jobs {
-                if *stop.borrow() || (!batch.is_empty() && started.elapsed() >= BATCH) {
-                    break;
+            let next = AtomicUsize::new(0);
+            let batch = Mutex::new(Vec::new());
+            let readers = std::thread::available_parallelism()
+                .map_or(1, |cores| cores.get() / 2)
+                .clamp(1, MAX_READERS)
+                .min(jobs.len());
+            std::thread::scope(|scope| {
+                for _ in 0..readers {
+                    scope.spawn(|| loop {
+                        let published = batch.lock().map_or(true, |batch| !batch.is_empty());
+                        if *stop.borrow() || (published && started.elapsed() >= BATCH) {
+                            break;
+                        }
+                        let Some(key) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) else {
+                            break;
+                        };
+                        let total = key.read();
+                        if let Ok(mut batch) = batch.lock() {
+                            batch.push((key.clone(), total));
+                        }
+                    });
                 }
-                let total = key.read();
-                batch.push((key, total));
-            }
-            batch
+            });
+            batch.into_inner().unwrap_or_default()
         })
         .await
         else {
@@ -221,10 +256,10 @@ pub(super) async fn run(
             break;
         }
         let mut totals = Vec::new();
-        for (key, total) in batch {
+        for (key, read) in batch {
             checked.insert(key.locator.clone(), key.clone());
-            if let Some(total) = total {
-                totals.push((key, total));
+            if let Some(read) = read {
+                totals.push((key, read));
             }
         }
         if let Ok(Some(revision)) = catalog.install_totals(totals) {

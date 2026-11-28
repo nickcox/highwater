@@ -2,8 +2,9 @@
 
 use crate::{
     claude_code, copilot,
-    domain::{Harness, HarnessSessionCost},
+    domain::{Harness, HarnessSessionCost, NormalizedModelCall, NormalizedSession},
 };
+use serde::Serialize;
 use std::{
     fs::File,
     io::{self, BufRead, BufReader, Read, Seek, SeekFrom},
@@ -265,16 +266,74 @@ impl CostSum {
 
 /// Price recorded calls without estimating context or running a tokenizer. A
 /// subtotal remains useful if the source has some calls without a known price.
-pub(crate) fn codex_total(path: &Path) -> Option<(f64, bool)> {
-    let loaded = crate::codex::load(path).ok()?;
+pub(crate) fn codex_total(session: &NormalizedSession) -> Option<(f64, bool)> {
     let mut totals = CostSum::default();
     let mut partial = false;
-    for call in &loaded.session.model_calls {
+    for call in &session.model_calls {
         let cost = crate::analysis::assess_cost(call, Harness::Codex);
         partial |= cost.amount.is_none();
         totals.add(cost.amount);
     }
     Some((totals.total()?, partial))
+}
+
+/// The session table's call figures: the calls the session summary counts as Model calls.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SessionCalls {
+    pub count: u64,
+    /// The largest recorded input of one call, from the calls whose input is fully recorded.
+    pub peak_input: Option<u64>,
+    /// Most calls first. Calls with no model are counted only in `count`.
+    pub models: Vec<ModelCalls>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct ModelCalls {
+    pub model: String,
+    pub calls: u64,
+}
+
+impl SessionCalls {
+    pub(crate) fn of(calls: &[NormalizedModelCall]) -> Self {
+        Self::from_calls(calls.iter().map(|call| {
+            (
+                call.target.model.as_deref(),
+                crate::analysis::reported_prompt_tokens(&call.reported_usage).0,
+            )
+        }))
+    }
+
+    /// Each call's model and recorded input.
+    pub(crate) fn from_calls<'a>(
+        calls: impl IntoIterator<Item = (Option<&'a str>, Option<u64>)>,
+    ) -> Self {
+        let mut count = 0;
+        let mut peak_input = None;
+        let mut models = std::collections::HashMap::<&str, u64>::new();
+        for (model, input) in calls {
+            count += 1;
+            peak_input = peak_input.max(input);
+            // Claude Code records an API error as a call with the model `<synthetic>`.
+            if let Some(model) = model.filter(|model| !model.is_empty() && *model != "<synthetic>")
+            {
+                *models.entry(model).or_default() += 1;
+            }
+        }
+        let mut models: Vec<_> = models
+            .into_iter()
+            .map(|(model, calls)| ModelCalls {
+                model: model.to_owned(),
+                calls,
+            })
+            .collect();
+        models.sort_by(|a, b| b.calls.cmp(&a.calls).then_with(|| a.model.cmp(&b.model)));
+        Self {
+            count,
+            peak_input,
+            models,
+        }
+    }
 }
 
 #[cfg(test)]
