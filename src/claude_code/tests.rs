@@ -1031,3 +1031,39 @@ fn listing_first_prompt_skips_harness_records() {
     );
     assert_eq!(listing.first_prompt.as_deref(), Some("Review the project"));
 }
+
+#[test]
+fn listing_first_prompt_is_a_skill_command_as_typed() {
+    let skill = |command: &str| {
+        activity_listing(
+            format!(
+                r#"{{"type":"user","message":{{"content":"{command}"}}}}
+{{"type":"user","isMeta":true,"message":{{"content":[{{"type":"text","text":"Base directory for this skill: /skills/review\n\n# Review"}}]}}}}
+{{"type":"user","message":{{"content":"Later prompt"}}}}
+"#
+            )
+            .as_bytes(),
+        )
+        .first_prompt
+    };
+    assert_eq!(
+        skill("<command-message>review</command-message>\\n<command-name>/review</command-name>")
+            .as_deref(),
+        Some("/review")
+    );
+    assert_eq!(
+        skill("<command-name>/review</command-name>\\n<command-args>the  open PR</command-args>")
+            .as_deref(),
+        Some("/review the open PR")
+    );
+
+    // A built-in command is not followed by a skill's instructions, so it is left out,
+    // even when Claude Code adds other text after it.
+    let listing = activity_listing(
+        br#"{"type":"user","message":{"content":"<command-name>/statusline</command-name>"}}
+{"type":"user","isMeta":true,"message":{"content":"Configure the status line"}}
+{"type":"user","message":{"content":"Review the project"}}
+"#,
+    );
+    assert_eq!(listing.first_prompt.as_deref(), Some("Review the project"));
+}

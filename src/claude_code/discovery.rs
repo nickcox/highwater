@@ -173,6 +173,7 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
     let mut listing = Listing::default();
     let mut custom_title = None;
     let mut generated_title = None;
+    let mut pending_command: Option<String> = None;
     let mut raw = Vec::new();
     loop {
         raw.clear();
@@ -199,22 +200,33 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
         }
         if listing.first_prompt.is_none() && line.contains("\"type\":\"user\"") {
             if let Ok(value) = serde_json::from_str::<Value>(line) {
-                if value.get("isMeta").and_then(Value::as_bool) != Some(true)
+                let content = &value["message"]["content"];
+                let text = content.as_str().map(str::to_owned).unwrap_or_else(|| {
+                    content
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter(|part| part["type"] == "text")
+                        .filter_map(|part| part["text"].as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                });
+                let is_meta = value.get("isMeta").and_then(Value::as_bool) == Some(true);
+                // A skill run as a command is a command record followed by the skill's
+                // instructions; the prompt is the command as typed.
+                if let Some(command) = pending_command.take() {
+                    if is_meta && text.starts_with("Base directory for this skill:") {
+                        listing.first_prompt = crate::discovery::compact_prompt(&command);
+                    }
+                }
+                if listing.first_prompt.is_none()
+                    && !is_meta
                     && value.get("isCompactSummary").and_then(Value::as_bool) != Some(true)
                 {
-                    let content = &value["message"]["content"];
-                    let text = content.as_str().map(str::to_owned).unwrap_or_else(|| {
-                        content
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter(|part| part["type"] == "text")
-                            .filter_map(|part| part["text"].as_str())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    });
                     if !text.trim_start().starts_with('<') {
                         listing.first_prompt = crate::discovery::compact_prompt(&text);
+                    } else {
+                        pending_command = typed_command(&text);
                     }
                 }
             }
@@ -301,6 +313,20 @@ fn activity_timestamp(line: &[u8]) -> Option<String> {
     let value: Value = serde_json::from_str(text).ok()?;
     value.get("uuid")?.as_str()?;
     value.get("timestamp")?.as_str().map(str::to_owned)
+}
+
+/// `/name args` from a command record's `<command-name>` and `<command-args>` tags.
+fn typed_command(text: &str) -> Option<String> {
+    let tag = |name: &str| {
+        let start = text.find(&format!("<{name}>"))? + name.len() + 2;
+        let end = start + text[start..].find(&format!("</{name}>"))?;
+        Some(text[start..end].trim())
+    };
+    let name = tag("command-name").filter(|name| name.starts_with('/'))?;
+    Some(match tag("command-args").filter(|args| !args.is_empty()) {
+        Some(args) => format!("{name} {args}"),
+        None => name.to_owned(),
+    })
 }
 
 fn string_field(line: &str, key: &str) -> Option<String> {

@@ -92,4 +92,4 @@ Transcripts use the same size and modification-time fingerprint as Pi files, and
 
 A synthetic 16.8 MB transcript (701 calls, 2,798 context items, one compaction) took about 0.5 s for a cold release-build analysis, 4 ms for a cached one and under 1 ms for a `304`, with about 126 MiB peak sampled server memory (`python3 scripts/benchmark-claude-code.py`).
 
-The catalogue takes the first non-meta user text, excluding compaction summaries, tool results and tag-wrapped harness records.
+The catalogue takes the first non-meta user text, excluding compaction summaries, tool results and tag-wrapped harness records. A skill run as a command is recorded as a `<command-name>` record followed by a meta record starting "Base directory for this skill:"; its prompt is the command as typed, such as `/review-source-refresh-pr` followed by any `<command-args>`. Built-in commands such as `/clear` are left out.
