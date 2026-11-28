@@ -455,3 +455,82 @@ export function testAnalysis(): SessionAnalysis {
     lineage: [{ from: 'a', to: 'summary', kind: 'frameworkCompaction' }],
   };
 }
+
+/**
+ * `testAnalysis` with a compaction call as Pi records it: call 3 is the compaction's own call,
+ * whose context is only the compaction's input, and the summary starts at call 4. Item `a` is
+ * removed and `retained` is kept, so both have their last call before the compaction at call 2.
+ */
+export function compactionCallAnalysis(): SessionAnalysis {
+  const analysis = testAnalysis();
+  const [first, second, afterCompaction, last] = analysis.modelCalls;
+  const compactionCall: ModelCall = {
+    ...afterCompaction!,
+    sourceRecordId: 'compaction-call',
+    stopReason: 'compaction-call',
+    contextItemIds: ['input'],
+    addedItemIds: ['input'],
+    droppedItemIds: ['a', 'retained'],
+    transitionItemCounts: { added: 1, retained: 0, dropped: 2 },
+    compactionBefore: null,
+    tokenAnalysis: callAnalysis(60, 60, 0, 95, 1),
+  };
+  analysis.modelCalls = [
+    first!,
+    second!,
+    { ...compactionCall, index: 3, usage: { ...compactionCall.usage } },
+    {
+      ...afterCompaction!,
+      index: 4,
+      addedItemIds: ['summary', 'retained'],
+      droppedItemIds: ['input'],
+      transitionItemCounts: { added: 2, retained: 0, dropped: 1 },
+      usage: { ...afterCompaction!.usage },
+    },
+    { ...last!, index: 5, usage: { ...last!.usage } },
+  ];
+  const byId = new Map(analysis.contextItems.map((item) => [item.id, item]));
+  const shifted = (id: string, presence: ContextItem['presence']): ContextItem => ({
+    ...byId.get(id)!,
+    presence,
+    presenceCallCount: presence.reduce(
+      (total, range) => total + range.endCall - range.startCall + 1,
+      0,
+    ),
+    firstModelCall: presence[0]!.startCall,
+    lastModelCall: presence[presence.length - 1]!.endCall,
+  });
+  analysis.contextItems = [
+    byId.get('a')!,
+    shifted('retained', [
+      { startCall: 2, endCall: 2 },
+      { startCall: 4, endCall: 5 },
+    ]),
+    shifted('summary', [{ startCall: 4, endCall: 5 }]),
+    shifted('gap', [
+      { startCall: 1, endCall: 1 },
+      { startCall: 5, endCall: 5 },
+    ]),
+    {
+      ...byId.get('summary')!,
+      id: 'input',
+      kind: 'unrecordedContext',
+      label: 'Compaction input · not recorded',
+      sourceRecordId: 'c-entry',
+      presence: [{ startCall: 3, endCall: 3 }],
+      presenceCallCount: 1,
+      firstModelCall: 3,
+      lastModelCall: 3,
+      metadata: { compactionInput: 'true' },
+      tokenEstimates: [estimate(60)],
+    },
+  ];
+  analysis.compactions = [
+    {
+      ...analysis.compactions[0]!,
+      beforeModelCall: 4,
+      details: { ...analysis.compactions[0]!.details, summaryCall: 3 },
+    },
+  ];
+  return analysis;
+}

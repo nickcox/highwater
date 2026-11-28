@@ -6,6 +6,7 @@
 - The session list gives each session's first user prompt (`firstPrompt`), cut to 300 characters, for Pi, Claude Code, Codex, OpenCode, Copilot and VS Code Copilot. A Pi session started with a skill shows it as `/skill:<name>` followed by any text typed after it. Costs that already include child sessions, such as Claude Code's own totals, are marked `includesChildren`.
 - Pi sessions use the name set with `/name`, `--name` or an extension. Pi sessions with no assistant response are no longer listed, as for Claude Code and Codex. A Pi session file with another record before its header is now read correctly.
 - Claude Code sessions are dated by their last conversation record, not the transcript file's modification time. Claude Code adds records to old transcripts, which moved sessions not used for weeks to the top of the session picker and into `highwater report --last`.
+- In the River, a Pi compaction's removed items flow into its compaction call's band again, that band flows into the summary, and the retained items continue across the call. Since 0.5.4 the compaction call separated them, and no flows were drawn. A compaction's marker, in the River and the events lane, is now on the compaction's own call when it has one, and the reported-input line starts again at each compaction instead of running across it.
 
 ## 0.5.7 – 2026-11-26
 

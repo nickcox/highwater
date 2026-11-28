@@ -93,15 +93,9 @@ export function projectRiverHorizontally(
     const path = pathFor(points, ribbon.linear === true);
     return { ...ribbon, points, path, hitPath: path };
   });
-  const boundaryById = new Map(
-    source.compactions.map((event) => [
-      event.compactionId,
-      (boundaryX(event.beforeModelCall) - offset) / scale,
-    ]),
-  );
   const control = Math.max(8, Math.min(step * 0.25, 24)) / scale;
   const lineageConnectors = source.lineageConnectors.map((connector) => {
-    const boundary = boundaryById.get(connector.compactionId)!;
+    const boundary = (boundaryX(connector.targetBeforeModelCall) - offset) / scale;
     return {
       ...connector,
       targetX: boundary,
@@ -128,7 +122,9 @@ export function projectRiverHorizontally(
       innerWidth,
       compactions: source.compactions.map((event) => ({
         ...event,
-        x: boundaryX(event.beforeModelCall),
+        x:
+          (event.ownCall === null ? undefined : xByCall.get(event.ownCall)) ??
+          boundaryX(event.beforeModelCall),
       })),
     },
   };

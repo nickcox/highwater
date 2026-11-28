@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from '../testing/wire-analysis';
-import { testAnalysis } from './test-data';
+import { compactionCallAnalysis, testAnalysis } from './test-data';
 import { sessionScenario } from '../testing/session-scenarios';
 import { layoutContextRiver } from './layout';
 import { projectRiverHorizontally } from './horizontal-projection';
@@ -15,15 +15,20 @@ const options: RiverLayoutOptions = {
 
 describe('canonical horizontal River projection', () => {
   it('matches native call, ribbon, singleton, compaction and lineage coordinates at every width', () => {
-    for (const groupByKind of [false, true]) {
-      const analysis = testAnalysis();
-      // Includes a capped first boundary in addition to the existing interior compaction.
-      analysis.compactions.push({
-        ...analysis.compactions[0],
-        id: 'first',
-        beforeModelCall: 1,
-        summaryItemId: 'gap',
-      });
+    const withFirstBoundary = testAnalysis();
+    // Includes a capped first boundary in addition to the existing interior compaction.
+    withFirstBoundary.compactions.push({
+      ...withFirstBoundary.compactions[0],
+      id: 'first',
+      beforeModelCall: 1,
+      summaryItemId: 'gap',
+    });
+    // Flows that end before the compaction's own call, and a marker on that call.
+    for (const [groupByKind, analysis] of [
+      [false, withFirstBoundary],
+      [true, withFirstBoundary],
+      [false, compactionCallAnalysis()],
+    ] as const) {
       const indexed = indexTestAnalysis(analysis);
       const source = layoutContextRiver(indexed, { ...options, groupByKind });
       for (const width of [70, 100, 200, 390, 750, 960, 1300, 32000]) {

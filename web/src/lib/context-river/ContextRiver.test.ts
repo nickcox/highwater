@@ -3,7 +3,7 @@ import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetInteraction } from '../state/interaction';
 import { defaultPresentationPreferences } from '../state/presentation-preferences';
-import { costAssessmentOf, testAnalysis } from './test-data';
+import { compactionCallAnalysis, costAssessmentOf, testAnalysis } from './test-data';
 import ContextRiver from './ContextRiver.svelte';
 import type { IndexedAnalysis } from '../types';
 import type { RiverNavigationCommand, RiverViewportStatus } from './viewport';
@@ -282,6 +282,30 @@ describe('ContextRiver keyboard focus', () => {
     expect(document.activeElement).toBe(bottom);
     await fireEvent.keyDown(document.activeElement!, { key: 'End' });
     expect(document.activeElement).toBe(ribbonFor(order[order.length - 1]));
+  });
+});
+
+describe('ContextRiver compaction flows', () => {
+  it('highlights the flows through a compaction call that leads to the selected item', async () => {
+    const indexed = indexTestAnalysis(compactionCallAnalysis());
+    const view = render(ContextRiver, {
+      props: { indexed, ...resetInteraction(), ...callbacks() },
+    });
+    const highlighted = () =>
+      [...view.container.querySelectorAll('.compaction-merge-emphasis')].map((path) =>
+        path.classList.contains('emphasized') ? 'emphasized' : 'light',
+      );
+    expect(view.container.querySelectorAll('.compaction-merge')).toHaveLength(3);
+
+    // The summary: the removed item's flow into the input, and the input's flow into it.
+    await view.rerender({ selectedItemId: 'summary' });
+    expect(highlighted()).toEqual(['light', 'light']);
+    // The removed item: its own flow, and lightly the flow from the input to the summary.
+    await view.rerender({ selectedItemId: 'a' });
+    expect(highlighted()).toEqual(['emphasized', 'light']);
+    // The kept item: only its own flow across the compaction call.
+    await view.rerender({ selectedItemId: 'retained' });
+    expect(highlighted()).toEqual(['emphasized']);
   });
 });
 

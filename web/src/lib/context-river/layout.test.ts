@@ -4,7 +4,7 @@ import { indexTestAnalysis } from '../testing/wire-analysis';
 import { curveLinear, curveMonotoneX, line, type CurveFactory } from 'd3-shape';
 import { layoutContextRiver, withoutFlatInteriors } from './layout';
 import type { RibbonPoint } from './types';
-import { testAnalysis } from './test-data';
+import { compactionCallAnalysis, testAnalysis } from './test-data';
 import { versionScenario } from '../testing/version-scenario';
 
 const options = {
@@ -116,6 +116,81 @@ describe('layoutContextRiver', () => {
     expect(retained.points.some((point) => point.x > boundary.x)).toBe(true);
     expect(layout.lineageConnectors).toHaveLength(1);
     expect(layout.lineageConnectors[0]).not.toHaveProperty('strokeWidth');
+  });
+
+  it('runs flows through a compaction call that contains only the compaction input', () => {
+    const layout = layoutContextRiver(indexTestAnalysis(compactionCallAnalysis()), options);
+    const x = (call: number) => layout.columns.find((column) => column.callIndex === call)!.x;
+    const boundary = (call: number) => (x(call - 1) + x(call)) / 2;
+    const ribbon = (itemId: string, rangeIndex = 0) =>
+      layout.ribbons.find((r) => r.itemId === itemId && r.rangeIndex === rangeIndex)!;
+    const connector = (from: string, to: string) =>
+      layout.lineageConnectors.find((c) => c.fromItemId === from && c.toItemId === to)!;
+
+    // The marker is on the compaction's own call.
+    expect(layout.compactions[0]).toMatchObject({ ownCall: 3, x: x(3) });
+
+    // The removed item ends at call 2 and flows into the input, which starts halfway to call 3.
+    const source = ribbon('a');
+    expect(source.points[source.points.length - 1]!.x).toBe(x(2));
+    const input = ribbon('input');
+    expect(input.points.map((point) => point.x)).toEqual([boundary(3), x(3)]);
+    expect(connector('a', 'input')).toMatchObject({
+      kind: 'removed',
+      summaryItemId: 'summary',
+      sourceX: x(2),
+      targetX: boundary(3),
+      targetBeforeModelCall: 3,
+      summaryY0: input.points[0]!.y0,
+      summaryY1: input.points[0]!.y1,
+    });
+
+    // The input flows into the summary, which starts halfway to call 4.
+    const summary = ribbon('summary');
+    expect(summary.points[0]!.x).toBe(boundary(4));
+    expect(connector('input', 'summary')).toMatchObject({
+      kind: 'input',
+      sourceX: x(3),
+      targetX: boundary(4),
+      targetBeforeModelCall: 4,
+    });
+
+    // The kept item flows across the compaction call into its own next range.
+    const keptBefore = ribbon('retained', 0);
+    const keptAfter = ribbon('retained', 1);
+    expect(keptBefore.points.map((point) => point.x)).toEqual([keptBefore.points[0]!.x, x(2)]);
+    expect(keptBefore.points[0]!.x).toBeLessThan(x(2));
+    expect(keptAfter.points[0]!.x).toBe(boundary(4));
+    expect(connector('retained', 'retained')).toMatchObject({
+      kind: 'kept',
+      sourceX: x(2),
+      targetX: boundary(4),
+    });
+    expect(layout.lineageConnectors).toHaveLength(3);
+  });
+
+  it('runs removed items straight to the summary when the compaction input has no size', () => {
+    const analysis = compactionCallAnalysis();
+    analysis.contextItems.find((item) => item.id === 'input')!.tokenEstimates[0]!.tokens = 0;
+    const layout = layoutContextRiver(indexTestAnalysis(analysis), options);
+    const x = (call: number) => layout.columns.find((column) => column.callIndex === call)!.x;
+
+    expect(layout.lineageConnectors.map((c) => [c.fromItemId, c.toItemId, c.sourceX])).toEqual([
+      ['a', 'summary', x(2)],
+      ['retained', 'retained', x(2)],
+    ]);
+  });
+
+  it('puts the marker on a compaction call that contains the context, without changing the flows', () => {
+    const analysis = testAnalysis();
+    analysis.compactions[0]!.details = { ...analysis.compactions[0]!.details, summaryCall: 2 };
+    const layout = layoutContextRiver(indexTestAnalysis(analysis), options);
+    const unchanged = layoutContextRiver(indexTestAnalysis(testAnalysis()), options);
+
+    expect(layout.compactions[0]).toMatchObject({ ownCall: 2, x: layout.columns[1]!.x });
+    expect(unchanged.compactions[0]).toMatchObject({ ownCall: null });
+    expect(layout.ribbons).toEqual(unchanged.ribbons);
+    expect(layout.lineageConnectors).toEqual(unchanged.lineageConnectors);
   });
 
   it('matches repeated source and summary compactions to their exact range boundaries', () => {

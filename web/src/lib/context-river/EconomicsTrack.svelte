@@ -9,6 +9,7 @@
   import { costKindLabel, formatAssessedCost } from '../cost-assessment';
   import { formatVerticalTick, verticalScaleTicks } from './vertical-scale';
   import type { CallColumn } from './types';
+  import { compactionMarkerCall } from './layout';
   import EventGlyph from './EventGlyph.svelte';
   import { clusterEconomicsEvents, type EconomicsEventCluster } from './event-clustering';
   import {
@@ -299,14 +300,18 @@
         : Math.max(0, chartWidth - margin.left - margin.right);
     const innerWidth = Math.max(0, chartWidth - margin.left - margin.right);
     return compactions.map((compaction) => {
+      const own = compactionMarkerCall(compaction);
+      const ownX = own === null ? undefined : byCall.get(own);
       const current = byCall.get(compaction.beforeModelCall);
       const previous = byCall.get(compaction.beforeModelCall - 1);
       const x =
-        current !== undefined && previous !== undefined
-          ? (previous + current) / 2
-          : current !== undefined
-            ? current - Math.min(step / 2, 16)
-            : margin.left + innerWidth;
+        ownX !== undefined
+          ? ownX
+          : current !== undefined && previous !== undefined
+            ? (previous + current) / 2
+            : current !== undefined
+              ? current - Math.min(step / 2, 16)
+              : margin.left + innerWidth;
       return {
         callIndex: compaction.beforeModelCall,
         x,

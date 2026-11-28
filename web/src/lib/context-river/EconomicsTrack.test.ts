@@ -3,6 +3,7 @@ import { indexTestAnalysis } from '../testing/wire-analysis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { costAssessmentOf, testAnalysis } from './test-data';
 import EconomicsTrack from './EconomicsTrack.svelte';
+import type { CompactionDetails } from '../types';
 
 afterEach(cleanup);
 
@@ -248,12 +249,9 @@ describe('EconomicsTrack cost scaling', () => {
 });
 
 describe('EconomicsTrack compaction span', () => {
-  it('draws the calls a background compaction ran over', () => {
+  function renderCompaction(details: Partial<CompactionDetails>) {
     const analysis = testAnalysis();
-    analysis.compactions[0].details = {
-      ...analysis.compactions[0].details,
-      startedBeforeModelCall: 2,
-    };
+    analysis.compactions[0].details = { ...analysis.compactions[0].details, ...details };
     const indexed = indexTestAnalysis(analysis);
     const columns = analysis.modelCalls.map((call, index) => ({
       callIndex: call.index,
@@ -273,12 +271,24 @@ describe('EconomicsTrack compaction span', () => {
         onMarkClick: () => {},
       },
     });
+    return container;
+  }
+
+  it('draws the calls a background compaction ran over', () => {
+    const container = renderCompaction({ startedBeforeModelCall: 2 });
     const span = container.querySelector('line.compaction-span')!;
     expect(span.getAttribute('x1')).toBe('130');
     expect(span.getAttribute('x2')).toBe('230');
     expect(span.querySelector('title')).toHaveTextContent(
       'Compaction ran in the background from before call 2 to before call 3',
     );
+  });
+
+  it("ends at the compaction's own call when it is the call just before the compaction", () => {
+    const container = renderCompaction({ startedBeforeModelCall: 2, summaryCall: 2 });
+    const span = container.querySelector('line.compaction-span')!;
+    expect(span.getAttribute('x1')).toBe('130');
+    expect(span.getAttribute('x2')).toBe('180');
   });
 
   it('draws no span for a compaction applied where it started', () => {

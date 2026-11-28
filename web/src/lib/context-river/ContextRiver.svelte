@@ -42,7 +42,12 @@
   import { chartUnitLabel } from './format';
   import { describeCostBasis } from '../cost-basis';
   import { layoutCallColumns, layoutContextRiver } from './layout';
-  import { inputComparisons, inputScaleColumns, layoutInputReferences } from './reported-input';
+  import {
+    inputComparisons,
+    inputReferenceBreaks,
+    inputScaleColumns,
+    layoutInputReferences,
+  } from './reported-input';
   import { projectCallColumns, projectRiverHorizontally } from './horizontal-projection';
   import type { ContextRiverLayout } from './types';
   import { formatVerticalTick, verticalScaleTicks, visibleStackSample } from './vertical-scale';
@@ -360,12 +365,14 @@
     verticalScaleMode === 'visible' ? visibleScaleSample.maxWeight : sessionVerticalMaximum,
   );
   let verticalAxisDomain = $derived(Math.max(1, verticalAxisMaximum));
+  let inputBreaks = $derived(inputReferenceBreaks(indexed));
   let inputReferences = $derived(
     layoutInputReferences(
       river.columns,
       inputComparison,
       { width, height, margin, minimumVisibleThickness: 1 },
       verticalAxisDomain,
+      inputBreaks,
     ),
   );
   let hasInputGap = $derived(
@@ -444,7 +451,15 @@
           .map((connector, index) => ({ connector, index }))
           .filter(
             ({ connector }) =>
-              connector.fromItemId === focusedItemId || connector.toItemId === focusedItemId,
+              connector.fromItemId === focusedItemId ||
+              connector.toItemId === focusedItemId ||
+              // A summary highlights all the flows that lead to it.
+              (connector.kind !== 'kept' && connector.summaryItemId === focusedItemId) ||
+              // A removed item highlights the flow from the compaction's input as well as its own.
+              (connector.kind === 'input' &&
+                (indexed.compactionBySourceId.get(focusedItemId!) ?? []).some(
+                  (compaction) => compaction.id === connector.compactionId,
+                )),
           ),
   );
   let viewportColumns = $derived(

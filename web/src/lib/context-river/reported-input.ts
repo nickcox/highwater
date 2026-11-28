@@ -1,6 +1,7 @@
 import { area, line, curveLinear } from 'd3-shape';
 import type { IndexedAnalysis, ModelCall } from '../types';
 import type { CallColumn, RiverLayoutOptions } from './types';
+import { compactionCallOutsideContext } from './layout';
 
 export interface InputComparison {
   callIndex: number;
@@ -127,15 +128,31 @@ export interface InputReferenceRun {
   fill: string;
 }
 
+/**
+ * The calls where the reported-input line starts again: the first call after each compaction,
+ * and a compaction's own call when it does not contain the items the compaction removed. A line
+ * from the call before would cross the River's compaction flows without showing anything.
+ */
+export function inputReferenceBreaks(indexed: IndexedAnalysis): Set<number> {
+  return new Set(
+    indexed.analysis.compactions.flatMap((compaction) => {
+      const own = compactionCallOutsideContext(indexed, compaction);
+      return own === null ? [compaction.beforeModelCall] : [own, compaction.beforeModelCall];
+    }),
+  );
+}
+
 /** Linear interpolation only between adjacent comparable calls. Missing values
- * break runs; an isolated call gets a small, pixel-capped reference segment.
- * Fill is masked against the actual ribbons by the renderer, not added to them.
+ * and `breaksBefore` break runs; an isolated call gets a small, pixel-capped
+ * reference segment. Fill is masked against the actual ribbons by the renderer,
+ * not added to them.
  */
 export function layoutInputReferences(
   columns: readonly CallColumn[],
   comparisons: ReadonlyMap<number, InputComparison>,
   options: RiverLayoutOptions,
   domain: number,
+  breaksBefore: ReadonlySet<number> = new Set(),
 ): InputReferenceRun[] {
   const runs: Sample[][] = [];
   let current: Sample[] | null = null;
@@ -145,7 +162,7 @@ export function layoutInputReferences(
       current = null;
       continue;
     }
-    if (!current) {
+    if (!current || breaksBefore.has(column.callIndex)) {
       current = [];
       runs.push(current);
     }

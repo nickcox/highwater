@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { indexTestAnalysis } from '../testing/wire-analysis';
-import { testAnalysis } from './test-data';
+import { compactionCallAnalysis, testAnalysis } from './test-data';
 import { layoutCallColumns, layoutContextRiver } from './layout';
 import {
   inputComparisons,
+  inputReferenceBreaks,
   inputScaleColumns,
   layoutInputReferences,
   summarizeInputComparisons,
@@ -16,8 +17,8 @@ const options = {
   margin: { left: 42, right: 24, top: 36, bottom: 54 },
   minimumVisibleThickness: 1,
 };
-function fixture() {
-  const input = structuredClone(testAnalysis());
+function fixture(analysis = testAnalysis()) {
+  const input = structuredClone(analysis);
   for (const call of input.modelCalls) {
     call.reportedUsageCompleteness = 'complete';
     call.reportedPromptTokens = call.tokenAnalysis.calculatedVisibleTokens! + 100;
@@ -100,6 +101,28 @@ describe('reported input comparison', () => {
       );
     },
   );
+
+  it('starts the reference again after a compaction, and at a compaction call outside the context', () => {
+    const plain = fixture();
+    expect(inputReferenceBreaks(plain.indexed)).toEqual(new Set([3]));
+    const runs = layoutInputReferences(
+      plain.columns,
+      inputComparisons(plain.indexed, plain.columns),
+      options,
+      500,
+      inputReferenceBreaks(plain.indexed),
+    );
+    expect(runs).toHaveLength(2);
+
+    // The compaction's own call (3) contains only its input, so it is a run of its own.
+    const { indexed, columns } = fixture(compactionCallAnalysis());
+    expect(inputReferenceBreaks(indexed)).toEqual(new Set([3, 4]));
+    const comparisons = inputComparisons(indexed, columns);
+    expect(comparisons.size).toBe(5);
+    expect(
+      layoutInputReferences(columns, comparisons, options, 500, inputReferenceBreaks(indexed)),
+    ).toHaveLength(3);
+  });
 
   it('does not paint isolated references across missing neighbours in a dense fit', () => {
     const { indexed, columns } = fixture();

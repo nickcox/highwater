@@ -51,6 +51,9 @@ export interface RibbonSegment {
 export interface CompactionBoundaryLayout {
   compactionId: string;
   beforeModelCall: number;
+  /** The compaction's own call, when it is the call just before the compaction. The marker is
+   * drawn on that call instead of between the calls either side of the compaction. */
+  ownCall: number | null;
   x: number;
 }
 
@@ -67,9 +70,20 @@ export interface VersionMarkLayout {
 
 export interface LineageConnectorLayout {
   key: string;
+  /** The item the flow starts from. */
   fromItemId: string;
+  /** The item the flow ends at: the compaction's summary or input, or the kept item itself. */
   toItemId: string;
   compactionId: string;
+  summaryItemId: string;
+  /**
+   * `removed`: from a removed item to the summary, or to the compaction's input when its own
+   * call contains only that. `input`: from the compaction's input to the summary. `kept`: a kept
+   * item, across a compaction call that does not contain it.
+   */
+  kind: 'removed' | 'input' | 'kept';
+  /** The flow ends halfway between this call and the one before it. */
+  targetBeforeModelCall: number;
   path: string;
   sourceX: number;
   sourceY: number;
@@ -77,6 +91,7 @@ export interface LineageConnectorLayout {
   sourceY1: number;
   targetX: number;
   mergePath: string;
+  /** The middle and edges of the item the flow ends at (`toItemId`). */
   summaryY: number;
   summaryY0: number;
   summaryY1: number;
