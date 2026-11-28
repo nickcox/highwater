@@ -5,7 +5,7 @@ description: Analyse recent coding-agent sessions with Highwater and suggest con
 
 # Token efficiency
 
-Highwater reads the session files that Claude Code, Codex, OpenCode, Pi and VS Code Copilot Chat keep on this computer. `highwater report` summarises where those sessions spent tokens, and `highwater show` prints one item from a session. Use them to find the few changes that would save the most, and explain each one with the evidence for it.
+Highwater reads the session files that Claude Code, Codex, OpenCode, Pi and VS Code Copilot Chat keep on this computer. `highwater report` summarises where those sessions spent tokens, and `highwater session show` prints one item from a session. Use them to find the few changes that would save the most, and explain each one with the evidence for it.
 
 ## 1. Check Highwater is installed
 
@@ -30,7 +30,7 @@ If the report lists no sessions, say so and suggest `--all` or `--dir`.
 
 ## 3. Read the report
 
-- `costByInput` separates uncached input, cache reads, cache writes and output, with median and largest uncached input per call. `costByContextSize` groups calls and costs by reported prompt size. `cacheRewrites` counts large cache writes, including those after expiry. The latter two also have report-wide totals. `largestItems` lists the ten most expensive items with full IDs for `highwater show`.
+- `costByInput` separates uncached input, cache reads, cache writes and output, with median and largest uncached input per call. `costByContextSize` groups calls and costs by reported prompt size. `cacheRewrites` counts large cache writes, including those after expiry. The latter two also have report-wide totals. `largestItems` lists the ten most expensive items with full IDs for `highwater session show`.
 
 - **Costs are estimates** in US dollars at API rates. For calls covered by a subscription they are what the API would have charged, not what the user paid. Use them to rank, and say they are estimates.
 - **Token-turns** are tokens multiplied by the number of calls they were sent with. A 10,000-token file read that stays in context for 100 calls is 1,000,000 token-turns, even though it was read once. Most of a long session's cost is input sent again on every call, mostly read from the cache.
@@ -61,10 +61,21 @@ Each finding lists up to three `items` (`itemId`, and `ref` for findings across 
 
 ## 4. Look at the evidence
 
+For a single session, run the report first, then inspect its turns before selecting
+items for `highwater session show`:
+
+```sh
+highwater session turns <session ref> --sort cost
+```
+
+This shows which turns spent the most, their call ranges, prompt starts, tool activity
+and breaks longer than five minutes. Use `--sort order` to find where a new session
+would have avoided carrying old context, and `--offset` to see more turns.
+
 Before recommending a change, look at what the agent actually ran and got back, for the findings you intend to mention:
 
 ```bash
-highwater show <session ref> '<item ID>' --max-tokens 1500
+highwater session show <session ref> '<item ID>' --max-tokens 1500
 ```
 
 For a large result, use `--lines A..B` (one-based, inclusive) or `--grep PATTERN --around N` to select relevant lines. Selected lines show their original line numbers, so a grep match can be followed with a line range. Grep also reports how many lines matched out of the item's total, or says that none matched. If output is cut, repeat the command with the `--offset N` given in the cut message, keeping the other options unchanged. Tool results include the producing tool's name and up to 500 characters of its arguments when recorded.

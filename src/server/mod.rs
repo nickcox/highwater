@@ -316,6 +316,46 @@ pub(crate) fn discover_sessions(
     Ok(scanner.scan(Arc::new(AtomicBool::new(false)))?)
 }
 
+/// Restrict discovery to the harness named by a session reference.
+pub(crate) fn discover_session_sources(
+    args: SourceArgs,
+    reference: &str,
+) -> Result<Vec<SessionFile>, Box<dyn std::error::Error>> {
+    let mut sources = configured_sources(args)?;
+    let harness = [
+        "vscode-copilot",
+        "claude-code",
+        "opencode",
+        "copilot",
+        "codex",
+        "pi",
+    ]
+    .into_iter()
+    .find(|name| reference.starts_with(&format!("{name}-")));
+    if let Some(harness) = harness {
+        if harness != "pi" {
+            sources.pi_roots.clear();
+        }
+        if harness != "opencode" {
+            sources.databases.clear();
+        }
+        if harness != "claude-code" {
+            sources.claude_roots.clear();
+        }
+        if harness != "vscode-copilot" {
+            sources.vscode_user_dirs.clear();
+        }
+        if harness != "codex" {
+            sources.codex_homes.clear();
+        }
+        if harness != "copilot" {
+            sources.copilot_homes.clear();
+        }
+    }
+    let scanner = sources::MixedScanner::new(&sources, Arc::default());
+    Ok(scanner.scan(Arc::new(AtomicBool::new(false)))?)
+}
+
 fn start_watcher_or_degraded(
     root: &FsPath,
     hint_sender: mpsc::Sender<watcher::WatchHint>,

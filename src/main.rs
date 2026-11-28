@@ -38,9 +38,12 @@ enum Command {
     Serve(server::ServeArgs),
     /// Summarise where sessions spent tokens, for finding ways to use fewer.
     Report(report::ReportArgs),
-    /// Print the text of one context item from a session.
+    /// Inspect a session's turns or context items.
+    Session(report::SessionArgs),
+    /// Print the text of one context item from a session (legacy alias).
+    #[command(hide = true)]
     Show(report::ShowArgs),
-    /// Print or install the agent skill that uses `report` and `show`.
+    /// Print or install the agent skill that uses `report` and `session`.
     Skill(report::SkillArgs),
 }
 
@@ -51,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => cli.serve,
         Some(Command::Serve(args)) => args,
         Some(Command::Report(args)) => return report::run(args),
+        Some(Command::Session(args)) => return report::session(args),
         Some(Command::Show(args)) => return report::show(args),
         Some(Command::Skill(args)) => return report::skill(args),
     };
@@ -86,6 +90,26 @@ mod tests {
     fn options_are_accepted_only_by_the_commands_that_use_them() {
         assert!(parse(&["report", "--claude-root", "x", "--last", "3"]).is_ok());
         assert!(parse(&["show", "session", "item", "--codex-home", "x"]).is_ok());
+        assert!(parse(&["session", "show", "session", "item", "--lines", "1..2"]).is_ok());
+        for sort in ["order", "cost", "calls"] {
+            assert!(parse(&[
+                "session",
+                "turns",
+                "pi-session",
+                "--sort",
+                sort,
+                "--limit",
+                "2",
+                "--offset",
+                "1",
+                "--json",
+                "--session-root",
+                "x"
+            ])
+            .is_ok());
+        }
+        assert!(parse(&["session", "turns", "pi-session", "--sort", "unknown"]).is_err());
+        assert!(parse(&["session", "turns"]).is_err());
         assert!(parse(&["report", "--port", "1"]).is_err());
         assert!(parse(&["skill", "install", "--claude-root", "x"]).is_err());
         assert!(parse(&["--port", "1", "report"]).is_err());

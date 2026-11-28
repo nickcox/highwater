@@ -1673,3 +1673,46 @@ fn starter_totals_sum_sessions_before_rounding() {
     assert_eq!(json["user"]["usd"], 3.0001);
     assert!(json["heartbeat"]["usd"].is_null());
 }
+
+#[test]
+fn session_turn_rows_use_report_bounds_costs_and_break_threshold() {
+    let sessions = fixture_sessions();
+    let (session, normalized, mut analysis) = sessions
+        .iter()
+        .find_map(|session| {
+            let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            (analysis.model_calls.len() >= 4).then_some((session, normalized, analysis))
+        })
+        .unwrap();
+    analysis.model_calls.truncate(4);
+    analysis.context_items.clear();
+    analysis.turns.clear();
+    for (i, call) in analysis.model_calls.iter_mut().enumerate() {
+        call.stop_reason = Some("compaction-call".into());
+        call.cost_assessment.amount = [Some(1.123456), None, Some(3.0), Some(3.0)][i];
+        call.reported_prompt_tokens = Some(100 + i as u64);
+        call.timing.recorded_at_ms = Some([0, 300_000, 601_000, 9_241_000][i]);
+        call.timing.started_at_ms = None;
+        analysis.turns.push(crate::domain::RecordedTurn {
+            first_call: i + 1,
+            last_call: i + 1,
+            starter: None,
+            prompt: None,
+            duration_ms: None,
+            duration_estimated: false,
+            status: None,
+            combined_calls: false,
+        });
+    }
+    let rows = serde_json::to_value(super::turns::rows(session, &normalized, &analysis)).unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 4);
+    assert!(rows[0]["breakSeconds"].is_null());
+    assert!(rows[1]["breakSeconds"].is_null());
+    assert_eq!(rows[2]["breakSeconds"], 301);
+    assert_eq!(rows[3]["breakSeconds"], 8640);
+    assert_eq!(rows[0]["usd"], 1.1235);
+    assert!(rows[1]["usd"].is_null());
+    assert_eq!(rows[3]["turn"], 4);
+    assert_eq!(rows[3]["firstPromptTokens"], 103);
+    assert_eq!(rows[3]["starter"], "compaction");
+}

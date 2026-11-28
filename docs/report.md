@@ -1,14 +1,14 @@
 # Token reports and the agent skill
 
-`highwater report` summarises where sessions spent tokens, as text or JSON, without starting the viewer. `highwater show` prints one item from a session. The `token-efficiency` skill, kept in [`skills/token-efficiency`](../skills/token-efficiency/SKILL.md) and built into the binary, tells a coding agent how to use the two to suggest ways to spend fewer tokens.
+`highwater report` summarises where sessions spent tokens, as text or JSON, without starting the viewer. `highwater session show` prints one item from a session. The `token-efficiency` skill, kept in [`skills/token-efficiency`](../skills/token-efficiency/SKILL.md) and built into the binary, tells a coding agent how to use the two to suggest ways to spend fewer tokens.
 
 ## Commands
 
 ```bash
 highwater report [SESSION...] [--all | --dir PATH] [--last N] [--since YYYY-MM-DD] [--harness NAME] [--json] [--limit N]
-highwater show SESSION ITEM_ID [--max-tokens N] [--offset N]
-highwater show SESSION ITEM_ID --lines A..B
-highwater show SESSION ITEM_ID --grep PATTERN [--around N]
+highwater session show SESSION ITEM_ID [--max-tokens N] [--offset N]
+highwater session show SESSION ITEM_ID --lines A..B
+highwater session show SESSION ITEM_ID --grep PATTERN [--around N]
 highwater skill print
 highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [--force]
 ```
@@ -29,6 +29,32 @@ highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [-
 | `--agent claude-code` | `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`) | `<repository>/.claude/skills` |
 
 `<repository>` is the top folder of the current git working tree, or the current folder when it is not in one. `--dir PATH` installs into `PATH` instead. The skill only works where Highwater is installed, so a project's copy is useful only to collaborators who have it. A different file already installed is kept unless `--force` is given, since it may have been edited.
+
+## Session turns
+
+`highwater session turns SESSION` lists one row per report turn. Use `--sort order|cost|calls`
+(default `order`), `--limit N` (default 30), `--offset N` and `--json`. It accepts the
+report's source options and `--tokenization`.
+
+Rows show inclusive call bounds, breaks longer than five minutes, reported prompt tokens
+at the first and last call, estimated whole-call cost, tool and failed-tool counts, the
+two most frequent command families or tools, and the start of the user's prompt.
+Text rounds context to thousands, shows breaks below 90 minutes in minutes and longer
+breaks in hours, and limits prompts to 60 characters (JSON keeps up to 80). The header
+includes the session cost, user-started turns and compactions. Turns not started by the user show their starter in brackets. Unknown tokens or
+costs display as `?`. Sorting keeps the original turn numbers; pagination is applied after
+sorting. The final line gives the number of later turns and the next offset; when none
+remain, it mentions earlier turns instead, if any. JSON gives
+`reference`, `totalTurns`, `omittedTurns` and the selected `turns`.
+
+```sh
+highwater session turns SESSION --sort cost
+highwater session turns SESSION --offset 30
+```
+
+`highwater session show` replaces `highwater show`; the old spelling remains a hidden
+alias with the same behaviour. Both session commands restrict discovery to the harness
+in the session reference.
 
 ## Costs
 
@@ -131,7 +157,7 @@ penalty. These two fields also have report-wide totals; report-wide rewrites
 do not repeat the largest entries.
 
 `largestItems` contains up to ten items ranked by existing estimated item
-cost: full `id` for `highwater show`, `kind`, `label`, `tokens`, `calls`
+cost: full `id` for `highwater session show`, `kind`, `label`, `tokens`, `calls`
 present, `firstCall` and `usd`. These are estimates over all calls where the
 item was present, not additional charges.
 

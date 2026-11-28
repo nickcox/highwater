@@ -5,7 +5,10 @@ mod build;
 mod figures;
 mod findings;
 mod repository;
+mod shared;
 mod skill;
+mod turns;
+pub(crate) use turns::{session, SessionArgs};
 #[cfg(test)]
 mod tests;
 mod text;
@@ -107,7 +110,11 @@ pub(crate) fn run(args: ReportArgs) -> Result<(), Error> {
         tokenization: args.tokenization.into(),
         perf_diagnostics: false,
     };
-    let sessions = discover_sessions(args.sources.clone())?;
+    let sessions = if args.sessions.len() == 1 {
+        crate::server::discover_session_sources(args.sources.clone(), &args.sessions[0])?
+    } else {
+        discover_sessions(args.sources.clone())?
+    };
     let (scope, groups) = select(&sessions, &args)?;
     let thresholds = Thresholds::default();
     let analysed = analyse_groups(&groups, scope.last, config);
@@ -378,7 +385,7 @@ fn analyse(locator: &SessionLocator, config: AnalysisConfig) -> Analysed {
 }
 
 pub(crate) fn show(args: ShowArgs) -> Result<(), Error> {
-    let sessions = discover_sessions(args.sources.clone())?;
+    let sessions = crate::server::discover_session_sources(args.sources.clone(), &args.session)?;
     let session = sessions
         .iter()
         .find(|session| session.id == args.session)
