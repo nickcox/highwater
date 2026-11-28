@@ -41,6 +41,16 @@ struct Row<'a> {
     child_sessions: usize,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Listing<'a> {
+    schema_version: u32,
+    highwater_version: &'static str,
+    scope: Scope,
+    sessions: Vec<Row<'a>>,
+    more_sessions: usize,
+}
+
 fn matches(session: &SessionFile, search: &str) -> bool {
     let text = format!(
         "{} {} {} {} {} {}",
@@ -61,21 +71,55 @@ pub(super) fn run(args: ListArgs) -> Result<(), Error> {
     let sessions =
         crate::server::discover_harness_sources(args.sources, args.scope.harness.as_deref())?;
     let (scope, groups) = select(&sessions, &args.scope, &[], args.last)?;
+    let has_sessions = !groups.is_empty();
+    let (rows, more) = rows(
+        &sessions,
+        &groups,
+        args.search.as_deref(),
+        args.last,
+        args.children,
+    );
+    let listing = Listing {
+        schema_version: 1,
+        highwater_version: env!("CARGO_PKG_VERSION"),
+        scope,
+        sessions: rows,
+        more_sessions: more,
+    };
+    let mut out = std::io::stdout().lock();
+    if args.json {
+        serde_json::to_writer(&mut out, &listing)?;
+        writeln!(out)?;
+    } else {
+        write_text(
+            &mut out,
+            &listing.sessions,
+            &listing.scope,
+            more,
+            args.last,
+            args.search.as_deref().filter(|_| has_sessions),
+        )?;
+    }
+    Ok(())
+}
+
+fn rows<'a>(
+    sessions: &'a [SessionFile],
+    groups: &[Vec<&'a SessionFile>],
+    search: Option<&str>,
+    last: usize,
+    children: bool,
+) -> (Vec<Row<'a>>, usize) {
     let groups: Vec<_> = groups
-        .into_iter()
+        .iter()
         .filter(|group| {
-            args.search
-                .as_deref()
-                .is_none_or(|search| group.iter().any(|session| matches(session, search)))
+            search.is_none_or(|search| group.iter().any(|session| matches(session, search)))
         })
         .collect();
-    let more = groups.len().saturating_sub(args.last);
+    let more = groups.len().saturating_sub(last);
     let mut rows = Vec::new();
-    for group in groups.iter().take(args.last) {
-        for session in group
-            .iter()
-            .take(if args.children { group.len() } else { 1 })
-        {
+    for group in groups.iter().take(last) {
+        for session in group.iter().take(if children { group.len() } else { 1 }) {
             rows.push(Row {
                 reference: &session.id,
                 title: &session.display_name,
@@ -88,31 +132,14 @@ pub(super) fn run(args: ListArgs) -> Result<(), Error> {
                 first_prompt: &session.first_prompt,
                 parent: &session.parent_reference,
                 subagent_type: &session.subagent_type,
-                child_sessions: if session.id == group[0].id {
-                    group.len() - 1
-                } else {
-                    sessions
-                        .iter()
-                        .filter(|child| child.parent_reference.as_deref() == Some(&session.id))
-                        .count()
-                },
+                child_sessions: sessions
+                    .iter()
+                    .filter(|child| child.parent_reference.as_deref() == Some(&session.id))
+                    .count(),
             });
         }
     }
-    let mut out = std::io::stdout().lock();
-    if args.json {
-        serde_json::to_writer(
-            &mut out,
-            &serde_json::json!({
-                "schemaVersion": 1, "highwaterVersion": env!("CARGO_PKG_VERSION"),
-                "scope": scope, "sessions": rows, "moreSessions": more
-            }),
-        )?;
-        writeln!(out)?;
-    } else {
-        write_text(&mut out, &rows, &scope, more, args.last)?;
-    }
-    Ok(())
+    (rows, more)
 }
 
 fn write_text(
@@ -121,13 +148,22 @@ fn write_text(
     scope: &Scope,
     more: usize,
     last: usize,
+    unmatched_search: Option<&str>,
 ) -> std::io::Result<()> {
-    if rows.is_empty() {
-        writeln!(
-            out,
-            "No sessions in scope: {}. Try --all or --dir DIR.",
-            scope.directory.as_deref().unwrap_or("all directories")
-        )?;
+    if rows.is_empty() && more == 0 {
+        if let Some(search) = unmatched_search {
+            writeln!(
+                out,
+                "No sessions match {search:?} in {}.",
+                scope.directory.as_deref().unwrap_or("all directories")
+            )?;
+        } else {
+            writeln!(
+                out,
+                "No sessions in scope: {}. Try --all or --dir DIR.",
+                scope.directory.as_deref().unwrap_or("all directories")
+            )?;
+        }
     }
     for row in rows {
         let indent = if row.parent.is_some() { "  " } else { "" };
@@ -224,10 +260,20 @@ mod tests {
     fn text_has_an_empty_scope_hint_and_pagination() {
         let scope = Scope::sessions();
         let mut out = Vec::new();
-        write_text(&mut out, &[], &scope, 12, 20).unwrap();
-        let text = String::from_utf8(out).unwrap();
+        write_text(&mut out, &[], &scope, 0, 20, None).unwrap();
+        let text = String::from_utf8(out.clone()).unwrap();
         assert!(text.contains("Try --all or --dir DIR"));
-        assert!(text.contains("[12 more sessions: --last 32]"));
+        assert!(text.contains("[0 more sessions]"));
+        out.clear();
+        write_text(&mut out, &[], &scope, 0, 20, Some("nothing matches")).unwrap();
+        let text = String::from_utf8(out.clone()).unwrap();
+        assert!(text.contains("No sessions match \"nothing matches\" in all directories."));
+        assert!(!text.contains("Try --all"));
+        out.clear();
+        write_text(&mut out, &[], &scope, 12, 20, None).unwrap();
+        assert!(String::from_utf8(out)
+            .unwrap()
+            .contains("[12 more sessions: --last 32]"));
     }
 
     #[test]
@@ -257,11 +303,92 @@ mod tests {
         assert_eq!(json["parent"], "pi-parent");
         assert_eq!(json["childSessions"], 2);
         let mut out = Vec::new();
-        write_text(&mut out, &[row], &Scope::sessions(), 0, 20).unwrap();
+        write_text(&mut out, &[row], &Scope::sessions(), 0, 20, None).unwrap();
         let text = String::from_utf8(out).unwrap();
         assert!(text.starts_with("  pi-child · Child · pi"));
         assert!(text.contains("2 child sessions"));
         assert!(text.ends_with("[0 more sessions]\n"));
+    }
+
+    #[test]
+    fn listing_search_precedes_pagination_and_children_follow_their_parent() {
+        let fixtures = super::super::tests::fixture_sessions();
+        let mut sessions = Vec::new();
+        for (index, (id, parent, prompt)) in [
+            ("newest", None, "not relevant"),
+            ("parent", None, "parent prompt"),
+            ("older", None, "release timing"),
+            ("child", Some("parent"), "Release TIMING"),
+            ("grandchild", Some("child"), "other prompt"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut session = fixtures[index % fixtures.len()].clone();
+            session.id = id.into();
+            session.display_name = id.into();
+            session.parent_reference = parent.map(String::from);
+            session.first_prompt = Some(prompt.into());
+            session.modified_at = DateTime::from_timestamp(100 - index as i64, 0);
+            sessions.push(session);
+        }
+        let args = ScopeArgs {
+            all: true,
+            dir: None,
+            since: None,
+            harness: None,
+        };
+        let (scope, groups) = select(&sessions, &args, &[], 1).unwrap();
+        let (listed, more) = rows(&sessions, &groups, Some("release timing"), 1, false);
+        assert_eq!(
+            listed.iter().map(|row| row.reference).collect::<Vec<_>>(),
+            ["parent"]
+        );
+        assert_eq!(listed[0].child_sessions, 1);
+        assert_eq!(more, 1);
+        let (listed, more) = rows(&sessions, &groups, Some("release timing"), 1, true);
+        assert_eq!(
+            listed.iter().map(|row| row.reference).collect::<Vec<_>>(),
+            ["parent", "child", "grandchild"]
+        );
+        assert_eq!(
+            listed
+                .iter()
+                .map(|row| row.child_sessions)
+                .collect::<Vec<_>>(),
+            [1, 1, 0]
+        );
+        assert_eq!(listed[1].parent.as_deref(), Some("parent"));
+        assert_eq!(listed[2].parent.as_deref(), Some("child"));
+        assert_eq!(more, 1);
+        let (listed, more) = rows(&sessions, &groups, Some("release timing"), 2, false);
+        assert_eq!(
+            listed.iter().map(|row| row.reference).collect::<Vec<_>>(),
+            ["parent", "older"]
+        );
+        assert_eq!(more, 0);
+        let listing = Listing {
+            schema_version: 1,
+            highwater_version: env!("CARGO_PKG_VERSION"),
+            scope,
+            sessions: listed,
+            more_sessions: more,
+        };
+        let json = serde_json::to_string(&listing).unwrap();
+        let keys = [
+            "schemaVersion",
+            "highwaterVersion",
+            "scope",
+            "sessions",
+            "moreSessions",
+        ];
+        assert!(keys
+            .windows(2)
+            .all(|pair| json.find(&format!("\"{}\":", pair[0])).unwrap()
+                < json.find(&format!("\"{}\":", pair[1])).unwrap()));
+        let (listed, more) = rows(&sessions, &groups, Some("nothing matches"), 1, true);
+        assert!(listed.is_empty());
+        assert_eq!(more, 0);
     }
 
     #[test]
