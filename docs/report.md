@@ -1,11 +1,12 @@
 # Token reports and the agent skill
 
-`highwater report` summarises where sessions spent tokens, as text or JSON, without starting the viewer. `highwater session show` prints one item from a session. The `token-efficiency` skill, kept in [`skills/token-efficiency`](../skills/token-efficiency/SKILL.md) and built into the binary, tells a coding agent how to use the two to suggest ways to spend fewer tokens.
+`highwater report` summarises where sessions spent tokens, as text or JSON, without starting the viewer. `highwater session show` prints one item from a session. The `token-efficiency` skill, kept in [`skills/token-efficiency`](../skills/token-efficiency/SKILL.md) and built into the binary, tells a coding agent how to use these commands to suggest ways to spend fewer tokens.
 
 ## Commands
 
 ```bash
 highwater report [SESSION...] [--all | --dir PATH] [--last N] [--since YYYY-MM-DD] [--harness NAME] [--json] [--limit N]
+highwater session turns SESSION [--sort order|cost|calls] [--limit N] [--offset N] [--json]
 highwater session show SESSION ITEM_ID [--max-tokens N] [--offset N]
 highwater session show SESSION ITEM_ID --lines A..B
 highwater session show SESSION ITEM_ID --grep PATTERN [--around N]
@@ -13,7 +14,7 @@ highwater skill print
 highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [--force]
 ```
 
-`report` and `show` take the same source options as `highwater serve` (`--claude-root`, `--codex-home` and so on), and `report` also takes `--tokenization`; see the [README](../README.md#run). The options go after the command, as in `highwater report --codex-home <dir>`.
+`report`, `session turns` and `session show` take the same source options as `highwater serve` (`--claude-root`, `--codex-home` and so on), and `report` also takes `--tokenization`; see the [README](../README.md#run). The options go after the command, as in `highwater report --codex-home <dir>`.
 
 **Scope.** Without session references, `report` covers the `--last` (default 10) most recently updated sessions run in the current directory's git repository: the directory itself, anywhere inside it, and the repository's other worktrees. A directory outside a repository matches itself and the directories inside it. `--dir` names another directory, and `--all` takes sessions from every directory. Child sessions of the chosen sessions are included and are not counted in `--last`. Sessions that made no model calls, such as a fork that was never used, are left out and the next session takes their place; a session named on the command line is always included. The repository is found by reading `.git` files and folders, without running git; a session whose directory no longer exists matches only by path.
 
@@ -30,31 +31,16 @@ highwater skill install [--agent agents|claude-code] [--project | --dir PATH] [-
 
 `<repository>` is the top folder of the current git working tree, or the current folder when it is not in one. `--dir PATH` installs into `PATH` instead. The skill only works where Highwater is installed, so a project's copy is useful only to collaborators who have it. A different file already installed is kept unless `--force` is given, since it may have been edited.
 
-## Session turns
+**Session turns.** `highwater session turns SESSION` lists one row per report turn. Use `--sort order|cost|calls` (default `order`), `--limit N` (default 30), `--offset N` and `--json`. Like `report`, it accepts `--tokenization`.
 
-`highwater session turns SESSION` lists one row per report turn. Use `--sort order|cost|calls`
-(default `order`), `--limit N` (default 30), `--offset N` and `--json`. It accepts the
-report's source options and `--tokenization`.
-
-Rows show inclusive call bounds, breaks longer than five minutes, reported prompt tokens
-at the first and last call, estimated whole-call cost, tool and failed-tool counts, the
-two most frequent command families or tools, and the start of the user's prompt.
-Text rounds context to thousands, shows breaks below 90 minutes in minutes and longer
-breaks in hours, and limits prompts to 60 characters (JSON keeps up to 80). The header
-includes the session cost, user-started turns and compactions. Turns not started by the user show their starter in brackets. Unknown tokens or
-costs display as `?`. Sorting keeps the original turn numbers; pagination is applied after
-sorting. The final line gives the number of later turns and the next offset; when none
-remain, it mentions earlier turns instead, if any. JSON gives
-`reference`, `totalTurns`, `omittedTurns` and the selected `turns`.
+Rows show inclusive call bounds, breaks longer than five minutes, reported prompt tokens at the first and last call, estimated whole-call cost, tool and failed-tool counts, the two most frequent command families or tools, and the start of the user's prompt. Text rounds context to thousands, shows breaks below 90 minutes in minutes and longer breaks in hours, and limits prompts to 60 characters (JSON keeps up to 80). The header includes the session cost, user-started turns and compactions. Turns not started by the user show their starter in brackets. Unknown tokens or costs display as `?`. Sorting keeps the original turn numbers; pagination is applied after sorting. The final line gives the number of later turns and the next offset; when none remain, it mentions earlier turns instead, if any. JSON gives `reference`, `totalTurns`, `omittedTurns` and the selected `turns`.
 
 ```sh
 highwater session turns SESSION --sort cost
 highwater session turns SESSION --offset 30
 ```
 
-`highwater session show` replaces `highwater show`; the old spelling remains a hidden
-alias with the same behaviour. Both session commands restrict discovery to the harness
-in the session reference.
+`highwater session show` replaces `highwater show`; the old spelling remains a hidden alias with the same behaviour. Both session commands restrict discovery to the harness in the session reference.
 
 ## Costs
 
@@ -74,11 +60,14 @@ Token totals are subtotals over calls that recorded each value. `null` means no 
 
 | Field | What it holds |
 | --- | --- |
+| `schemaVersion` | The JSON schema version; see above. |
 | `highwaterVersion`, `priceDataCommit` | The Highwater version and the models.dev commit of its prices. |
 | `scope` | `kind` (`directory`, `all` or `sessions`), `directory`, `repository` (the git folder shared by the repository's worktrees), `last`, `since` and `harness`. |
 | `thresholds` | The sizes and counts the findings use. |
 | `commandFamilies[]` | The 12 shell command families that cost the most over all the sessions, with `sessions`, the number of sessions each ran in; see below. |
 | `sessions[]` | One per session; see below. |
+| `costByContextSize[]`, `cacheRewrites` | Report-wide context bands and cache rewrite totals; see Input and context costs. |
+| `turnsByStarter` | Report-wide turns, calls and cost by starter; see Turn figures. |
 | `acrossSessions[]` | Findings over all the sessions. |
 | `skipped[]` | Sessions that could not be read or analysed, with `ref` and `reason`. |
 
@@ -91,6 +80,8 @@ Each session has:
 | `compactionCalls` | The calls that wrote compaction summaries, where the harness records them: `calls` and `usd`, the low end of their cost. They are also counted in `calls` and `cost`. Text output gives their cost beside the number of compactions. |
 | `tokens` | Recorded subtotals: `prompt` (total input), `freshInput` (neither read from nor written to the cache), `cacheRead`, `cacheWrite`, `output` (including reasoning exactly once when known) and `reasoning`. Each has matching counts under `coverage`. |
 | `cost` | `billed` and `apiEquivalent` ranges (`low`, `high`), as the viewer's session summary gives them, and `unknownCalls`. |
+| `costByInput`, `costByContextSize[]`, `cacheRewrites`, `largestItems[]` | Input costs, context bands, large cache writes and the most expensive items; see Input and context costs. |
+| `turnsByStarter`, `expensiveTurns[]` | Turns, calls and cost by starter, and the three most expensive turns; see Turn figures. |
 | `reconstruction` | `medianAbsoluteGapPercent`, how far the calculated context is from the reported input, and `limitationCodes` from the session's reader. |
 | `contextByKind[]` | The kinds of item that made up at least 1% of the token-turns: `kind`, `items`, `tokenTurns`, `share` (0 to 1) and `estimatedCost`. |
 | `carriedContext` | Input spent on the conversation's own items (user and assistant messages, tool results and thinking) at calls 3 or more user turns after they were added: `olderThanTurns`, `tokenTurns`, `estimatedCost` and `share` of the session's token-turns. The system prompt, tool definitions, attachments, compaction summaries and the Unrecorded request context are not included. |
@@ -133,42 +124,21 @@ For each pattern, the report keeps the `--limit` (default 10) most expensive fin
 
 ## Input and context costs
 
-Each session adds `costByInput`: `uncached`, `cacheRead`, `cacheWrite` and
-`output`, each with `tokens` and `usd`, plus `medianUncached` and
-`largestUncached` per call (whole tokens; an even median rounds down). Missing counters are not zero. Recorded component
-costs are used when all four are available (Pi, OpenCode and Copilot). Otherwise the
-same dated prices as item costs determine the shares, including prompt tiers,
-and those shares are fitted to the call's known total. A call with only a
-total cost needs prices and usage to allocate it; without those its allocation
-is unknown. A call without a recorded cost uses dated prices where available.
-Null means no known values; sums with missing calls are partial. Ranges use
-the low estimate, as item costs do.
+**Input costs.** `costByInput` gives `uncached`, `cacheRead`, `cacheWrite` and `output`, each with `tokens` and `usd`, plus `medianUncached` and `largestUncached` per call (whole tokens; an even median rounds down). Missing counters are not zero. Recorded component costs are used when all four are available (Pi, OpenCode and Copilot). Otherwise the same dated prices as item costs determine the shares, including prompt tiers, and those shares are fitted to the call's known total. A call with only a total cost needs prices and usage to allocate it; without those its allocation is unknown. A call without a recorded cost uses dated prices where available. Null means no known values; sums with missing calls are partial. Ranges use the low estimate, as item costs do.
 
-`costByContextSize` gives `prompt`, `calls` and `usd` for reported prompts
-below 50K, 50–100K, 100–200K, 200–400K and at least 400K. Calls without a
-reported prompt are excluded. `cacheRewrites` gives `calls`, `usd`,
-`afterExpiry` and up to five `largest` writes (`call`, `tokens`, `usd`,
-`breakSeconds`). It excludes the first call and compaction calls, requires a prompt
-of at least 20,000 tokens and a write of at least half the prompt. Breaks use
-previous end to current start, falling back to current end; missing timing
-is not counted as expiry. Expiry is one hour if any call wrote one-hour
-entries, five minutes otherwise. Its cost is the whole call, not a cache-miss
-penalty. These two fields also have report-wide totals; report-wide rewrites
-do not repeat the largest entries.
+**Context size.** `costByContextSize` gives `prompt`, `calls` and `usd` for reported prompts below 50K, 50–100K, 100–200K, 200–400K and at least 400K. Calls without a reported prompt are excluded. The report also gives totals over all sessions.
 
-`largestItems` contains up to ten items ranked by existing estimated item
-cost: full `id` for `highwater session show`, `kind`, `label`, `tokens`, `calls`
-present, `firstCall` and `usd`. These are estimates over all calls where the
-item was present, not additional charges.
+**Cache rewrites.** `cacheRewrites` gives `calls`, `usd`, `afterExpiry` and up to five `largest` writes (`call`, `tokens`, `usd`, `breakSeconds`). It excludes the first call and compaction calls, requires a prompt of at least 20,000 tokens and a write of at least half the prompt. Breaks use previous end to current start, falling back to current end; missing timing is not counted as expiry. Expiry is one hour if any call wrote one-hour entries, five minutes otherwise. Its cost is the whole call, not a cache-miss penalty. Report-wide rewrite totals do not repeat the largest entries.
 
-New dollar figures use four decimal places, as other report costs do.
-Largest-item labels are limited to 80 characters; IDs are not shortened.
+**Largest items.** `largestItems` contains up to ten items ranked by estimated item cost: full `id` for `highwater session show`, `kind`, `label`, `tokens`, `calls` present, `firstCall` and `usd`. These are estimates over all calls where the item was present, not additional charges. Labels are limited to 80 characters; IDs are not shortened.
 
-### Turn figures
+Dollar figures use four decimal places, as other report costs do.
 
-Each session's `turnsByStarter` groups turns by starter (`user`, `taskNotification`, `heartbeat`, `compaction`, `guardianReview`, `injectedContext` and other recorded starters), with `turns`, `calls` and `usd`. The report-level `turnsByStarter` sums these over sessions in scope.
+## Turn figures
 
-`expensiveTurns` lists up to three turns ranked by their whole-call cost, with ties in turn order: `turn`, `firstCall`, `lastCall`, `usd`, `breakSeconds`, `firstPromptTokens`, `lastPromptTokens`, `starter` and `prompt`. Prompt token counts are the reported totals at the first and last call; `prompt` is the first 80 characters of a user prompt, or null for other starters. Breaks use the same timing and whole seconds as `cacheRewrites`; the first turn has no preceding break. Missing figures are null. Costs sum known call costs before rounding to four decimal places, as in the other per-call figures. Text output briefly lists starter totals and the most expensive turn ranges.
+**Starters.** Each session's `turnsByStarter` groups turns by starter (`user`, `taskNotification`, `heartbeat`, `compaction`, `guardianReview`, `injectedContext` and other recorded starters), with `turns`, `calls` and `usd`. The report-level `turnsByStarter` sums these over sessions in scope.
+
+**Expensive turns.** `expensiveTurns` lists up to three turns ranked by their whole-call cost, with ties in turn order: `turn`, `firstCall`, `lastCall`, `usd`, `breakSeconds`, `firstPromptTokens`, `lastPromptTokens`, `starter` and `prompt`. Prompt token counts are the reported totals at the first and last call; `prompt` is the first 80 characters of a user prompt, or null for other starters. Breaks use the same timing and whole seconds as `cacheRewrites`; the first turn has no preceding break. Missing figures are null. Costs sum known call costs before rounding to four decimal places, as in the other per-call figures. Text output briefly lists starter totals and the most expensive turn ranges.
 
 ## Not yet included
 

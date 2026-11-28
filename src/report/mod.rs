@@ -403,7 +403,7 @@ pub(crate) fn show(args: ShowArgs) -> Result<(), Error> {
                     args.item
                 )
             } else {
-                format!("the session has no item {}; find item IDs in the report's findings (and largestItems when available)", args.item)
+                format!("the session has no item {}; find item IDs in the report's findings and largestItems", args.item)
             }
         })?;
     let mut out = std::io::stdout().lock();

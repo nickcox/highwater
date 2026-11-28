@@ -2,13 +2,14 @@
 
 ## Unreleased
 
+- The token-efficiency skill reads the report's new totals first, then uses `highwater session turns` and `highwater session show` to look at a session more closely, and gives the report's current size per session.
 - `highwater session turns` lists report turns with costs, breaks, prompt sizes and tool activity, with sorting and pagination. `show` moves to `highwater session show`, keeping the old spelling as a hidden alias. Session commands search only the referenced harness's folders.
 - Reports add turn, call and cost totals by starter and each session's three most expensive turns.
 - Cache-miss estimates use the one-hour write rate for calls that wrote one-hour entries. Findings also give whole-call costs for missed calls and their total.
 - Copilot reports use recorded token-detail charges for input cost components, including compactions. New report costs and cache-rewrite breaks use compact precision; text costs are formatted as dollars.
 - Reports add input costs, context-size costs, cache rewrites and the ten most expensive items with full IDs.
 - Report schema version 2 adds `turns` for all requests and counts only requests the user started in `userTurns` and carried context age. Recorded turns keep messages sent during a request together; harness notifications and injected context are not user turns.
-- `highwater show` includes the producing tool's name and arguments, selects lines with `--lines` or `--grep` and `--around`, and gives a character `--offset` to continue cut output. Missing item IDs now point to the report's findings and `largestItems` when available.
+- `highwater show` includes the producing tool's name and arguments, selects lines with `--lines` or `--grep` and `--around`, and gives a character `--offset` to continue cut output. Missing item IDs now point to the report's findings and `largestItems`.
 - A Claude Code session copied from another, such as a bb fork, counts only its own calls. The copied history is context for its first call, as for Pi and Codex forks, and the session shows **Forked from** its source. Reports no longer count copied calls more than once.
 - A Codex guardian review no longer shows the review request Codex wrote as its first prompt.
 - A Claude Code session started with a skill command, as T3 Code and Claude Code record it, shows the command as its first prompt, such as `/review-source-refresh-pr`.

@@ -19,7 +19,7 @@ highwater report --json
 
 By default this covers the 10 most recently updated sessions run in the current directory's git repository, including its other worktrees, with their child sessions. Choose the scope from what the user asked:
 
-- **A general review** ("where do my sessions spend tokens?"): the default. Patterns repeated across sessions only show up here. Use `--last 20` or more only when the user asks for a wider look; the report grows by about 700 tokens for each session.
+- **A general review** ("where do my sessions spend tokens?"): the default. Patterns repeated across sessions only show up here. Use `--last 20` or more only when the user asks for a wider look; allow roughly 4,000 tokens per session (16 KB of JSON for one measured session; sizes vary).
 - **A particular session**, named by a reference such as `claude-code-51475cc186e8` or by a Highwater view link (its `session=` value): `highwater report --json <reference>`.
 - **The session the user just finished:** `highwater report --json --last 2`, and look at the second session. The first is the one you are running in.
 - Other options: `--all` (every directory), `--dir PATH` (another project), `--since YYYY-MM-DD`, `--harness claude-code|codex|opencode|pi|vscode-copilot`.
@@ -30,16 +30,13 @@ If the report lists no sessions, say so and suggest `--all` or `--dir`.
 
 ## 3. Read the report
 
-- `costByInput` separates uncached input, cache reads, cache writes and output, with median and largest uncached input per call. `costByContextSize` groups calls and costs by reported prompt size. `cacheRewrites` counts large cache writes, including those after expiry. The latter two also have report-wide totals. `largestItems` lists the ten most expensive items with full IDs for `highwater session show`.
-
 - **Costs are estimates** in US dollars at API rates. For calls covered by a subscription they are what the API would have charged, not what the user paid. Use them to rank, and say they are estimates.
 - **Token-turns** are tokens multiplied by the number of calls they were sent with. A 10,000-token file read that stays in context for 100 calls is 1,000,000 token-turns, even though it was read once. Most of a long session's cost is input sent again on every call, mostly read from the cache.
 - An item's `estimatedCost` is what that item cost over every call it was sent with. It is the most that removing the item could save, not the expected saving.
 - The report keeps unavailable token subtotals as `null`, not zero. `tokens.coverage` gives `recordedCalls`, `failedAttemptCalls` and `missingCalls` for each token field. Treat a subtotal with missing calls as partial. `tokens.prompt` includes total-only input; do not reconstruct it from cache buckets that may cover different calls. `averageContextTokens` covers only calls with complete prompt totals, with `tokens.coverage.prompt.recordedCalls` as its denominator. Check that coverage before comparing sessions.
 - Each session has `tokens`, `cost`, `averageContextTokens`, `turns` (all requests), `userTurns` (requests the user started, excluding harness notifications and injected context), `contextByKind` (what made up the context, as a share of token-turns), `carriedContext`, `tools` (the most expensive tools), `commandFamilies` (shell commands grouped by program and subcommand, such as `rg` or `git diff`) and `findings`.
 - `commandFamilies` at the top level totals the shell commands over all the sessions, and `acrossSessions` holds findings over several sessions: commands and file reads repeated in them, and commands that returned large output without a limit in them.
-- `turnsByStarter` gives turns, calls and `usd` by starter, per session and across the report. A large share of cost in turns not started by the user, such as task notifications, points to background work done in a large session. `expensiveTurns` is a place to start reading a session: it gives the three most expensive turns, their call ranges, breaks, reported prompt sizes, starter and the start of user prompts.
-- **Look at the totals before the findings.** In long sessions most of the cost is spread over many items: hundreds of small tool results, the agent's own messages and thinking, and conversation carried from earlier turns. Individual findings are often worth cents in a session that cost tens of dollars. Compare each figure with the session's cost before deciding what matters.
+- **Read totals before findings.** `costByInput` separates uncached input, cache reads, cache writes and output, with median and largest uncached input per call. High uncached input points to input that caching is not reducing. `costByContextSize` groups calls and costs by reported prompt size: high costs in large contexts suggest looking for places to split a session. `cacheRewrites` counts large cache writes, including those after expiry: these point to the cost of resuming after breaks. `turnsByStarter` gives turns, calls and `usd` by starter: a large non-user share points to background work in a large session. The last three also have report-wide totals. Compare findings with these totals; a finding worth cents may not matter in a session costing tens of dollars.
 - Sessions can share history. A forked session starts with a copy of its parent's conversation. For Pi, Codex and Claude Code forks the report leaves the copied calls and tool runs out of the fork's totals and findings.
 - `reconstruction.medianAbsoluteGapPercent` is how far Highwater's reconstruction is from the reported input. If it is above about 10%, treat that session's item figures with caution.
 
@@ -61,18 +58,15 @@ Each finding lists up to three `items` (`itemId`, and `ref` for findings across 
 
 ## 4. Look at the evidence
 
-For a single session, run the report first, then inspect its turns before selecting
-items for `highwater session show`:
+Choose sessions from the totals and findings. Their `expensiveTurns` list the three most expensive turns, with call ranges, breaks, prompt sizes, starter and prompt starts. For a session needing a closer look, inspect its turns:
 
 ```sh
 highwater session turns <session ref> --sort cost
 ```
 
-This shows which turns spent the most, their call ranges, prompt starts, tool activity
-and breaks longer than five minutes. Use `--sort order` to find where a new session
-would have avoided carrying old context, and `--offset` to see more turns.
+The rows include tool activity and breaks longer than five minutes. Use `--sort order` to find where a new session would have avoided carrying old context, and `--offset` to see more turns.
 
-Before recommending a change, look at what the agent actually ran and got back, for the findings you intend to mention:
+Before recommending a change, inspect relevant items using IDs from findings or `largestItems` (the ten most expensive items). Look at what the agent actually ran and got back:
 
 ```bash
 highwater session show <session ref> '<item ID>' --max-tokens 1500
@@ -91,7 +85,7 @@ Prefer a few well-supported suggestions over many weak ones, and start with the 
 - **Compaction calls.** `compactionCalls` is what the calls that wrote compaction summaries cost, where the harness records them. Mention them when they are a large share of a session's cost, alongside the number of compactions, but compaction is usually necessary, so do not suggest avoiding it for its cost alone.
 - **Re-runs after a compaction.** The agent read the same files again because the compaction removed them. When the same file is re-read after most compactions, suggest keeping the essential facts in the compaction summary or in a short notes file, splitting a long plan document so that only the current part is read, or ending the session and starting a new one at that point instead.
 - **A large share of `assistantMessage` or `thinking` in `contextByKind`.** The agent's own writing is sent again with every later call. Suggest shorter progress messages, and a lower reasoning effort for routine steps where the harness allows it.
-- **Large, long-lived results.** A narrower command: `rg -l` or `rg -n` with a pattern instead of `cat`, reading a line range, `git diff --stat` before a full diff, `--quiet` flags, `| tail -n 50` on build and test output, or `jq` to select fields from JSON. Running exploratory work in a subagent, so that only its summary returns to the main session. Starting a new session, or compacting, between unrelated tasks.
+- **Large, long-lived results.** Suggest a narrower command using the limits below, or exploratory work in a subagent so that only its summary returns to the main session.
 - **A result repeated while an earlier copy was in context** (`repeatedResultInContext`). For a file read, the agent already had the text. Suggest an instruction to use the earlier read unless the file has changed, and look at `callsBetween`: a large gap may mean the agent lost track of the earlier read in a long context, which is another reason to start new sessions between tasks. For a command whose output had not changed, see the next point.
 - **Large output without a limit** (`largeUnlimitedOutput`). Suggest the limited form of each example in `facts.commands`: `git diff --stat` before a full diff, `git log -n 20`, `rg -l` or `rg -m 5`, `| head -n 100`, or a line range instead of `cat` of a whole file. Across sessions, suggest an instruction in `CLAUDE.md` or `AGENTS.md` that says how to run these commands in this project.
 - **Cache misses** (`cacheMiss`). A miss sends the whole prompt again at the uncached rate or the cache write rate. Misses `afterPause` usually mean a session was continued after a break; for a long session, suggest starting a new one with a short summary instead of resuming it after a break longer than the cache lifetime (`facts.cacheLifetimeSeconds`). Unexplained misses can come from something early in the prompt changing between calls, such as a tool list, an instruction file edited during the session or a changing timestamp; mention them, but do not claim a cause the evidence does not show, especially for OpenAI models.

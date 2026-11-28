@@ -1496,6 +1496,30 @@ fn show_selects_lines_matches_and_character_pages() {
 }
 
 #[test]
+fn show_missing_item_points_to_report_ids() {
+    let session = fixture_sessions().remove(0);
+    let error = super::show(super::ShowArgs {
+        session: session.id,
+        item: "no-such-item".into(),
+        max_tokens: 4000,
+        lines: None,
+        grep: None,
+        around: 0,
+        offset: 0,
+        sources: SourceArgs {
+            claude_root: vec![PathBuf::from("fixtures/claude-code/projects")],
+            codex_home: vec![PathBuf::from("fixtures/codex/home")],
+            ..args(None).sources
+        },
+    })
+    .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "the session has no item no-such-item; find item IDs in the report's findings and largestItems"
+    );
+}
+
+#[test]
 fn show_includes_recorded_tool_arguments() {
     let sessions = fixture_sessions();
     let mut checked = 0;
