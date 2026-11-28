@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0 – 2026-11-28
+
 - `highwater session list` finds sessions by scope and catalogue text, with references, child counts and JSON output, without analysing them.
 - `--harness` reads only the named harness's sessions, making `report --harness` faster. Unknown harness names now produce an error.
 - The token-efficiency skill reads the report's new totals first, then uses `highwater session turns` and `highwater session show` to look at a session more closely, and gives the report's current size per session.
@@ -23,6 +25,7 @@
 - Pi sessions use the name set with `/name`, `--name` or an extension. Pi sessions with no assistant response are no longer listed, as for Claude Code and Codex. A Pi session file with another record before its header is now read correctly.
 - Claude Code sessions are dated by their last conversation record, not the transcript file's modification time. Claude Code adds records to old transcripts, which moved sessions not used for weeks to the top of the session picker and into `highwater report --last`.
 - In the River, a Pi compaction's removed items flow into its compaction call's band again, that band flows into the summary, and the retained items continue across the call. Since 0.5.4 the compaction call separated them, and no flows were drawn. A compaction's marker, in the River and the events lane, is now on the compaction's own call when it has one, and the reported-input line starts again at each compaction instead of running across it.
+- Cost estimates use model prices from 28 November 2026.
 
 ## 0.5.7 – 2026-11-26
 
