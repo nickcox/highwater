@@ -43,3 +43,7 @@ ruzstd = "0.9.1"
 [dev-dependencies]
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+
+# Newer clippy versions leave this out of the default set, but the 1.88 check in CI reports it.
+[lints.clippy]
+uninlined_format_args = "warn"

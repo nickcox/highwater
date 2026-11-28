@@ -17,11 +17,7 @@ const sessions = [
   session('pi-one', { displayName: 'First task', firstPrompt: 'Fix tests' }),
   session('codex-two', { harness: 'codex', displayName: 'Second task' }),
 ];
-afterEach(() => {
-  cleanup();
-  // The picker saves its sort and child-session setting, which would carry into later tests.
-  globalThis.localStorage?.clear();
-});
+afterEach(cleanup);
 const button = () => screen.getByRole('button', { name: /^Session:/ });
 const search = () => screen.getByRole('textbox', { name: 'Search sessions' });
 const grid = () => screen.getByRole('grid', { name: 'Sessions' });
