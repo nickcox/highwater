@@ -63,6 +63,7 @@ fn discovery_finds_session_folders_with_an_event_log() {
 fn listings_read_the_workspace_and_whether_a_call_reported_usage() {
     let files = find_files(&home(), None).expect("discovery");
     let app = read_listing(&files[0]).expect("app");
+    assert!(app.first_prompt.is_some());
     assert!(app.has_responses);
     assert_eq!(app.workspace.id, Some(session_id("001")));
     assert_eq!(

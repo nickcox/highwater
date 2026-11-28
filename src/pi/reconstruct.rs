@@ -594,6 +594,58 @@ pub(crate) fn bounded_label(value: &str) -> String {
     bounded
 }
 
+/// Only ordinary user messages are typed prompts. Extension messages, commands and
+/// branch summaries have their own entry types, even if they contain user-role text.
+pub(crate) fn typed_user_message(value: &Value) -> Option<MessageContent> {
+    if value.get("type").and_then(Value::as_str) != Some("message") {
+        return None;
+    }
+    let message = value.get("message")?;
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    let content = message_content(Some(message));
+    let text = content
+        .parts
+        .iter()
+        .filter_map(|part| match part {
+            ContentPart::Text(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    // Recover the typed skill invocation without including its expanded instructions.
+    let mut remaining = text.trim();
+    let mut invocations = Vec::new();
+    while remaining.starts_with("<skill ") {
+        let (header, _) = remaining.split_once('>')?;
+        let attribute = header
+            .split_whitespace()
+            .find_map(|part| part.strip_prefix("name="))?;
+        let name = attribute
+            .strip_prefix('"')
+            .and_then(|name| name.strip_suffix('"'))
+            .or_else(|| {
+                attribute
+                    .strip_prefix('\'')
+                    .and_then(|name| name.strip_suffix('\''))
+            })?
+            .trim();
+        if name.is_empty() {
+            return None;
+        }
+        invocations.push(format!("/skill:{name}"));
+        remaining = remaining.split_once("</skill>")?.1.trim();
+    }
+    if !invocations.is_empty() {
+        if !remaining.is_empty() {
+            invocations.push(remaining.to_owned());
+        }
+        return Some(MessageContent::text(invocations.join(" ")));
+    }
+    Some(content)
+}
+
 fn message_content(message: Option<&Value>) -> MessageContent {
     let Some(message) = message else {
         return MessageContent::empty();

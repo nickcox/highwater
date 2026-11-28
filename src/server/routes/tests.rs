@@ -17,6 +17,7 @@ async fn body(response: Response) -> bytes::Bytes {
 async fn ambiguous_short_references_never_select_an_arbitrary_file() {
     use axum::response::IntoResponse;
     let first = SessionFile {
+        first_prompt: None,
         id: "pi-123456789abc".into(),
         path: "/private/first.jsonl".into(),
         file_name: "first.jsonl".into(),

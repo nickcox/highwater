@@ -28,6 +28,7 @@ pub(crate) struct SessionFile {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
+    pub first_prompt: Option<String>,
     pub session_id: Option<String>,
     /// `customTitle`, otherwise the first request's message.
     pub title: Option<String>,
@@ -158,6 +159,9 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
     });
     Ok(Listing {
         session_id: text(session.get("sessionId")),
+        first_prompt: first_message
+            .as_deref()
+            .and_then(crate::discovery::compact_prompt),
         title: text(session.get("customTitle")).or(first_message),
         working_directory: file.workspace.as_deref().and_then(workspace_folder),
         created_at_ms: session.get("creationDate").and_then(Value::as_i64),

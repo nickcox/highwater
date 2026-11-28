@@ -187,3 +187,35 @@ mod tests {
         assert_eq!(cache.reads, 3);
     }
 }
+
+/// Keep catalogue prompts small without splitting a Unicode character.
+pub(crate) fn compact_prompt(text: &str) -> Option<String> {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.is_empty() {
+        return None;
+    }
+    let mut result: String = text.chars().take(300).collect();
+    if text.chars().count() > 300 {
+        result.push('…');
+    }
+    Some(result)
+}
+
+#[cfg(test)]
+mod prompt_tests {
+    #[test]
+    fn whitespace_and_unicode_limit() {
+        assert_eq!(
+            super::compact_prompt("  hello\n world "),
+            Some("hello world".into())
+        );
+        assert_eq!(
+            super::compact_prompt(&"😀".repeat(301))
+                .unwrap()
+                .chars()
+                .count(),
+            301
+        );
+        assert_eq!(super::compact_prompt(" "), None);
+    }
+}

@@ -62,6 +62,7 @@ fn listings_read_session_meta_from_plain_and_compressed_files() {
         main.working_directory.as_deref(),
         Some("/synthetic/project")
     );
+    assert!(main.first_prompt.is_some());
     assert!(main.has_responses);
     assert_eq!(main.child, None);
 
@@ -70,6 +71,7 @@ fn listings_read_session_meta_from_plain_and_compressed_files() {
         compressed.thread_id.as_deref(),
         Some(thread("002").as_str())
     );
+    assert!(compressed.first_prompt.is_some());
     assert!(compressed.has_responses);
 
     let archived = read_listing(&file_for("006")).expect("several frames");

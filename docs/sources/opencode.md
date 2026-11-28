@@ -61,3 +61,5 @@ The rules above were checked against OpenCode's source at these versions:
 Pruning sets `state.time.compacted` on a tool part without deleting its stored output; `toModelMessages` then sends `[Old tool result content cleared]` in its place. Calls before and after pruning therefore see different versions of the same tool result.
 
 `python3 scripts/benchmark-opencode.py --full` and `node scripts/accept-opencode-readonly.mjs` check performance and real databases; see [development](../development.md).
+
+The catalogue reads the first user message’s text parts (legacy) or inline text (modern) in its listing transaction.

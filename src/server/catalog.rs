@@ -117,7 +117,10 @@ pub(super) fn canonical_root(root: &Path) -> Result<PathBuf, AppError> {
     Ok(canonical)
 }
 
-struct ListingMetadata {
+#[derive(Clone)]
+pub(super) struct ListingMetadata {
+    first_prompt: Option<String>,
+    has_responses: bool,
     reference: String,
     display_name: String,
     working_directory: Option<String>,
@@ -125,13 +128,81 @@ struct ListingMetadata {
 }
 
 fn session_listing_metadata(path: &Path, file_name: &str) -> std::io::Result<ListingMetadata> {
-    let first_line = BufReader::new(File::open(path)?)
-        .lines()
-        .next()
-        .transpose()?;
-    let header = first_line
-        .as_deref()
-        .and_then(|line| serde_json::from_str::<Value>(line).ok());
+    const MAX_LISTING_BYTES: u64 = 1024 * 1024;
+    let mut reader = BufReader::new(File::open(path)?);
+    let mut raw = Vec::new();
+    let mut bytes = 0_u64;
+    let mut line_number = 0;
+    let mut first_line = None;
+    let mut header = None;
+    let mut first_prompt = None;
+    let mut prompt_seen = false;
+    let mut has_responses = false;
+    let mut name = None;
+    loop {
+        raw.clear();
+        if reader.read_until(b'\n', &mut raw)? == 0 {
+            break;
+        }
+        bytes = bytes.saturating_add(raw.len() as u64);
+        line_number += 1;
+        let Ok(line) = std::str::from_utf8(&raw) else {
+            continue;
+        };
+        if line_number == 1 {
+            first_line = Some(line.trim_end_matches(['\n', '\r']).to_owned());
+        }
+        let needs_header = line_number <= 5 && header.is_none();
+        let needs_messages = bytes <= MAX_LISTING_BYTES && (!prompt_seen || !has_responses);
+        // Names can occur anywhere. Beyond the bounded message search, only lines
+        // containing this record type are parsed, not large assistant/tool records.
+        let needs_name = line.contains("\"session_info\"");
+        if !needs_header && !needs_messages && !needs_name {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        match value.get("type").and_then(Value::as_str) {
+            Some("session") if needs_header => header = Some(value),
+            Some("session_info") => {
+                if let Some(text) = value
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())
+                {
+                    name = Some(text.chars().take(160).collect::<String>());
+                }
+            }
+            Some("message") if needs_messages => {
+                has_responses |= value["message"]["role"] == "assistant";
+                if !prompt_seen {
+                    if let Some(content) = crate::pi::reconstruct::typed_user_message(&value) {
+                        prompt_seen = true;
+                        let text = content
+                            .parts
+                            .iter()
+                            .filter_map(|part| match part {
+                                crate::domain::ContentPart::Text(text) => Some(text.as_str()),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        first_prompt = crate::discovery::compact_prompt(&text);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    // Keep metadata from old untyped headers, but never use a title record as a header.
+    let header = header.or_else(|| {
+        first_line
+            .as_deref()
+            .and_then(|line| serde_json::from_str::<Value>(line).ok())
+            .filter(|value| value.get("type").is_none())
+    });
     let native_id = header
         .as_ref()
         .filter(|value| value.get("type").and_then(Value::as_str) == Some("session"))
@@ -172,12 +243,14 @@ fn session_listing_metadata(path: &Path, file_name: &str) -> std::io::Result<Lis
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty());
     // The browser adds the start time in the viewer's own time zone.
-    let display_name = match (project, suffix) {
+    let display_name = name.unwrap_or_else(|| match (project, suffix) {
         (Some(project), Some(suffix)) => format!("{project} · {suffix}"),
         (Some(project), None) => project.to_owned(),
         _ => stem.chars().take(48).collect(),
-    };
+    });
     Ok(ListingMetadata {
+        first_prompt,
+        has_responses,
         reference,
         display_name,
         working_directory,
@@ -193,18 +266,48 @@ pub(super) enum ScanError {
     Cancelled,
 }
 
+pub(super) struct PiFile {
+    path: PathBuf,
+    stamp: crate::discovery::FileStamp,
+}
+impl crate::discovery::ListedFile for PiFile {
+    type Key = crate::discovery::FileStamp;
+    fn path(&self) -> &Path {
+        &self.path
+    }
+    fn key(&self) -> Self::Key {
+        self.stamp
+    }
+    fn stamp(&self) -> Self::Key {
+        self.stamp
+    }
+}
+pub(super) type PiListingCache = crate::discovery::ListingCache<PiFile, ListingMetadata>;
+
+#[cfg(test)]
 pub(super) fn discover(
     root: &Path,
     cancelled: Option<&AtomicBool>,
 ) -> Result<Vec<SessionFile>, ScanError> {
+    discover_cached(root, cancelled, &mut PiListingCache::default())
+}
+
+pub(super) fn discover_cached(
+    root: &Path,
+    cancelled: Option<&AtomicBool>,
+    cache: &mut PiListingCache,
+) -> Result<Vec<SessionFile>, ScanError> {
     let mut output = Vec::new();
     let mut identities = HashSet::new();
+    let mut files = Vec::new();
     fn walk(
         root: &Path,
         path: &Path,
         output: &mut Vec<SessionFile>,
         identities: &mut HashSet<PathBuf>,
         cancelled: Option<&AtomicBool>,
+        cache: &mut PiListingCache,
+        files: &mut Vec<PiFile>,
     ) -> Result<(), ScanError> {
         if cancelled.is_some_and(|value| value.load(Ordering::Acquire)) {
             return Err(ScanError::Cancelled);
@@ -224,7 +327,9 @@ pub(super) fn discover(
                 continue;
             }
             if file_type.is_dir() {
-                walk(root, &candidate, output, identities, cancelled)?;
+                walk(
+                    root, &candidate, output, identities, cancelled, cache, files,
+                )?;
                 continue;
             }
             if !file_type.is_file()
@@ -267,14 +372,26 @@ pub(super) fn discover(
                 .and_then(|name| name.to_str())
                 .unwrap_or_default()
                 .to_owned();
-            let listing = session_listing_metadata(&canonical, &file_name)
+            let file = PiFile {
+                path: canonical.clone(),
+                stamp: crate::discovery::FileStamp::of(&after),
+            };
+            let listing = cache
+                .listing(&file, |file| {
+                    session_listing_metadata(&file.path, &file_name)
+                })
                 .map_err(|error| ScanError::Transient(error.to_string()))?;
+            files.push(file);
+            let Some(listing) = listing.filter(|listing| listing.has_responses) else {
+                continue;
+            };
             let modified_nanos = metadata
                 .modified()
                 .ok()
                 .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
                 .map(|duration| duration.as_nanos());
             output.push(SessionFile {
+                first_prompt: listing.first_prompt,
                 id: listing.reference,
                 path: canonical.to_string_lossy().into_owned(),
                 file_name,
@@ -294,7 +411,16 @@ pub(super) fn discover(
         }
         Ok(())
     }
-    walk(root, root, &mut output, &mut identities, cancelled)?;
+    walk(
+        root,
+        root,
+        &mut output,
+        &mut identities,
+        cancelled,
+        cache,
+        &mut files,
+    )?;
+    cache.retain(&files);
     output.sort_by(|left, right| {
         right
             .modified_nanos

@@ -55,3 +55,5 @@ With the system prompt recorded, most of each call's input is in the file. Over 
 - **Inferred boundaries that are not visible.** A reset or unsent history is only found when the reported input falls under half the calculated context. A smaller gap is shown as it is.
 - **`wait` results.** The exec tool's `wait` results are recorded as the full list of output chunks, but the model is sent less (in the surveyed sessions, about 12,000 tokens of a median 18,000). There are too few to work out the rule, so they are counted at their recorded size.
 - **Linking a spawned subagent to its tool call.** The parent's `spawn_agent` call is not yet linked to the child session it started; child sessions are linked to their parent thread only.
+
+The catalogue prefers the first user-message event before the first usage record, with a user response-item fallback using the reader’s harness-context rules; compressed files use the same reader.

@@ -100,3 +100,5 @@ Cache figures are usage-only, as for Claude Code. Claude calls use the `github-c
 ## Freshness
 
 A session's analysis is identified by the session file's size and modification time plus a fingerprint of the trace database and its `-wal` file, so an open session refreshes when records are added or deleted. `workspaceStorage` and `emptyWindowChatSessions` are watched.
+
+The catalogue takes the first request’s message text, independently of its custom title.

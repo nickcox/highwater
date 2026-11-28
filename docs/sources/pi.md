@@ -48,3 +48,7 @@ Pi 1.0.4's documentation describes `replace: true`, but its replay code ignores 
 ## Freshness
 
 A session's analysis is identified by the file's size and modification time, checked before and after reading. A rewrite that keeps both can go unnoticed, and file system races are not completely ruled out. The session folder is watched for changes.
+
+The catalogue takes the first ordinary user message, excluding extension messages, commands and branch summaries, using the Pi reader’s content rules. An expanded skill block is shown as `/skill:<name>`, followed by any typed text after the block; its instructions are excluded. The reconstructed prompt has the same 300-character limit as other prompts. Prompt and assistant-message detection is limited to the first 1 MiB. Sessions without an assistant message in that range are not listed; direct references to unlisted sessions are unavailable, as for Claude Code.
+
+The header is the first `session` record in the first five lines, allowing a preceding non-header record. The latest non-empty `session_info.name` supplies the display name, falling back to the project and short ID. Names set by `/name`, `--name` or `pi.setSessionName()` are supported; undocumented `title` records are not used as names. The listing scans the whole file for names, but after the bounded message search it parses only lines whose text contains `"session_info"`. Listings are cached by file size and modification time, so unchanged files are not read again.

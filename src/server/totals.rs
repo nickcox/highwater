@@ -21,6 +21,8 @@ const QUIET: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SessionTotal {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    includes_children: bool,
     usd: f64,
     kind: &'static str,
     partial: bool,
@@ -90,6 +92,7 @@ impl TotalKey {
                 .flatten()
                 .map(SessionTotal::sum),
             CodexFile { .. } => codex_total(path).map(|(usd, partial)| SessionTotal {
+                includes_children: false,
                 usd,
                 kind: "estimated",
                 partial,
@@ -110,6 +113,7 @@ impl TotalKey {
                         .map(|cost| (cost, false, None))
                 };
                 cost.map(|(cost, newer_usage, through_ms)| SessionTotal {
+                    includes_children: matches!(self.locator, ClaudeCodeFile { .. }),
                     usd: cost.total_usd,
                     kind: "recorded",
                     partial: newer_usage
@@ -130,6 +134,7 @@ impl TotalKey {
 impl SessionTotal {
     fn sum(usd: f64) -> Self {
         Self {
+            includes_children: false,
             usd,
             kind: "sum",
             partial: false,
@@ -232,5 +237,23 @@ pub(super) async fn run(
                 true
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod browser_tests {
+    use super::*;
+    #[test]
+    fn child_inclusion_is_omitted_when_false() {
+        let mut total = SessionTotal::sum(1.0);
+        assert!(serde_json::to_value(&total)
+            .unwrap()
+            .get("includesChildren")
+            .is_none());
+        total.includes_children = true;
+        assert_eq!(
+            serde_json::to_value(&total).unwrap()["includesChildren"],
+            true
+        );
     }
 }

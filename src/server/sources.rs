@@ -1,7 +1,7 @@
 //! Mixed local source discovery with per-source last-good catalogue retention.
 
 use super::{
-    catalog::{canonical_root, discover, ScanError},
+    catalog::{canonical_root, ScanError},
     watcher::WatchSignals,
     AppError, SessionFile,
 };
@@ -36,7 +36,7 @@ use std::{
 #[test]
 fn session_references_keep_their_existing_values() {
     let root = canonical_root(Path::new("fixtures/pi")).expect("fixture root");
-    let pi = discover(&root, None)
+    let pi = super::catalog::discover(&root, None)
         .expect("Pi sessions")
         .into_iter()
         .find(|entry| entry.file_name == "simple.jsonl")
@@ -286,6 +286,7 @@ fn vscode_copilot_entry(
         }
     });
     SessionFile {
+        first_prompt: listing.first_prompt,
         id: vscode_copilot_reference(&session_id),
         path: String::new(),
         file_name,
@@ -385,6 +386,7 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
         listing.title.clone().unwrap_or_else(fallback)
     };
     SessionFile {
+        first_prompt: listing.first_prompt,
         id,
         path: String::new(),
         file_name,
@@ -487,6 +489,7 @@ fn codex_entry(
             None => short_id.clone(),
         });
     SessionFile {
+        first_prompt: listing.first_prompt,
         id: codex_reference(&thread_id),
         path: String::new(),
         file_name,
@@ -587,6 +590,7 @@ fn copilot_entry(
         None => short_id.clone(),
     });
     SessionFile {
+        first_prompt: listing.first_prompt,
         id: copilot_reference(&session_id),
         path: String::new(),
         file_name,
@@ -643,6 +647,7 @@ struct DatabaseSource {
 }
 struct DiscoveryState {
     pi_last_good: Vec<SessionFile>,
+    pi_listings: super::catalog::PiListingCache,
     databases: Vec<DatabaseSource>,
     claude_code: Vec<ClaudeCodeSource>,
     vscode_copilot: Vec<VsCodeCopilotSource>,
@@ -663,6 +668,7 @@ impl MixedScanner {
             signals,
             state: Mutex::new(DiscoveryState {
                 pi_last_good: Vec::new(),
+                pi_listings: super::catalog::PiListingCache::default(),
                 databases: sources
                     .databases
                     .iter()
@@ -725,9 +731,14 @@ impl MixedScanner {
         if let Some(root) = &self.pi_root {
             match fs::metadata(root) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    state.pi_last_good.clear()
+                    state.pi_last_good.clear();
+                    state.pi_listings.retain(&[]);
                 }
-                _ => match discover(root, Some(&cancelled)) {
+                _ => match super::catalog::discover_cached(
+                    root,
+                    Some(&cancelled),
+                    &mut state.pi_listings,
+                ) {
                     Ok(entries) => state.pi_last_good = entries,
                     Err(ScanError::Cancelled) => return Err(ScanError::Cancelled),
                     Err(_) => failed = true,
@@ -764,6 +775,7 @@ impl MixedScanner {
                     sessions
                         .into_iter()
                         .map(|session| SessionFile {
+                            first_prompt: session.first_prompt,
                             id: opencode_reference(&session.id),
                             path: String::new(),
                             file_name: String::new(),

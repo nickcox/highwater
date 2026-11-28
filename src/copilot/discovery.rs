@@ -36,6 +36,7 @@ pub(crate) struct Workspace {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
+    pub first_prompt: Option<String>,
     pub workspace: Workspace,
     /// Whether the main agent recorded the usage of any call. A session without one has
     /// nothing to chart; most are sessions Copilot opened for its own use.
@@ -184,6 +185,7 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
     let folder = file.path.parent().unwrap_or(&file.path);
     let mut listing = Listing {
         workspace: read_workspace(folder),
+        first_prompt: None,
         has_responses: false,
     };
     let mut reader = BufReader::new(fs::File::open(&file.path)?);
@@ -199,6 +201,7 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
         };
         if ![
             "\"assistant.turn_",
+            "\"user.message\"",
             "\"type\":\"abort\"",
             "\"session.usage_record\"",
         ]
@@ -214,6 +217,11 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
             continue;
         }
         match record.get("type").and_then(Value::as_str) {
+            Some("user.message") if listing.first_prompt.is_none() => {
+                listing.first_prompt = record["data"]["content"]
+                    .as_str()
+                    .and_then(crate::discovery::compact_prompt);
+            }
             Some("assistant.turn_start") => in_turn = true,
             Some("assistant.turn_end" | "abort") => in_turn = false,
             Some("session.usage_record") if in_turn => {

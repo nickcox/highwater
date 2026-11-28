@@ -30,6 +30,7 @@ pub(crate) struct TranscriptFile {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
+    pub first_prompt: Option<String>,
     pub session_id: Option<String>,
     pub agent_id: Option<String>,
     /// The latest custom title, otherwise the latest generated title.
@@ -195,6 +196,28 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
                 generated_title = Some(title);
             }
             continue;
+        }
+        if listing.first_prompt.is_none() && line.contains("\"type\":\"user\"") {
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                if value.get("isMeta").and_then(Value::as_bool) != Some(true)
+                    && value.get("isCompactSummary").and_then(Value::as_bool) != Some(true)
+                {
+                    let content = &value["message"]["content"];
+                    let text = content.as_str().map(str::to_owned).unwrap_or_else(|| {
+                        content
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter(|part| part["type"] == "text")
+                            .filter_map(|part| part["text"].as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    });
+                    if !text.trim_start().starts_with('<') {
+                        listing.first_prompt = crate::discovery::compact_prompt(&text);
+                    }
+                }
+            }
         }
         let needs_record = listing.working_directory.is_none() || listing.started_at.is_none();
         let needs_session = listing.session_id.is_none();

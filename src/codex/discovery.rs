@@ -25,6 +25,7 @@ pub(crate) struct SessionFile {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
+    pub first_prompt: Option<String>,
     /// The thread ID from `session_meta`.
     pub thread_id: Option<String>,
     /// `session_meta.timestamp`, as written.
@@ -132,6 +133,7 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
     let mut listing = Listing::default();
     let mut raw = Vec::new();
     let mut first = true;
+    let mut fallback_prompt = None;
     loop {
         raw.clear();
         // Records are separated only by `\n`; text inside them can hold U+2028.
@@ -150,11 +152,40 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
             }
             continue;
         }
+        if fallback_prompt.is_none() && line.contains("response_item") {
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                let payload = &value["payload"];
+                if payload["role"] == "user" {
+                    let text = payload["content"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|part| part["text"].as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if super::reconstruct::harness_label("user", text.lines().next()).is_none() {
+                        fallback_prompt = crate::discovery::compact_prompt(&text);
+                    }
+                }
+            }
+        }
+        if listing.first_prompt.is_none() && line.contains("user_message") {
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                if value["type"] == "event_msg" && value["payload"]["type"] == "user_message" {
+                    listing.first_prompt = value["payload"]["message"]
+                        .as_str()
+                        .and_then(crate::discovery::compact_prompt);
+                }
+            }
+        }
         if line.contains("\"last_token_usage\"") {
             listing.has_responses = true;
+        }
+        if listing.has_responses && (listing.first_prompt.is_some() || fallback_prompt.is_some()) {
             break;
         }
     }
+    listing.first_prompt = listing.first_prompt.or(fallback_prompt);
     Ok(listing)
 }
 

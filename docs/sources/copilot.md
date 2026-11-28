@@ -63,3 +63,5 @@ With the system prompt and the skills' text recorded, almost all of each call's 
 - **Calls with Claude models.** None of the surveyed sessions used one, so how their usage and reasoning are recorded has not been checked.
 - **Failed and cancelled calls.** `model.call_failure` and `abort` events are not shown as calls.
 - **Image results from tools.** `binaryResultsForLlm` is not counted (`unsupportedContent`).
+
+The catalogue takes the first main-agent user-message event’s content.

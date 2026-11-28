@@ -23,6 +23,7 @@ fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> Ses
     let path = path.into();
     let file_name = file_name.into();
     SessionFile {
+        first_prompt: None,
         id: file_name.clone(),
         path,
         file_name,
@@ -1227,6 +1228,7 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
 #[test]
 fn discovery_summary_counts_sessions_and_child_sessions_by_harness() {
     let session = |harness: Harness, parent: Option<&str>| SessionFile {
+        first_prompt: None,
         harness,
         parent_reference: parent.map(Into::into),
         ..fixture_session("", "")
@@ -1249,4 +1251,13 @@ fn discovery_summary_counts_sessions_and_child_sessions_by_harness() {
         "Discovered 1 session: 1 VS Code Copilot"
     );
     assert_eq!(discovery_summary(&[]), "Discovered 0 sessions");
+}
+
+#[test]
+fn catalogue_omits_absent_prompt() {
+    let entry = fixture_session("synthetic.jsonl", "synthetic.jsonl");
+    assert!(serde_json::to_value(entry)
+        .unwrap()
+        .get("firstPrompt")
+        .is_none());
 }

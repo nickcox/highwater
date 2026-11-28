@@ -79,6 +79,7 @@ impl From<rusqlite::Error> for StorageError {
 /// Stored session metadata, never a provider request or aggregate usage authority.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionMetadata {
+    pub first_prompt: Option<String>,
     pub id: String,
     pub parent_id: Option<String>,
     pub directory: String,
@@ -345,6 +346,7 @@ const METADATA_COLUMNS: &str =
 fn metadata(row: &rusqlite::Row<'_>) -> Result<SessionMetadata, StorageError> {
     let revert = row.get::<_, Option<String>>(8)?;
     let result = SessionMetadata {
+        first_prompt: None,
         id: row.get(0)?,
         parent_id: row.get(1)?,
         directory: row.get(2)?,
@@ -515,7 +517,18 @@ pub(crate) fn discover(
         if ids.len() >= MAX_SESSIONS {
             return Err(StorageError::BudgetExceeded);
         }
-        let session = metadata(row)?;
+        let mut session = metadata(row)?;
+        let sql = match generation(row)? {
+            Generation::Legacy => "SELECT json_extract(p.data, '$.text') FROM part p WHERE p.message_id = (SELECT id FROM message WHERE session_id = ?1 AND json_extract(data, '$.role') = 'user' ORDER BY time_created, id LIMIT 1) AND json_extract(p.data, '$.type') = 'text' ORDER BY p.id",
+            Generation::Modern => "SELECT json_extract(data, '$.text') FROM session_message WHERE session_id = ?1 AND type = 'user' ORDER BY seq, id LIMIT 1",
+        };
+        let mut prompt_statement = tx.prepare(sql)?;
+        let texts = prompt_statement
+            .query_map([&session.id], |row| row.get::<_, Option<String>>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        session.first_prompt = crate::discovery::compact_prompt(
+            &texts.into_iter().flatten().collect::<Vec<_>>().join(" "),
+        );
         if !ids.insert(session.id.clone()) {
             return Err(StorageError::InvalidRecords);
         }

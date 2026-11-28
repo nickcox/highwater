@@ -1164,7 +1164,7 @@ fn has_image(content: &MessageContent) -> bool {
 /// Codex writes its own context (instructions, environment details, AGENTS.md) as
 /// developer messages and as user messages that start with a tag. Those are labelled from
 /// the tag; a user's own message gets `None`.
-fn harness_label(role: &str, first_line: Option<&str>) -> Option<String> {
+pub(super) fn harness_label(role: &str, first_line: Option<&str>) -> Option<String> {
     let line = first_line.unwrap_or("");
     let tag = line
         .strip_prefix('<')

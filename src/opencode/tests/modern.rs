@@ -80,6 +80,7 @@ fn native_sequence_and_inline_payloads_are_preserved_without_private_tables() {
     f.writer.execute_batch("CREATE TABLE credential(secret TEXT); INSERT INTO credential VALUES('synthetic-secret'); CREATE TABLE event(data TEXT); INSERT INTO event VALUES('not JSON');").expect("unrelated tables");
     let sessions = discover(&f.path, None).expect("modern discovery");
     assert_eq!(sessions.len(), 1);
+    assert!(sessions[0].first_prompt.is_some());
     let snapshot = load_session(&f.path, "ses_modern", None).expect("snapshot");
     assert_eq!(snapshot.generation, Generation::Modern);
     assert_eq!(snapshot.messages[1].id, "msg_user");

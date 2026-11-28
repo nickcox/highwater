@@ -121,3 +121,5 @@ A cache policy says how a provider's usage counters add up to the prompt, so the
 - **Direct OpenAI** policies treat older adapters' missing cache writes with caution, and reject a positive cache-write count where none is expected.
 
 Pi's cost-component rules were checked against Pi 0.78.0's provider adapters and may not hold for other versions.
+
+The session catalogue includes optional `firstPrompt`, normalised to one line and limited to 300 characters plus an ellipsis when truncated. Catalogue cost totals include `includesChildren: true` when the recorded parent total already includes subagents (Claude Code). The viewer uses this flag when combining costs with child sessions hidden. Missing totals are still pending; `null` means no cost is available.

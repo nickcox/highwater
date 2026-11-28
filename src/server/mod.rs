@@ -177,6 +177,8 @@ impl ScanCoordinator {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) first_prompt: Option<String>,
     pub(crate) id: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     path: String,

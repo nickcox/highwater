@@ -1018,3 +1018,16 @@ fn recognises_claude_code_tool_actions() {
     }
     assert_eq!(tool_action("mcp__bash", &json!({"command": "pwd"})), None);
 }
+
+#[test]
+fn listing_first_prompt_skips_harness_records() {
+    let listing = activity_listing(
+        br#"{"type":"user","isMeta":true,"message":{"content":"instructions"}}
+{"type":"user","isCompactSummary":true,"message":{"content":"summary"}}
+{"type":"user","message":{"content":"<command-name>/clear</command-name>"}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"output"}]}}
+{"type":"user","message":{"content":"  Review\n the project  "}}
+"#,
+    );
+    assert_eq!(listing.first_prompt.as_deref(), Some("Review the project"));
+}

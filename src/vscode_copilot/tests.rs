@@ -145,6 +145,7 @@ fn listings_name_sessions_and_count_requests() {
         .map(|file| discovery::read_listing(file).expect("listing"))
         .collect();
     assert_eq!(listings[1].requests, 0);
+    assert!(listings[2].first_prompt.is_some());
     assert_eq!(listings[2].requests, 3);
     assert_eq!(listings[2].session_id.as_deref(), Some("11111111-agent"));
     assert_eq!(
