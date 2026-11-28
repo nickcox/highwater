@@ -8,6 +8,8 @@ OpenCode keeps sessions in SQLite databases, `opencode.db` and `opencode-stable.
 
 Databases are opened read-only, never migrated or opened with a writable fallback. No credentials or account tables are queried, and referenced files and URLs are never fetched. An OpenCode session with no assistant message has nothing to chart and is not listed, though it is still validated. References are `opencode-…`, a hash of the native session ID, and contain no database path. The same native ID in two databases is ambiguous, and a request for it is rejected rather than choosing one copy.
 
+OpenCode records no Git branch. Its project table records `worktree` and `vcs`, but not a branch, so the session table leaves the branch blank. Highwater does not read the folder's current checkout.
+
 ## Format
 
 - **Legacy layout:** `session`, `message` and `part` tables. Message and part `data` columns are JSON; IDs and parent and session relationships are columns. Messages are ordered by creation time and ID, and parts by ID. Part types include `text`, `reasoning`, `tool` (one mutable state object holding both the call and its result), `file`, `compaction`, `step-start`, `step-finish` and `patch`.

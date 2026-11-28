@@ -126,6 +126,8 @@ Pi's cost-component rules were checked against Pi 0.78.0's provider adapters and
 
 The session catalogue includes optional `firstPrompt`, normalised to one line and limited to 300 characters plus an ellipsis when truncated. Catalogue cost totals include `includesChildren: true` when the recorded parent total already includes subagents (Claude Code). The viewer uses this flag when combining costs with child sessions hidden. Missing totals are still pending; `null` means no cost is available.
 
+Catalogue entries have optional `gitBranch`, the last recorded Git branch other than `HEAD`. When a session recorded several distinct branches, `gitBranches` lists them in first-use order. Missing branches are omitted; Highwater never reads the folder's current checkout. These fields are read during discovery and cached by file stamp, independently of costs and calls. They describe Git branches, not the conversation branches used for replay.
+
 Catalogue entries also have optional `calls`: `{count, peakInput, models}`, worked out in the same background pass as costs. As for `total`, a missing field means the session has not been read yet and `null` means no figures are available, for example because the session cannot be loaded.
 
 - `count` is the number of model calls in the loaded session, the same calls as the analysis's `modelCalls` and the summary's **Model calls**. For Pi and Claude Code these are the calls on the active branch, so calls on abandoned branches are not counted, although Pi's cost includes them. Calls the harness made but did not record, such as Claude Code's title and compaction calls, are not counted. Failed attempts that the analysis keeps as calls are counted.

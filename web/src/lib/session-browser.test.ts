@@ -12,6 +12,8 @@ import {
   clearFilters,
   projects,
   projectOf,
+  projectBranchLine,
+  branchTooltip,
 } from './session-browser';
 const session = (id: string, overrides: Partial<SessionListItem> = {}): SessionListItem => ({
   id,
@@ -30,6 +32,19 @@ const calls = (count: number, peakInput: number | null, ...models: [string, numb
 });
 const total = (usd: number) => ({ usd, kind: 'sum' as const, partial: false, sinceMs: null });
 describe('session browser', () => {
+  it('shows recorded branches without changing project grouping', () => {
+    const s = session('a', { gitBranch: 'topic', gitBranches: ['main', 'topic'] });
+    expect(projectBranchLine(s)).toBe('traffic-apps · topic');
+    expect(branchTooltip(s)).toBe('main\ntopic');
+    expect(matches(s, 'main')).toBe(true);
+    expect(matches(s, 'topic')).toBe(true);
+    expect(projects([s, session('b')])).toHaveLength(1);
+    expect(projectBranchLine(session('a'))).toBe('traffic-apps');
+    expect(branchTooltip(session('a'))).toBeUndefined();
+    expect(projectBranchLine(session('a', { workingDirectory: null, gitBranch: 'topic' }))).toBe(
+      'topic',
+    );
+  });
   it('matches words across fields in any order', () => {
     expect(
       matches(

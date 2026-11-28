@@ -334,6 +334,8 @@ fn vscode_copilot_entry(
         }
     });
     SessionFile {
+        git_branch: None,
+        git_branches: Vec::new(),
         first_prompt: listing.first_prompt,
         id: vscode_copilot_reference(&session_id),
         path: String::new(),
@@ -434,6 +436,8 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
         listing.title.clone().unwrap_or_else(fallback)
     };
     SessionFile {
+        git_branch: listing.git_branch,
+        git_branches: listing.git_branches,
         first_prompt: listing.first_prompt,
         id,
         path: String::new(),
@@ -549,6 +553,8 @@ fn codex_entry(
             None => short_id.clone(),
         });
     SessionFile {
+        git_branch: listing.git_branch,
+        git_branches: Vec::new(),
         first_prompt: listing.first_prompt,
         id: codex_reference(&thread_id),
         path: String::new(),
@@ -650,6 +656,8 @@ fn copilot_entry(
         None => short_id.clone(),
     });
     SessionFile {
+        git_branch: listing.git_branch,
+        git_branches: listing.git_branches,
         first_prompt: listing.first_prompt,
         id: copilot_reference(&session_id),
         path: String::new(),
@@ -846,6 +854,8 @@ impl MixedScanner {
                     sessions
                         .into_iter()
                         .map(|session| SessionFile {
+                            git_branch: None,
+                            git_branches: Vec::new(),
                             first_prompt: session.first_prompt,
                             id: opencode_reference(&session.id),
                             path: String::new(),

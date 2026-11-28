@@ -15,6 +15,8 @@ Pi writes one JSON Lines file per session under `~/.pi/agent/sessions`. Without 
 
 The catalogue reads the first line of each file, the `session` header, for the session ID, working directory (`cwd`) and start time. The public reference is `pi-` followed by 12 hexadecimal characters of a BLAKE3 hash of the session ID. A file without a valid header is still listed, under a reference derived from its first line. The title is the working directory's folder name and the suffix of the file name.
 
+Pi records no Git branch in its session files, so the session table leaves the branch blank. Highwater does not read the folder's current checkout.
+
 ## Format
 
 Each line is one entry with a `type`. Entries other than the header have an `id` and a `parentId`, so the file is a tree: rewinding and retrying in Pi starts a new branch from an earlier entry.

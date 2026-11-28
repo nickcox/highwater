@@ -32,6 +32,8 @@ pub(crate) struct TranscriptFile {
 pub(crate) struct Listing {
     pub first_prompt: Option<String>,
     pub fork_parent: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_branches: Vec<String>,
     pub session_id: Option<String>,
     pub agent_id: Option<String>,
     /// The latest custom title, otherwise the latest generated title.
@@ -196,6 +198,13 @@ pub(crate) fn read_listing(file: &TranscriptFile) -> io::Result<Listing> {
                             false
                         }
                     }));
+        // A copied record's branch is the one the original session used.
+        if let Some(branch) = git_branch(line).filter(|branch| !inherited && branch != "HEAD") {
+            if !listing.git_branches.contains(&branch) {
+                listing.git_branches.push(branch.clone());
+            }
+            listing.git_branch = Some(branch);
+        }
         if !inherited && !listing.has_responses && line.contains("\"type\":\"assistant\"") {
             listing.has_responses = true;
         }
@@ -340,6 +349,18 @@ fn typed_command(text: &str) -> Option<String> {
         Some(args) => format!("{name} {args}"),
         None => name.to_owned(),
     })
+}
+
+/// Nearly every record has `gitBranch`, and records can hold large tool output, so the
+/// value is read from the text. A value with an escape is parsed with the whole record.
+fn git_branch(line: &str) -> Option<String> {
+    const KEY: &str = "\"gitBranch\":\"";
+    let value = &line[line.find(KEY)? + KEY.len()..];
+    let value = &value[..value.find('"')?];
+    if value.contains('\\') {
+        return string_field(line, "gitBranch");
+    }
+    Some(value.trim().to_owned()).filter(|value| !value.is_empty())
 }
 
 fn string_field(line: &str, key: &str) -> Option<String> {

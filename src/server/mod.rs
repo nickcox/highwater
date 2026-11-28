@@ -177,11 +177,19 @@ impl ScanCoordinator {
     }
 }
 
+fn single_branch(branches: &[String]) -> bool {
+    branches.len() <= 1
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SessionFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) first_prompt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) git_branch: Option<String>,
+    #[serde(skip_serializing_if = "single_branch")]
+    pub(crate) git_branches: Vec<String>,
     pub(crate) id: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     path: String,

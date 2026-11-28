@@ -19,6 +19,8 @@ Without explicit source flags, Highwater reads VS Code's and VS Code Insiders' u
 
 Only sessions with at least one request are listed; most session files are empty. The title is the custom title, otherwise the first message. References are `vscode-copilot-…`, derived from the session ID.
 
+VS Code Copilot records no Git branch in its session files, so the session table leaves the branch blank. Highwater does not read the folder's current checkout.
+
 ## Session file format
 
 A session file is a log of changes to one JSON value, one change per line. Replaying the lines in order gives the session:

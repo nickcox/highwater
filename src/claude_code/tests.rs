@@ -1095,3 +1095,28 @@ fn copied_history_is_context_even_without_the_source_file() {
     assert!(empty.session.model_calls.is_empty());
     assert!(empty.session.turns.is_empty());
 }
+
+#[test]
+fn listing_branches_follow_record_order_and_leave_out_head() {
+    let listing = activity_listing(
+        br#"{"gitBranch":"first"}
+{"gitBranch":"second","message":{"content":"text with \"gitBranch\":\"quoted\""}}
+{"gitBranch":"first"}
+{"gitBranch":"HEAD"}
+"#,
+    );
+    assert_eq!(listing.git_branch.as_deref(), Some("first"));
+    assert_eq!(listing.git_branches, ["first", "second"]);
+    let listing = activity_listing(b"{\"gitBranch\":\"HEAD\"}\n{}\n");
+    assert_eq!(listing.git_branch, None);
+    assert!(listing.git_branches.is_empty());
+    let escaped = activity_listing(b"{\"gitBranch\":\"topic\\\"name\"}\n");
+    assert_eq!(escaped.git_branch.as_deref(), Some("topic\"name"));
+    // Records copied from another session keep that session's branch.
+    let fork = activity_listing(
+        br#"{"gitBranch":"original","forkedFrom":{"sessionId":"parent"}}
+{"gitBranch":"fork"}
+"#,
+    );
+    assert_eq!(fork.git_branches, ["fork"]);
+}

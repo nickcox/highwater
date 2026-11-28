@@ -26,6 +26,7 @@ pub(crate) struct SessionFile {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
     pub first_prompt: Option<String>,
+    pub git_branch: Option<String>,
     /// The thread ID from `session_meta`.
     pub thread_id: Option<String>,
     /// `session_meta.timestamp`, as written.
@@ -207,6 +208,7 @@ fn text(value: &Value, key: &str) -> Option<String> {
 }
 
 fn read_meta(meta: &Value, listing: &mut Listing) {
+    listing.git_branch = text(&meta["git"], "branch").filter(|b| b != "HEAD");
     listing.thread_id = text(meta, "id");
     listing.started_at = text(meta, "timestamp");
     listing.working_directory = text(meta, "cwd");

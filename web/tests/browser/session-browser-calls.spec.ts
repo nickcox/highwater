@@ -34,6 +34,8 @@ async function catalogue(page: Page) {
             id: 'browser-smoke',
             displayName: 'Review the session table',
             firstPrompt: 'Add Model, Calls and Peak input columns',
+            gitBranch: 'bb/model-calls-and-peak-context',
+            gitBranches: ['main', 'bb/model-calls-and-peak-context'],
             total: {
               usd: 4.5,
               includesChildren: true,
@@ -105,6 +107,16 @@ for (const [width, headers] of [
     await page.goto('/');
     await page.getByRole('button', { name: /^Session:/ }).click();
     await expect.poll(() => visibleHeaders(page)).toEqual(headers);
+    const row = page
+      .getByRole('grid', { name: 'Sessions' })
+      .locator('tbody tr')
+      .filter({ hasText: 'Review the session table' });
+    await expect(
+      width > 850 ? row.locator('td').nth(1).locator('small') : row.locator('.narrow-project'),
+    ).toContainText('bb/model-calls-and-peak-context');
+    await expect(
+      width > 850 ? row.locator('td').nth(1) : row.locator('.narrow-project'),
+    ).toHaveAttribute('title', 'main\nbb/model-calls-and-peak-context');
     const directory = process.env.HIGHWATER_BASELINE_SCREENSHOTS;
     if (directory)
       await page
@@ -153,6 +165,8 @@ test('call figures include hidden child sessions, sort and filter by model', asy
   await model.selectOption('gpt-6.1-sol');
   await expect(grid.locator('tbody tr')).toHaveText([/Plan the release/]);
   await page.getByRole('button', { name: 'Clear filters' }).first().click();
+  await page.getByRole('textbox', { name: 'Search sessions' }).fill('peak-context');
+  await expect(grid.locator('tbody tr')).toHaveText([/Review the session table/]);
   await page.getByRole('textbox', { name: 'Search sessions' }).fill('sol');
   await expect(grid.locator('tbody tr')).toHaveText([/Plan the release/]);
 });

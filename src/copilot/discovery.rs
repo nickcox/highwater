@@ -37,6 +37,8 @@ pub(crate) struct Workspace {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Listing {
     pub first_prompt: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_branches: Vec<String>,
     pub workspace: Workspace,
     /// Whether the main agent recorded the usage of any call. A session without one has
     /// nothing to chart; most are sessions Copilot opened for its own use.
@@ -179,13 +181,15 @@ fn scalar(value: &str) -> Option<String> {
     Some(value.trim().to_owned()).filter(|value| !value.is_empty())
 }
 
-/// Reads on only until the main agent's first usage record inside an assistant turn, which
-/// is what the reader counts as a call. Only lines that can matter are parsed.
+/// Reads catalogue fields and branches, including branches recorded on resume.
+/// Only lines that can matter are parsed.
 pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
     let folder = file.path.parent().unwrap_or(&file.path);
     let mut listing = Listing {
         workspace: read_workspace(folder),
         first_prompt: None,
+        git_branch: None,
+        git_branches: Vec::new(),
         has_responses: false,
     };
     let mut reader = BufReader::new(fs::File::open(&file.path)?);
@@ -200,6 +204,8 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
             continue;
         };
         if ![
+            "\"session.start\"",
+            "\"session.resume\"",
             "\"assistant.turn_",
             "\"user.message\"",
             "\"type\":\"abort\"",
@@ -217,6 +223,17 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
             continue;
         }
         match record.get("type").and_then(Value::as_str) {
+            Some("session.start" | "session.resume") => {
+                if let Some(branch) = record["data"]["context"]["branch"]
+                    .as_str()
+                    .filter(|b| !b.is_empty() && *b != "HEAD")
+                {
+                    if !listing.git_branches.iter().any(|b| b == branch) {
+                        listing.git_branches.push(branch.to_owned());
+                    }
+                    listing.git_branch = Some(branch.to_owned());
+                }
+            }
             Some("user.message") if listing.first_prompt.is_none() => {
                 listing.first_prompt = record["data"]["content"]
                     .as_str()
@@ -226,7 +243,6 @@ pub(crate) fn read_listing(file: &SessionFile) -> io::Result<Listing> {
             Some("assistant.turn_end" | "abort") => in_turn = false,
             Some("session.usage_record") if in_turn => {
                 listing.has_responses = true;
-                break;
             }
             _ => {}
         }

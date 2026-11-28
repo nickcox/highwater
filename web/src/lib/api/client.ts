@@ -4,6 +4,8 @@ export interface SessionListItem {
   id: string;
   fileName: string;
   firstPrompt?: string;
+  gitBranch?: string;
+  gitBranches?: string[];
   displayName: string;
   workingDirectory: string | null;
   startedAt: string | null;

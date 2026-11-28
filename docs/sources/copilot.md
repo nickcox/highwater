@@ -12,6 +12,8 @@ The app and the CLI keep their data under `$COPILOT_HOME` (default `~/.copilot`)
 - **Titles and folders:** `workspace.yaml` beside the event log, a flat list of `key: value` lines. Highwater reads `id`, `cwd`, `name` (the title), `client_name` and `created_at`, and only from a regular file, not a symbolic link. A change to it, such as renaming the session, makes the analysis again.
 - Only `session-state` is watched for changes; the rest of the folder holds databases and logs. A session with no call of the main agent (a usage record inside an assistant turn, as below) has nothing to chart and is not listed. Most of these are sessions the app opens for its own use. The CLI sessions surveyed (versions 1.0.64 to 1.0.91) record no usage either, so they are not listed. A session found in more than one home folder is listed once, from the copy changed most recently. References are `copilot-…`, a hash of the session ID.
 
+The session table reads `data.context.branch` from `session.start` and `session.resume` during discovery, cached by file stamp. Resume events can record a newer branch, so discovery scans through the file. It shows the last recorded branch other than `HEAD`, with every distinct branch in first-use order in the tooltip. A resume with no branch does not erase an earlier recorded branch.
+
 ## Format
 
 Each line is one JSON event, `{type, data, id, timestamp, parentId}`. An unfinished last line is skipped. Events from a subagent also carry `agentId`, and events that repeat earlier history for a replay checkpoint carry `checkpoint: true`; neither is part of the main agent's conversation.

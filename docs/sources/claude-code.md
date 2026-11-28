@@ -16,6 +16,8 @@ Transcripts are under `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects
 - The catalogue reads each transcript's listing fields again only when its size or modification time changes.
 - The session table's **Model**, **Calls** and **Peak input** come from loading each transcript in full in the background, so they cover the calls on the active branch. Its cost is still the latest `cost-state` record, read from the end of the file.
 
+The session table reads `gitBranch` across the transcript during discovery. It shows the last branch other than `HEAD` and lists distinct branches in first-use order in the tooltip. A transcript with only `HEAD` has no branch shown. Records copied from another session (with `forkedFrom`) are left out, because their branch is the original session's. These fields are cached by file stamp.
+
 ## Format
 
 Each line is one JSON record with a `type`. Records with a `uuid` and `parentUuid` form a graph; the others hold session state.

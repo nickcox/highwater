@@ -13,6 +13,8 @@ Codex keeps its data under `$CODEX_HOME` (default `~/.codex`), which Highwater r
 - **Titles:** the last line for a thread in `session_index.jsonl` (`id`, `thread_name`, `updated_at`).
 - Only `sessions` and `archived_sessions` are watched for changes; the rest of the folder holds databases and logs that change constantly. A session with no reported call has nothing to chart and is not listed. References are `codex-…`, a hash of the thread ID.
 
+The session table reads the Git branch from `session_meta.payload.git.branch` at discovery, cached by file stamp. Codex records it once at the start; an absent branch stays blank.
+
 ## Format
 
 Each line is one JSON record, `{timestamp, type, payload}`. Records are split only at `\n`: text inside them can contain Unicode line separators (U+2028), which some line-splitting functions also treat as line ends. An unfinished last line is skipped.

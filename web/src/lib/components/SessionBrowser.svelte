@@ -10,6 +10,8 @@
     models,
     projects,
     projectOf,
+    projectBranchLine,
+    branchTooltip,
     tooltip,
     formatDuration,
     type SessionBrowserState,
@@ -131,7 +133,7 @@
         bind:this={searchInput}
         bind:value={browserState.search}
         aria-label="Search sessions"
-        placeholder="Search title, project, model, prompt or ID"
+        placeholder="Search title, project, branch, model, prompt or ID"
         onkeydown={(event) => {
           if (event.key === 'ArrowDown' && !event.isComposing && entries.length) {
             event.preventDefault();
@@ -243,8 +245,8 @@
           >
             <td style:padding-left={`${8 + depth * 16}px`}
               ><strong>{session.displayName}</strong><small
-                ><span class="narrow-project"
-                  >{projectOf(session) ?? ''}{projectOf(session) && session.firstPrompt
+                ><span class="narrow-project" title={branchTooltip(session)}
+                  >{projectBranchLine(session)}{projectBranchLine(session) && session.firstPrompt
                     ? ' · '
                     : ''}</span
                 >{session.firstPrompt ?? ''}</small
@@ -253,7 +255,9 @@
                     session.parentReference}</small
                 >{/if}</td
             >
-            <td class="hide-{hiddenBelow('project')}">{projectOf(session) ?? ''}</td
+            <td class="hide-{hiddenBelow('project')}" title={branchTooltip(session)}
+              >{projectOf(session) ?? ''}{#if session.gitBranch}<small>{session.gitBranch}</small
+                >{/if}</td
             >{#if browserState.harness === 'all'}<td class="hide-{hiddenBelow('harness')}"
                 >{harnessName(session)}</td
               >{/if}<td class="hide-{hiddenBelow('model')}" title={callsTooltip(calls, callsNote)}

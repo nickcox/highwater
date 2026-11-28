@@ -598,3 +598,24 @@ fn recognises_copilot_tool_actions() {
     );
     assert_eq!(tool_action("mcp__read", &input), None);
 }
+
+#[test]
+fn listing_branch_follows_resume_events_after_the_first_call() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = root.path().join("session-state/test");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(
+        folder.join("events.jsonl"),
+        concat!(
+            "{\"type\":\"session.start\",\"data\":{\"context\":{\"branch\":\"first\"}}}\n",
+            "{\"type\":\"assistant.turn_start\"}\n",
+            "{\"type\":\"session.usage_record\"}\n",
+            "{\"type\":\"session.resume\",\"data\":{\"context\":{\"branch\":\"second\"}}}\n"
+        ),
+    )
+    .unwrap();
+    let files = find_files(&root.path().canonicalize().unwrap(), None).unwrap();
+    let listing = read_listing(&files[0]).unwrap();
+    assert_eq!(listing.git_branch.as_deref(), Some("second"));
+    assert_eq!(listing.git_branches, ["first", "second"]);
+}

@@ -479,3 +479,17 @@ fn local_codex_sessions_load_and_analyse() {
         at(&absolute, 0.9) * 100.0
     );
 }
+
+#[test]
+fn listing_branch_comes_from_session_meta() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("sessions")).unwrap();
+    fs::write(
+        root.path().join("sessions/rollout-test.jsonl"),
+        "{\"type\":\"session_meta\",\"payload\":{\"git\":{\"branch\":\"topic\"}}}\n",
+    )
+    .unwrap();
+    let files = find_files(&root.path().canonicalize().unwrap(), None).unwrap();
+    let listing = read_listing(&files[0]).unwrap();
+    assert_eq!(listing.git_branch.as_deref(), Some("topic"));
+}

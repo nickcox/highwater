@@ -86,12 +86,22 @@ export function harnessOf(s: Session): NonNullable<Session['harness']> {
     'pi'
   );
 }
+export function projectBranchLine(s: Session): string {
+  return [projectOf(s), s.gitBranch].filter(Boolean).join(' · ');
+}
+
+export function branchTooltip(s: Session): string | undefined {
+  return s.gitBranches?.join('\n') ?? s.gitBranch;
+}
+
 export function matches(s: Session, text: string, models: string[] = []): boolean {
   const fields = [
     s.displayName,
     projectOf(s),
     s.workingDirectory,
     s.firstPrompt,
+    s.gitBranch,
+    ...(s.gitBranches ?? []),
     s.id,
     s.fileName,
     ...models,

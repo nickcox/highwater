@@ -391,6 +391,8 @@ pub(super) fn discover_cached(
                 .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
                 .map(|duration| duration.as_nanos());
             output.push(SessionFile {
+                git_branch: None,
+                git_branches: Vec::new(),
                 first_prompt: listing.first_prompt,
                 id: listing.reference,
                 path: canonical.to_string_lossy().into_owned(),

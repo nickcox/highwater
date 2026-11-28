@@ -23,6 +23,8 @@ fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> Ses
     let path = path.into();
     let file_name = file_name.into();
     SessionFile {
+        git_branch: None,
+        git_branches: Vec::new(),
         first_prompt: None,
         id: file_name.clone(),
         path,
