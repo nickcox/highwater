@@ -21,7 +21,18 @@ fn listening_stdout_line_is_stable_for_external_clients() {
 
 fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> SessionFile {
     let path = path.into();
-    let file_name = file_name.into();
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: PathBuf::from(&path),
+        reader: crate::source::FileReader::Pi,
+    });
+    fixture_session_with_locator(locator, path, file_name.into())
+}
+
+fn fixture_session_with_locator(
+    locator: crate::source::SessionLocator,
+    path: String,
+    file_name: String,
+) -> SessionFile {
     SessionFile {
         git_branch: None,
         git_branches: Vec::new(),
@@ -34,11 +45,11 @@ fn fixture_session(path: impl Into<String>, file_name: impl Into<String>) -> Ses
         started_at: None,
         byte_size: Some(1),
         modified_at: None,
-        harness: Harness::Pi,
+        harness: locator.harness(),
         parent_reference: None,
         forked_from_reference: None,
         subagent_type: None,
-        locator: None,
+        locator,
         source_revision: None,
         modified_nanos: None,
     }
@@ -756,6 +767,31 @@ async fn matching_etag_returns_not_modified_without_a_body() {
     assert!(response_body(response).await.is_empty());
 }
 
+#[tokio::test]
+async fn missing_file_never_returns_a_cached_not_modified() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("session.jsonl");
+    std::fs::copy("fixtures/pi/simple.jsonl", &path).unwrap();
+    let app = router(test_state(
+        fixture_session(path.to_str().unwrap(), "session.jsonl"),
+        AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        },
+        Arc::new(Mutex::new(AnalysisCache::default())),
+    ));
+    let first = app.clone().oneshot(request("session.jsonl")).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let etag = first.headers()[axum::http::header::ETAG].clone();
+    std::fs::remove_file(&path).unwrap();
+    let mut conditional = request("session.jsonl");
+    conditional
+        .headers_mut()
+        .insert(axum::http::header::IF_NONE_MATCH, etag);
+    let response = app.oneshot(conditional).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
 #[test]
 fn completed_flight_retains_result_without_subscribers() {
     let (result, receiver) = watch::channel(None);
@@ -1059,16 +1095,39 @@ async fn request_cache_invalidates_after_same_size_file_rewrite() {
         .oneshot(request("session.jsonl"))
         .await
         .expect("first response");
+    let first_etag = first.headers()[header::ETAG].clone();
     let first_body = response_body(first).await;
+    let mut conditional = request("session.jsonl");
+    conditional
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, first_etag.clone());
+    let unchanged = app.clone().oneshot(conditional).await.expect("unchanged");
+    assert_eq!(unchanged.status(), StatusCode::NOT_MODIFIED);
     let contents = std_fs::read_to_string(&path).expect("read fixture copy");
     rewrite_with_changed_mtime(&path, contents.replace("hello", "world").as_bytes());
+    let mut conditional = request("session.jsonl");
+    conditional
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, first_etag.clone());
     let second = app
-        .oneshot(request("session.jsonl"))
+        .clone()
+        .oneshot(conditional)
         .await
         .expect("second response");
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_etag = second.headers()[header::ETAG].clone();
+    assert_ne!(first_etag, second_etag);
     let second_body = response_body(second).await;
     assert_ne!(first_body, second_body);
     assert_eq!(cache.lock().expect("cache").entries.len(), 2);
+    std_fs::remove_file(&path).expect("remove source");
+    let mut conditional = request("session.jsonl");
+    conditional
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, second_etag);
+    let missing = app.oneshot(conditional).await.expect("missing response");
+    assert!(!missing.status().is_success());
+    assert_ne!(missing.status(), StatusCode::NOT_MODIFIED);
 }
 
 #[test]
@@ -1080,16 +1139,16 @@ fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
         tokenization: TokenizationPolicy::Auto,
         perf_diagnostics: false,
     };
-    let first = analysis_cache_key(&path, auto).expect("first fingerprint");
+    let first = pi_analysis_cache_key(&path, auto).expect("first fingerprint");
     rewrite_with_changed_mtime(&path, b"xyz");
-    let second = analysis_cache_key(&path, auto).expect("rewritten fingerprint");
+    let second = pi_analysis_cache_key(&path, auto).expect("rewritten fingerprint");
     assert_eq!(first.byte_size, second.byte_size);
     assert_ne!(first.modified_nanos, second.modified_nanos);
 
     std_fs::write(&path, b"longer").expect("size rewrite");
-    let third = analysis_cache_key(&path, auto).expect("size fingerprint");
+    let third = pi_analysis_cache_key(&path, auto).expect("size fingerprint");
     assert_ne!(second.byte_size, third.byte_size);
-    let strict = analysis_cache_key(
+    let strict = pi_analysis_cache_key(
         &path,
         AnalysisConfig {
             tokenization: TokenizationPolicy::Strict,
@@ -1097,7 +1156,7 @@ fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
         },
     )
     .expect("strict fingerprint");
-    let diagnostics = analysis_cache_key(
+    let diagnostics = pi_analysis_cache_key(
         &path,
         AnalysisConfig {
             tokenization: TokenizationPolicy::Auto,
@@ -1107,7 +1166,10 @@ fn cache_key_tracks_filesystem_fingerprint_and_configuration() {
     .expect("diagnostic fingerprint");
     assert_ne!(third, strict);
     assert_eq!(third, diagnostics);
-    assert_eq!(etag_for_key(&third), etag_for_key(&diagnostics));
+    assert_eq!(
+        etag_for_key(&analysis::AnalysisCacheKey::File(third.clone())),
+        etag_for_key(&analysis::AnalysisCacheKey::File(diagnostics.clone()))
+    );
 }
 
 #[test]
@@ -1119,11 +1181,18 @@ fn analysis_rejects_a_source_changed_after_the_initial_fingerprint() {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
     };
-    let key = analysis_cache_key(&path, config).expect("initial fingerprint");
+    let key = pi_analysis_cache_key(&path, config).expect("initial fingerprint");
     let original = std_fs::read_to_string(&path).expect("read fixture copy");
     let changed = original.replace("hello", "world");
     rewrite_with_changed_mtime(&path, changed.as_bytes());
-    let result = execute_analysis(path.clone(), config, key);
+    let result = execute_analysis(
+        crate::source::FileLocator {
+            path: path.clone(),
+            reader: crate::source::FileReader::Pi,
+        },
+        config,
+        key,
+    );
     assert!(matches!(result, Err(FlightError::SourceChanged)));
 }
 
@@ -1131,12 +1200,12 @@ fn analysis_rejects_a_source_changed_after_the_initial_fingerprint() {
 fn vanished_source_during_parse_failure_is_not_reported_as_bad_format() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let path = directory.path().join("never-created.jsonl");
-    let key = AnalysisCacheKey {
+    let key = analysis::FileAnalysisKey {
         path: path.clone(),
-        database_revision: None,
+        auxiliary: None,
         byte_size: 1,
         modified_nanos: 1,
-        reader: super::analysis::FileReader::Pi,
+        reader: crate::source::FileReader::Pi,
         tokenization: TokenizationPolicy::Auto,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -1160,33 +1229,43 @@ fn analysis_publishes_a_stable_response() {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
     };
-    let key = analysis_cache_key(&path, config).expect("fingerprint");
-    let response = execute_analysis(path, config, key).expect("stable analysis");
+    let key = pi_analysis_cache_key(&path, config).expect("fingerprint");
+    let response = execute_analysis(
+        crate::source::FileLocator {
+            path,
+            reader: crate::source::FileReader::Pi,
+        },
+        config,
+        key,
+    )
+    .expect("stable analysis");
     assert!(!response.body.is_empty());
 }
 
 #[test]
 fn analysis_cache_enforces_entry_and_byte_limits() {
     let path = PathBuf::from("fixtures/pi/simple.jsonl");
-    let key = |byte_size| AnalysisCacheKey {
+    let key = |byte_size| analysis::FileAnalysisKey {
         path: path.clone(),
-        database_revision: None,
+        auxiliary: None,
         byte_size,
         modified_nanos: 0,
-        reader: super::analysis::FileReader::Pi,
+        reader: crate::source::FileReader::Pi,
         tokenization: TokenizationPolicy::Heuristic,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
         compact_previews: false,
     };
     let mut cache = AnalysisCache::with_limits(3, 10);
-    cache.insert(key(1), sized_response(6));
-    cache.insert(key(2), sized_response(6));
+    cache.insert(analysis::AnalysisCacheKey::File(key(1)), sized_response(6));
+    cache.insert(analysis::AnalysisCacheKey::File(key(2)), sized_response(6));
     assert_eq!(cache.entries.len(), 1);
     assert_eq!(cache.bytes, 6);
-    cache.insert(key(3), sized_response(11));
+    cache.insert(analysis::AnalysisCacheKey::File(key(3)), sized_response(11));
     assert_eq!(cache.entries.len(), 1);
-    assert!(cache.get(&key(1)).is_none());
+    assert!(cache
+        .get(&analysis::AnalysisCacheKey::File(key(1)))
+        .is_none());
 }
 
 #[test]
@@ -1204,12 +1283,12 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
     )
     .expect("analysis");
     let path = PathBuf::from("fixtures/pi/simple.jsonl");
-    let key = |byte_size| AnalysisCacheKey {
+    let key = |byte_size| analysis::FileAnalysisKey {
         path: path.clone(),
-        database_revision: None,
+        auxiliary: None,
         byte_size,
         modified_nanos: 0,
-        reader: super::analysis::FileReader::Pi,
+        reader: crate::source::FileReader::Pi,
         tokenization: config.tokenization,
         schema_version: crate::analysis::ANALYSIS_SCHEMA_VERSION,
         output_version: crate::analysis::ANALYSIS_OUTPUT_VERSION,
@@ -1217,31 +1296,73 @@ fn analysis_cache_reuses_entries_and_evicts_oldest() {
     };
     let mut cache = AnalysisCache::new(2);
     let cached = cached_response(&analysis);
-    cache.insert(key(1), Arc::clone(&cached));
-    assert!(cache.get(&key(1)).is_some());
-    assert!(cache.get(&key(2)).is_none());
-    cache.insert(key(2), Arc::clone(&cached));
-    cache.insert(key(3), cached);
-    assert!(cache.get(&key(1)).is_none());
-    assert!(cache.get(&key(2)).is_some());
-    assert!(cache.get(&key(3)).is_some());
+    cache.insert(
+        analysis::AnalysisCacheKey::File(key(1)),
+        Arc::clone(&cached),
+    );
+    assert!(cache
+        .get(&analysis::AnalysisCacheKey::File(key(1)))
+        .is_some());
+    assert!(cache
+        .get(&analysis::AnalysisCacheKey::File(key(2)))
+        .is_none());
+    cache.insert(
+        analysis::AnalysisCacheKey::File(key(2)),
+        Arc::clone(&cached),
+    );
+    cache.insert(analysis::AnalysisCacheKey::File(key(3)), cached);
+    assert!(cache
+        .get(&analysis::AnalysisCacheKey::File(key(1)))
+        .is_none());
+    assert!(cache
+        .get(&analysis::AnalysisCacheKey::File(key(2)))
+        .is_some());
+    assert!(cache
+        .get(&analysis::AnalysisCacheKey::File(key(3)))
+        .is_some());
 }
 
 #[test]
 fn discovery_summary_counts_sessions_and_child_sessions_by_harness() {
-    let session = |harness: Harness, parent: Option<&str>| SessionFile {
-        first_prompt: None,
-        harness,
-        parent_reference: parent.map(Into::into),
-        ..fixture_session("", "")
+    use crate::source::SessionLocator;
+    let session = |locator: SessionLocator, parent: Option<&str>| {
+        let mut entry = fixture_session_with_locator(locator, String::new(), String::new());
+        entry.parent_reference = parent.map(Into::into);
+        entry
+    };
+    let claude = || {
+        crate::source::SessionLocator::File(crate::source::FileLocator {
+            path: "claude.jsonl".into(),
+            reader: crate::source::FileReader::ClaudeCode(crate::claude_code::FileKind::Main),
+        })
     };
     let mut sessions = vec![
-        session(Harness::ClaudeCode, None),
-        session(Harness::ClaudeCode, Some("parent")),
-        session(Harness::VsCodeCopilot, None),
-        session(Harness::OpenCode, Some("parent")),
+        session(claude(), None),
+        session(claude(), Some("parent")),
+        session(
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "vscode.jsonl".into(),
+                reader: crate::source::FileReader::VsCodeCopilot,
+            }),
+            None,
+        ),
+        session(
+            SessionLocator::OpenCode {
+                database: "opencode.db".into(),
+                native_id: "session".into(),
+            },
+            Some("parent"),
+        ),
     ];
-    sessions.extend((0..1_000).map(|_| session(Harness::Pi, None)));
+    sessions.extend((0..1_000).map(|_| {
+        session(
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "pi.jsonl".into(),
+                reader: crate::source::FileReader::Pi,
+            }),
+            None,
+        )
+    }));
 
     assert_eq!(
         discovery_summary(&sessions),
@@ -1253,6 +1374,136 @@ fn discovery_summary_counts_sessions_and_child_sessions_by_harness() {
         "Discovered 1 session: 1 VS Code Copilot"
     );
     assert_eq!(discovery_summary(&[]), "Discovered 0 sessions");
+}
+
+#[test]
+fn locator_harness_matches_every_reader() {
+    use crate::domain::Harness;
+    use crate::source::SessionLocator;
+    let cases = [
+        (
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "pi.jsonl".into(),
+                reader: crate::source::FileReader::Pi,
+            }),
+            Harness::Pi,
+        ),
+        (
+            SessionLocator::OpenCode {
+                database: "private.db".into(),
+                native_id: "id".into(),
+            },
+            Harness::OpenCode,
+        ),
+        (
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "claude.jsonl".into(),
+                reader: crate::source::FileReader::ClaudeCode(crate::claude_code::FileKind::Main),
+            }),
+            Harness::ClaudeCode,
+        ),
+        (
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "vscode.jsonl".into(),
+                reader: crate::source::FileReader::VsCodeCopilot,
+            }),
+            Harness::VsCodeCopilot,
+        ),
+        (
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "codex.jsonl".into(),
+                reader: crate::source::FileReader::Codex,
+            }),
+            Harness::Codex,
+        ),
+        (
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: "copilot.jsonl".into(),
+                reader: crate::source::FileReader::Copilot,
+            }),
+            Harness::Copilot,
+        ),
+    ];
+    for (locator, expected) in cases {
+        assert_eq!(locator.harness(), expected);
+        let entry = fixture_session_with_locator(locator, String::new(), String::new());
+        assert_eq!(entry.harness, expected);
+    }
+}
+
+#[tokio::test]
+async fn catalogue_route_omits_internal_source_fields() {
+    use crate::source::SessionLocator;
+    let mut entry = fixture_session_with_locator(
+        SessionLocator::OpenCode {
+            database: "/private/secret.db".into(),
+            native_id: "native-secret".into(),
+        },
+        String::new(),
+        String::new(),
+    );
+    entry.source_revision = Some(998877);
+    entry.modified_nanos = Some(887766);
+    let state = test_state(
+        entry,
+        AnalysisConfig {
+            tokenization: TokenizationPolicy::Heuristic,
+            perf_diagnostics: false,
+        },
+        Arc::new(Mutex::new(AnalysisCache::default())),
+    );
+    let response = router(state)
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/api/sessions")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8(bytes.to_vec()).unwrap();
+    for private in [
+        "locator",
+        "database",
+        "sourceRevision",
+        "modifiedNanos",
+        "secret.db",
+        "native-secret",
+        "998877",
+        "887766",
+    ] {
+        assert!(!text.contains(private), "leaked {private}: {text}");
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn pi_discovery_retains_non_utf8_native_path() {
+    use std::os::unix::ffi::OsStringExt;
+    let directory = tempfile::tempdir().unwrap();
+    let parent = directory
+        .path()
+        .join(std::ffi::OsString::from_vec(b"sessions-\xff".to_vec()));
+    std_fs::create_dir(&parent).unwrap();
+    let path = parent.join("session.jsonl");
+    std_fs::copy("fixtures/pi/simple.jsonl", &path).unwrap();
+    let root = std_fs::canonicalize(directory.path()).unwrap();
+    let entries = catalog::discover(&root, None).unwrap();
+    assert_eq!(entries.len(), 1);
+    let entry = &entries[0];
+    assert_eq!(
+        entry.source_locator(),
+        &crate::source::SessionLocator::File(crate::source::FileLocator {
+            path: std_fs::canonicalize(&path).unwrap(),
+            reader: crate::source::FileReader::Pi
+        })
+    );
+    assert_eq!(entry.path, path.to_string_lossy());
+    crate::source::load(entry.source_locator(), None).expect("load native path, not display path");
 }
 
 #[test]

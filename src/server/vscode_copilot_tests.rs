@@ -1,5 +1,4 @@
 use super::*;
-use crate::source::SessionLocator;
 use axum::{
     body::{to_bytes, Body},
     http::Request,
@@ -62,7 +61,10 @@ fn sessions_with_requests_are_listed_once() {
     assert!(agent.started_at.is_some());
     assert!(matches!(
         agent.locator,
-        Some(SessionLocator::VsCodeCopilotFile { .. })
+        crate::source::SessionLocator::File(crate::source::FileLocator {
+            reader: crate::source::FileReader::VsCodeCopilot,
+            ..
+        })
     ));
     let json = serde_json::to_value(agent).expect("listing");
     assert!(json.get("locator").is_none());
@@ -199,13 +201,16 @@ fn copilot_cache_keys_and_etags_differ_from_pi_keys_for_the_same_file() {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
     };
-    let pi = analysis_cache_key(&path, config).expect("Pi key");
-    let copilot = AnalysisCacheKey {
-        reader: super::analysis::FileReader::VsCodeCopilot,
+    let pi = pi_analysis_cache_key(&path, config).expect("Pi key");
+    let copilot = analysis::FileAnalysisKey {
+        reader: crate::source::FileReader::VsCodeCopilot,
         ..pi.clone()
     };
     assert_ne!(pi, copilot);
-    assert_ne!(etag_for_key(&pi), etag_for_key(&copilot));
+    assert_ne!(
+        etag_for_key(&analysis::AnalysisCacheKey::File(pi.clone())),
+        etag_for_key(&analysis::AnalysisCacheKey::File(copilot.clone()))
+    );
 }
 
 #[test]
@@ -227,12 +232,8 @@ fn a_copilot_cache_key_changes_with_its_trace_database() {
         perf_diagnostics: false,
     };
     let key = || {
-        super::analysis::file_cache_key(
-            &session,
-            super::analysis::FileReader::VsCodeCopilot,
-            config,
-        )
-        .expect("key")
+        super::analysis::file_cache_key(&session, crate::source::FileReader::VsCodeCopilot, config)
+            .expect("key")
     };
     let without = key();
     let database = user.join("globalStorage/github.copilot-chat/agent-traces.db");
@@ -240,7 +241,10 @@ fn a_copilot_cache_key_changes_with_its_trace_database() {
     fs::write(&database, "records").expect("database");
     let with = key();
     assert_ne!(without, with);
-    assert_ne!(etag_for_key(&without), etag_for_key(&with));
+    assert_ne!(
+        etag_for_key(&analysis::AnalysisCacheKey::File(without.clone())),
+        etag_for_key(&analysis::AnalysisCacheKey::File(with.clone()))
+    );
     fs::write(database.with_extension("db-wal"), "more records").expect("log");
     assert_ne!(
         with,

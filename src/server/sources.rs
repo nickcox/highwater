@@ -333,6 +333,10 @@ fn vscode_copilot_entry(
             None => short_id.clone(),
         }
     });
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: file.path,
+        reader: crate::source::FileReader::VsCodeCopilot,
+    });
     SessionFile {
         git_branch: None,
         git_branches: Vec::new(),
@@ -348,11 +352,11 @@ fn vscode_copilot_entry(
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: Harness::VsCodeCopilot,
+        harness: locator.harness(),
         parent_reference: None,
         forked_from_reference: None,
         subagent_type: None,
-        locator: Some(SessionLocator::VsCodeCopilotFile { path: file.path }),
+        locator,
         source_revision: None,
     }
 }
@@ -435,6 +439,10 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
     } else {
         listing.title.clone().unwrap_or_else(fallback)
     };
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: file.path,
+        reader: crate::source::FileReader::ClaudeCode(file.kind),
+    });
     SessionFile {
         git_branch: listing.git_branch,
         git_branches: listing.git_branches,
@@ -455,7 +463,7 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
             .and_then(|timestamp| timestamp.parse::<DateTime<Utc>>().ok())
             .or_else(|| file.modified.map(DateTime::<Utc>::from)),
         modified_nanos: file.stamp.modified_nanos,
-        harness: Harness::ClaudeCode,
+        harness: locator.harness(),
         parent_reference: session_id
             .filter(|_| subagent)
             .map(|session_id| claude_code_reference(session_id, None)),
@@ -469,10 +477,7 @@ fn claude_code_entry(file: TranscriptFile, listing: Listing) -> SessionFile {
             .as_ref()
             .and_then(|subagent| subagent.agent_type.as_deref())
             .map(|agent_type| agent_type.chars().take(80).collect()),
-        locator: Some(SessionLocator::ClaudeCodeFile {
-            path: file.path,
-            kind: file.kind,
-        }),
+        locator,
         source_revision: None,
     }
 }
@@ -552,6 +557,10 @@ fn codex_entry(
             Some(project) => format!("{project} · {short_id}"),
             None => short_id.clone(),
         });
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: file.path,
+        reader: crate::source::FileReader::Codex,
+    });
     SessionFile {
         git_branch: listing.git_branch,
         git_branches: Vec::new(),
@@ -568,7 +577,7 @@ fn codex_entry(
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: Harness::Codex,
+        harness: locator.harness(),
         parent_reference: child.map(|child| codex_reference(&child.parent_thread_id)),
         forked_from_reference: listing
             .forked_from
@@ -578,7 +587,7 @@ fn codex_entry(
         subagent_type: child
             .and_then(|child| child.kind.as_deref())
             .map(|kind| kind.chars().take(80).collect()),
-        locator: Some(SessionLocator::CodexFile { path: file.path }),
+        locator,
         source_revision: None,
     }
 }
@@ -655,6 +664,10 @@ fn copilot_entry(
         Some(project) => format!("{project} · {short_id}"),
         None => short_id.clone(),
     });
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: file.path,
+        reader: crate::source::FileReader::Copilot,
+    });
     SessionFile {
         git_branch: listing.git_branch,
         git_branches: listing.git_branches,
@@ -671,11 +684,11 @@ fn copilot_entry(
         byte_size: Some(file.stamp.byte_size),
         modified_at: file.modified.map(DateTime::<Utc>::from),
         modified_nanos: file.stamp.modified_nanos,
-        harness: Harness::Copilot,
+        harness: locator.harness(),
         parent_reference: None,
         forked_from_reference: None,
         subagent_type: None,
-        locator: Some(SessionLocator::CopilotFile { path: file.path }),
+        locator,
         source_revision: None,
     }
 }
@@ -853,32 +866,38 @@ impl MixedScanner {
                 Ok::<_, storage::StorageError>(
                     sessions
                         .into_iter()
-                        .map(|session| SessionFile {
-                            git_branch: None,
-                            git_branches: Vec::new(),
-                            first_prompt: session.first_prompt,
-                            id: opencode_reference(&session.id),
-                            path: String::new(),
-                            file_name: String::new(),
-                            display_name: session.title.chars().take(160).collect(),
-                            working_directory: Some(session.directory),
-                            started_at: DateTime::<Utc>::from_timestamp_millis(
-                                session.created_at_ms,
-                            ),
-                            byte_size: None,
-                            modified_at: DateTime::<Utc>::from_timestamp_millis(
-                                session.updated_at_ms,
-                            ),
-                            modified_nanos: None,
-                            harness: Harness::OpenCode,
-                            parent_reference: session.parent_id.as_deref().map(opencode_reference),
-                            forked_from_reference: None,
-                            subagent_type: None,
-                            locator: Some(SessionLocator::OpenCode {
+                        .map(|session| {
+                            let locator = SessionLocator::OpenCode {
                                 database: source.path.clone(),
-                                native_id: session.id,
-                            }),
-                            source_revision: Some(revision),
+                                native_id: session.id.clone(),
+                            };
+                            SessionFile {
+                                git_branch: None,
+                                git_branches: Vec::new(),
+                                first_prompt: session.first_prompt,
+                                id: opencode_reference(&session.id),
+                                path: String::new(),
+                                file_name: String::new(),
+                                display_name: session.title.chars().take(160).collect(),
+                                working_directory: Some(session.directory),
+                                started_at: DateTime::<Utc>::from_timestamp_millis(
+                                    session.created_at_ms,
+                                ),
+                                byte_size: None,
+                                modified_at: DateTime::<Utc>::from_timestamp_millis(
+                                    session.updated_at_ms,
+                                ),
+                                modified_nanos: None,
+                                harness: locator.harness(),
+                                parent_reference: session
+                                    .parent_id
+                                    .as_deref()
+                                    .map(opencode_reference),
+                                forked_from_reference: None,
+                                subagent_type: None,
+                                locator,
+                                source_revision: Some(revision),
+                            }
                         })
                         .collect::<Vec<_>>(),
                 )
@@ -951,7 +970,13 @@ impl MixedScanner {
             .pi
             .iter()
             .flat_map(|source| &source.last_good)
-            .filter(|entry| pi_paths.insert(entry.path.clone()))
+            .filter(|entry| match &entry.locator {
+                crate::source::SessionLocator::File(crate::source::FileLocator {
+                    path,
+                    reader: crate::source::FileReader::Pi,
+                }) => pi_paths.insert(path.clone()),
+                _ => true,
+            })
             .cloned()
             .collect();
         for source in &state.databases {
@@ -965,9 +990,11 @@ impl MixedScanner {
                     .last_good
                     .iter()
                     .filter(|entry| match &entry.locator {
-                        Some(SessionLocator::ClaudeCodeFile { path, .. }) => {
-                            claude_code_paths.insert(path.clone())
-                        }
+                        crate::source::SessionLocator::File(crate::source::FileLocator {
+                            path,
+                            reader: crate::source::FileReader::ClaudeCode(_),
+                            ..
+                        }) => claude_code_paths.insert(path.clone()),
                         _ => true,
                     })
                     .cloned(),
@@ -1010,9 +1037,10 @@ impl MixedScanner {
                     .last_good
                     .iter()
                     .filter(|entry| match &entry.locator {
-                        Some(SessionLocator::VsCodeCopilotFile { path }) => {
-                            vscode_paths.insert(path.clone())
-                        }
+                        crate::source::SessionLocator::File(crate::source::FileLocator {
+                            path,
+                            reader: crate::source::FileReader::VsCodeCopilot,
+                        }) => vscode_paths.insert(path.clone()),
                         _ => true,
                     })
                     .cloned(),

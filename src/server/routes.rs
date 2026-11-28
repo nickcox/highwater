@@ -129,7 +129,7 @@ async fn session_analysis(
     let response = state
         .analysis
         .response_source(
-            session.source_locator(),
+            session.source_locator().clone(),
             state.config,
             headers
                 .get("X-Highwater-Preview")
@@ -158,7 +158,9 @@ async fn item_content(
         return Err(AppError::InvalidItemContentRequest);
     }
     let snapshot = state.catalog.snapshot()?;
-    let locator = resolve_session(&snapshot.sessions, &id)?.source_locator();
+    let locator = resolve_session(&snapshot.sessions, &id)?
+        .source_locator()
+        .clone();
     let page = super::item_content::read(
         &state.analysis,
         locator,

@@ -373,7 +373,7 @@ fn analyse_all(sessions: &[&SessionFile], config: AnalysisConfig) -> Vec<Analyse
                 let Some(session) = sessions.get(position) else {
                     break;
                 };
-                let result = analyse(&session.source_locator(), config);
+                let result = analyse(session.source_locator(), config);
                 if let Ok(mut results) = results.lock() {
                     results[position] = Some(result);
                 }
@@ -404,7 +404,7 @@ pub(crate) fn show(args: ShowArgs) -> Result<(), Error> {
         .iter()
         .find(|session| session.id == args.session)
         .ok_or_else(|| format!("no session has the reference {}", args.session))?;
-    let loaded = source::load(&session.source_locator(), None)?;
+    let loaded = source::load(session.source_locator(), None)?;
     let item = loaded
         .normalized
         .context_items

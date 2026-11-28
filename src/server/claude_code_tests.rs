@@ -1,5 +1,5 @@
 use super::*;
-use crate::{claude_code::FileKind, source::SessionLocator};
+use crate::claude_code::FileKind;
 use axum::{
     body::{to_bytes, Body},
     http::Request,
@@ -32,7 +32,11 @@ fn scan(sources: &SourceSet) -> Vec<SessionFile> {
 
 fn transcript_path(entry: &SessionFile) -> &FsPath {
     match &entry.locator {
-        Some(SessionLocator::ClaudeCodeFile { path, .. }) => path,
+        crate::source::SessionLocator::File(crate::source::FileLocator {
+            path,
+            reader: crate::source::FileReader::ClaudeCode(_),
+            ..
+        }) => path,
         _ => panic!("not a Claude Code entry"),
     }
 }
@@ -131,7 +135,10 @@ fn catalogue_entries_match_the_expected_listings() {
         assert!(entry.started_at.is_some(), "{fixture}");
         assert!(entry.byte_size.is_some_and(|size| size > 0), "{fixture}");
         let kind = match &entry.locator {
-            Some(SessionLocator::ClaudeCodeFile { kind, .. }) => *kind,
+            crate::source::SessionLocator::File(crate::source::FileLocator {
+                reader: crate::source::FileReader::ClaudeCode(kind),
+                ..
+            }) => *kind,
             _ => unreachable!(),
         };
         match listing["parentFixture"].as_str() {
@@ -528,18 +535,24 @@ fn claude_code_cache_keys_and_etags_differ_from_pi_keys_for_the_same_file() {
         tokenization: TokenizationPolicy::Heuristic,
         perf_diagnostics: false,
     };
-    let pi = analysis_cache_key(&path, config).expect("Pi key");
-    assert_eq!(pi.reader, super::analysis::FileReader::Pi);
-    let claude_code = AnalysisCacheKey {
-        reader: super::analysis::FileReader::ClaudeCode(FileKind::Main),
+    let pi = pi_analysis_cache_key(&path, config).expect("Pi key");
+    assert_eq!(pi.reader, crate::source::FileReader::Pi);
+    let claude_code = analysis::FileAnalysisKey {
+        reader: crate::source::FileReader::ClaudeCode(FileKind::Main),
         ..pi.clone()
     };
-    assert_ne!(etag_for_key(&pi), etag_for_key(&claude_code));
-    let subagent = AnalysisCacheKey {
-        reader: super::analysis::FileReader::ClaudeCode(FileKind::Subagent),
+    assert_ne!(
+        etag_for_key(&analysis::AnalysisCacheKey::File(pi.clone())),
+        etag_for_key(&analysis::AnalysisCacheKey::File(claude_code.clone()))
+    );
+    let subagent = analysis::FileAnalysisKey {
+        reader: crate::source::FileReader::ClaudeCode(FileKind::Subagent),
         ..pi.clone()
     };
-    assert_ne!(etag_for_key(&claude_code), etag_for_key(&subagent));
+    assert_ne!(
+        etag_for_key(&analysis::AnalysisCacheKey::File(claude_code.clone())),
+        etag_for_key(&analysis::AnalysisCacheKey::File(subagent.clone()))
+    );
 }
 
 #[test]
@@ -550,8 +563,7 @@ fn an_agent_tool_result_links_the_subagent_it_started() {
         &entries,
         "-synthetic-project/subagent-parent/subagents/agent-a16.jsonl",
     );
-    let loaded =
-        crate::source::load(parent.locator.as_ref().expect("locator"), None).expect("parent loads");
+    let loaded = crate::source::load(&parent.locator, None).expect("parent loads");
     let result = loaded
         .normalized
         .context_items

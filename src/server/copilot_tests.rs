@@ -1,5 +1,5 @@
 use super::*;
-use crate::source::{copilot_reference, SessionLocator};
+use crate::source::copilot_reference;
 use axum::{
     body::{to_bytes, Body},
     http::Request,
@@ -56,7 +56,7 @@ fn catalogue_lists_sessions_with_calls_once() {
     assert!(app.started_at.is_some());
     assert!(matches!(
         &app.locator,
-        Some(SessionLocator::CopilotFile { path }) if path.starts_with(home())
+        crate::source::SessionLocator::File(crate::source::FileLocator { path, reader: crate::source::FileReader::Copilot }) if path.starts_with(home())
     ));
     let cli = entries
         .iter()
@@ -310,14 +310,14 @@ fn renaming_a_session_changes_its_cache_key_and_etag() {
         perf_diagnostics: false,
     };
     let events = folder.join("events.jsonl");
-    let before = analysis::file_cache_key(&events, analysis::FileReader::Copilot, config)
+    let before = analysis::file_cache_key(&events, crate::source::FileReader::Copilot, config)
         .expect("key before");
     fs::write(folder.join("workspace.yaml"), "name: Renamed session\n").expect("rename");
-    let after = analysis::file_cache_key(&events, analysis::FileReader::Copilot, config)
+    let after = analysis::file_cache_key(&events, crate::source::FileReader::Copilot, config)
         .expect("key after");
     assert_ne!(before, after);
     assert_ne!(
-        analysis::etag_for_key(&before),
-        analysis::etag_for_key(&after)
+        analysis::etag_for_key(&analysis::AnalysisCacheKey::File(before.clone())),
+        analysis::etag_for_key(&analysis::AnalysisCacheKey::File(after.clone()))
     );
 }

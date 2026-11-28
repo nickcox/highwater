@@ -1,5 +1,5 @@
 use super::*;
-use crate::source::{codex_reference, SessionLocator};
+use crate::source::codex_reference;
 use sources::{MixedScanner, SourceSet};
 use std::{fs, path::Path};
 
@@ -60,7 +60,7 @@ fn catalogue_lists_codex_sessions_with_titles_and_child_sessions() {
     assert_eq!(main.parent_reference, None);
     assert!(matches!(
         &main.locator,
-        Some(SessionLocator::CodexFile { path }) if path.starts_with(home())
+        crate::source::SessionLocator::File(crate::source::FileLocator { path, reader: crate::source::FileReader::Codex }) if path.starts_with(home())
     ));
     assert_eq!(entry(&entries, "002").display_name, "other · 01a10000");
     assert_eq!(entry(&entries, "006").display_name, "Archived work");

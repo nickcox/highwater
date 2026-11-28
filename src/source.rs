@@ -17,27 +17,43 @@ use std::{
 };
 use thiserror::Error;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum FileReader {
+    Pi,
+    ClaudeCode(crate::claude_code::FileKind),
+    VsCodeCopilot,
+    Codex,
+    Copilot,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct FileLocator {
+    pub path: PathBuf,
+    pub reader: FileReader,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum SessionLocator {
-    PiFile(PathBuf),
+    File(FileLocator),
     OpenCode {
         database: PathBuf,
         native_id: String,
     },
-    ClaudeCodeFile {
-        path: PathBuf,
-        kind: crate::claude_code::FileKind,
-    },
-    VsCodeCopilotFile {
-        path: PathBuf,
-    },
-    CodexFile {
-        path: PathBuf,
-    },
-    /// A Copilot session's `events.jsonl`.
-    CopilotFile {
-        path: PathBuf,
-    },
+}
+
+impl SessionLocator {
+    pub(crate) fn harness(&self) -> Harness {
+        match self {
+            Self::File(file) => match file.reader {
+                FileReader::Pi => Harness::Pi,
+                FileReader::ClaudeCode(_) => Harness::ClaudeCode,
+                FileReader::VsCodeCopilot => Harness::VsCodeCopilot,
+                FileReader::Codex => Harness::Codex,
+                FileReader::Copilot => Harness::Copilot,
+            },
+            Self::OpenCode { .. } => Harness::OpenCode,
+        }
+    }
 }
 
 /// The portable reference an OpenCode session is listed under.
@@ -115,17 +131,7 @@ pub(crate) fn load(
     cancelled: Option<Arc<AtomicBool>>,
 ) -> Result<LoadedSession, LoadError> {
     match locator {
-        SessionLocator::PiFile(path) => {
-            let (normalized, stats) = PiSourceAdapter.parse_path_with_stats(path)?;
-            Ok(LoadedSession {
-                normalized,
-                stats: LoadStats {
-                    records: stats.entries,
-                    selected_records: stats.selected_entries,
-                },
-                limitations: None,
-            })
-        }
+        SessionLocator::File(file) => load_file(file),
         SessionLocator::OpenCode {
             database,
             native_id,
@@ -148,8 +154,26 @@ pub(crate) fn load(
                 limitations: Some(reconstructed.limitations),
             })
         }
-        SessionLocator::ClaudeCodeFile { path, kind } => {
-            let loaded = crate::claude_code::load(path, *kind).map_err(LoadError::ClaudeCode)?;
+    }
+}
+
+/// Load exactly the file and reader supplied by discovery.
+pub(crate) fn load_file(locator: &FileLocator) -> Result<LoadedSession, LoadError> {
+    let path = &locator.path;
+    match locator.reader {
+        FileReader::Pi => {
+            let (normalized, stats) = PiSourceAdapter.parse_path_with_stats(path)?;
+            Ok(LoadedSession {
+                normalized,
+                stats: LoadStats {
+                    records: stats.entries,
+                    selected_records: stats.selected_entries,
+                },
+                limitations: None,
+            })
+        }
+        FileReader::ClaudeCode(kind) => {
+            let loaded = crate::claude_code::load(path, kind).map_err(LoadError::ClaudeCode)?;
             Ok(LoadedSession {
                 normalized: loaded.session,
                 stats: LoadStats {
@@ -159,7 +183,7 @@ pub(crate) fn load(
                 limitations: Some(loaded.limitations),
             })
         }
-        SessionLocator::VsCodeCopilotFile { path } => {
+        FileReader::VsCodeCopilot => {
             let loaded = crate::vscode_copilot::load(path).map_err(LoadError::VsCodeCopilot)?;
             Ok(LoadedSession {
                 normalized: loaded.session,
@@ -170,7 +194,7 @@ pub(crate) fn load(
                 limitations: Some(loaded.limitations),
             })
         }
-        SessionLocator::CodexFile { path } => {
+        FileReader::Codex => {
             let loaded = crate::codex::load(path).map_err(LoadError::Codex)?;
             Ok(LoadedSession {
                 normalized: loaded.session,
@@ -181,7 +205,7 @@ pub(crate) fn load(
                 limitations: Some(loaded.limitations),
             })
         }
-        SessionLocator::CopilotFile { path } => {
+        FileReader::Copilot => {
             let loaded = crate::copilot::load(path).map_err(LoadError::Copilot)?;
             Ok(LoadedSession {
                 normalized: loaded.session,
@@ -228,7 +252,14 @@ mod tests {
     #[test]
     fn pi_loading_preserves_existing_normalization_and_stats() {
         let path = PathBuf::from("fixtures/pi/simple.jsonl");
-        let loaded = load(&SessionLocator::PiFile(path.clone()), None).expect("source loading");
+        let loaded = load(
+            &crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: path.clone(),
+                reader: crate::source::FileReader::Pi,
+            }),
+            None,
+        )
+        .expect("source loading");
         let expected = PiSourceAdapter
             .parse(&mut std::io::BufReader::new(
                 std::fs::File::open(path).expect("fixture"),

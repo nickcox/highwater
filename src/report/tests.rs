@@ -150,7 +150,7 @@ fn report_uses_the_readers_tool_actions() {
     let reports: Vec<_> = sessions
         .iter()
         .map(|session| {
-            let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).unwrap();
+            let (normalized, analysis) = analyse(session.source_locator(), CONFIG).unwrap();
             session_report(session, &normalized, &analysis, &Thresholds::default(), 10)
         })
         .collect();
@@ -292,7 +292,7 @@ fn item_costs_add_up_to_each_sessions_reported_input_cost() {
     let mut priced = 0;
     for session in fixture_sessions() {
         let (normalized, analysis) =
-            analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+            analyse(session.source_locator(), CONFIG).expect("fixture analysis");
         let report = session_report(&session, &normalized, &analysis, &Thresholds::default(), 10);
         let items: f64 = report
             .context_by_kind
@@ -338,7 +338,7 @@ fn tool_results_are_joined_to_their_sessions_items() {
     let mut runs = 0;
     for session in &fixture_sessions() {
         let (normalized, analysis) =
-            analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+            analyse(session.source_locator(), CONFIG).expect("fixture analysis");
         let report = session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
         runs += report.runs.len();
         for run in &report.runs {
@@ -374,7 +374,7 @@ fn the_most_expensive_findings_are_kept_over_all_sessions() {
         .take(2)
         .map(|session| {
             let (normalized, analysis) =
-                analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+                analyse(session.source_locator(), CONFIG).expect("fixture analysis");
             session_report(session, &normalized, &analysis, &Thresholds::default(), 10)
         })
         .collect();
@@ -521,10 +521,10 @@ fn messages_inside_a_recorded_turn_do_not_split_it() {
     let session = fixture_sessions()
         .into_iter()
         .find(|session| {
-            analyse(&session.source_locator(), CONFIG).is_ok_and(|(_, a)| a.model_calls.len() >= 3)
+            analyse(session.source_locator(), CONFIG).is_ok_and(|(_, a)| a.model_calls.len() >= 3)
         })
         .unwrap();
-    let (_, mut analysis) = analyse(&session.source_locator(), CONFIG).unwrap();
+    let (_, mut analysis) = analyse(session.source_locator(), CONFIG).unwrap();
     analysis.turns = vec![crate::domain::RecordedTurn {
         starter: None,
         first_call: 1,
@@ -544,7 +544,7 @@ fn messages_inside_a_recorded_turn_do_not_split_it() {
 #[test]
 fn turns_cover_every_call_and_harness_messages_do_not_count_as_user_turns() {
     for session in fixture_sessions() {
-        let (_, mut analysis) = analyse(&session.source_locator(), CONFIG).unwrap();
+        let (_, mut analysis) = analyse(session.source_locator(), CONFIG).unwrap();
         let turns = super::build::report_turns(&analysis);
         let calls: Vec<_> = turns
             .iter()
@@ -578,7 +578,7 @@ fn turns_cover_every_call_and_harness_messages_do_not_count_as_user_turns() {
 fn carried_context_is_conversation_from_three_or_more_user_turns_earlier() {
     for session in fixture_sessions() {
         let (normalized, analysis) =
-            analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+            analyse(session.source_locator(), CONFIG).expect("fixture analysis");
         let turns = user_turns(&analysis);
         assert_eq!(turns.len(), analysis.model_calls.len());
         assert!(turns.windows(2).all(|pair| pair[0] <= pair[1]));
@@ -623,12 +623,12 @@ fn a_read_whose_result_a_compaction_removed_is_counted_when_it_runs_again() {
     let session = fixture_sessions()
         .into_iter()
         .find(|session| {
-            analyse(&session.source_locator(), CONFIG)
+            analyse(session.source_locator(), CONFIG)
                 .is_ok_and(|(_, analysis)| !analysis.compactions.is_empty())
         })
         .expect("a fixture with a compaction");
     let (normalized, analysis) =
-        analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+        analyse(session.source_locator(), CONFIG).expect("fixture analysis");
     let compaction = &analysis.compactions[0];
     let removed = compaction
         .source_item_ids
@@ -662,7 +662,7 @@ fn a_large_result_is_counted_when_an_identical_one_is_still_in_context() {
     let (session, analysis, earlier) = fixture_sessions()
         .into_iter()
         .find_map(|session| {
-            let (_, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let (_, analysis) = analyse(session.source_locator(), CONFIG).ok()?;
             let item = analysis
                 .context_items
                 .iter()
@@ -708,7 +708,7 @@ fn cache_misses_are_classed_by_the_pause_before_them() {
     let (mut analysis, first) = fixture_sessions()
         .into_iter()
         .find_map(|session| {
-            let (_, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let (_, analysis) = analyse(session.source_locator(), CONFIG).ok()?;
             let first = analysis.model_calls.windows(3).position(|calls| {
                 super::findings::comparable_for_test(&calls[0], &calls[1])
                     && super::findings::comparable_for_test(&calls[1], &calls[2])
@@ -842,7 +842,7 @@ fn fixed_overhead_is_what_a_session_sends_before_any_work() {
     let (mut analysis, compaction, other) = fixture_sessions()
         .into_iter()
         .find_map(|session| {
-            let (_, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let (_, analysis) = analyse(session.source_locator(), CONFIG).ok()?;
             let compaction = analysis.compactions.first()?.before_model_call;
             let calls = &analysis.model_calls;
             let other = calls.windows(2).find_map(|pair| {
@@ -938,7 +938,7 @@ fn fixed_overhead_is_what_a_session_sends_before_any_work() {
 fn fixed_overhead_is_reported_for_each_harness_with_several_sessions() {
     let session = &fixture_sessions()[0];
     let (normalized, analysis) =
-        analyse(&session.source_locator(), CONFIG).expect("fixture analysis");
+        analyse(session.source_locator(), CONFIG).expect("fixture analysis");
     let part = |kind: &str, label: &str, tokens: u64, usd: f64| FixedPart {
         kind: kind.into(),
         label: label.into(),
@@ -1086,9 +1086,9 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
     .expect("discovery");
     let session = sessions
         .iter()
-        .find(|session| matches!(session.source_locator(), crate::source::SessionLocator::PiFile(path) if path.ends_with("fork.jsonl")))
+        .find(|session| matches!(session.source_locator(), crate::source::SessionLocator::File(crate::source::FileLocator { path, reader: crate::source::FileReader::Pi }) if path.ends_with("fork.jsonl")))
         .unwrap_or_else(|| panic!("the fork in {sessions:?}"));
-    let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).expect("fork analysis");
+    let (normalized, analysis) = analyse(session.source_locator(), CONFIG).expect("fork analysis");
     let report = session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
     assert_eq!(report.calls, 2, "the parent's call is not the fork's");
     assert_eq!(report.user_turns, 1);
@@ -1122,7 +1122,7 @@ fn report_with_usage(usages: &[crate::domain::ReportedUsage]) -> super::types::S
     let (session, mut normalized) = sessions
         .iter()
         .find_map(|session| {
-            let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let (normalized, analysis) = analyse(session.source_locator(), CONFIG).ok()?;
             (analysis.model_calls.len() >= usages.len().max(2)).then_some((session, normalized))
         })
         .expect("fixture with enough calls");
@@ -1278,7 +1278,7 @@ fn report_overflow_stays_unavailable_after_later_values() {
 #[test]
 fn report_token_totals_for_no_calls_are_unavailable_with_empty_coverage() {
     let sessions = fixture_sessions();
-    let (mut normalized, _) = analyse(&sessions[0].source_locator(), CONFIG).expect("fixture");
+    let (mut normalized, _) = analyse(sessions[0].source_locator(), CONFIG).expect("fixture");
     normalized.model_calls.clear();
     let json = serde_json::to_value(super::build::token_totals(&normalized)).expect("totals");
     for field in [
@@ -1426,7 +1426,7 @@ fn a_session_report_counts_the_compactions_own_calls_and_their_cost() {
         .iter()
         .find(|session| session.display_name == "Synthetic: app session")
         .expect("the Copilot app fixture");
-    let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).expect("analysis");
+    let (normalized, analysis) = analyse(session.source_locator(), CONFIG).expect("analysis");
     let report = session_report(session, &normalized, &analysis, &Thresholds::default(), 10);
     assert_eq!(report.compactions, 1);
     assert_eq!(report.compaction_calls.calls, 1);
@@ -1527,7 +1527,7 @@ fn show_includes_recorded_tool_arguments() {
     let sessions = fixture_sessions();
     let mut checked = 0;
     for session in sessions {
-        let loaded = crate::source::load(&session.source_locator(), None).unwrap();
+        let loaded = crate::source::load(session.source_locator(), None).unwrap();
         for item in &loaded.normalized.context_items {
             if let Some(id) = &item.source_tool_call_id {
                 if let Some(text) = super::tool_call_text(&loaded.normalized, id) {
@@ -1597,7 +1597,7 @@ fn cache_rewrite_expiry_and_compaction_exclusion() {
     let (_, mut analysis) = sessions
         .iter()
         .find_map(|session| {
-            let pair = analyse(&session.source_locator(), CONFIG).ok()?;
+            let pair = analyse(session.source_locator(), CONFIG).ok()?;
             (pair.1.model_calls.len() >= 2).then_some(pair)
         })
         .unwrap();
@@ -1623,7 +1623,7 @@ fn turn_figures_rank_sum_and_preserve_unknowns() {
     let (_, mut analysis) = sessions
         .iter()
         .find_map(|session| {
-            let pair = analyse(&session.source_locator(), CONFIG).ok()?;
+            let pair = analyse(session.source_locator(), CONFIG).ok()?;
             (pair.1.model_calls.len() >= 4).then_some(pair)
         })
         .unwrap();
@@ -1707,7 +1707,7 @@ fn session_turn_rows_use_report_bounds_costs_and_break_threshold() {
     let (session, normalized, mut analysis) = sessions
         .iter()
         .find_map(|session| {
-            let (normalized, analysis) = analyse(&session.source_locator(), CONFIG).ok()?;
+            let (normalized, analysis) = analyse(session.source_locator(), CONFIG).ok()?;
             (analysis.model_calls.len() >= 4).then_some((session, normalized, analysis))
         })
         .unwrap();

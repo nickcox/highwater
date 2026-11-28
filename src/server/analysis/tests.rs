@@ -15,6 +15,41 @@ fn config() -> AnalysisConfig {
 fn path() -> PathBuf {
     fs::canonicalize("fixtures/pi/simple.jsonl").expect("fixture")
 }
+#[test]
+fn executor_loads_the_locator_reader_not_the_key_reader() {
+    let locator = FileLocator {
+        path: path(),
+        reader: FileReader::Pi,
+    };
+    let mut key = pi_analysis_cache_key(&locator.path, config()).expect("key");
+    let expected = execute_analysis(locator.clone(), config(), key.clone()).expect("Pi analysis");
+    key.reader = FileReader::ClaudeCode(FileKind::Main);
+    let result = execute_analysis(locator, config(), key).expect("Pi locator loads Pi fixture");
+    assert_eq!(result.body, expected.body);
+}
+
+#[tokio::test]
+async fn injected_executor_receives_the_original_file_locator() {
+    let locator = FileLocator {
+        path: PathBuf::from("fixtures/claude-code/projects/-synthetic-project/api-error.jsonl"),
+        reader: FileReader::ClaudeCode(FileKind::Main),
+    };
+    let expected = locator.clone();
+    let service = Arc::new(AnalysisService::new(Arc::new(move |file, _, key| {
+        assert_eq!(file, expected);
+        assert_eq!(
+            key.path,
+            fs::canonicalize(&file.path).expect("canonical path")
+        );
+        assert_eq!(key.reader, file.reader);
+        Ok(response(1))
+    })));
+    service
+        .response_source(SessionLocator::File(locator), config(), false)
+        .await
+        .expect("injected execution");
+}
+
 fn response(size: usize) -> Arc<CachedResponse> {
     Arc::new(CachedResponse {
         body: bytes::Bytes::from(vec![b'x'; size]),
@@ -73,7 +108,7 @@ async fn subscribers(service: &AnalysisService, expected: usize) {
 }
 fn request(service: &Arc<AnalysisService>) -> tokio::task::JoinHandle<SharedResult> {
     let service = Arc::clone(service);
-    tokio::spawn(async move { service.response(path(), config()).await })
+    tokio::spawn(async move { service.response_pi(path(), config()).await })
 }
 
 #[tokio::test]
@@ -85,17 +120,20 @@ async fn warm_cache_succeeds_with_all_execution_permits_occupied() {
         Ok(response(4))
     })));
     let first = service
-        .response(path(), config())
+        .response_pi(path(), config())
         .await
         .expect("cold response");
     let _held = Arc::clone(&service.permits)
         .acquire_many_owned(2)
         .await
         .expect("all permits");
-    let warm = tokio::time::timeout(Duration::from_secs(1), service.response(path(), config()))
-        .await
-        .expect("warm cache does not wait for permit")
-        .expect("warm response");
+    let warm = tokio::time::timeout(
+        Duration::from_secs(1),
+        service.response_pi(path(), config()),
+    )
+    .await
+    .expect("warm cache does not wait for permit")
+    .expect("warm response");
     assert!(Arc::ptr_eq(&first, &warm));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
@@ -196,7 +234,7 @@ async fn typed_errors_and_panics_fan_out_once_and_allow_stable_retry() {
         assert!(service.state.lock().expect("state").flights.is_empty());
         assert!(service.state.lock().expect("state").entries.is_empty());
         service
-            .response(path(), config())
+            .response_pi(path(), config())
             .await
             .expect("stable retry");
         assert_eq!(calls.load(Ordering::SeqCst), 2);
@@ -297,22 +335,26 @@ async fn failed_writes_and_panicking_reporters_cannot_strand_flights_or_prevent_
         assert_eq!(reports.load(Ordering::SeqCst), 1);
         assert_eq!(service.permits.available_permits(), 2);
         assert!(service.state.lock().expect("state").flights.is_empty());
-        let retry =
-            tokio::time::timeout(Duration::from_secs(5), service.response(path(), config()))
-                .await
-                .expect("failed request can retry")
-                .expect_err("second source failure");
+        let retry = tokio::time::timeout(
+            Duration::from_secs(5),
+            service.response_pi(path(), config()),
+        )
+        .await
+        .expect("failed request can retry")
+        .expect_err("second source failure");
         assert!(matches!(&*retry, FlightError::Source(_)));
         tokio::time::timeout(Duration::from_secs(5), reported.notified())
             .await
             .expect("second report attempted");
-        let stable =
-            tokio::time::timeout(Duration::from_secs(5), service.response(path(), config()))
-                .await
-                .expect("stable retry completes")
-                .expect("stable response");
+        let stable = tokio::time::timeout(
+            Duration::from_secs(5),
+            service.response_pi(path(), config()),
+        )
+        .await
+        .expect("stable retry completes")
+        .expect("stable response");
         let warm = service
-            .response(path(), config())
+            .response_pi(path(), config())
             .await
             .expect("cached stable response");
         assert!(Arc::ptr_eq(&stable, &warm));
@@ -333,7 +375,7 @@ async fn panicking_preflight_reporter_preserves_the_fingerprint_error() {
     );
     let error = tokio::time::timeout(
         Duration::from_secs(5),
-        service.response(temp.0.clone(), config()),
+        service.response_pi(temp.0.clone(), config()),
     )
     .await
     .expect("preflight completes")
@@ -388,7 +430,7 @@ async fn oversized_uncached_success_fans_out_then_next_request_starts_a_new_flig
     assert!(service.state.lock().expect("state").flights.is_empty());
     assert!(service.state.lock().expect("state").entries.is_empty());
     let later = service
-        .response(path(), config())
+        .response_pi(path(), config())
         .await
         .expect("later uncached success");
     assert_eq!(calls.load(Ordering::SeqCst), 2);
@@ -409,8 +451,11 @@ async fn source_changed_after_blocking_execution_starts_is_not_cached() {
     })));
     let operation_service = Arc::clone(&service);
     let operation_path = temp.0.clone();
-    let operation =
-        tokio::spawn(async move { operation_service.response(operation_path, config()).await });
+    let operation = tokio::spawn(async move {
+        operation_service
+            .response_pi(operation_path, config())
+            .await
+    });
     tokio::time::timeout(Duration::from_secs(5), started.notified())
         .await
         .expect("blocking execution started");
@@ -427,7 +472,7 @@ async fn source_changed_after_blocking_execution_starts_is_not_cached() {
     assert!(service.state.lock().expect("state").flights.is_empty());
     fs::copy(path(), &temp.0).expect("restore stable fixture");
     service
-        .response(temp.0.clone(), config())
+        .response_pi(temp.0.clone(), config())
         .await
         .expect("stable retry");
 }
@@ -465,7 +510,8 @@ async fn source_change_or_disappearance_after_registration_is_noncached_and_retr
             .expect("all permits");
         let job_service = Arc::clone(&service);
         let job_path = temp.0.clone();
-        let request = tokio::spawn(async move { job_service.response(job_path, config()).await });
+        let request =
+            tokio::spawn(async move { job_service.response_pi(job_path, config()).await });
         subscribers(&service, 1).await;
         if vanish {
             fs::remove_file(&temp.0).expect("remove source");
@@ -490,9 +536,154 @@ async fn source_change_or_disappearance_after_registration_is_noncached_and_retr
         assert!(service.state.lock().expect("state").flights.is_empty());
         fs::copy(path(), &temp.0).expect("restore stable source");
         service
-            .response(temp.0.clone(), config())
+            .response_pi(temp.0.clone(), config())
             .await
             .expect("stable retry");
         assert_eq!(service.state.lock().expect("state").entries.len(), 1);
+    }
+}
+
+#[test]
+fn typed_key_equality_and_encoding_cover_every_input() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("session.jsonl");
+    std::fs::write(&path, b"test").unwrap();
+    let file = pi_analysis_cache_key(&path, config()).unwrap();
+    let base = AnalysisCacheKey::File(file.clone());
+    let mut keys = vec![base.clone()];
+    for reader in [
+        FileReader::ClaudeCode(FileKind::Main),
+        FileReader::ClaudeCode(FileKind::Subagent),
+        FileReader::VsCodeCopilot,
+        FileReader::Codex,
+        FileReader::Copilot,
+    ] {
+        keys.push(AnalysisCacheKey::File(FileAnalysisKey {
+            reader,
+            ..file.clone()
+        }));
+    }
+    keys.extend(
+        [
+            FileAnalysisKey {
+                path: path.with_extension("other"),
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                byte_size: file.byte_size + 1,
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                modified_nanos: file.modified_nanos + 1,
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                compact_previews: true,
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                tokenization: TokenizationPolicy::Strict,
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                schema_version: file.schema_version + 1,
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                output_version: file.output_version + 1,
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                auxiliary: Some(AuxiliaryFingerprint::VsCodeTraces([1; 32])),
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                auxiliary: Some(AuxiliaryFingerprint::VsCodeTraces([2; 32])),
+                ..file.clone()
+            },
+            FileAnalysisKey {
+                auxiliary: Some(AuxiliaryFingerprint::CopilotWorkspace([1; 32])),
+                ..file.clone()
+            },
+        ]
+        .into_iter()
+        .map(AnalysisCacheKey::File),
+    );
+    let database = DatabaseAnalysisKey {
+        database: path,
+        native_id: "session".into(),
+        revision: [1; 32],
+        tokenization: file.tokenization,
+        schema_version: file.schema_version,
+        output_version: file.output_version,
+        compact_previews: false,
+    };
+    keys.extend(
+        [
+            database.clone(),
+            DatabaseAnalysisKey {
+                database: database.database.with_extension("db"),
+                ..database.clone()
+            },
+            DatabaseAnalysisKey {
+                native_id: "other".into(),
+                ..database.clone()
+            },
+            DatabaseAnalysisKey {
+                revision: [2; 32],
+                ..database.clone()
+            },
+            DatabaseAnalysisKey {
+                compact_previews: true,
+                ..database.clone()
+            },
+            DatabaseAnalysisKey {
+                tokenization: TokenizationPolicy::Strict,
+                ..database.clone()
+            },
+            DatabaseAnalysisKey {
+                schema_version: database.schema_version + 1,
+                ..database.clone()
+            },
+            DatabaseAnalysisKey {
+                output_version: database.output_version + 1,
+                ..database
+            },
+        ]
+        .into_iter()
+        .map(AnalysisCacheKey::Database),
+    );
+    for (index, key) in keys.iter().enumerate() {
+        assert_eq!(key, &key.clone());
+        assert_eq!(etag_for_key(key), etag_for_key(&key.clone()));
+        for other in &keys[index + 1..] {
+            assert_ne!(key, other);
+            assert_ne!(etag_for_key(key), etag_for_key(other));
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn etags_preserve_native_path_bytes_and_field_boundaries() {
+    use std::os::unix::ffi::OsStringExt;
+    let key = |path: Vec<u8>, id: &str| {
+        AnalysisCacheKey::Database(DatabaseAnalysisKey {
+            database: std::ffi::OsString::from_vec(path).into(),
+            native_id: id.into(),
+            revision: [0; 32],
+            tokenization: TokenizationPolicy::Heuristic,
+            schema_version: 1,
+            output_version: 1,
+            compact_previews: false,
+        })
+    };
+    let pairs = [
+        (key(vec![0xff], "id"), key(vec![0xfe], "id")),
+        (key(b"ab".to_vec(), "c"), key(b"a".to_vec(), "bc")),
+    ];
+    for (left, right) in pairs {
+        assert_ne!(left, right);
+        assert_ne!(etag_for_key(&left), etag_for_key(&right));
     }
 }

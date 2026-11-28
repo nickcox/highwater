@@ -1,5 +1,4 @@
 use super::*;
-use crate::domain::Harness;
 use std::sync::Arc;
 
 fn conditional(value: &str) -> HeaderMap {
@@ -16,6 +15,10 @@ async fn body(response: Response) -> bytes::Bytes {
 #[tokio::test]
 async fn ambiguous_short_references_never_select_an_arbitrary_file() {
     use axum::response::IntoResponse;
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: "/private/first.jsonl".into(),
+        reader: crate::source::FileReader::Pi,
+    });
     let first = SessionFile {
         git_branch: None,
         git_branches: Vec::new(),
@@ -28,16 +31,20 @@ async fn ambiguous_short_references_never_select_an_arbitrary_file() {
         started_at: None,
         byte_size: Some(1),
         modified_at: None,
-        harness: Harness::Pi,
+        harness: locator.harness(),
         parent_reference: None,
         forked_from_reference: None,
         subagent_type: None,
-        locator: None,
+        locator,
         source_revision: None,
         modified_nanos: None,
     };
     let mut second = first.clone();
     second.path = "/private/second.jsonl".into();
+    second.locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+        path: "/private/second.jsonl".into(),
+        reader: crate::source::FileReader::Pi,
+    });
     let unique = [first.clone()];
     assert_eq!(
         resolve_session(&unique, &first.id).expect("unique").path,

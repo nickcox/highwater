@@ -1210,10 +1210,10 @@ fn zero_reported_prompt_is_not_divided() {
 }
 
 fn claude_code_fixture(name: &str) -> NormalizedSession {
-    let locator = crate::source::SessionLocator::ClaudeCodeFile {
+    let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
         path: format!("fixtures/claude-code/projects/-synthetic-project/{name}.jsonl").into(),
-        kind: crate::claude_code::FileKind::Main,
-    };
+        reader: crate::source::FileReader::ClaudeCode(crate::claude_code::FileKind::Main),
+    });
     crate::source::load(&locator, None)
         .expect("fixture")
         .normalized

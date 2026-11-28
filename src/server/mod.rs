@@ -30,8 +30,8 @@ use crate::{
 };
 #[cfg(test)]
 use analysis::{
-    analysis_cache_key, classify_parse_failure, etag_for_key, AnalysisCache, AnalysisCacheKey,
-    AnalysisExecutor, AnalysisFlight, CachedResponse,
+    classify_parse_failure, etag_for_key, pi_analysis_cache_key, AnalysisCache, AnalysisExecutor,
+    AnalysisFlight, CachedResponse,
 };
 use analysis::{execute_analysis, AnalysisService};
 #[cfg(test)]
@@ -208,7 +208,7 @@ pub(crate) struct SessionFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) subagent_type: Option<String>,
     #[serde(skip)]
-    locator: Option<crate::source::SessionLocator>,
+    locator: crate::source::SessionLocator,
     #[serde(skip)]
     source_revision: Option<u64>,
     #[serde(skip)]
@@ -216,11 +216,9 @@ pub(crate) struct SessionFile {
 }
 
 impl SessionFile {
-    /// How to load the session. A Pi session is found by its path.
-    pub(crate) fn source_locator(&self) -> crate::source::SessionLocator {
-        self.locator
-            .clone()
-            .unwrap_or_else(|| crate::source::SessionLocator::PiFile(PathBuf::from(&self.path)))
+    /// The exact source discovered for this session.
+    pub(crate) fn source_locator(&self) -> &crate::source::SessionLocator {
+        &self.locator
     }
 }
 

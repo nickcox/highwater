@@ -1,6 +1,6 @@
 use super::{
     totals::{SessionTotals, TotalKey},
-    AppError, Harness, SessionFile,
+    AppError, SessionFile,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -390,6 +390,10 @@ pub(super) fn discover_cached(
                 .ok()
                 .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
                 .map(|duration| duration.as_nanos());
+            let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: canonical.clone(),
+                reader: crate::source::FileReader::Pi,
+            });
             output.push(SessionFile {
                 git_branch: None,
                 git_branches: Vec::new(),
@@ -403,11 +407,11 @@ pub(super) fn discover_cached(
                 byte_size: Some(metadata.len()),
                 modified_at: metadata.modified().ok().map(DateTime::<Utc>::from),
                 modified_nanos,
-                harness: Harness::Pi,
+                harness: locator.harness(),
                 parent_reference: None,
                 forked_from_reference: None,
                 subagent_type: None,
-                locator: None,
+                locator,
                 source_revision: None,
             });
         }

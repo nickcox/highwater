@@ -512,10 +512,10 @@ fn export_live_contract() {
     // Claude Code transcripts, through the same loader and coverage notice as HTTP.
     let claude_code = |fixture: &str, kind| {
         let loaded = crate::source::load(
-            &crate::source::SessionLocator::ClaudeCodeFile {
+            &crate::source::SessionLocator::File(crate::source::FileLocator {
                 path: PathBuf::from(format!("fixtures/claude-code/projects/{fixture}")),
-                kind,
-            },
+                reader: crate::source::FileReader::ClaudeCode(kind),
+            }),
             None,
         )
         .expect("Claude Code fixture");
@@ -562,9 +562,10 @@ fn export_live_contract() {
     let codex_home = std::fs::canonicalize("fixtures/codex/home").expect("Codex fixtures");
     for file in crate::codex::discovery::find_files(&codex_home, None).expect("Codex discovery") {
         let loaded = crate::source::load(
-            &crate::source::SessionLocator::CodexFile {
+            &crate::source::SessionLocator::File(crate::source::FileLocator {
                 path: file.path.clone(),
-            },
+                reader: crate::source::FileReader::Codex,
+            }),
             None,
         )
         .expect("Codex fixture");
@@ -592,7 +593,10 @@ fn export_live_contract() {
         .take(2)
     {
         let loaded = crate::source::load(
-            &crate::source::SessionLocator::CopilotFile { path: file.path },
+            &crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: file.path,
+                reader: crate::source::FileReader::Copilot,
+            }),
             None,
         )
         .expect("Copilot fixture");

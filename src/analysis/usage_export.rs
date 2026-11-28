@@ -17,10 +17,10 @@ fn local_sessions() -> Vec<(Harness, SessionLocator)> {
     for file in crate::claude_code::discovery::find_files(&claude_root, None).unwrap_or_default() {
         sessions.push((
             Harness::ClaudeCode,
-            SessionLocator::ClaudeCodeFile {
+            crate::source::SessionLocator::File(crate::source::FileLocator {
                 path: file.path,
-                kind: file.kind,
-            },
+                reader: crate::source::FileReader::ClaudeCode(file.kind),
+            }),
         ));
     }
     fn walk(path: &Path, sessions: &mut Vec<(Harness, SessionLocator)>) {
@@ -29,7 +29,13 @@ fn local_sessions() -> Vec<(Harness, SessionLocator)> {
             if path.is_dir() {
                 walk(&path, sessions);
             } else if path.extension().and_then(|extension| extension.to_str()) == Some("jsonl") {
-                sessions.push((Harness::Pi, SessionLocator::PiFile(path)));
+                sessions.push((
+                    Harness::Pi,
+                    crate::source::SessionLocator::File(crate::source::FileLocator {
+                        path,
+                        reader: crate::source::FileReader::Pi,
+                    }),
+                ));
             }
         }
     }

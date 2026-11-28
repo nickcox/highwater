@@ -184,7 +184,7 @@ fn turns(args: TurnsArgs) -> Result<(), Error> {
         .find(|s| s.id == args.session)
         .ok_or_else(|| format!("no session has the reference {}", args.session))?;
     let (normalized, analysis) = analyse(
-        &session.source_locator(),
+        session.source_locator(),
         AnalysisConfig {
             tokenization: args.tokenization.into(),
             perf_diagnostics: false,

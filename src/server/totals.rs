@@ -61,7 +61,7 @@ impl TotalKey {
             return None;
         }
         Some(Self {
-            locator: session.source_locator(),
+            locator: session.source_locator().clone(),
             size: session.byte_size,
             modified: session.modified_nanos,
             database_revision: session.source_revision,
@@ -86,11 +86,7 @@ impl TotalKey {
                     calls: read.map(|(_, calls)| calls),
                 });
             }
-            PiFile(path)
-            | ClaudeCodeFile { path, .. }
-            | CopilotFile { path }
-            | VsCodeCopilotFile { path }
-            | CodexFile { path } => path,
+            File(file) => &file.path,
         };
         let matches = || {
             fs::metadata(path).is_ok_and(|metadata| {
@@ -109,12 +105,21 @@ impl TotalKey {
         let cost = match &self.locator {
             OpenCode { .. } => unreachable!(),
             // Pi's cost includes calls on branches the loaded session leaves out.
-            PiFile(_) => pi_total(path).ok().flatten().map(SessionTotal::sum),
-            VsCodeCopilotFile { .. } => crate::vscode_copilot::session_total(path)
+            File(crate::source::FileLocator {
+                reader: crate::source::FileReader::Pi,
+                ..
+            }) => pi_total(path).ok().flatten().map(SessionTotal::sum),
+            File(crate::source::FileLocator {
+                reader: crate::source::FileReader::VsCodeCopilot,
+                ..
+            }) => crate::vscode_copilot::session_total(path)
                 .ok()
                 .flatten()
                 .map(SessionTotal::sum),
-            CodexFile { .. } => loaded
+            File(crate::source::FileLocator {
+                reader: crate::source::FileReader::Codex,
+                ..
+            }) => loaded
                 .as_ref()
                 .and_then(|loaded| codex_total(&loaded.normalized))
                 .map(|(usd, partial)| SessionTotal {
@@ -126,8 +131,21 @@ impl TotalKey {
                     newer_usage: false,
                     through_ms: None,
                 }),
-            ClaudeCodeFile { .. } | CopilotFile { .. } => {
-                let cost = if matches!(self.locator, ClaudeCodeFile { .. }) {
+            File(crate::source::FileLocator {
+                reader: crate::source::FileReader::ClaudeCode(_),
+                ..
+            })
+            | File(crate::source::FileLocator {
+                reader: crate::source::FileReader::Copilot,
+                ..
+            }) => {
+                let cost = if matches!(
+                    self.locator,
+                    File(crate::source::FileLocator {
+                        reader: crate::source::FileReader::ClaudeCode(_),
+                        ..
+                    })
+                ) {
                     claude_code_total(path)
                         .ok()
                         .flatten()
@@ -139,7 +157,13 @@ impl TotalKey {
                         .map(|cost| (cost, false, None))
                 };
                 cost.map(|(cost, newer_usage, through_ms)| SessionTotal {
-                    includes_children: matches!(self.locator, ClaudeCodeFile { .. }),
+                    includes_children: matches!(
+                        self.locator,
+                        File(crate::source::FileLocator {
+                            reader: crate::source::FileReader::ClaudeCode(_),
+                            ..
+                        })
+                    ),
                     usd: cost.total_usd,
                     kind: "recorded",
                     partial: newer_usage

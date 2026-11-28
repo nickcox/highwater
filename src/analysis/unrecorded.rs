@@ -166,17 +166,17 @@ fn unrecorded_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::{load, SessionLocator};
+    use crate::source::load;
     use std::path::PathBuf;
 
     fn claude_code(name: &str) -> NormalizedSession {
         let path = PathBuf::from(format!(
             "fixtures/claude-code/projects/-synthetic-project/{name}.jsonl"
         ));
-        let locator = SessionLocator::ClaudeCodeFile {
+        let locator = crate::source::SessionLocator::File(crate::source::FileLocator {
             path,
-            kind: crate::claude_code::FileKind::Main,
-        };
+            reader: crate::source::FileReader::ClaudeCode(crate::claude_code::FileKind::Main),
+        });
         load(&locator, None).expect("fixture").normalized
     }
 
@@ -217,11 +217,8 @@ mod tests {
 
     #[test]
     fn copilot_unrecorded_content_covers_the_calls_before_the_measuring_call() {
-        let locator = SessionLocator::VsCodeCopilotFile {
-            path: PathBuf::from(
-                "fixtures/vscode-copilot/User/workspaceStorage/0a1b2c3d/chatSessions/11111111-agent.jsonl",
-            ),
-        };
+        let locator = crate::source::SessionLocator::File(crate::source::FileLocator { path: PathBuf::from(
+                "fixtures/vscode-copilot/User/workspaceStorage/0a1b2c3d/chatSessions/11111111-agent.jsonl"), reader: crate::source::FileReader::VsCodeCopilot });
         let mut session = load(&locator, None).expect("fixture").normalized;
         add_unrecorded_context(
             &mut session,
@@ -367,7 +364,10 @@ mod tests {
         );
         assert!(unrecorded(&session).is_empty());
         let mut pi = load(
-            &SessionLocator::PiFile(PathBuf::from("fixtures/pi/simple.jsonl")),
+            &crate::source::SessionLocator::File(crate::source::FileLocator {
+                path: PathBuf::from("fixtures/pi/simple.jsonl"),
+                reader: crate::source::FileReader::Pi,
+            }),
             None,
         )
         .expect("pi fixture")
