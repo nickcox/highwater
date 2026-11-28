@@ -418,7 +418,7 @@
   }
   .session-controls {
     grid-area: picker;
-    width: min(960px, 100%);
+    width: 100%;
   }
   .theme-controls {
     grid-area: theme;

@@ -3,6 +3,7 @@ import type { WireSessionAnalysis } from '../types';
 export interface SessionListItem {
   id: string;
   fileName: string;
+  firstPrompt?: string;
   displayName: string;
   workingDirectory: string | null;
   startedAt: string | null;
@@ -16,6 +17,7 @@ export interface SessionListItem {
   /** Absent before a lookup or for unsupported sources; null if no total is available. */
   total?: {
     usd: number;
+    includesChildren?: boolean;
     kind: 'recorded' | 'sum' | 'estimated';
     partial: boolean;
     sinceMs: number | null;

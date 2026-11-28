@@ -35,6 +35,7 @@ test('integrated VS Code Copilot catalogue, trace records, cost and timing', asy
   const response = await page.request.get(`/api/sessions/${agent.id}/analysis`);
   expect(response.status()).toBe(200);
   const analysis = await response.json();
+  await page.getByRole('button', { name: /^Session:/ }).click();
   await page.getByRole('combobox', { name: 'Harness' }).selectOption('vscode-copilot');
   await chooseSession(page, agent.id);
   expect(analysis.session.source).toBe('vscode-copilot');

@@ -249,13 +249,13 @@ for (const width of [390, 850, 1100, 1280, 1440]) {
     // The theme icons end at the header's right edge, on the title's row.
     expect(Math.abs(right(toggle!) - (width - (width <= 850 ? 16 : 26)))).toBeLessThanOrEqual(2);
     expect(Math.abs(middle(toggle!) - middle(heading!))).toBeLessThanOrEqual(6);
-    // The picker has its own row below the title, from the left edge, at most 960px wide.
+    // The picker has its own row below the title and uses the header's full content width.
     expect(sessionPicker!.y).toBeGreaterThanOrEqual(bottom(heading!));
     expect(Math.abs(sessionPicker!.x - heading!.x)).toBeLessThanOrEqual(2);
-    expect(sessionPicker!.width).toBeCloseTo(Math.min(960, width - (width <= 850 ? 32 : 52)), 0);
+    expect(sessionPicker!.width).toBeCloseTo(width - (width <= 850 ? 32 : 52), 0);
     for (const palette of paletteList) {
       await selectTheme(page, palette.id);
-      await expect(page.getByRole('combobox', { name: 'Session' })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^Session:/ })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );

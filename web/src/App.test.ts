@@ -390,7 +390,7 @@ describe('view links', () => {
       }),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(screen.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /^Session:/ })).toHaveAttribute(
       'data-session-id',
       'one',
     );
@@ -1215,7 +1215,7 @@ describe('analysis cache freshness', () => {
     await renderLoaded();
     await chooseSession('two');
     await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /^Session:/ })).toHaveAttribute(
         'data-session-id',
         'two',
       ),
@@ -1364,7 +1364,7 @@ describe('analysis cache freshness', () => {
     for (const id of ['two', 'three', 'four', 'one']) {
       await chooseSession(id);
       await waitFor(() =>
-        expect(screen.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+        expect(screen.getByRole('button', { name: /^Session:/ })).toHaveAttribute(
           'data-session-id',
           id,
         ),
@@ -1518,7 +1518,7 @@ describe('selected analysis request lifecycle', () => {
     );
 
     render(App);
-    await screen.findByLabelText('Session');
+    await screen.findByRole('button', { name: /^Session:/ });
     await chooseSession('two');
     expect(await screen.findByText(/selected-two-model/)).toBeInTheDocument();
     pendingOne.resolve(

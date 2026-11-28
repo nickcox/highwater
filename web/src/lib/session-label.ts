@@ -39,17 +39,22 @@ export function harnessName(session: SessionListItem): string {
   return 'Pi';
 }
 
-/** Option labels for the picker. Each shows the session's last-changed time,
+/** Labels for the session button. Each shows the session's last-changed time,
  * which is what the list is sorted by. Identical labels get the file name (or
- * reference) appended so every option can be told apart. */
-export function sessionOptionLabels(
+ * reference) appended so every session can be told apart. */
+export function sessionLabels(
   sessions: readonly SessionListItem[],
   showHarness: boolean,
   now = new Date(),
 ): Map<string, string> {
   const base = new Map(
     sessions.map((session) => {
+      const project = session.workingDirectory
+        ?.replace(/[\\/]+$/, '')
+        .split(/[\\/]/)
+        .pop();
       const parts = [session.displayName];
+      if (project) parts.push(project);
       const changed = formatSessionTime(session.modifiedAt, now);
       if (changed) parts.push(changed);
       if (session.parentReference)

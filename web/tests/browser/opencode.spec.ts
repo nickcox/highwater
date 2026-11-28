@@ -71,9 +71,10 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   );
   expect(openCode.id).toMatch(/^opencode-[0-9a-f]{12}$/);
   expect(list.sessions.some((session: { harness: string }) => session.harness === 'pi')).toBe(true);
-  const picker = page.getByRole('combobox', { name: 'Session' });
+  const picker = page.getByRole('button', { name: /^Session:/ });
   await expect(picker).toHaveAttribute('data-session-id', /^pi-/);
   const original = (await picker.getAttribute('data-session-id'))!;
+  await picker.click();
   const harness = page.getByRole('combobox', { name: 'Harness' });
   await expect(harness).toHaveValue('all');
   await harness.selectOption('opencode');

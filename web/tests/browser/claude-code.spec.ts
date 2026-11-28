@@ -40,19 +40,13 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
     claudeCode.find((session) => session.displayName === 'project · 00000016')!.id,
   );
 
-  const harness = page.getByRole('combobox', { name: 'Harness' });
-  const picker = page.getByRole('combobox', { name: 'Session' });
-  await harness.selectOption('claude-code');
-  const subagentOption = page.getByRole('option', {
-    name: /^Configure the status line · .*child session · statusline-setup\b/,
-  });
-  // Child sessions are listed only when asked for.
+  const picker = page.getByRole('button', { name: /^Session:/ });
   await picker.click();
-  await expect(subagentOption).not.toBeAttached();
-  await page.keyboard.press('Escape');
+  await page.getByRole('combobox', { name: 'Harness' }).selectOption('claude-code');
+  const subagentRow = page.locator('tbody tr').filter({ hasText: 'Configure the status line' });
+  await expect(subagentRow).not.toBeAttached();
   await page.getByRole('checkbox', { name: 'Child sessions' }).check();
-  await picker.click();
-  await expect(subagentOption).toBeAttached();
+  await expect(subagentRow).toBeAttached();
   const analysisResponse = page.waitForResponse(
     (response) => response.url().includes(compaction.id) && response.url().endsWith('/analysis'),
   );

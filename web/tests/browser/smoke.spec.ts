@@ -261,7 +261,7 @@ function denseEconomicsScenario(): ReturnType<typeof testAnalysis> {
 async function assertLoaded(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Highwater' })).toBeVisible();
   await expect(page.getByRole('application', { name: 'Context River' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: /^Session:/ })).toHaveAttribute(
     'data-session-id',
     integrated ? /.+/ : 'browser-smoke',
   );
@@ -345,50 +345,25 @@ test('keyboard Retry recovers an analysis failure without switching sessions', a
   await expect(retry).toHaveCount(0);
 });
 
-test('session picker controls align, share one row on narrow screens, and search in place', async ({
-  page,
-}) => {
+test('session button opens the only search and fits a narrow header', async ({ page }) => {
   test.skip(integrated, 'Mocked API only.');
   await mockApi(page);
   await page.goto('/');
-  const harness = page.getByRole('combobox', { name: 'Harness' });
-  const session = page.getByRole('combobox', { name: 'Session' });
-  await expect(session).toBeVisible();
-  await expect(page.getByRole('searchbox', { name: 'Search sessions' })).toHaveCount(0);
-  const controls = [harness, session];
-  const desktop = await Promise.all(controls.map((control) => control.boundingBox()));
-  for (const bounds of desktop) {
-    expect(bounds).not.toBeNull();
-    expect(bounds!.height).toBe(36);
-    expect(bounds!.y).toBe(desktop[0]!.y);
-  }
-  const appearance = await Promise.all(
-    controls.map((control) =>
-      control.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return [style.padding, style.borderRadius, style.fontSize, style.backgroundColor];
-      }),
-    ),
-  );
-  expect(appearance[1]).toEqual(appearance[0]);
-  const label = await session.inputValue();
-  await session.click();
-  await expect(page.getByRole('listbox', { name: 'Sessions' })).toBeVisible();
-  expect(await session.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
-  await session.fill('no session has this title');
-  await expect(page.getByRole('status')).toContainText('No sessions match');
-  await session.press('Escape');
-  await expect(page.getByRole('listbox', { name: 'Sessions' })).toHaveCount(0);
-  await expect(session).toHaveValue(label);
-
+  const control = page.getByRole('button', { name: /^Session:/ });
+  const label = await control.innerText();
+  await expect(page.getByRole('combobox', { name: 'Harness' })).toHaveCount(0);
+  await control.click();
+  const search = page.getByRole('textbox', { name: 'Search sessions' });
+  await expect(search).toBeFocused();
+  await search.fill('no session has this title');
+  await expect(page.getByText('No sessions match these filters.', { exact: false })).toBeVisible();
+  await search.press('Escape');
+  await expect(control).toBeFocused();
+  await expect(control).toContainText(label);
   await page.setViewportSize({ width: 390, height: 844 });
-  const narrow = await Promise.all(controls.map((control) => control.boundingBox()));
-  expect(narrow[1]!.y).toBe(narrow[0]!.y);
-  for (const bounds of narrow) {
-    expect(bounds!.height).toBe(36);
-    expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-  }
+  const bounds = (await control.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
 });
 
 test('mocked app loads a session, selects an item, and navigates the chart', async ({ page }) => {
@@ -1096,7 +1071,7 @@ test('view links restore Composition scope and absent items, and reject stale re
   test.skip(integrated, 'Uses deterministic session IDs.');
   await mockApi(page);
   await page.goto('/#session=browser-smoke&view=composition&scope=atCall&pin=3&item=a&range=2:4');
-  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: /^Session:/ })).toHaveAttribute(
     'data-session-id',
     'browser-smoke',
   );
@@ -3174,7 +3149,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   expect(analysis.modelCalls[4].economics.promptTokens).toBe(70);
   expect(analysis.modelCalls[4].economics.cacheWriteStatus).toBe('reported');
   await assertLoaded(page);
-  await expect(page.getByRole('combobox', { name: 'Session' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: /^Session:/ })).toHaveAttribute(
     'data-session-id',
     /^pi-[0-9a-f]{12}$/,
   );
@@ -3183,7 +3158,7 @@ test('integrated Rust-served embedded app loads, selects, and navigates', async 
   expect(linkParams.has('tp')).toBe(false);
   expect(linkParams.has('v')).toBe(false);
   expect(linkParams.get('session')).toBe(
-    (await page.getByRole('combobox', { name: 'Session' }).getAttribute('data-session-id'))!,
+    (await page.getByRole('button', { name: /^Session:/ }).getAttribute('data-session-id'))!,
   );
   const chart = page.getByRole('application', { name: 'Context River' });
   await expect(page.getByTestId('visible-call-range')).toContainText('of');

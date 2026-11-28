@@ -4,7 +4,7 @@ import {
   formatByteSize,
   formatSessionTime,
   sessionDetailLine,
-  sessionOptionLabels,
+  sessionLabels,
 } from './session-label';
 
 const now = new Date(2026, 9, 11, 12, 0);
@@ -40,7 +40,7 @@ describe('session labels', () => {
   it('adds the harness and last-changed time, and disambiguates identical labels', () => {
     const changed = new Date(2026, 9, 9, 15, 27).toISOString();
     const started = new Date(2026, 8, 1, 9, 0).toISOString();
-    const labels = sessionOptionLabels(
+    const labels = sessionLabels(
       [
         session({ id: 'pi-a', startedAt: started, modifiedAt: changed, fileName: 'a.jsonl' }),
         session({ id: 'pi-b', startedAt: started, modifiedAt: changed, fileName: 'b.jsonl' }),
@@ -58,7 +58,7 @@ describe('session labels', () => {
     expect(labels.get('pi-a')).toContain(formatSessionTime(changed, now)!);
     expect(labels.get('pi-a')).not.toContain(formatSessionTime(started, now)!);
     expect(labels.get('pi-b')).toMatch(/· b\.jsonl$/);
-    expect(labels.get('opencode-c')).toBe('[OpenCode] Fix tests · child session');
+    expect(labels.get('opencode-c')).toBe('[OpenCode] Fix tests · Highwater · child session');
   });
 
   it('describes the selected session in one line', () => {
