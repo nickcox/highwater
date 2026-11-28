@@ -13,6 +13,8 @@ mod item_content;
 mod local_origin;
 #[cfg(test)]
 mod opencode_tests;
+#[cfg(test)]
+mod pi_source_tests;
 mod routes;
 mod scan;
 mod sources;
@@ -82,9 +84,10 @@ impl From<TokenizationArg> for TokenizationPolicy {
 /// Where to find sessions, for `serve`, `report` and `show`.
 #[derive(Args, Debug, Clone)]
 pub(crate) struct SourceArgs {
-    /// Pi sessions folder. On its own, it turns off the other sources' defaults.
+    /// Pi sessions folder (repeatable). Replaces the default Pi and bb folders, and on its
+    /// own it turns off the other sources' defaults.
     #[arg(long)]
-    pub session_root: Option<PathBuf>,
+    pub session_root: Vec<PathBuf>,
     /// OpenCode SQLite database (repeatable). Explicit Pi roots remain Pi-only unless set.
     #[arg(long)]
     pub opencode_db: Vec<PathBuf>,
@@ -284,8 +287,11 @@ fn configured_sources(args: SourceArgs) -> Result<sources::SourceSet, AppError> 
     let copilot_home_env = std::env::var_os("COPILOT_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute());
+    let pi_defaults =
+        sources::default_pi_roots(&home, |name| std::env::var_os(name).map(PathBuf::from));
     sources::SourceSet::configured(
         args.session_root,
+        &pi_defaults,
         args.opencode_db,
         args.claude_root,
         &home,
@@ -334,13 +340,13 @@ async fn run_with_watcher(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let source_args = args.sources.clone();
     let sources = tokio::task::spawn_blocking(move || configured_sources(source_args)).await??;
-    let root = sources.pi_root.clone().unwrap_or_default();
+    let root = sources.pi_roots.first().cloned().unwrap_or_default();
     let generation = new_generation()?;
     let diagnostics = Arc::new(Diagnostics::default());
     let signals = Arc::new(watcher::WatchSignals::default());
     let (hint_sender, hint_receiver) = mpsc::channel(HINT_CHANNEL_CAPACITY);
     let mut watchers = Vec::new();
-    if let Some(pi_root) = &sources.pi_root {
+    for pi_root in &sources.pi_roots {
         if let Some(watcher) =
             start_watcher_or_degraded(pi_root, hint_sender.clone(), &signals, start_watcher)
         {

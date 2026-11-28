@@ -4,7 +4,14 @@ How Highwater reads sessions written by the Pi coding agent (`@earendil-works/pi
 
 ## Where sessions are
 
-Pi writes one JSON Lines file per session under `~/.pi/agent/sessions`. Highwater uses that folder when it exists, or the folder given with `--session-root`. An explicit `--session-root` on its own reads Pi sessions only; add the other source flags to include them too.
+Pi writes one JSON Lines file per session under `~/.pi/agent/sessions`. Without `--session-root`, Highwater reads each of these folders that exists:
+
+- `$PI_CODING_AGENT_SESSION_DIR`.
+- `sessionDir` in Pi's `settings.json`, in Pi's agent folder (`$PI_CODING_AGENT_DIR`, default `~/.pi/agent`). A path starting with `~/` is in the home folder; other relative paths are not used, because Pi reads them from the working directory.
+- `sessions` in Pi's agent folder.
+- Sessions bb runs through Pi: `$BB_PI_BRIDGE_SESSION_DIR`, otherwise `~/.bb/plugins/provider-pi/bridge-data/sessions`, and the older `~/.bb/pi-bridge-sessions`.
+
+`--session-root` (repeatable) replaces these folders. A file found through two folders, such as a folder and a folder inside it, is listed once. An explicit `--session-root` on its own reads Pi sessions only; add the other source flags to include them too.
 
 The catalogue reads the first line of each file, the `session` header, for the session ID, working directory (`cwd`) and start time. The public reference is `pi-` followed by 12 hexadecimal characters of a BLAKE3 hash of the session ID. A file without a valid header is still listed, under a reference derived from its first line. The title is the working directory's folder name and the suffix of the file name.
 

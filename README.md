@@ -51,7 +51,7 @@ Without options, Highwater finds sessions in each tool's default location, when 
 
 | Source | Default location | Option |
 | --- | --- | --- |
-| Pi | `~/.pi/agent/sessions` | `--session-root <dir>` |
+| Pi | `~/.pi/agent/sessions` (or Pi's configured session folder), and bb's Pi sessions | `--session-root <dir>` (repeatable) |
 | OpenCode | `opencode.db` and `opencode-stable.db` in `$XDG_DATA_HOME/opencode` (default `~/.local/share/opencode`) | `--opencode-db <file>` (repeatable) |
 | Claude Code | `$CLAUDE_CONFIG_DIR/projects` (default `~/.claude/projects`) | `--claude-root <dir>` (repeatable) |
 | Codex | `$CODEX_HOME` (default `~/.codex`) | `--codex-home <dir>` (repeatable) |

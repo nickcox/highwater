@@ -77,7 +77,8 @@ fn session_references_keep_their_existing_values() {
 }
 
 pub(super) struct SourceSet {
-    pub pi_root: Option<PathBuf>,
+    /// Pi session folders: the user's own and bb's, or those given with `--session-root`.
+    pub pi_roots: Vec<PathBuf>,
     pub databases: Vec<PathBuf>,
     pub claude_roots: Vec<PathBuf>,
     /// VS Code user data folders, for Copilot Chat sessions.
@@ -90,11 +91,13 @@ pub(super) struct SourceSet {
 
 impl SourceSet {
     /// An explicit `--session-root` is Pi only: it turns off the OpenCode, Claude Code,
-    /// VS Code, Codex and Copilot defaults unless their own flags are also given. `vscode_defaults`
-    /// are the platform's VS Code user data folders; those that exist are used.
+    /// VS Code, Codex and Copilot defaults unless their own flags are also given. `pi_defaults`
+    /// and `vscode_defaults` are the default folders for those sources; those that exist are
+    /// used.
     #[allow(clippy::too_many_arguments)]
     pub fn configured(
-        pi: Option<PathBuf>,
+        pi_roots: Vec<PathBuf>,
+        pi_defaults: &[PathBuf],
         databases: Vec<PathBuf>,
         claude_roots: Vec<PathBuf>,
         home: &Path,
@@ -107,15 +110,25 @@ impl SourceSet {
         copilot_homes: Vec<PathBuf>,
         copilot_home_env: Option<&Path>,
     ) -> Result<Self, AppError> {
-        let explicit_pi = pi.is_some();
+        let explicit_pi = !pi_roots.is_empty();
         let default_databases = databases.is_empty() && !explicit_pi;
         let default_claude = claude_roots.is_empty() && !explicit_pi;
-        let pi = pi.unwrap_or_else(|| home.join(".pi/agent/sessions"));
-        let pi_root = if explicit_pi || pi.exists() {
-            Some(canonical_root(&pi)?)
+        let pi_candidates = if explicit_pi {
+            pi_roots
         } else {
-            None
+            pi_defaults
+                .iter()
+                .filter(|path| path.is_dir())
+                .cloned()
+                .collect()
         };
+        let mut pi_roots = Vec::new();
+        for root in pi_candidates {
+            let root = canonical_root(&root)?;
+            if !pi_roots.contains(&root) {
+                pi_roots.push(root);
+            }
+        }
         let candidates = if default_databases {
             ["opencode.db", "opencode-stable.db"]
                 .into_iter()
@@ -209,7 +222,7 @@ impl SourceSet {
                 copilot_homes.push(folder);
             }
         }
-        if pi_root.is_none()
+        if pi_roots.is_empty()
             && databases.is_empty()
             && claude_roots.is_empty()
             && vscode_user_dirs.is_empty()
@@ -222,7 +235,7 @@ impl SourceSet {
             ));
         }
         Ok(Self {
-            pi_root,
+            pi_roots,
             databases,
             claude_roots,
             vscode_user_dirs,
@@ -251,6 +264,41 @@ pub(super) fn default_vscode_user_dirs(home: &Path) -> Vec<PathBuf> {
         .into_iter()
         .map(|product| base.join(product).join("User"))
         .collect()
+}
+
+/// Where Pi and bb's Pi provider keep sessions by default, in order. Only absolute paths
+/// from the environment and Pi's settings are used.
+///
+/// - Pi: `$PI_CODING_AGENT_SESSION_DIR`, then `sessionDir` in Pi's `settings.json`, then
+///   `sessions` in Pi's agent folder (`$PI_CODING_AGENT_DIR`, default `~/.pi/agent`).
+/// - bb: `$BB_PI_BRIDGE_SESSION_DIR`, otherwise
+///   `~/.bb/plugins/provider-pi/bridge-data/sessions`, then the older
+///   `~/.bb/pi-bridge-sessions`.
+pub(super) fn default_pi_roots(home: &Path, env: impl Fn(&str) -> Option<PathBuf>) -> Vec<PathBuf> {
+    let absolute = |path: PathBuf| path.is_absolute().then_some(path);
+    let env = |name: &str| env(name).and_then(absolute);
+    let agent_dir = env("PI_CODING_AGENT_DIR").unwrap_or_else(|| home.join(".pi/agent"));
+    let setting = fs::read(agent_dir.join("settings.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|settings| {
+            let value = settings.get("sessionDir")?.as_str()?;
+            match value.strip_prefix("~/") {
+                Some(rest) => Some(home.join(rest)),
+                None => absolute(PathBuf::from(value)),
+            }
+        });
+    let mut roots: Vec<PathBuf> = env("PI_CODING_AGENT_SESSION_DIR")
+        .into_iter()
+        .chain(setting)
+        .chain([agent_dir.join("sessions")])
+        .chain([env("BB_PI_BRIDGE_SESSION_DIR")
+            .unwrap_or_else(|| home.join(".bb/plugins/provider-pi/bridge-data/sessions"))])
+        .chain([home.join(".bb/pi-bridge-sessions")])
+        .collect();
+    let mut seen = HashSet::new();
+    roots.retain(|root| seen.insert(root.clone()));
+    roots
 }
 
 pub(super) fn vscode_copilot_reference(session_id: &str) -> String {
@@ -645,9 +693,14 @@ struct DatabaseSource {
     tracker: Option<CatalogTracker>,
     last_good: Vec<SessionFile>,
 }
+struct PiSource {
+    root: PathBuf,
+    listings: super::catalog::PiListingCache,
+    last_good: Vec<SessionFile>,
+}
+
 struct DiscoveryState {
-    pi_last_good: Vec<SessionFile>,
-    pi_listings: super::catalog::PiListingCache,
+    pi: Vec<PiSource>,
     databases: Vec<DatabaseSource>,
     claude_code: Vec<ClaudeCodeSource>,
     vscode_copilot: Vec<VsCodeCopilotSource>,
@@ -656,7 +709,6 @@ struct DiscoveryState {
 }
 
 pub(super) struct MixedScanner {
-    pi_root: Option<PathBuf>,
     state: Mutex<DiscoveryState>,
     signals: Arc<WatchSignals>,
 }
@@ -664,11 +716,17 @@ pub(super) struct MixedScanner {
 impl MixedScanner {
     pub fn new(sources: &SourceSet, signals: Arc<WatchSignals>) -> Self {
         Self {
-            pi_root: sources.pi_root.clone(),
             signals,
             state: Mutex::new(DiscoveryState {
-                pi_last_good: Vec::new(),
-                pi_listings: super::catalog::PiListingCache::default(),
+                pi: sources
+                    .pi_roots
+                    .iter()
+                    .map(|root| PiSource {
+                        root: root.clone(),
+                        listings: super::catalog::PiListingCache::default(),
+                        last_good: Vec::new(),
+                    })
+                    .collect(),
                 databases: sources
                     .databases
                     .iter()
@@ -728,18 +786,18 @@ impl MixedScanner {
             .lock()
             .map_err(|_| ScanError::Transient("source catalogue unavailable".into()))?;
         let mut failed = false;
-        if let Some(root) = &self.pi_root {
-            match fs::metadata(root) {
+        for source in &mut state.pi {
+            match fs::metadata(&source.root) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    state.pi_last_good.clear();
-                    state.pi_listings.retain(&[]);
+                    source.last_good.clear();
+                    source.listings.retain(&[]);
                 }
                 _ => match super::catalog::discover_cached(
-                    root,
+                    &source.root,
                     Some(&cancelled),
-                    &mut state.pi_listings,
+                    &mut source.listings,
                 ) {
-                    Ok(entries) => state.pi_last_good = entries,
+                    Ok(entries) => source.last_good = entries,
                     Err(ScanError::Cancelled) => return Err(ScanError::Cancelled),
                     Err(_) => failed = true,
                 },
@@ -864,7 +922,15 @@ impl MixedScanner {
         self.signals
             .sources_degraded
             .store(failed, Ordering::Release);
-        let mut entries = state.pi_last_good.clone();
+        // Nested or repeated roots can find the same Pi file twice.
+        let mut pi_paths = HashSet::new();
+        let mut entries: Vec<SessionFile> = state
+            .pi
+            .iter()
+            .flat_map(|source| &source.last_good)
+            .filter(|entry| pi_paths.insert(entry.path.clone()))
+            .cloned()
+            .collect();
         for source in &state.databases {
             entries.extend(source.last_good.iter().cloned());
         }

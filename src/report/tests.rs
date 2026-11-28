@@ -29,7 +29,7 @@ const CONFIG: AnalysisConfig = AnalysisConfig {
 fn fixture_sessions() -> Vec<SessionFile> {
     let empty = tempfile::tempdir().expect("temporary folder");
     discover_sessions(SourceArgs {
-        session_root: Some(empty.path().to_path_buf()),
+        session_root: vec![empty.path().to_path_buf()],
         opencode_db: Vec::new(),
         claude_root: vec![PathBuf::from("fixtures/claude-code/projects")],
         vscode_user_dir: Vec::new(),
@@ -51,7 +51,7 @@ fn args(dir: Option<&str>) -> ReportArgs {
         tokenization: TokenizationArg::Heuristic,
         limit: 10,
         sources: SourceArgs {
-            session_root: None,
+            session_root: Vec::new(),
             opencode_db: Vec::new(),
             claude_root: Vec::new(),
             vscode_user_dir: Vec::new(),
@@ -137,7 +137,7 @@ fn reads_are_compared_by_path_and_other_tools_by_their_arguments() {
 fn report_uses_the_readers_tool_actions() {
     let empty = tempfile::tempdir().expect("temporary folder");
     let sessions = discover_sessions(SourceArgs {
-        session_root: Some(empty.path().to_path_buf()),
+        session_root: vec![empty.path().to_path_buf()],
         opencode_db: Vec::new(),
         claude_root: Vec::new(),
         vscode_user_dir: Vec::new(),
@@ -969,7 +969,7 @@ fn a_fork_reports_only_its_own_turns_and_tool_runs() {
             .expect("modification time");
     }
     let sessions = discover_sessions(SourceArgs {
-        session_root: Some(root.path().to_path_buf()),
+        session_root: vec![root.path().to_path_buf()],
         opencode_db: Vec::new(),
         claude_root: Vec::new(),
         vscode_user_dir: Vec::new(),
@@ -1304,7 +1304,7 @@ fn report_text_does_not_count_failed_attempts_as_unrecorded() {
 fn a_session_report_counts_the_compactions_own_calls_and_their_cost() {
     let empty = tempfile::tempdir().expect("temporary folder");
     let sessions = discover_sessions(SourceArgs {
-        session_root: Some(empty.path().to_path_buf()),
+        session_root: vec![empty.path().to_path_buf()],
         opencode_db: Vec::new(),
         claude_root: Vec::new(),
         vscode_user_dir: Vec::new(),

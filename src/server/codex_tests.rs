@@ -9,7 +9,7 @@ fn home() -> PathBuf {
 
 fn codex_only(homes: Vec<PathBuf>) -> SourceSet {
     SourceSet {
-        pi_root: None,
+        pi_roots: Vec::new(),
         databases: Vec::new(),
         claude_roots: Vec::new(),
         vscode_user_dirs: Vec::new(),
@@ -167,7 +167,8 @@ fn codex_home_comes_from_the_flag_then_codex_home_then_the_home_folder() {
     let data = home_folder.join("data");
     let configured = |homes: Vec<PathBuf>, env: Option<&Path>, pi: Option<PathBuf>| {
         SourceSet::configured(
-            pi,
+            pi.into_iter().collect(),
+            &super::sources::default_pi_roots(&home_folder, |_| None),
             Vec::new(),
             Vec::new(),
             &home_folder,

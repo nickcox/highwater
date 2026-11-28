@@ -87,4 +87,4 @@ For local development, install from the repository root with `bb plugin install 
 
 ## Scope
 
-The Rust server remains independent of bb. Its existing listening-line format is tested as an external startup contract. The TypeScript package depends only on public bb SDK surfaces and ordinary runtime dependencies. `skills: []` prevents adding agent instructions to every thread.
+The Rust server uses no bb code or services. It only knows where bb's Pi provider stores sessions, so that `highwater serve` lists them by default. Its existing listening-line format is tested as an external startup contract. The TypeScript package depends only on public bb SDK surfaces and ordinary runtime dependencies. `skills: []` prevents adding agent instructions to every thread.

@@ -15,7 +15,7 @@ fn fixture_root() -> PathBuf {
 
 fn claude_only(roots: Vec<PathBuf>) -> SourceSet {
     SourceSet {
-        pi_root: None,
+        pi_roots: Vec::new(),
         databases: Vec::new(),
         claude_roots: roots,
         vscode_user_dirs: Vec::new(),
@@ -253,7 +253,7 @@ fn a_removed_root_empties_its_entries_and_other_sources_are_kept() {
     )
     .expect("copy");
     let mut sources = claude_only(vec![root.clone()]);
-    sources.pi_root = Some(fs::canonicalize("fixtures/pi").expect("Pi fixtures"));
+    sources.pi_roots = vec![fs::canonicalize("fixtures/pi").expect("Pi fixtures")];
     let scanner = MixedScanner::new(&sources, Arc::new(watcher::WatchSignals::default()));
     let first = scanner
         .scan(Arc::new(AtomicBool::new(false)))
@@ -291,7 +291,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
     let canonical = |path: PathBuf| fs::canonicalize(path).expect("canonical");
 
     let defaults = SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -311,7 +312,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
     );
 
     let from_config = SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -332,7 +334,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
 
     let pi = fs::canonicalize("fixtures/pi").expect("Pi fixtures");
     let pi_only = SourceSet::configured(
-        Some(pi.clone()),
+        vec![pi.clone()],
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -349,7 +352,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
     assert!(pi_only.claude_roots.is_empty());
 
     let explicit = SourceSet::configured(
-        Some(pi),
+        vec![pi],
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         vec![fixture_root()],
         &home,
@@ -366,7 +370,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
     assert_eq!(explicit.claude_roots, vec![fixture_root()]);
 
     assert!(SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         vec![directory.path().join("missing")],
         &home,
@@ -383,7 +388,8 @@ fn claude_code_defaults_follow_the_config_directory_and_explicit_pi_roots() {
 
     let empty_home = directory.path().join("empty-home");
     let error = SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&empty_home, |_| None),
         Vec::new(),
         Vec::new(),
         &empty_home,

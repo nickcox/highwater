@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `highwater serve`, `report` and `show` find Pi sessions in Pi's configured session folder (`PI_CODING_AGENT_SESSION_DIR` or `sessionDir` in Pi's settings) and the sessions bb runs through Pi, as well as `~/.pi/agent/sessions`. `--session-root` can be given more than once.
 - Sessions are chosen with one **Session** button, which opens a table of sessions. The table sorts by any column, filters by harness, project, last change and cost, and its search matches each word separately against the title, project, working directory, first prompt and session ID. Each row shows the session's first prompt under its title. With child sessions hidden, a session's cost includes its child sessions' costs unless its harness's total already includes them. Only the sort order and the **Child sessions** setting are remembered between visits.
 - The session list gives each session's first user prompt (`firstPrompt`), cut to 300 characters, for Pi, Claude Code, Codex, OpenCode, Copilot and VS Code Copilot. A Pi session started with a skill shows it as `/skill:<name>` followed by any text typed after it. Costs that already include child sessions, such as Claude Code's own totals, are marked `includesChildren`.
 - Pi sessions use the name set with `/name`, `--name` or an extension. Pi sessions with no assistant response are no longer listed, as for Claude Code and Codex. A Pi session file with another record before its header is now read correctly.

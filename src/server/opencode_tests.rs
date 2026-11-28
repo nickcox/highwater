@@ -94,7 +94,7 @@ impl DatabaseFixture {
     }
     fn sources(&self) -> SourceSet {
         SourceSet {
-            pi_root: None,
+            pi_roots: Vec::new(),
             databases: vec![self.path.clone()],
             claude_roots: Vec::new(),
             vscode_user_dirs: Vec::new(),
@@ -300,7 +300,7 @@ fn mixed_catalog_metadata_has_harness_relationships_and_no_database_locator() {
         )
         .expect("child response");
     let mut sources = fixture.sources();
-    sources.pi_root = Some(std::fs::canonicalize("fixtures/pi").expect("Pi fixtures"));
+    sources.pi_roots = vec![std::fs::canonicalize("fixtures/pi").expect("Pi fixtures")];
     let entries = scan(&scanner(&sources));
     assert!(entries.iter().any(|entry| entry.harness == Harness::Pi));
     let child = entries
@@ -327,7 +327,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
     std::fs::create_dir_all(data.join("opencode")).expect("data home");
     std::fs::copy(&fixture.path, data.join("opencode/opencode.db")).expect("default DB");
     let defaults = SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -341,11 +342,12 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
         None,
     )
     .expect("OpenCode-only defaults");
-    assert!(defaults.pi_root.is_none());
+    assert!(defaults.pi_roots.is_empty());
     assert_eq!(defaults.databases.len(), 1);
     let pi = std::fs::canonicalize("fixtures/pi").expect("Pi fixtures");
     let explicit = SourceSet::configured(
-        Some(pi),
+        vec![pi],
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -361,7 +363,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
     .expect("Pi-only");
     assert!(explicit.databases.is_empty());
     assert!(SourceSet::configured(
-        Some(home.join("missing")),
+        vec![home.join("missing")],
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -376,7 +379,8 @@ fn database_only_defaults_and_explicit_pi_only_configuration_are_supported() {
     )
     .is_err());
     assert!(SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&home, |_| None),
         vec![data.join("missing.db")],
         Vec::new(),
         &home,
@@ -415,7 +419,7 @@ fn failed_database_retains_its_catalogue_while_healthy_sources_advance() {
     let fixture = DatabaseFixture::new();
     let healthy = DatabaseFixture::new();
     let sources = SourceSet {
-        pi_root: None,
+        pi_roots: Vec::new(),
         databases: vec![fixture.path.clone(), healthy.path.clone()],
         claude_roots: Vec::new(),
         vscode_user_dirs: Vec::new(),
@@ -517,7 +521,7 @@ async fn duplicate_database_native_ids_are_ambiguous_and_cache_entries_are_isola
     assert_ne!(a.etag, b.etag);
     assert_ne!(a.body, b.body);
     let sources = SourceSet {
-        pi_root: None,
+        pi_roots: Vec::new(),
         databases: vec![first.path.clone(), second.path.clone()],
         claude_roots: Vec::new(),
         vscode_user_dirs: Vec::new(),

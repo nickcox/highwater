@@ -15,7 +15,7 @@ fn user_dir() -> PathBuf {
 
 fn vscode_only(user_dirs: Vec<PathBuf>) -> SourceSet {
     SourceSet {
-        pi_root: None,
+        pi_roots: Vec::new(),
         databases: Vec::new(),
         claude_roots: Vec::new(),
         vscode_user_dirs: user_dirs,
@@ -80,7 +80,8 @@ fn vscode_defaults_are_used_when_they_exist_unless_pi_is_explicit() {
     let defaults = [existing.clone(), missing];
 
     let sources = SourceSet::configured(
-        None,
+        Vec::new(),
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -99,7 +100,8 @@ fn vscode_defaults_are_used_when_they_exist_unless_pi_is_explicit() {
     let pi = home.join("pi");
     fs::create_dir_all(&pi).expect("Pi root");
     let pi_only = SourceSet::configured(
-        Some(pi.clone()),
+        vec![pi.clone()],
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
@@ -116,7 +118,8 @@ fn vscode_defaults_are_used_when_they_exist_unless_pi_is_explicit() {
     assert!(pi_only.vscode_user_dirs.is_empty());
 
     let explicit = SourceSet::configured(
-        Some(pi),
+        vec![pi],
+        &super::sources::default_pi_roots(&home, |_| None),
         Vec::new(),
         Vec::new(),
         &home,
