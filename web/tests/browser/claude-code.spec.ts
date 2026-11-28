@@ -43,7 +43,8 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   const picker = page.getByRole('button', { name: /^Session:/ });
   await picker.click();
   await page.getByRole('combobox', { name: 'Harness' }).selectOption('claude-code');
-  const subagentRow = page.locator('tbody tr').filter({ hasText: 'Configure the status line' });
+  // The parent's first prompt has the same text, so find the subagent's row by its id.
+  const subagentRow = page.locator(`tbody tr[data-session-id="${subagent.id}"]`);
   await expect(subagentRow).not.toBeAttached();
   await page.getByRole('checkbox', { name: 'Child sessions' }).check();
   await expect(subagentRow).toBeAttached();
@@ -94,7 +95,9 @@ test('integrated Claude Code catalogue, coverage, costs and subagents', async ({
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(harness).toBeVisible();
+  await expect(picker).toBeVisible();
+  await picker.click();
+  await expect(page.getByRole('combobox', { name: 'Harness' })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
     .toBe(true);

@@ -88,7 +88,7 @@ fn forks_link_past_copies_without_calls_and_are_not_children() {
                             serde_json::json!({"sessionId": parent, "messageUuid": row["uuid"]});
                     }
                 }
-                format!("{}\n", row)
+                format!("{row}\n")
             })
             .collect();
         fs::write(project.join(format!("{id}.jsonl")), text).unwrap();

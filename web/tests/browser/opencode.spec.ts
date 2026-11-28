@@ -143,8 +143,9 @@ test('integrated OpenCode mixed catalogue, harness filters, links and WAL refres
   await page.locator('.item-details summary').filter({ hasText: 'Content preview' }).click();
   await expect(page.locator('.item-details').getByText(/Synthetic revision/)).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(harness).toBeVisible();
   await expect(picker).toBeVisible();
+  await picker.click();
+  await expect(harness).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
     .toBe(true);
