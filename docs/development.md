@@ -25,6 +25,8 @@ rustup toolchain install 1.88.0 --profile minimal --component rustfmt --componen
 RUSTUP_TOOLCHAIN=1.88.0 scripts/check.sh
 ```
 
+`--full` includes the standard checks, so there is no need to run both before merging. Each `[check]` line reports the elapsed time for one step.
+
 The checks install npm dependencies with `scripts/npm-install.sh`, which runs `npm ci` in CI and `npm install` locally, so an unchanged folder is not reinstalled. They build the frontend with `scripts/build-web.sh`, which replaces only the `web/dist/` files whose contents changed, so an unchanged frontend does not make Cargo rebuild the release binary.
 
 `.github/workflows/check.yml` runs the Rust checks on 1.88 and stable, and `scripts/check.sh --full --skip-rust-checks` on Node 24, on GitHub Actions. It also runs the Rust tests on macOS and Windows, and builds the Nix package on Linux and macOS. Every check also runs locally.
@@ -35,7 +37,7 @@ The checks install npm dependencies with `scripts/npm-install.sh`, which runs `n
 
 **Browser tests.** The browser tests use Playwright with Chromium and mocked API responses. Install the browser once with `npm --prefix web run test:browser:install`. Tests run in parallel, including tests in the same file, so each test must set up its own page and data. A file whose tests change a shared fixture, such as the integrated OpenCode and Claude Code tests, sets `test.describe.configure({ mode: 'default' })` to run them one at a time. A run that takes longer than five minutes in total fails. To save desktop and narrow screenshots outside the repository, set `HIGHWATER_BASELINE_SCREENSHOTS=/tmp/highwater-browser-baseline` when running `npm --prefix web run test:browser`.
 
-The integrated browser checks run the real server with its embedded frontend. Each uses the debug binary by default, or the release binary when `HIGHWATER_BROWSER_BUILD_PROFILE=release` is set:
+The full check runs `python3 scripts/browser-smoke.py all` once per build profile. Each source has its own server, port and temporary fixtures, so Playwright can run the suites together. To check one source, use the scripts below. Each uses the debug binary by default, or the release binary when `HIGHWATER_BROWSER_BUILD_PROFILE=release` is set:
 
 - `scripts/browser-smoke-integrated.sh` uses a generated synthetic Pi session, and also checks its cache track and Composition at a pinned call.
 - `scripts/browser-smoke-opencode-integrated.sh` generates a separate SQLite database and Pi session, and checks mixed discovery, filtering, OpenCode coverage and cost labels, view links, Composition, refresh after a WAL write, and the narrow layout.

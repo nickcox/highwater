@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { chooseSession } from './session-picker';
 
+test.use({ baseURL: process.env.HIGHWATER_VSCODE_COPILOT_URL });
 const userFolder = process.env.HIGHWATER_VSCODE_COPILOT_FIXTURE;
 
 interface Listed {
