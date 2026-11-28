@@ -477,25 +477,21 @@ async fn source_changed_after_blocking_execution_starts_is_not_cached() {
         .expect("stable retry");
 }
 
-struct TempSession(PathBuf);
+/// A copy of the fixture in a unique temporary folder, removed when dropped.
+struct TempSession(
+    PathBuf,
+    // Never read: dropping it removes the folder.
+    #[allow(dead_code)] tempfile::TempDir,
+);
 impl TempSession {
     fn new() -> Self {
-        let name = format!(
-            "highwater-flight-{}-{}.jsonl",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        );
-        let destination = std::env::temp_dir().join(name);
+        let directory = tempfile::Builder::new()
+            .prefix("highwater-flight-")
+            .tempdir()
+            .expect("temporary folder");
+        let destination = directory.path().join("session.jsonl");
         fs::copy(path(), &destination).expect("temporary fixture");
-        Self(destination)
-    }
-}
-impl Drop for TempSession {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        Self(destination, directory)
     }
 }
 

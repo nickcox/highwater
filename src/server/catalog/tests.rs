@@ -1,24 +1,18 @@
 use super::*;
 
-struct TempRoot(PathBuf);
+/// A unique temporary folder, removed when dropped.
+struct TempRoot(
+    PathBuf,
+    // Never read: dropping it removes the folder.
+    #[allow(dead_code)] tempfile::TempDir,
+);
 impl TempRoot {
     fn new() -> Self {
-        let name = format!(
-            "highwater-catalog-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
-        );
-        let path = std::env::temp_dir().join(name);
-        fs::create_dir(&path).expect("temporary root");
-        Self(path)
-    }
-}
-impl Drop for TempRoot {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        let directory = tempfile::Builder::new()
+            .prefix("highwater-catalog-")
+            .tempdir()
+            .expect("temporary root");
+        Self(directory.path().to_path_buf(), directory)
     }
 }
 
